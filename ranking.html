@@ -145,35 +145,28 @@
         let allPlayersData = [];
         const modalOverlay = document.getElementById('playerModal');
 
-        // SIMULACIÓN: Lista de ganadores históricos para el reconocimiento (DEBE SER UNA FUENTE PERSISTENTE REAL)
+        // SIMULACIÓN: Lista de ganadores históricos para el reconocimiento 
         const historicalWinners = [
             { nombre: 'Juan Pérez', wins: 3 }, 
             { nombre: 'María García', wins: 2 },
             { nombre: 'Pedro Ramírez', wins: 4 },
         ];
         
-        // NOMBRES DEL BANNER (Alternará en cada carga)
         const bannerTitles = [
             'Ascenso de la Semana', 
             'El Gran Escalador', 
             'La Revelación', 
             'Impulso Semanal'
         ];
-        // Selecciona un título al azar
         const currentBannerTitle = bannerTitles[Math.floor(Math.random() * bannerTitles.length)];
 
-        // FUNCIÓN AUXILIAR: Determina la frase de inicio correcta
         function getIntroPhrase(title) {
-            // Revisa si el título empieza con un artículo (El, La, Los, Las, Un, Una, etc.)
             const articleRegex = /^(el|la|los|las|un|una)\s/i;
             if (articleRegex.test(title)) {
-                // Si ya tiene artículo, solo devolvemos la apertura de la exclamación.
                 return '¡'; 
             }
-            // Si no tiene, por defecto asumimos el artículo masculino 'El' (neutro para "Ascenso")
             return '¡El ';
         }
-        // Determina la frase de inicio con la lógica corregida
         const introPhrase = getIntroPhrase(currentBannerTitle);
 
 
@@ -200,7 +193,6 @@
             }
         }
         
-        // FUNCIÓN: Busca y renderiza el jugador que más subió
         function findAndRenderTopMover() {
             let topMover = { nombre: '', movimiento: 0, posicion: '', genero: '' };
             
@@ -208,7 +200,7 @@
                 const posActual = parseInt(p.posicion);
                 const posAnterior = parseInt(p.posicionAnterior);
                 
-                if (!isNaN(posActual) && !isNaN(posAnterior) && posAnterior > posActual) {
+                if (!isNaN(posAnterior) && posAnterior > posActual) {
                     const movimiento = posAnterior - posActual;
                     if (movimiento > topMover.movimiento) {
                         topMover.movimiento = movimiento;
@@ -222,7 +214,6 @@
             const banner = document.getElementById('topMoverBanner');
             if (topMover.movimiento > 0) {
                 
-                // Lógica de Reconocimiento Histórico
                 const historicalRecord = historicalWinners.find(w => w.nombre === topMover.nombre);
                 let recognitionHtml = '';
 
@@ -232,7 +223,6 @@
 
                 banner.classList.remove('hidden');
                 
-                // FRASES CORREGIDAS usando introPhrase para evitar doble artículo
                 banner.innerHTML = `
                     ${introPhrase}${currentBannerTitle} es para ${topMover.nombre}! Subió 
                     <span>${topMover.movimiento}</span> puestos hasta la posición #${topMover.posicion}.
@@ -243,7 +233,6 @@
             }
         }
 
-        // FUNCIÓN: Renderiza la tabla con los números de evolución
         function renderTabla(gender, lista) {
             const tbody = document.getElementById(`tbody${gender}`);
             const table = document.getElementById(`table${gender}`);
@@ -255,6 +244,7 @@
             tbody.innerHTML = '';
             lista.forEach(p => {
                 const tr = tbody.insertRow();
+                p.gender = gender; 
                 tr.addEventListener('click', () => showPlayerProfile(p.nombre));
                 
                 const posActual = parseInt(p.posicion);
@@ -262,17 +252,15 @@
                 let evolucionHtml = '<span class="new-entry" title="Nuevo o Sin Ranking">●</span>';
                 
                 if (!isNaN(posAnterior) && posAnterior > 0) {
-                    const diferencia = posAnterior - posActual; // Positivo = subida, Negativo = bajada
+                    const diferencia = posAnterior - posActual; 
                     
-                    if (diferencia > 0) { // Subió
-                        // Flecha de subida con animación de pulso y el número de puestos
+                    if (diferencia > 0) { 
                         evolucionHtml = `<span class="arrow-up animated" title="Subió ${diferencia} puestos desde ${posAnterior}">▲ +${diferencia}</span>`; 
                     }
-                    else if (diferencia < 0) { // Bajó
-                        // Flecha de bajada con el número de puestos
+                    else if (diferencia < 0) { 
                         evolucionHtml = `<span class="arrow-down" title="Bajó ${Math.abs(diferencia)} puestos desde ${posAnterior}">▼ ${diferencia}</span>`;
                     }
-                    else { // Mantuvo
+                    else { 
                         evolucionHtml = `<span class="new-entry" title="Mantuvo la posición">●</span>`;
                     }
                 }
@@ -290,16 +278,35 @@
           const playerData = allPlayersData.find(p => p.nombre === playerName);
           if (!playerData) return;
           const modalContent = modalOverlay.querySelector('.modal-content');
+          
+          // 1. Determinar la ruta de la silueta por defecto (¡Ruta corregida a la carpeta 'fotos'!)
+          const gender = playerData.gender || 'H';
+          const defaultAvatarPath = gender === 'M' ? 'fotos/default_avatar_m.png' : 'fotos/default_avatar_h.png';
+          
+          // 2. Determinar la fuente de la foto.
+          const photoSrc = playerData.foto && playerData.foto.trim() !== '' ? playerData.foto : defaultAvatarPath;
+          
+          let photoTag;
+          if (photoSrc === defaultAvatarPath) {
+            // Carga directa de silueta
+            photoTag = `<img src="${defaultAvatarPath}" class="modal-photo" loading="lazy" alt="Foto de ${playerData.nombre}">`;
+          } else {
+            // Carga de foto oficial, si falla (onerror), usa la silueta.
+            photoTag = `<img src="${photoSrc}" class="modal-photo" onerror="this.onerror=null; this.src='${defaultAvatarPath}';" loading="lazy" alt="Foto de ${playerData.nombre}">`;
+          }
+
+          // 3. Definición de íconos (CORRECCIÓN: La sintaxis de iconBackhand está corregida)
           const iconRanking = `<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"></path></svg>`;
           const iconAge = `<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M9 11H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2zm2-7h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11z"></path></svg>`;
           const iconCategory = `<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l-5.5 9h11L12 2zm0 3.84L13.93 9h-3.86L12 5.84zM21.5 11h-19L12 22l9.5-11zM13 18h-2v-4h2v4z"></path></svg>`;
           const iconHand = `<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M10.53 11.45c.47-.21.96-.32 1.47-.32s1,.11 1.47,.32L17.93 9l-3.6-2.18c-.46-.27-1.01-.42-1.57-.42s-1.11,.15-1.57,.42L7.54 9l4.46 2.45c.17,.1.36,.15.53,.15s-.36-.05,.53-.15L4.77 10.5L2 12l10 6 10-6-2.77-1.5-4.46 2.45c-.17,.1-.36,.15-.53,.15s-.36-.05-.53-.15L4.77 10.5z"></path></svg>`;
-          const iconBackhand = `<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M6.99 11L3 15l3.99 4v-3H14v-2H6.99v-3zM21 9l-3.99-4v3HIOv2h7.01v3L21 9z"></path></svg>`;
+          const iconBackhand = `<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M6.99 11L3 15l3.99 4v-3H14v-2H6.99v-3zM21 9l-3.99-4v3H10v2h7.01v3L21 9z"></path></svg>`; // Corregido: HI0v2h (H diez v dos h)
+
           modalContent.innerHTML = `
               <button class="modal-close-btn" onclick="closePlayerProfile()">×</button>
               <img src="logo_uctenis_v03.png" class="modal-logo" alt="Logo UCTenis">
               <div class="modal-header">
-                  <img src="${playerData.foto || 'default_avatar.png'}" class="modal-photo" onerror="this.src='default_avatar.png';">
+                  ${photoTag}
                   <h2 class="modal-name">${playerData.nombre}</h2>
               </div>
               <ul class="modal-stats">
