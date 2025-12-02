@@ -1,328 +1,77 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
-    <meta charset="utf-8"/>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ranking UCTenis</title>
-    <link rel="icon" href="favicon.ico" type="image/png">
-    <style>
-        :root{--background-color:#001f33;--text-color:#f5f5f7;--subtle-text-color:#a1a1a6;--accent-color:#c6d300;--card-background:rgba(255,255,255,0.05);}
-        @keyframes fadeIn{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
-        body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;margin:0;padding:0;background:var(--background-color);color:var(--text-color)}
-        .main-container{max-width:900px;margin:0 auto;padding:40px 20px;animation:fadeIn 1s ease-out forwards}
-        .header-section{text-align:center;margin-bottom:20px}
-        .uct-logo{width:clamp(96px,14vw,168px);height:auto;display:block;margin:0 auto 12px;filter:drop-shadow(0 2px 6px rgba(0,0,0,.35))}
-        h1{font-size:36px;font-weight:700;letter-spacing:-1px;margin:0}
-        .ranking-info{text-align:center;margin-bottom:20px}
-        .last-updated-date{font-size:14px;color:var(--subtle-text-color);font-style:italic}
-        .section{background:var(--card-background);border-radius:18px;padding:18px 16px;margin-bottom:24px;}
-        .section h2{font-size:22px;margin:6px 6px 12px;color:var(--text-color);}
-        table{width:100%;border-collapse:collapse;color:var(--text-color);display:none}
-        th,td{padding:12px 15px;text-align:left;border-bottom:1px solid rgba(255,255,255,.1)}
-        th{font-weight:600; color:var(--text-color);}
-        tbody tr { cursor: pointer; transition: background-color 0.2s ease; }
-        tbody tr:hover { background-color: rgba(255,255,255,0.03); }
-        tr:last-child td{border-bottom:none}
-        .loading, .error-message {text-align:center; padding:20px; color:var(--subtle-text-color); font-weight:bold;}
-        .footer-nav{text-align:center;margin-top:28px}
-        .back-button{display:inline-block;background:var(--accent-color);color:#001f33;font-size:16px;font-weight:700;padding:12px 30px;border:none;border-radius:30px;cursor:pointer;text-decoration:none}
-        .arrow-up{color:#4CAF50;} .arrow-down{color:#F44336;} .new-entry{color:#FFC107;}
-        .col-pos {width:80px;text-align:center;}
-        .col-evol {width:70px;text-align:center;font-size:1.2em; white-space: nowrap;} 
-        td.col-nombre { font-weight: 600; }
-        .player-highlight { background-image: linear-gradient(to right, rgba(200, 211, 0, 0.1), transparent 80%); border-left: 4px solid var(--accent-color); }
-
-        /* --- ESTILOS ASCENSO DE LA SEMANA Y ANIMACIÓN --- */
-        .top-mover-banner {
-            background: linear-gradient(90deg, var(--accent-color) 0%, #001f33 100%);
-            color: #001f33;
-            padding: 15px 20px;
-            border-radius: 14px;
-            margin-bottom: 24px;
-            text-align: center;
-            font-size: 1.1em;
-            font-weight: 700;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-        }
-        .top-mover-banner.hidden {
-            display: none;
-        }
-        /* El span del número sigue siendo bold */
-        .top-mover-banner span {
-            color: #001f33;
-            font-size: 1.3em;
-            font-weight: 900; 
-            margin-left: 5px;
-        }
-        /* ANIMACIÓN PARA LAS FLECHAS DE ASCENSO */
-        @keyframes pulse-up {
-            0% { transform: scale(1); opacity: 0.5; }
-            50% { transform: scale(1.2); opacity: 1; }
-            100% { transform: scale(1); opacity: 0.5; }
-        }
-        .arrow-up.animated {
-            animation: pulse-up 1.5s ease-out 2; 
-            display: inline-block;
-        }
-        /* --- FIN ESTILOS --- */
-
-
-        /* --- ESTILOS DE LA FICHA --- */
-        .modal-overlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0, 0, 0, 0.85); display: flex; align-items: center; justify-content: center;
-            opacity: 0; visibility: hidden; transition: all 0.4s ease; z-index: 1000;
-            padding: 20px; box-sizing: border-box; 
-        }
-        .modal-overlay.visible { opacity: 1; visibility: visible; }
-        .modal-content {position: relative; background: linear-gradient(145deg, #002a42, #001f33); border: 1px solid rgba(255,255,255,.1); border-radius: 20px; width: 100%; max-width: 380px; text-align: center; transform: translateY(20px); transition: transform 0.4s ease; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.3);}
-        .modal-overlay.visible .modal-content { transform: translateY(0); }
-        .modal-close-btn {
-            position: absolute; top: 10px; right: 10px;
-            width: 32px; height: 32px;
-            border: none; background: rgba(255,255,255,0.1);
-            color: white; border-radius: 50%;
-            font-size: 20px; line-height: 32px; text-align: center;
-            cursor: pointer; transition: background-color 0.2s ease;
-        }
-        .modal-close-btn:hover { background: rgba(255,255,255,0.2); }
-        .modal-header { padding: 40px 25px 20px; border-bottom: 1px solid rgba(255,255,255,0.1); }
-        .modal-photo {width: 140px; height: 140px; border-radius: 50%; object-fit: cover; border: 5px solid var(--accent-color); margin-bottom: 15px; box-shadow: 0 5px 20px rgba(0,0,0,0.3); background-color: #001f33;}
-        .modal-name { font-size: 2.2em; font-weight: 700; margin: 0; letter-spacing: -1px; }
-        .modal-logo { position: absolute; top: 20px; left: 20px; width: 40px; opacity: 0.5; }
-        .modal-stats { list-style: none; padding: 15px 25px; margin: 0; }
-        .modal-stats li { display: flex; align-items: center; justify-content: space-between; padding: 15px 0; font-size: 1em; }
-        .modal-stats li:not(:last-child) { border-bottom: 1px solid rgba(255,255,255,.05); }
-        .modal-stats .label { display: flex; align-items: center; color: var(--subtle-text-color); }
-        .modal-stats .icon { width: 18px; height: 18px; margin-right: 12px; opacity: 0.7; }
-        .modal-stats .value { font-weight: 600; font-size: 1.1em; color: var(--text-color); }
-        @media (max-width:768px){
-            h1{font-size:28px}
-            .section h2{font-size:20px}
-            table thead { display: none; }
-            table, tbody, tr, td { display: block; }
-            tr {
-                display: flex;
-                align-items: center;
-                padding: 10px 5px;
-                border-bottom: 1px solid rgba(255,255,255,.1);
-                margin-bottom: 5px;
-            }
-            .player-highlight { border-left-width: 5px; }
-            tr:last-child { border-bottom: none; }
-            td { border: none; padding: 2px 5px; }
-            .col-pos { font-size: 1.1em; font-weight: bold; width: 45px; text-align: center; }
-            .col-nombre { flex-grow: 1; width: auto; }
-            .col-evol { width: 55px; text-align: center; font-size: 1.4em; } 
-        }
-    </style>
+    <link rel="icon" href="logo_uctenis_v03.png" type="image/png">
+    <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
     <div class="main-container">
-        <div class="header-section">
-            <img src="logo_uctenis_v03.png" alt="Logo UCTenis Club" class="uct-logo" loading="lazy"/>
+        <header>
+            <img src="logo_uctenis_v03.png" alt="Logo UCTenis Club" class="club-logo">
             <h1>Ranking UCTenis</h1>
+            <div class="date-today" id="lastUpdatedDate">Cargando...</div>
+        </header>
+
+        <div class="top-mover-banner hidden glass-card" id="topMoverBanner"
+            style="text-align:center; margin-bottom: 30px; font-size: 1.1rem;"></div>
+
+        <section class="info-section glass-card">
+            <h2 class="section-title">Ranking Femenino</h2>
+            <div class="loading" id="loadingM" style="text-align:center; padding:20px; color:var(--text-secondary);">
+                Cargando ranking...</div>
+            <div class="ranking-table-container">
+                <table id="tableM" style="display:none;">
+                    <thead>
+                        <tr>
+                            <th>Pos.</th>
+                            <th>Nombre</th>
+                            <th>Evolución</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbodyM"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="info-section glass-card">
+            <h2 class="section-title">Ranking Masculino</h2>
+            <div class="loading" id="loadingH" style="text-align:center; padding:20px; color:var(--text-secondary);">
+                Cargando ranking...</div>
+            <div class="ranking-table-container">
+                <table id="tableH" style="display:none;">
+                    <thead>
+                        <tr>
+                            <th>Pos.</th>
+                            <th>Nombre</th>
+                            <th>Evolución</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbodyH"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <div style="text-align:center; margin-top:40px;">
+            <a href="index.html" class="btn-pill">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" />
+                </svg>
+                Volver a Reservar
+            </a>
         </div>
-        <div class="ranking-info"><p class="last-updated-date" id="lastUpdatedDate">Cargando...</p></div>
-        
-        <div class="top-mover-banner hidden" id="topMoverBanner"></div>
-        
-        <section class="section" id="secM">
-            <h2>Ranking Femenino</h2>
-            <div class="loading" id="loadingM">Cargando ranking...</div>
-            <table id="tableM"><thead><tr><th class="col-pos">Pos.</th><th>Nombre</th><th class="col-evol">Evol.</th></tr></thead><tbody id="tbodyM"></tbody></table>
-        </section>
-        <section class="section" id="secH">
-            <h2>Ranking Masculino</h2>
-            <div class="loading" id="loadingH">Cargando ranking...</div>
-            <table id="tableH"><thead><tr><th class="col-pos">Pos.</th><th>Nombre</th><th class="col-evol">Evol.</th></tr></thead><tbody id="tbodyH"></tbody></table>
-        </section>
-        <div class="footer-nav"><a class="back-button" href="index.html">Volver a Reservar</a></div>
     </div>
-    <div class="modal-overlay" id="playerModal"><div class="modal-content"></div></div>
-    <script>
-        const API_URL = "https://script.google.com/macros/s/AKfycbxCpCp0gy4fEENaItRbt8qX3B0zt3EsbKifX_MWSu3gC2UqMDjf1uQku9bk9qYkNBLtuw/exec";
-        let allPlayersData = [];
-        const modalOverlay = document.getElementById('playerModal');
 
-        // SIMULACIÓN: Lista de ganadores históricos para el reconocimiento 
-        const historicalWinners = [
-            { nombre: 'Juan Pérez', wins: 3 }, 
-            { nombre: 'María García', wins: 2 },
-            { nombre: 'Pedro Ramírez', wins: 4 },
-        ];
-        
-        const bannerTitles = [
-            'Ascenso de la Semana', 
-            'El Gran Escalador', 
-            'La Revelación', 
-            'Impulso Semanal'
-        ];
-        const currentBannerTitle = bannerTitles[Math.floor(Math.random() * bannerTitles.length)];
+    <!-- Modal -->
+    <div class="modal-overlay" id="playerModal">
+        <div class="modal-content"></div>
+    </div>
 
-        function getIntroPhrase(title) {
-            const articleRegex = /^(el|la|los|las|un|una)\s/i;
-            if (articleRegex.test(title)) {
-                return '¡'; 
-            }
-            return '¡El ';
-        }
-        const introPhrase = getIntroPhrase(currentBannerTitle);
-
-
-        async function cargarDatos() {
-            document.getElementById('lastUpdatedDate').textContent = 'Ranking al día: ' + new Date().toLocaleDateString('es-CL', { year: 'numeric', month: 'long', day: 'numeric' });
-            try {
-                const response = await fetch(`${API_URL}?v=${new Date().getTime()}`);
-                const data = await response.json();
-                if (data.status === 'error') throw new Error(data.message);
-                
-                allPlayersData = [
-                    ...(data.hombres || []).map(p => ({...p, gender: 'H'})), 
-                    ...(data.mujeres || []).map(p => ({...p, gender: 'M'}))
-                ]; 
-
-                renderTabla('M', data.mujeres);
-                renderTabla('H', data.hombres);
-                
-                findAndRenderTopMover(); 
-
-            } catch (err) {
-                document.getElementById('loadingM').innerHTML = `<div class="error-message">Error al cargar: ${err.message}. Revisa la URL de tu script.</div>`;
-                document.getElementById('loadingH').innerHTML = ``;
-            }
-        }
-        
-        function findAndRenderTopMover() {
-            let topMover = { nombre: '', movimiento: 0, posicion: '', genero: '' };
-            
-            allPlayersData.forEach(p => {
-                const posActual = parseInt(p.posicion);
-                const posAnterior = parseInt(p.posicionAnterior);
-                
-                if (!isNaN(posAnterior) && posAnterior > posActual) {
-                    const movimiento = posAnterior - posActual;
-                    if (movimiento > topMover.movimiento) {
-                        topMover.movimiento = movimiento;
-                        topMover.nombre = p.nombre;
-                        topMover.posicion = p.posicion;
-                        topMover.genero = p.gender === 'H' ? 'Masculino' : 'Femenino';
-                    }
-                }
-            });
-
-            const banner = document.getElementById('topMoverBanner');
-            if (topMover.movimiento > 0) {
-                
-                const historicalRecord = historicalWinners.find(w => w.nombre === topMover.nombre);
-                let recognitionHtml = '';
-
-                if (historicalRecord && historicalRecord.wins >= 2) {
-                    recognitionHtml = `<br>¡Récord! Es su ${historicalRecord.wins}º ${currentBannerTitle}.`;
-                }
-
-                banner.classList.remove('hidden');
-                
-                banner.innerHTML = `
-                    ${introPhrase}${currentBannerTitle} es para ${topMover.nombre}! Subió 
-                    <span>${topMover.movimiento}</span> puestos hasta la posición #${topMover.posicion}.
-                    ${recognitionHtml}
-                `;
-            } else {
-                banner.classList.add('hidden');
-            }
-        }
-
-        function renderTabla(gender, lista) {
-            const tbody = document.getElementById(`tbody${gender}`);
-            const table = document.getElementById(`table${gender}`);
-            const loading = document.getElementById(`loading${gender}`);
-            if (!lista || lista.length === 0) {
-                loading.textContent = 'No hay jugadores en esta sección.';
-                return;
-            }
-            tbody.innerHTML = '';
-            lista.forEach(p => {
-                const tr = tbody.insertRow();
-                p.gender = gender; 
-                tr.addEventListener('click', () => showPlayerProfile(p.nombre));
-                
-                const posActual = parseInt(p.posicion);
-                const posAnterior = parseInt(p.posicionAnterior);
-                let evolucionHtml = '<span class="new-entry" title="Nuevo o Sin Ranking">●</span>';
-                
-                if (!isNaN(posAnterior) && posAnterior > 0) {
-                    const diferencia = posAnterior - posActual; 
-                    
-                    if (diferencia > 0) { 
-                        evolucionHtml = `<span class="arrow-up animated" title="Subió ${diferencia} puestos desde ${posAnterior}">▲ +${diferencia}</span>`; 
-                    }
-                    else if (diferencia < 0) { 
-                        evolucionHtml = `<span class="arrow-down" title="Bajó ${Math.abs(diferencia)} puestos desde ${posAnterior}">▼ ${diferencia}</span>`;
-                    }
-                    else { 
-                        evolucionHtml = `<span class="new-entry" title="Mantuvo la posición">●</span>`;
-                    }
-                }
-                
-                if (!isNaN(posAnterior) && posAnterior > 0 && posActual !== posAnterior) {
-                    tr.classList.add('player-highlight');
-                }
-                tr.innerHTML = `<td class="col-pos">${p.posicion}</td><td class="col-nombre">${p.nombre}</td><td class="col-evol">${evolucionHtml}</td>`;
-            });
-            loading.style.display = 'none';
-            table.style.display = 'table';
-        }
-        
-        function showPlayerProfile(playerName) {
-          const playerData = allPlayersData.find(p => p.nombre === playerName);
-          if (!playerData) return;
-          const modalContent = modalOverlay.querySelector('.modal-content');
-          
-          // 1. Determinar la ruta de la silueta por defecto (¡Ruta corregida a la carpeta 'fotos'!)
-          const gender = playerData.gender || 'H';
-          const defaultAvatarPath = gender === 'M' ? 'fotos/default_avatar_m.png' : 'fotos/default_avatar_h.png';
-          
-          // 2. Determinar la fuente de la foto.
-          const photoSrc = playerData.foto && playerData.foto.trim() !== '' ? playerData.foto : defaultAvatarPath;
-          
-          let photoTag;
-          if (photoSrc === defaultAvatarPath) {
-            // Carga directa de silueta
-            photoTag = `<img src="${defaultAvatarPath}" class="modal-photo" loading="lazy" alt="Foto de ${playerData.nombre}">`;
-          } else {
-            // Carga de foto oficial, si falla (onerror), usa la silueta.
-            photoTag = `<img src="${photoSrc}" class="modal-photo" onerror="this.onerror=null; this.src='${defaultAvatarPath}';" loading="lazy" alt="Foto de ${playerData.nombre}">`;
-          }
-
-          // 3. Definición de íconos (CORRECCIÓN: La sintaxis de iconBackhand está corregida)
-          const iconRanking = `<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"></path></svg>`;
-          const iconAge = `<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M9 11H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2zm2-7h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11z"></path></svg>`;
-          const iconCategory = `<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l-5.5 9h11L12 2zm0 3.84L13.93 9h-3.86L12 5.84zM21.5 11h-19L12 22l9.5-11zM13 18h-2v-4h2v4z"></path></svg>`;
-          const iconHand = `<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M10.53 11.45c.47-.21.96-.32 1.47-.32s1,.11 1.47,.32L17.93 9l-3.6-2.18c-.46-.27-1.01-.42-1.57-.42s-1.11,.15-1.57,.42L7.54 9l4.46 2.45c.17,.1.36,.15.53,.15s-.36-.05,.53-.15L4.77 10.5L2 12l10 6 10-6-2.77-1.5-4.46 2.45c-.17,.1-.36,.15-.53,.15s-.36-.05-.53-.15L4.77 10.5z"></path></svg>`;
-          const iconBackhand = `<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M6.99 11L3 15l3.99 4v-3H14v-2H6.99v-3zM21 9l-3.99-4v3H10v2h7.01v3L21 9z"></path></svg>`; // Corregido: HI0v2h (H diez v dos h)
-
-          modalContent.innerHTML = `
-              <button class="modal-close-btn" onclick="closePlayerProfile()">×</button>
-              <img src="logo_uctenis_v03.png" class="modal-logo" alt="Logo UCTenis">
-              <div class="modal-header">
-                  ${photoTag}
-                  <h2 class="modal-name">${playerData.nombre}</h2>
-              </div>
-              <ul class="modal-stats">
-                  <li><span class="label">${iconRanking} Ranking</span><span class="value">${playerData.posicion || '-'}</span></li>
-                  <li><span class="label">${iconAge} Edad</span><span class="value">${playerData.edad || '-'}</span></li>
-                  <li><span class="label">${iconCategory} Categoría</span><span class="value">${playerData.categoria || '-'}</span></li>
-                  <li><span class="label">${iconHand} Mano Hábil</span><span class="value">${playerData.manoHabil || '-'}</span></li>
-                  <li><span class="label">${iconBackhand} Revés</span><span class="value">${playerData.reves || '-'}</span></li>
-              </ul>`;
-          modalOverlay.classList.add('visible');
-        }
-        function closePlayerProfile() {
-            modalOverlay.classList.remove('visible');
-        }
-        modalOverlay.addEventListener('click', function(e) { if (e.target === this) closePlayerProfile(); });
-        document.addEventListener('DOMContentLoaded', cargarDatos);
-    </script>
+    <script src="script.js"></script>
 </body>
+
 </html>
