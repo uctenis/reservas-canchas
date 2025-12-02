@@ -1,127 +1,26 @@
 <!DOCTYPE html>
 <html lang="es">
-<head>
-    <link rel="icon" href="favicon.ico" type="image/x-icon">
 
+<head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>UCTenis</title>
+    <title>UCTenis - Reserva de Canchas</title>
 
-    <meta property="og:title" content="Reserva de Canchas UCTenis" />
-    <meta property="og:description" content="Sistema de reservas de canchas de tenis CEC y CJP de la Universidad Católica de Temuco." />
-    <meta property="og:image" content="https://uctenis.github.io/reservas-canchas/logo_uctenis_v03.png" />
-    <meta property="og:url" content="https://uctenis.github.io/reservas-canchas/index.html" />
-    <meta property="og:type" content="website" />
-    <meta name="theme-color" content="#111111"/>
-    <link rel="manifest" href="manifest.json">
     <link rel="icon" href="logo_uctenis_v03.png" type="image/png">
+    <link rel="manifest" href="manifest.json">
 
-    <style>
-        :root {
-            --background-color: #111;
-            --text-color: #f5f5f7;
-            --subtle-text-color: #a1a1a6;
-            --accent-color: #007aff;
-            --card-background: rgba(35, 35, 35, 0.5);
-        }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 0; background-color: var(--background-color); color: var(--text-color); overflow-x: hidden; }
-        .main-container { max-width: 1200px; margin: 0 auto; padding: 40px 20px; animation: fadeIn 1s ease-out forwards; }
-        header { text-align: center; margin-bottom: 60px; }
-        header h1 { font-size: 48px; font-weight: 700; margin: 0; letter-spacing: -1px; }
-        header .date-today { font-size: 18px; color: var(--subtle-text-color); font-weight: 500; margin-top: 8px; }
-        /* Logo del club: visible en desktop y móvil (mínimo cambio) */
-        .club-logo { width: 140px; height: auto; display: block; margin: 0 auto 14px; filter: drop-shadow(0 2px 6px rgba(0,0,0,.35)); }
-        .mobile-instruction { display: none; }
-        .complex-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 50px; margin-bottom: 60px; }
-        .complex-wrapper { text-align: center; }
-        .complex-title { margin-bottom: 15px; }
-        .complex-title h2 { font-size: 28px; font-weight: 600; margin: 0 0 5px 0; }
-        .complex-title p { font-size: 16px; color: var(--subtle-text-color); margin: 0; }
-        .complex-card { position: relative; width: 100%; padding-top: 60%; background-size: cover; background-position: center; border-radius: 24px; overflow: hidden; border: 1px solid rgba(255, 255, 255, 0.1); }
-        .clickable-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; z-index: 2; }
-        .court-link-zone { flex: 1; height: 100%; transition: background-color 0.3s ease; display: flex; justify-content: center; align-items: center; text-decoration: none; }
-        .court-link-zone:hover { background-color: rgba(255, 255, 255, 0.15); backdrop-filter: blur(2px); }
-        .zone-text { color: white; font-size: 20px; font-weight: 700; text-shadow: 0 2px 8px rgba(0,0,0,0.9); text-align: center; padding: 10px; opacity: 0; transition: opacity 0.3s ease; pointer-events: none; }
-        .court-link-zone:hover .zone-text { opacity: 1; }
-        .info-section { background-color: var(--card-background); border-radius: 24px; padding: 30px; margin-bottom: 60px; }
-        .section-title { font-size: 28px; font-weight: 600; margin-top: 0; margin-bottom: 5px; color: var(--text-color); }
-        .smart-suggestion { font-size: 16px; color: var(--accent-color); font-weight: 500; margin-bottom: 25px; min-height: 24px;}
-        .forecast-container { display: flex; gap: 15px; overflow-x: auto; padding-bottom: 20px; }
-        .forecast-container::-webkit-scrollbar { display: none; }
-        .forecast-container { -ms-overflow-style: none; scrollbar-width: none; }
-        .forecast-day { flex: 0 0 110px; background: rgba(30, 30, 30, 0.75); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 18px; padding: 15px; text-align: center; }
-        .forecast-day span { display: block; font-size: 14px; font-weight: 500; margin-top: 5px; }
-        .weather-icon-emoji { font-size: 36px; line-height: 1; margin: 8px 0; }
-        footer { text-align: center; padding: 0 20px 40px; color: var(--subtle-text-color); }
-        .tennis-message { font-size: 22px; font-style: italic; max-width: 700px; margin: 0 auto 30px; line-height: 1.5; }
-        .footer-links {
-            display: flex; 
-            justify-content: center;
-            flex-wrap: wrap; 
-            gap: 15px; 
-            margin-bottom: 20px; 
-        }
-        .footer-links a { 
-            color: var(--subtle-text-color); 
-            background-color: var(--card-background); 
-            border: 1px solid rgba(255, 255, 255, 0.1); 
-            border-radius: 20px; 
-            padding: 10px 20px; 
-            text-decoration: none; 
-            transition: color 0.3s, background-color 0.3s; 
-        }
-        .footer-links a:hover { background-color: var(--accent-color); color: white; border-color: var(--accent-color); }
-        .small-note { margin-top: 30px; font-size: 14px; max-width: 600px; margin-left: auto; margin-right: auto; line-height: 1.6; }
-        /* Leyenda de marca dentro del mismo footer original */
-        .brand-legend { display:flex; align-items:center; justify-content:center; gap:10px; margin-top:14px; opacity:.95; }
-        .brand-legend img { width:42px; height:auto; vertical-align:middle; filter: drop-shadow(0 1px 3px rgba(0,0,0,.3)); }
-        .brand-legend span { color: var(--subtle-text-color); font-size: 14px; }
+    <!-- Meta Tags -->
+    <meta property="og:title" content="Reserva de Canchas UCTenis" />
+    <meta property="og:description"
+        content="Sistema de reservas de canchas de tenis CEC y CJP de la Universidad Católica de Temuco." />
+    <meta property="og:image" content="https://uctenis.github.io/reservas-canchas/logo_uctenis_v03.png" />
+    <meta property="og:type" content="website" />
+    <meta name="theme-color" content="#0f172a" />
 
-        @media (max-width: 768px) { 
-            .main-container { padding: 20px 15px; } 
-            header { margin-bottom: 40px; } 
-            header h1 { font-size: 36px; } 
-            header .date-today { font-size: 16px; } 
-            .mobile-instruction { display: block; text-align: center; color: var(--subtle-text-color); margin-bottom: 30px; font-style: italic; } 
-            .complex-grid { grid-template-columns: 1fr; gap: 40px;} 
-            .info-section { padding: 25px; } 
-            .section-title { font-size: 24px; } 
-            .tennis-message { font-size: 18px; } 
-            .club-logo { width: 120px; margin-bottom: 12px; }
-        }
-        
-        /* --- ESTILOS PARA EL NUEVO BOTÓN DE INSTAGRAM --- */
-        .instagram-link {
-            background: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
-            color: white !important; 
-            border-color: transparent !important;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px; 
-        }
-        .instagram-link svg {
-            width: 20px;
-            height: 20px;
-            fill: white;
-        }
-        .instagram-link:hover {
-            color: white !important;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-        }
-    </style>
-
-    <style>
-        :root {
-            --background-color: #003e46;
-        }
-    </style>
-
-    <style>
-        :root { --background-color: #001f33; }
-    </style>
+    <!-- Styles -->
+    <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
     <div class="main-container">
         <header>
@@ -129,9 +28,10 @@
             <h1>Canchas de Tenis UCT</h1>
             <div class="date-today" id="dateToday"></div>
         </header>
+
         <main>
-            <p class="mobile-instruction">Pincha en la cancha que deseas reservar.</p>
             <div class="complex-grid">
+                <!-- Complejo CEC -->
                 <div class="complex-wrapper">
                     <div class="complex-title">
                         <h2>Complejo CEC</h2>
@@ -139,11 +39,19 @@
                     </div>
                     <div class="complex-card" style="background-image: url('cec.jpg');">
                         <div class="clickable-overlay">
-                            <a href="https://calendar.google.com/calendar/appointments/schedules/AcZssZ1pS98lJc9AnurRJsrrFELO8p7lFqT8SE5tpaJPiVixBHN83PpSWM4oqIfom2EAtwcVqooJYG7K?gv=true" target="_blank" class="court-link-zone" aria-label="Reservar Cancha CEC 1"><span class="zone-text">Reserva Cancha CEC 1</span></a>
-                            <a href="https://calendar.google.com/calendar/appointments/schedules/AcZssZ1ijnDghWGh6GVpsD6Q76qxlJqEdDhj9E0MvboyNI_rTAkbn0JfXE3qFoYECfCMjyEPSGpaTRk4?gv=true" target="_blank" class="court-link-zone" aria-label="Reservar Cancha CEC 2"><span class="zone-text">Reserva Cancha CEC 2</span></a>
+                            <a href="https://calendar.google.com/calendar/appointments/schedules/AcZssZ1pS98lJc9AnurRJsrrFELO8p7lFqT8SE5tpaJPiVixBHN83PpSWM4oqIfom2EAtwcVqooJYG7K?gv=true"
+                                target="_blank" class="court-link-zone" aria-label="Reservar Cancha CEC 1">
+                                <span class="zone-text">Reserva Cancha 1</span>
+                            </a>
+                            <a href="https://calendar.google.com/calendar/appointments/schedules/AcZssZ1ijnDghWGh6GVpsD6Q76qxlJqEdDhj9E0MvboyNI_rTAkbn0JfXE3qFoYECfCMjyEPSGpaTRk4?gv=true"
+                                target="_blank" class="court-link-zone" aria-label="Reservar Cancha CEC 2">
+                                <span class="zone-text">Reserva Cancha 2</span>
+                            </a>
                         </div>
                     </div>
                 </div>
+
+                <!-- Complejo CJP -->
                 <div class="complex-wrapper">
                     <div class="complex-title">
                         <h2>Complejo CJP</h2>
@@ -151,243 +59,82 @@
                     </div>
                     <div class="complex-card" style="background-image: url('cjp.jpg');">
                         <div class="clickable-overlay">
-                            <a href="https://calendar.google.com/calendar/appointments/schedules/AcZssZ1GpWHQQiPLKIG7X4TDDUcngRRUAB6Dbo-xM-Ponh2IWTxNwwFnT74l71-bL-toFqDC6b0mAhhu?gv=true" target="_blank" class="court-link-zone" aria-label="Reservar Cancha CJP 1"><span class="zone-text">Reserva Cancha CJP 1</span></a>
-                            <a href="https://calendar.google.com/calendar/appointments/schedules/AcZssZ23FAuAAPtwBFxJUeCMMAKAQlZTRGMrX3JGA8s3b0Rl9TOj0du1cb6m1cin96U30DfFV03piwMA?gv=true" target="_blank" class="court-link-zone" aria-label="Reservar Cancha CJP 2"><span class="zone-text">Reserva Cancha CJP 2</span></a>
+                            <a href="https://calendar.google.com/calendar/appointments/schedules/AcZssZ1GpWHQQiPLKIG7X4TDDUcngRRUAB6Dbo-xM-Ponh2IWTxNwwFnT74l71-bL-toFqDC6b0mAhhu?gv=true"
+                                target="_blank" class="court-link-zone" aria-label="Reservar Cancha CJP 1">
+                                <span class="zone-text">Reserva Cancha 1</span>
+                            </a>
+                            <a href="https://calendar.google.com/calendar/appointments/schedules/AcZssZ23FAuAAPtwBFxJUeCMMAKAQlZTRGMrX3JGA8s3b0Rl9TOj0du1cb6m1cin96U30DfFV03piwMA?gv=true"
+                                target="_blank" class="court-link-zone" aria-label="Reservar Cancha CJP 2">
+                                <span class="zone-text">Reserva Cancha 2</span>
+                            </a>
                         </div>
                     </div>
                 </div>
             </div>
-            <section class="info-section">
-                <h2 class="section-title">Pronóstico del Tiempo en Temuco</h2>
-                <p class="smart-suggestion" id="smartSuggestion">Analizando el mejor momento para jugar...</p>
+
+            <section class="info-section glass-card">
+                <h2 class="section-title">Pronóstico del Tiempo</h2>
+                <p class="smart-suggestion" id="smartSuggestion">Consultando a los dioses del clima...</p>
                 <div class="forecast-container" id="forecast"></div>
             </section>
+
+            <!-- Prominent Ranking Banner -->
+            <div class="ranking-banner">
+                <div class="ranking-content">
+                    <h2 class="ranking-title">Ranking UCTenis</h2>
+                    <p class="ranking-subtitle">Revisa la tabla de posiciones y el ascenso de la semana.</p>
+                </div>
+                <div class="ranking-action">
+                    <a href="ranking.html" class="btn-ranking-cta">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z" />
+                        </svg>
+                        Ver Ranking Completo
+                    </a>
+                </div>
+            </div>
         </main>
+
         <footer>
             <div class="tennis-message" id="tennisMessage">Generando frase motivacional...</div>
+
             <div class="footer-links">
-                <a href="ranking.html">Ver Ranking</a> 
-                <a href="normas.html">Normas de Uso</a>
-                <a href="https://www.instagram.com/uct.tenis" target="_blank" class="instagram-link">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><path d="M224.1 141c-63.6 0-114.9 51.3-114.9 114.9s51.3 114.9 114.9 114.9S339 319.5 339 255.9 287.7 141 224.1 141zm0 189.6c-41.1 0-74.7-33.5-74.7-74.7s33.5-74.7 74.7-74.7 74.7 33.5 74.7 74.7-33.6 74.7-74.7 74.7zm146.4-194.3c0 14.9-12 26.8-26.8 26.8-14.9 0-26.8-12-26.8-26.8s12-26.8 26.8-26.8 26.8 12 26.8 26.8zm76.1 27.2c-1.7-35.9-9.9-67.7-36.2-93.9-26.2-26.2-58-34.4-93.9-36.2-37-2.1-147.9-2.1-184.9 0-35.8 1.7-67.6 9.9-93.9 36.1s-34.4 58-36.2 93.9c-2.1 37-2.1 147.9 0 184.9 1.7 35.9 9.9 67.7 36.2 93.9s58 34.4 93.9 36.2c37 2.1 147.9 2.1 184.9 0 35.9-1.7 67.7-9.9 93.9-36.2 26.2-26.2 34.4-58 36.2-93.9 2.1-37 2.1-147.8 0-184.8zM398.8 388c-7.8 19.6-22.9 34.7-42.6 42.6-29.5 11.7-99.5 9-132.1 9s-102.7 2.6-132.1-9c-19.6-7.8-34.7-22.9-42.6-42.6-11.7-29.5-9-99.5-9-132.1s-2.6-102.7 9-132.1c7.8-19.6 22.9-34.7 42.6-42.6 29.5-11.7 99.5-9 132.1-9s102.7-2.6 132.1 9c19.6 7.8 34.7 22.9 42.6 42.6 11.7 29.5 9 99.5 9 132.1s2.7 102.7-9 132.1z"/></svg>
-                    <span>Instagram</span>
+
+                <a href="normas.html" class="btn-pill">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <path
+                            d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z" />
+                    </svg>
+                    Normas de Uso
+                </a>
+                <a href="https://www.instagram.com/uct.tenis" target="_blank" class="btn-pill instagram-link">
+                    <svg viewBox="0 0 448 512">
+                        <path
+                            d="M224.1 141c-63.6 0-114.9 51.3-114.9 114.9s51.3 114.9 114.9 114.9S339 319.5 339 255.9 287.7 141 224.1 141zm0 189.6c-41.1 0-74.7-33.5-74.7-74.7s33.5-74.7 74.7-74.7 74.7 33.5 74.7 74.7-33.6 74.7-74.7 74.7zm146.4-194.3c0 14.9-12 26.8-26.8 26.8-14.9 0-26.8-12-26.8-26.8s12-26.8 26.8-26.8 26.8 12 26.8 26.8zm76.1 27.2c-1.7-35.9-9.9-67.7-36.2-93.9-26.2-26.2-58-34.4-93.9-36.2-37-2.1-147.9-2.1-184.9 0-35.8 1.7-67.6 9.9-93.9 36.1s-34.4 58-36.2 93.9c-2.1 37-2.1 147.9 0 184.9 1.7 35.9 9.9 67.7 36.2 93.9s58 34.4 93.9 36.2c37 2.1 147.9 2.1 184.9 0 35.9-1.7 67.7-9.9 93.9-36.2 26.2-26.2 34.4-58 36.2-93.9 2.1-37 2.1-147.8 0-184.8zM398.8 388c-7.8 19.6-22.9 34.7-42.6 42.6-29.5 11.7-99.5 9-132.1 9s-102.7 2.6-132.1-9c-19.6-7.8-34.7-22.9-42.6-42.6-11.7-29.5-9-99.5-9-132.1s-2.6-102.7 9-132.1c7.8-19.6 22.9-34.7 42.6-42.6 29.5-11.7 99.5-9 132.1-9s102.7-2.6 132.1 9c19.6 7.8 34.7 22.9 42.6 42.6 11.7 29.5 9 99.5 9 132.1s2.7 102.7-9 132.1z" />
+                    </svg>
+                    Instagram
                 </a>
             </div>
-            <div class="small-note">Al finalizar el juego en arcilla pasa el escobillón, barre las líneas y riega la cancha para mantenerla en óptimas condiciones. ¡Ocupa los basureros! Solo se permite una reserva diaria por socio. ¡Gracias!</div>
+
+            <div class="small-note">Al finalizar el juego en arcilla pasa el escobillón, barre las líneas y riega la
+                cancha. ¡Ocupa los basureros! Solo se permite una reserva diaria por socio.</div>
+
             <div class="brand-legend">
                 <img src="logo_uctenis_v03.png" alt="Escudo UCTenis">
-                <span>UCTenis Club · Universidad Católica de Temuco · Desde 2024</span>
+                <span>UCTenis Club · Universidad Católica de Temuco</span>
             </div>
         </footer>
     </div>
+
+    <!-- Scripts -->
+    <script src="script.js"></script>
     <script>
-        const todayElement = document.getElementById('dateToday');
-        const today = new Date();
-        todayElement.textContent = today.toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-        const LAT = -38.7359;
-        const LON = -72.5904;
-        const members = ["Luis Otth", "Ismael Devia", "Paulo Garrido", "Roberto Bermudez", "Roberto Espinoza", "Pablo Lagos", "Francisco Encina", "Gustavo Curaqueo", "Cristian Henriquez", "Cristian Rebolledo", "Sebastián Garrido", "Rodrigo Castro", "Matías Cáceres", "Juan Maripillán", "David Figueroa", "David Silva", "David Fonseca", "Cristian Farias", "Jaime Castillo", "José Baeza", "José Melgarejo", "Miguel Escalona", "Rodrigo Zuñiga", "Francisco Muñoz", "Sebastian Aguilar", "Victor Navarrete", "Cristobal Correa", "Jano Medina", "Miguel Angulo", "Carolina Cárdenas", "Mauricio Matus", "Angélica Encina", "Maria José", "Klaus Hennicke", "Francisco Mendez", "Violeta Moreno", "Valeria Schatter"];
-        
-        const motivationalMessages = [
-            "¡Hoy es tu día para brillar en la cancha, [Nombre]! (O al menos para no tropezar con tus propios pies).",
-            "[Nombre], el sol brilla, ¡casi tanto como tu futuro revés si practicas hoy! O no.",
-            "El clima está perfecto, [Nombre]. Sin excusas... excepto quizás tu condición física.",
-            "¡Vamos a aprovechar el buen tiempo, [Nombre], y a mejorar ese revés! O a resignarnos a que siempre será así.",
-            "El sol brilla tanto como tu determinación, [Nombre]. Lástima que la pelota no siempre siga esa misma luz.",
-            "Día nublado, [Nombre], perfecto para que nadie vea tus errores no forzados con claridad. ¡Aprovéchalo!",
-            "Hoy el clima está ideal para practicar tus saques, [Nombre]. Apunta a la cancha, es un buen comienzo.",
-            "No hay mejor clima para mejorar tu técnica, [Nombre]. O para darte cuenta de que no tienes.",
-            "El sol está contigo, [Nombre], igual que tu pasión por el tenis. La pelota, a veces, está en tu contra.",
-            "Nublado pero sin lluvia, [Nombre]. ¡Una razón más para no detenerse... o para quedarse en casa viendo Netflix!",
-            "Nada mejor que un día soleado para mostrar de qué estás hecho, [Nombre]. Y de qué no, también.",
-            "El clima perfecto para esos rallies largos, [Nombre]. Si es que logras pasar la segunda pelota.",
-            "Con este clima, cada punto cuenta, [Nombre]. Especialmente los que pierdes por errores tontos.",
-            "Hoy toca darle fuerte, [Nombre], el clima está de nuestro lado. La red, ya veremos.",
-            "Aprovecha este día sin lluvia para dar lo mejor de ti, [Nombre]. O al menos, inténtalo.",
-            "Hoy el sol está para acompañarte a mejorar, [Nombre]. Y para que se vea bien claro cuándo fallas.",
-            "El clima no podría ser mejor, [Nombre], ¡a aprovechar cada minuto! (Probablemente los últimos de tu energía).",
-            "La victoria está en tu mente antes de estar en la cancha, [Nombre]. Y a veces, solo se queda ahí.",
-            "El tenis es 90% mental y 10% evitar tropezar con la línea blanca, [Nombre]. Concentración.",
-            "Si pierdes el partido, [Nombre], al menos no pierdas la compostura. Bueno, tal vez un poco. O mucho.",
-            "¡No culpes a la raqueta, [Nombre]! Ella está haciendo lo mejor que puede con el material que tiene.",
-            "Hoy no se trata de ganar, [Nombre], se trata de no romper otra cuerda... ni tu paciencia.",
-            "Si no puedes ganar el punto, [Nombre], al menos haz que tu rival sude por él. O que se ría.",
-            "¿Hoy vienes a jugar o a dar un curso de errores no forzados, [Nombre]? Ambas son válidas.",
-            "Recuerda, [Nombre], el tenis es como la vida: a veces solo intentas no hacer el ridículo.",
-            "¡Gran saque, [Nombre]! Lástima que fue fuera por medio metro. O dos.",
-            "Siempre dicen que el esfuerzo lo es todo, [Nombre]. Bueno, hoy lo intentaste. Eso ya es algo.",
-            "Tu revés tiene un 50% de probabilidades de ir a la red, [Nombre]... optimismo, ¿no?",
-            "Un día sin tenis es un día perdido, [Nombre]. O un día ganado para tus rodillas.",
-            "Con cada golpe, [Nombre], estás más cerca de la perfección. O de la siguiente pelota perdida.",
-            "Tu mayor rival no está del otro lado de la red, [Nombre], sino en tu mente. Y a veces, es tu propio físico.",
-            "El clima es perfecto, igual que tu determinación, [Nombre]. Lástima que la pelota tenga sus propias ideas.",
-            "El éxito es 1% inspiración y 99% transpiración, [Nombre]... ¡y hoy toca sudar para disimular los errores!",
-            "El tenis es el único deporte donde puedes discutir contigo mismo y perder, [Nombre].",
-            "Si la pelota va hacia ti, [Nombre], ¡corre! Es una pista, no una selfie. Aunque una buena selfie después de un punto (ganado) no está mal.",
-            "La raqueta está en tus manos, [Nombre], pero la magia viene del café que tomaste antes. O del ibuprofeno.",
-            "Hoy no jugamos para ganar, [Nombre], sino para demostrar que sabemos correr... aunque sea detrás de la pelota.",
-            "Tu saque es tan rápido, [Nombre], que ni tú sabes a dónde va... ¡sorpresa! (Generalmente fuera).",
-            "[Nombre], dicen que la práctica hace al maestro. A estas alturas, tú deberías ser un maestro... en encontrar excusas.",
-            "Hoy es un día perfecto para que tu revés paralelo sorprenda a todos, [Nombre]. Principalmente a ti mismo si entra.",
-            "Recuerda [Nombre], cada error no forzado es una oportunidad de aprendizaje. Ya debes ser un erudito.",
-            "[Nombre], no te presiones. La probabilidad de que esa dejada toque la red es alta, pero la esperanza es lo último que se pierde... después de la pelota.",
-            "El pronóstico dice sol, [Nombre]. Ideal para que el reflejo no sea tu excusa cuando la pelota pase de largo.",
-            "¡Vamos [Nombre]! Hoy es un buen día para donar algunas pelotas a las canchas vecinas con tus saques.",
-            "Tu plan de juego hoy, [Nombre]: 1. Pegarle a la pelota. 2. Intentar que entre. 3. Repetir el paso 1 con más optimismo.",
-            "[Nombre], si te sientes frustrado, solo recuerda que hay gente que paga por esto. Tú, por ejemplo.",
-            "Dicen que el tenis es un deporte de caballeros, [Nombre]. Intenta no lanzar la raqueta... muy lejos.",
-            "Objetivo del día, [Nombre]: que la cantidad de pelotas perdidas sea menor que tu edad. ¡Tú puedes (quizás)!",
-            "[Nombre], la clave está en la anticipación. Anticipa que vas a correr mucho... y probablemente en vano.",
-            "Si tu oponente te gana con un 'lucky shot', [Nombre], recuerda que tú llevas todo el partido jugando 'unlucky shots'.",
-            "[Nombre], hoy tu derecha podría ser ilegal de tan potente... si le apuntaras a la cancha.",
-            "No te preocupes por el marcador, [Nombre]. Lo importante es que el atuendo combine.",
-            "[Nombre], piensa en la pelota como ese problema que evitas. Tarde o temprano, te va a volver... o se va a ir muy lejos.",
-            "Hoy puede ser el día en que todos tus globos aterricen dentro, [Nombre]. O el día que descubras el bádminton.",
-            "Recuerda, [Nombre]: un buen grito después de un mal golpe no mejora el punto, pero libera el alma (y asusta a las palomas).",
-            "[Nombre], la red es tu amiga. A veces demasiado... especialmente en los drop shots.",
-            "No subestimes el poder de una buena charla técnica contigo mismo en medio del punto, [Nombre]. Aunque nadie más la entienda.",
-            "Ánimo, [Nombre]. Aunque no ganes el partido, siempre puedes ganar la discusión sobre si la pelota fue buena o mala.",
-            "Eres mas malo que el presidente del club, [Nombre]. (Es broma... o no).",
-            "[Nombre], cuidado que los mutantes estan ganando todo! Mantén la guardia alta.",
-            "[Nombre], no robes puntos como Melgarejo! Juega limpio, o al menos, que no te pillen.",
-            "[Nombre], ¿también fuiste atendido por el \"nana vieja\"? Esas historias son leyenda."
-        ];
-        
-        const twoPlayerStoryTemplates = [
-            "Se comenta en los pasillos que [Nombre1] está entrenando en secreto para ganarle el próximo set a [Nombre2]. Las apuestas están 100 a 1... a favor de [Nombre2].",
-            "Dicen las malas lenguas que [Nombre1] tiene un revés más temible que el de [Nombre2]. Claro, si por 'temible' entendemos 'impredeciblemente fuera'.",
-            "Hoy, [Nombre1] y [Nombre2] podrían enfrentarse. El pronóstico es reservado, pero se espera una alta probabilidad de risas (y errores no forzados).",
-            "Alerta de Clásico UCTenis: [Nombre1] vs [Nombre2]. Se juega el honor, la última Coca-Cola del refri y el derecho a presumir por una semana.",
-            "[Nombre1] le preguntó a [Nombre2] el secreto de su saque. [Nombre2] respondió: 'Apuntar adentro y rezar un poco no viene mal'.",
-            "Última hora desde las canchas: [Nombre1] fue visto practicando dejadas. [Nombre2] fue visto comprando zapatillas más rápidas... y un casco.",
-            "Si [Nombre1] y [Nombre2] juegan hoy, recuerden la regla de oro del club: lo importante no es ganar, es tener una buena anécdota para el tercer tiempo.",
-            "La rivalidad entre [Nombre1] y [Nombre2] es legendaria. Como el monstruo del Lago Ness: muchos hablan de ella, pocos la han visto terminar bien para ambos.",
-            "[Nombre1] dice que su derecha es como la de Federer. [Nombre2] dice que sí, si Federer jugara con la mano izquierda, los ojos vendados y después de tres piscolas.",
-            "Dicen que [Nombre1] tiene la volea de un profesional. [Nombre2] pregunta de qué profesional hablamos, ¿uno de bádminton o de recoger pelotas?"
-        ];
-        
-        function getWeatherIcon(wmoCode) { const icons = { 0: "☀️", 1: "🌤️", 2: "⛅", 3: "☁️", 45: "🌫️", 48: "🌫️", 51: "🌦️", 53: "🌦️", 55: "🌦️", 61: "🌧️", 63: "🌧️", 65: "🌧️", 80: "⛈️", 81: "⛈️", 82: "⛈️" }; return icons[wmoCode] || "🤷"; }
-        
-        function updateMotivationalMessage(dailyData = null) { 
-            const tennisMessageElement = document.getElementById('tennisMessage'); 
-            const currentDay = today.getDay(); 
-            const currentHour = today.getHours(); 
-
-            if (currentDay === 0) { 
-                tennisMessageElement.textContent = "Las canchas están cerradas los domingos. Aprovecha para descansar, planificar tu semana de juego... o cómo evitarla."; 
-                return; 
-            } 
-            
-            let rainProbability = 0; 
-            if (dailyData && dailyData.precipitation_probability_max && dailyData.precipitation_probability_max.length > 0) { 
-                rainProbability = dailyData.precipitation_probability_max[0]; 
-            } 
-            
-            let message = "";
-
-            if (currentHour >= 7 && currentHour <= 23) {
-                if (Math.random() < 0.3 && members.length >= 2) { 
-                    let member1Index = Math.floor(Math.random() * members.length);
-                    let member2Index = Math.floor(Math.random() * members.length);
-                    while (member2Index === member1Index) {
-                        member2Index = Math.floor(Math.random() * members.length);
-                    }
-                    const member1 = members[member1Index];
-                    const member2 = members[member2Index];
-                    
-                    let storyTemplate = twoPlayerStoryTemplates[Math.floor(Math.random() * twoPlayerStoryTemplates.length)];
-                    message = storyTemplate.replace("[Nombre1]", member1).replace("[Nombre2]", member2);
-
-                } else { 
-                    const randomMember = members[Math.floor(Math.random() * members.length)]; 
-                    let randomMessage = motivationalMessages[Math.floor(Math.random() * motivationalMessages.length)];
-                    message = randomMessage.replace("[Nombre]", randomMember);
-                }
-
-                if (rainProbability > 70) { 
-                    const randomMember = members[Math.floor(Math.random() * members.length)]; 
-                    message = `${randomMember}, hoy llueve más que tus excusas post-partido. Mejor quédate en casa viendo tutoriales de cómo no hacer una doble falta.`; 
-                }
-            } else { 
-                const randomMember = members[Math.floor(Math.random() * members.length)]; 
-                message = `Las canchas duermen, y tú también deberías, ${randomMember}. Mañana será otro día para... seguir intentando que esa pelota entre.`; 
-            } 
-            tennisMessageElement.textContent = message;
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW Error:', err));
+            });
         }
-        
-        async function fetchWeather() { 
-            const forecastDiv = document.getElementById('forecast'); 
-            const suggestionEl = document.getElementById('smartSuggestion'); 
-            const URL = `https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_probability_max&hourly=precipitation_probability&timezone=America/Santiago`; 
-            let dailyData = null; 
-            try { 
-                const response = await fetch(URL); 
-                if (!response.ok) throw new Error(`Error de red: ${response.statusText}`); 
-                const data = await response.json(); 
-                dailyData = data.daily; 
-                forecastDiv.innerHTML = ""; 
-                for (let i = 0; i < dailyData.time.length; i++) { 
-                    const date = new Date(dailyData.time[i] + 'T00:00:00'); 
-                    const dayString = new Intl.DateTimeFormat('es-ES', { weekday: 'short' }).format(date).replace(/^\w/, c => c.toUpperCase()); 
-                    const icon = getWeatherIcon(dailyData.weathercode[i]); 
-                    forecastDiv.innerHTML += `<div class="forecast-day"><span>${dayString}</span><div class="weather-icon-emoji">${icon}</div><span>Máx: ${Math.round(dailyData.temperature_2m_max[i])}°C</span><span>Mín: ${Math.round(dailyData.temperature_2m_min[i])}°C</span><span>${dailyData.precipitation_probability_max[i]}% lluvia</span></div>`; 
-                } 
-                const hourlyData = data.hourly; 
-                let bestTimeFound = false; 
-                let suggestedHourString = "";
-
-                for (let i = 0; i < hourlyData.time.length; i++) { 
-                    const hourDate = new Date(hourlyData.time[i]); 
-                    if (!bestTimeFound && hourDate > today) { 
-                        if (hourDate.getHours() >= 8 && hourDate.getHours() <= 21 && hourlyData.precipitation_probability[i] < 15) { 
-                            suggestedHourString = new Intl.DateTimeFormat('es-ES', { hour: '2-digit', minute: '2-digit', hour12: false }).format(hourDate); 
-                            bestTimeFound = true; 
-                        } 
-                    } 
-                } 
-                
-                if (bestTimeFound) {
-                    const courtOpinions = [
-                        `La Cancha ${ (Math.random() < 0.5 ? "CEC 1" : "CJP 2") } te guiña un ojo. Dice que a las ${suggestedHourString} hrs está despejada y lista para tus (intentos de) dejadas.`,
-                        `Parece que a las ${suggestedHourString} hrs hay una ventana perfecta. ¡Las canchas esperan tu saque (dentro, por favor)!`,
-                        `A las ${suggestedHourString} hrs el clima dice 'sí'. La cancha dice 'tráeme tus mejores errores no forzados'.`
-                    ];
-                    suggestionEl.textContent = courtOpinions[Math.floor(Math.random() * courtOpinions.length)];
-                } else { 
-                    const noTimeOpinions = [
-                        "Uf, parece que hoy el clima en Temuco está más complicado que explicarle el fuera de juego a tu tía. Revisa bien el pronóstico.",
-                        "Las canchas están en modo 'mejor otro día'. El clima no coopera para una exhibición de tu talento.",
-                        "Hoy el pronóstico sugiere que es un día perfecto para... ver tenis en la tele. O afilar la raqueta (mentalmente)."
-                    ];
-                    suggestionEl.textContent = noTimeOpinions[Math.floor(Math.random() * noTimeOpinions.length)]; 
-                } 
-                
-                if (dailyData && dailyData.precipitation_probability_max[0] > 70) {
-                     suggestionEl.textContent = `La Cancha ${(Math.random() < 0.5 ? "CEC" : "CJP")} sugiere que hoy te dediques al waterpolo. ¡Está lloviendo a cántaros!`;
-                }
-
-            } catch (error) { 
-                console.error("Error al cargar el clima:", error); 
-                suggestionEl.textContent = "No se pudo cargar la información del clima... quizás los dioses del tenis están ocupados."; 
-                forecastDiv.innerHTML = "<p>El pronóstico no está disponible. Intenta de nuevo o asume que es día de descanso oficial.</p>"; 
-            } finally { 
-                updateMotivationalMessage(dailyData); 
-            } 
-        }
-        fetchWeather(); 
-        setInterval(fetchWeather, 60 * 60 * 1000);
-    </script>
-    
-    <script>
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js').then(registration => {
-            console.log('SW registrado: ', registration);
-          }).catch(registrationError => {
-            console.log('SW registro falló: ', registrationError);
-          });
-        });
-      }
     </script>
 </body>
+
 </html>
