@@ -1,137 +1,339 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="utf-8"/>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-    <title>ADMINISTRADOR Ranking</title>
-    <link rel="icon" href="favicon.png" type="image/png">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
-    <style>
-        :root{--background-color:#001f33;--text-color:#f5f5f7;--subtle-text-color:#a1a1a6;--accent-color:#c6d300;--card-background:rgba(255,255,255,0.05);}
-        body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;margin:0;padding:0;background:var(--background-color);color:var(--text-color)}
-        .main-container{max-width:900px;margin:0 auto;padding:40px 20px;}
-        .header-section{text-align:center;margin-bottom:20px}
-        .uct-logo{width:clamp(96px,14vw,168px);height:auto;display:block;margin:0 auto 12px;}
-        h1{font-size:36px;font-weight:700;letter-spacing:-1px;margin:0}
-        .section{background:var(--card-background);border-radius:18px;padding:18px 16px;margin-bottom:24px;}
-        .section-header{display:flex; align-items:center; margin:6px 6px 12px;}
-        .section-header h2{font-size:22px;margin:0;}
-        table{width:100%;border-collapse:collapse;display:none;}
-        th,td{padding:12px 15px;text-align:left;border-bottom:1px solid rgba(255,255,255,.1)}
-        tbody tr {cursor: grab;}
-        tbody tr:active {cursor: grabbing;}
-        .loading, .error-message {text-align:center; padding:20px; color:var(--subtle-text-color); font-weight:bold;}
-        .arrow-up{color:#4CAF50;} .arrow-down{color:#F44336;} .new-entry{color:#FFC107;}
-        .col-pos {width:80px;text-align:center;}
-        .col-evol {width:60px;text-align:center;font-size:1.2em;}
-        td.col-nombre { font-weight: 600; }
-        .player-highlight { background-image: linear-gradient(to right, rgba(200, 211, 0, 0.1), transparent 80%); border-left: 4px solid var(--accent-color); }
-        .save-button{ display:none; background-color:var(--accent-color); color:var(--background-color); border:none; padding:8px 16px; font-size:14px; font-weight:700; border-radius:20px; cursor:pointer; margin-left: auto; }
-        .save-button:disabled { background-color: #555; cursor: not-allowed; }
-        .sortable-ghost{ background:rgba(255,255,255,0.1); opacity: 0.8; }
-    </style>
-</head>
-<body>
-    <div class="main-container">
-        <div class="header-section">
-            <img src="logo_uctenis_v03.png" alt="Logo UCTenis Club" class="uct-logo"/>
-            <h1>Administrador del Ranking</h1>
-        </div>
-        <section class="section" id="secM">
-            <div class="section-header">
-                <h2>Ranking Femenino</h2>
-                <button class="save-button" id="saveM" onclick="saveRanking('mujeres')">Guardar Cambios</button>
-            </div>
-            <div class="loading" id="loadingM">Cargando...</div>
-            <table id="tableM"><thead><tr><th class="col-pos">Pos.</th><th>Nombre</th><th class="col-evol">Evol.</th></tr></thead><tbody id="tbodyM"></tbody></table>
-        </section>
-        <section class="section" id="secH">
-            <div class="section-header">
-                <h2>Ranking Masculino</h2>
-                <button class="save-button" id="saveH" onclick="saveRanking('hombres')">Guardar Cambios</button>
-            </div>
-            <div class="loading" id="loadingH">Cargando...</div>
-            <table id="tableH"><thead><tr><th class="col-pos">Pos.</th><th>Nombre</th><th class="col-evol">Evol.</th></tr></thead><tbody id="tbodyH"></tbody></table>
-        </section>
-    </div>
-    <script>
-        const API_URL = "https://script.google.com/macros/s/AKfycbxCpCp0gy4fEENaItRbt8qX3B0zt3EsbKifX_MWSu3gC2UqMDjf1uQku9bk9qYkNBLtuw/exec";
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ADMINISTRADOR Ranking</title>
+  <link rel="icon" href="favicon.png" type="image/png">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
 
-        async function cargarDatos() {
-            try {
-                const response = await fetch(`${API_URL}?v=${new Date().getTime()}`);
-                const data = await response.json();
-                if (data.status === 'error') throw new Error(data.message);
-                renderTabla('M', data.mujeres);
-                renderTabla('H', data.hombres);
-            } catch (err) {
-                document.getElementById('loadingM').innerHTML = `<div class="error-message">Error: ${err.message}</div>`;
-            }
-        }
-        function renderTabla(gender, lista) {
-            const tbody = document.getElementById(`tbody${gender}`);
-            const table = document.getElementById(`table${gender}`);
-            const loading = document.getElementById(`loading${gender}`);
-            tbody.innerHTML = '';
-            if (!lista || lista.length === 0) {
-                loading.textContent = 'No hay jugadores.';
-                return;
-            }
-            lista.forEach(p => {
-                const tr = tbody.insertRow();
-                const posActual = parseInt(p.posicion);
-                const posAnterior = parseInt(p.posicionAnterior);
-                let evolucionHtml = '<span class="new-entry" title="Nuevo">●</span>';
-                if (!isNaN(posAnterior) && posAnterior > 0) {
-                    if (posActual < posAnterior) evolucionHtml = `<span class="arrow-up" title="Subió">▲</span>`;
-                    else if (posActual > posAnterior) evolucionHtml = `<span class="arrow-down" title="Bajó">▼</span>`;
-                    else evolucionHtml = `<span>-</span>`;
-                }
-                if (!isNaN(posAnterior) && posAnterior > 0 && posActual !== posAnterior) {
-                    tr.classList.add('player-highlight');
-                }
-                tr.innerHTML = `<td class="col-pos">${p.posicion}</td><td class="col-nombre">${p.nombre}</td><td class="col-evol">${evolucionHtml}</td>`;
-            });
-            loading.style.display = 'none';
-            table.style.display = 'table';
-        }
-        function initSortable() {
-            const createSortable = (tbodyId, saveButtonId) => {
-                new Sortable(document.getElementById(tbodyId), { animation: 150, ghostClass: 'sortable-ghost', onEnd: () => { document.getElementById(saveButtonId).style.display = 'block'; } });
-            };
-            createSortable('tbodyM', 'saveM');
-            createSortable('tbodyH', 'saveH');
-        }
-        async function saveRanking(category) {
-            const password = prompt("Ingresa la clave de administrador:");
-            if (!password) return;
-            const buttonId = category === 'mujeres' ? 'saveM' : 'saveH';
-            const tbodyId = category === 'mujeres' ? 'tbodyM' : 'tbodyH';
-            const button = document.getElementById(buttonId);
-            button.disabled = true;
-            button.textContent = "Guardando...";
-            const rows = document.getElementById(tbodyId).querySelectorAll('tr');
-            const newRanking = Array.from(rows).map(row => ({ nombre: row.querySelector('.col-nombre').textContent }));
-            try {
-                const response = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ password, category, ranking: newRanking }) });
-                const result = await response.json();
-                if (result.status === 'error') throw new Error(result.message);
-                button.textContent = "¡Guardado!";
-                setTimeout(() => {
-                    button.style.display = 'none';
-                    button.textContent = 'Guardar Cambios';
-                    button.disabled = false;
-                    cargarDatos();
-                }, 1500);
-            } catch (err) {
-                alert(`Error: ${err.message}`);
-                button.disabled = false;
-                button.textContent = 'Reintentar';
-            }
-        }
-        document.addEventListener('DOMContentLoaded', () => {
-            cargarDatos().then(() => { initSortable(); });
+  <style>
+    :root{
+      --background-color:#001f33;
+      --text-color:#f5f5f7;
+      --subtle-text-color:#a1a1a6;
+      --accent-color:#c6d300;
+      --card-background:rgba(255,255,255,0.05);
+    }
+    body{
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+      margin:0;padding:0;background:var(--background-color);color:var(--text-color)
+    }
+    .main-container{max-width:900px;margin:0 auto;padding:40px 20px;}
+    .header-section{text-align:center;margin-bottom:14px}
+    .uct-logo{
+      width:clamp(96px,14vw,168px);height:auto;display:block;margin:0 auto 12px;
+      filter: drop-shadow(0 2px 6px rgba(0,0,0,.35));
+    }
+    h1{font-size:36px;font-weight:700;letter-spacing:-1px;margin:0}
+
+    .ranking-toggle-wrapper{ text-align:center; margin: 18px 0 22px; }
+    .btn-pill{
+      display:inline-flex;align-items:center;justify-content:center;
+      background: rgba(255,255,255,0.08);
+      color: var(--text-color);
+      border: 1px solid rgba(255,255,255,0.12);
+      padding: 10px 18px;
+      border-radius: 999px;
+      font-weight: 700;
+      cursor: pointer;
+      margin: 0 8px;
+      transition: transform .15s ease, background-color .15s ease, border-color .15s ease;
+      user-select:none;
+    }
+    .btn-pill:hover{ transform: translateY(-1px); border-color: rgba(255,255,255,0.22); }
+    .btn-pill.active{
+      background: var(--accent-color);
+      color: var(--background-color);
+      border-color: var(--accent-color);
+    }
+
+    .section{background:var(--card-background);border-radius:18px;padding:18px 16px;margin-bottom:24px;}
+    .section-header{display:flex; align-items:center; margin:6px 6px 12px;}
+    .section-header h2{font-size:22px;margin:0;}
+
+    table{width:100%;border-collapse:collapse;display:none;}
+    th,td{padding:12px 15px;text-align:left;border-bottom:1px solid rgba(255,255,255,.1)}
+    tbody tr {cursor: grab;}
+    tbody tr:active {cursor: grabbing;}
+
+    .loading, .error-message {text-align:center; padding:20px; color:var(--subtle-text-color); font-weight:bold;}
+    .arrow-up{color:#4CAF50;} .arrow-down{color:#F44336;} .new-entry{color:#FFC107;}
+    .col-pos {width:80px;text-align:center;}
+    .col-evol {width:60px;text-align:center;font-size:1.2em;}
+    td.col-nombre { font-weight: 600; }
+    .player-highlight { background-image: linear-gradient(to right, rgba(200, 211, 0, 0.1), transparent 80%); border-left: 4px solid var(--accent-color); }
+    .save-button{
+      display:none; background-color:var(--accent-color); color:var(--background-color);
+      border:none; padding:8px 16px; font-size:14px; font-weight:700;
+      border-radius:20px; cursor:pointer; margin-left:auto;
+    }
+    .save-button:disabled { background-color: #555; cursor: not-allowed; }
+    .sortable-ghost{ background:rgba(255,255,255,0.1); opacity: 0.8; }
+  </style>
+</head>
+
+<body>
+  <div class="main-container">
+    <div class="header-section">
+      <img src="logo_uctenis_v03.png" alt="Logo UCTenis Club" class="uct-logo"/>
+      <h1>Administrador del Ranking</h1>
+    </div>
+
+    <div class="ranking-toggle-wrapper">
+      <button class="btn-pill active" id="btnFem" data-target="femenino">Femenino</button>
+      <button class="btn-pill" id="btnMas" data-target="masculino">Masculino</button>
+    </div>
+
+    <section class="section" id="sectionFemenino">
+      <div class="section-header">
+        <h2>Ranking Femenino</h2>
+        <button class="save-button" id="saveM" onclick="saveRanking('mujeres')">Guardar Cambios</button>
+      </div>
+      <div class="loading" id="loadingM">Cargando...</div>
+      <table id="tableM">
+        <thead>
+          <tr><th class="col-pos">Pos.</th><th>Nombre</th><th class="col-evol">Evol.</th></tr>
+        </thead>
+        <tbody id="tbodyM"></tbody>
+      </table>
+    </section>
+
+    <section class="section" id="sectionMasculino">
+      <div class="section-header">
+        <h2>Ranking Masculino</h2>
+        <button class="save-button" id="saveH" onclick="saveRanking('hombres')">Guardar Cambios</button>
+      </div>
+      <div class="loading" id="loadingH">Cargando...</div>
+      <table id="tableH">
+        <thead>
+          <tr><th class="col-pos">Pos.</th><th>Nombre</th><th class="col-evol">Evol.</th></tr>
+        </thead>
+        <tbody id="tbodyH"></tbody>
+      </table>
+    </section>
+  </div>
+
+  <script>
+    const API_URL = "https://script.google.com/macros/s/AKfycbxCpCp0gy4fEENaItRbt8qX3B0zt3EsbKifX_MWSu3gC2UqMDjf1uQku9bk9qYkNBLtuw/exec";
+
+    function normName(v){
+      return (v ?? "").toString().replace(/\s+/g,' ').trim();
+    }
+    function toPos(v){
+      const n = parseInt((v ?? "").toString().trim(), 10);
+      return Number.isFinite(n) ? n : NaN;
+    }
+
+    // Solo jugadores con ranking válido (posicion > 0 + nombre)
+    function cleanRankList(lista){
+      if (!Array.isArray(lista)) return [];
+      const seen = new Set();
+      const out = [];
+      for (const p of lista){
+        const nombre = normName(p?.nombre);
+        const pos = toPos(p?.posicion);
+        if (!nombre) continue;
+        if (!Number.isFinite(pos) || pos <= 0) continue;
+
+        const key = nombre.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+
+        out.push({
+          nombre,
+          posicion: pos,
+          posicionAnterior: toPos(p?.posicionAnterior)
         });
-    </script>
+      }
+      out.sort((a,b) => a.posicion - b.posicion);
+      return out;
+    }
+
+    async function cargarDatos() {
+      try {
+        const response = await fetch(`${API_URL}?v=${new Date().getTime()}`);
+        const data = await response.json();
+        if (data.status === 'error') throw new Error(data.message);
+
+        renderTabla('M', cleanRankList(data.mujeres));
+        renderTabla('H', cleanRankList(data.hombres));
+      } catch (err) {
+        document.getElementById('loadingM').innerHTML = `<div class="error-message">Error: ${err.message}</div>`;
+        document.getElementById('loadingH').innerHTML = `<div class="error-message">Error: ${err.message}</div>`;
+      }
+    }
+
+    function evolucionIcon(posActual, posAnterior){
+      let evolucionHtml = '<span class="new-entry" title="Nuevo">●</span>';
+      if (Number.isFinite(posAnterior) && posAnterior > 0) {
+        if (posActual < posAnterior) evolucionHtml = `<span class="arrow-up" title="Subió">▲</span>`;
+        else if (posActual > posAnterior) evolucionHtml = `<span class="arrow-down" title="Bajó">▼</span>`;
+        else evolucionHtml = `<span>-</span>`;
+      }
+      return evolucionHtml;
+    }
+
+    function renderTabla(gender, lista) {
+      const tbody = document.getElementById(`tbody${gender}`);
+      const table = document.getElementById(`table${gender}`);
+      const loading = document.getElementById(`loading${gender}`);
+
+      tbody.innerHTML = '';
+
+      if (!lista || lista.length === 0) {
+        loading.textContent = 'No hay jugadores con ranking.';
+        loading.style.display = 'block';
+        table.style.display = 'none';
+        return;
+      }
+
+      // Re-numera desde 1 según orden mostrado (admin)
+      lista.forEach((p, idx) => {
+        const posActual = idx + 1;
+        const posAnterior = p.posicionAnterior;
+
+        const tr = tbody.insertRow();
+        const evo = evolucionIcon(posActual, posAnterior);
+
+        if (Number.isFinite(posAnterior) && posAnterior > 0 && posActual !== posAnterior) {
+          tr.classList.add('player-highlight');
+        }
+
+        tr.innerHTML = `
+          <td class="col-pos">${posActual}</td>
+          <td class="col-nombre">${p.nombre}</td>
+          <td class="col-evol">${evo}</td>
+        `;
+      });
+
+      loading.style.display = 'none';
+      table.style.display = 'table';
+    }
+
+    function renumerarTabla(tbodyId){
+      const rows = document.getElementById(tbodyId).querySelectorAll('tr');
+      rows.forEach((row, idx) => {
+        const cell = row.querySelector('.col-pos');
+        if (cell) cell.textContent = String(idx + 1);
+      });
+    }
+
+    function initSortable() {
+      const createSortable = (tbodyId, saveButtonId) => {
+        new Sortable(document.getElementById(tbodyId), {
+          animation: 150,
+          ghostClass: 'sortable-ghost',
+          onEnd: () => {
+            renumerarTabla(tbodyId);
+            document.getElementById(saveButtonId).style.display = 'block';
+          }
+        });
+      };
+      createSortable('tbodyM', 'saveM');
+      createSortable('tbodyH', 'saveH');
+    }
+
+    // ✅ CAMBIO CLAVE: enviar POSICIÓN explícita al backend
+    function buildRankingPayloadFromDOM(tbodyId){
+      const rows = Array.from(document.getElementById(tbodyId).querySelectorAll('tr'));
+      const seen = new Set();
+      const payload = [];
+
+      for (const row of rows){
+        const nombre = normName(row.querySelector('.col-nombre')?.textContent);
+        if (!nombre) continue;
+
+        const key = nombre.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+
+        payload.push({ nombre });
+      }
+
+      // Asignar posicion 1..N de forma determinística
+      return payload.map((p, idx) => ({ posicion: idx + 1, nombre: p.nombre }));
+    }
+
+    async function saveRanking(category) {
+      const password = prompt("Ingresa la clave de administrador:");
+      if (!password) return;
+
+      const buttonId = category === 'mujeres' ? 'saveM' : 'saveH';
+      const tbodyId  = category === 'mujeres' ? 'tbodyM' : 'tbodyH';
+      const button = document.getElementById(buttonId);
+
+      button.disabled = true;
+      button.textContent = "Guardando...";
+
+      const ranking = buildRankingPayloadFromDOM(tbodyId);
+
+      if (ranking.length === 0){
+        alert("No hay jugadores con ranking válido para guardar.");
+        button.disabled = false;
+        button.textContent = 'Guardar Cambios';
+        return;
+      }
+
+      try {
+        const response = await fetch(API_URL, {
+          method: 'POST',
+          body: JSON.stringify({
+            password,
+            category,
+            // ✅ enviar lista con {posicion, nombre}
+            ranking
+          })
+        });
+
+        const result = await response.json();
+        if (result.status === 'error') throw new Error(result.message);
+
+        button.textContent = "¡Guardado!";
+        setTimeout(() => {
+          button.style.display = 'none';
+          button.textContent = 'Guardar Cambios';
+          button.disabled = false;
+          cargarDatos();
+        }, 1200);
+
+      } catch (err) {
+        alert(`Error: ${err.message}`);
+        button.disabled = false;
+        button.textContent = 'Reintentar';
+      }
+    }
+
+    function initToggle(){
+      const btnFem = document.getElementById('btnFem');
+      const btnMas = document.getElementById('btnMas');
+      const secFem = document.getElementById('sectionFemenino');
+      const secMas = document.getElementById('sectionMasculino');
+
+      function show(tipo){
+        if (tipo === 'femenino'){
+          secFem.style.display = 'block';
+          secMas.style.display = 'none';
+          btnFem.classList.add('active');
+          btnMas.classList.remove('active');
+        } else {
+          secFem.style.display = 'none';
+          secMas.style.display = 'block';
+          btnMas.classList.add('active');
+          btnFem.classList.remove('active');
+        }
+      }
+
+      btnFem.addEventListener('click', () => show('femenino'));
+      btnMas.addEventListener('click', () => show('masculino'));
+      show('femenino');
+    }
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      initToggle();
+      await cargarDatos();
+      initSortable();
+    });
+  </script>
 </body>
 </html>
