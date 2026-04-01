@@ -1,176 +1,217 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Ranking Test UCTenis</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ranking Test UCTenis</title>
 
-<style>
-body {
-  margin:0;
-  font-family: Arial, sans-serif;
-  background:#001f33;
-  color:white;
-}
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #001f33;
+      color: white;
+    }
 
-.container {
-  max-width:900px;
-  margin:auto;
-  padding:20px;
-}
+    .container {
+      max-width: 900px;
+      margin: auto;
+      padding: 20px;
+    }
 
-h1 {
-  text-align:center;
-}
+    h1 {
+      text-align: center;
+      margin-bottom: 20px;
+    }
 
-.tabs {
-  display:flex;
-  justify-content:center;
-  gap:10px;
-  margin:20px 0;
-}
+    .tabs {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin: 20px 0;
+      flex-wrap: wrap;
+    }
 
-button {
-  padding:10px 20px;
-  border-radius:20px;
-  border:none;
-  cursor:pointer;
-  font-weight:bold;
-}
+    button {
+      padding: 10px 20px;
+      border-radius: 20px;
+      border: none;
+      cursor: pointer;
+      font-weight: bold;
+      background: #e0e0e0;
+      color: #001f33;
+    }
 
-.active {
-  background:#c6d300;
-  color:#001f33;
-}
+    button.active {
+      background: #c6d300;
+      color: #001f33;
+    }
 
-.card {
-  display:flex;
-  gap:15px;
-  align-items:center;
-  background:rgba(255,255,255,0.08);
-  padding:12px;
-  border-radius:12px;
-  margin-bottom:10px;
-}
+    #contenido {
+      margin-top: 20px;
+    }
 
-img {
-  width:60px;
-  height:60px;
-  border-radius:50%;
-  object-fit:cover;
-  background:#333;
-}
+    .card {
+      display: flex;
+      gap: 15px;
+      align-items: center;
+      background: rgba(255,255,255,0.08);
+      padding: 12px;
+      border-radius: 12px;
+      margin-bottom: 10px;
+    }
 
-.info {
-  flex:1;
-}
+    .avatar {
+      width: 60px;
+      height: 60px;
+      border-radius: 50%;
+      object-fit: cover;
+      background: #333;
+      flex-shrink: 0;
+    }
 
-.nombre {
-  font-weight:bold;
-  font-size:18px;
-}
+    .info {
+      flex: 1;
+    }
 
-.meta {
-  font-size:13px;
-  opacity:0.8;
-}
+    .nombre {
+      font-weight: bold;
+      font-size: 18px;
+      margin-bottom: 6px;
+    }
 
-.puntos {
-  font-weight:bold;
-  color:#c6d300;
-}
-</style>
+    .meta {
+      font-size: 13px;
+      opacity: 0.9;
+      line-height: 1.4;
+    }
+
+    .puntos {
+      font-weight: bold;
+      color: #c6d300;
+      font-size: 20px;
+      min-width: 50px;
+      text-align: right;
+    }
+
+    .msg {
+      text-align: center;
+      padding: 20px;
+      opacity: 0.85;
+    }
+  </style>
 </head>
-
 <body>
 
-<div class="container">
-  <h1>Ranking UCTenis TEST</h1>
+  <div class="container">
+    <h1>Ranking UCTenis TEST</h1>
 
-  <div class="tabs">
-    <button id="btnH" class="active">Hombres</button>
-    <button id="btnM">Mujeres</button>
+    <div class="tabs">
+      <button id="btnH" class="active" type="button">Hombres</button>
+      <button id="btnM" type="button">Mujeres</button>
+    </div>
+
+    <div id="contenido" class="msg">Cargando...</div>
   </div>
 
-  <div id="contenido">Cargando...</div>
-</div>
+  <script>
+    const API = 'https://script.google.com/macros/s/AKfycbz7xwT8QECTamymk3fjq0K0XJZRmewkphc5yoHF_5IePkTM2MGamyefRypSj44XyYxeLg/exec';
 
-<script>
+    let DATA = { hombres: [], mujeres: [] };
+    let actual = 'hombres';
 
-const API = 'https://script.google.com/macros/s/AKfycbz7xwT8QECTamymk3fjq0K0XJZRmewkphc5yoHF_5IePkTM2MGamyefRypSj44XyYxeLg/exec';
+    document.getElementById('btnH').addEventListener('click', function () {
+      cambiar('hombres');
+    });
 
-let DATA = { hombres: [], mujeres: [] };
-let actual = 'hombres';
+    document.getElementById('btnM').addEventListener('click', function () {
+      cambiar('mujeres');
+    });
 
-document.getElementById('btnH').onclick = () => cambiar('hombres');
-document.getElementById('btnM').onclick = () => cambiar('mujeres');
+    function cambiar(tipo) {
+      actual = tipo;
+      document.getElementById('btnH').classList.toggle('active', tipo === 'hombres');
+      document.getElementById('btnM').classList.toggle('active', tipo === 'mujeres');
+      render();
+    }
 
-function cambiar(tipo){
-  actual = tipo;
-  document.getElementById('btnH').classList.toggle('active', tipo==='hombres');
-  document.getElementById('btnM').classList.toggle('active', tipo==='mujeres');
-  render();
-}
+    function getDefaultAvatar(tipo) {
+      return tipo === 'mujeres'
+        ? 'https://uctenis.github.io/reservas-canchas/fotos/default_avatar_m.png'
+        : 'https://uctenis.github.io/reservas-canchas/fotos/default_avatar_h.png';
+    }
 
-function render(){
-  const cont = document.getElementById('contenido');
-  const lista = DATA[actual];
+    function render() {
+      const cont = document.getElementById('contenido');
+      const lista = DATA[actual];
 
-  if(!lista || lista.length===0){
-    cont.innerHTML = "No hay datos";
-    return;
-  }
+      if (!lista || lista.length === 0) {
+        cont.innerHTML = '<div class="msg">No hay datos para mostrar</div>';
+        return;
+      }
 
-  cont.innerHTML = '';
+      cont.innerHTML = '';
 
-  lista.forEach(j => {
+      lista.forEach(function (j) {
+        const foto = j.foto
+          ? 'https://uctenis.github.io/reservas-canchas/' + j.foto
+          : getDefaultAvatar(actual);
 
-    // ⚠️ ruta absoluta para evitar errores
-    let foto = j.foto 
-      ? "https://uctenis.github.io/reservas-canchas/" + j.foto
-      : "https://uctenis.github.io/reservas-canchas/fotos/default_avatar_h.png";
+        const card = document.createElement('div');
+        card.className = 'card';
 
-    cont.innerHTML += `
-      <div class="card">
-        <img src="${foto}" 
-             onerror="this.src='https://uctenis.github.io/reservas-canchas/fotos/default_avatar_h.png'">
-
-        <div class="info">
-          <div class="nombre">${j.posicion}. ${j.nombre}</div>
-          <div class="meta">
-            Edad: ${j.edad || '-'} |
-            Cat: ${j.categoria || '-'} |
-            Mano: ${j.manoHabil || '-'} |
-            Revés: ${j.reves || '-'}
+        card.innerHTML = `
+          <img class="avatar" src="${foto}" alt="${j.nombre || 'Jugador'}">
+          <div class="info">
+            <div class="nombre">${j.posicion || '-'} . ${j.nombre || '-'}</div>
+            <div class="meta">
+              Edad: ${j.edad || '-'}<br>
+              Categoría: ${j.categoria || '-'}<br>
+              Mano: ${j.manoHabil || '-'}<br>
+              Revés: ${j.reves || '-'}
+            </div>
           </div>
-        </div>
+          <div class="puntos">${j.puntos || 0}</div>
+        `;
 
-        <div class="puntos">${j.puntos || 0}</div>
-      </div>
-    `;
-  });
-}
+        const img = card.querySelector('img');
+        img.onerror = function () {
+          this.onerror = null;
+          this.src = getDefaultAvatar(actual);
+        };
 
-async function cargar(){
-  try{
-    const res = await fetch(API + '?t=' + Date.now());
-    const json = await res.json();
+        cont.appendChild(card);
+      });
+    }
 
-    console.log("DATA:", json);
+    async function cargar() {
+      const cont = document.getElementById('contenido');
 
-    DATA = json;
+      try {
+        const res = await fetch(API + '?t=' + Date.now(), { cache: 'no-store' });
 
-    render();
+        if (!res.ok) {
+          throw new Error('HTTP ' + res.status);
+        }
 
-  }catch(e){
-    console.error(e);
-    document.getElementById('contenido').innerHTML = "ERROR cargando datos";
-  }
-}
+        const json = await res.json();
+        console.log('DATA:', json);
 
-cargar();
+        DATA = {
+          hombres: Array.isArray(json.hombres) ? json.hombres : [],
+          mujeres: Array.isArray(json.mujeres) ? json.mujeres : []
+        };
 
-</script>
+        render();
+
+      } catch (e) {
+        console.error(e);
+        cont.innerHTML = '<div class="msg">Error cargando datos: ' + e.message + '</div>';
+      }
+    }
+
+    cargar();
+  </script>
 
 </body>
 </html>
