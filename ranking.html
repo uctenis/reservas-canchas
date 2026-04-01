@@ -6,41 +6,44 @@
     <title>Ranking Oficial - UCTenis</title>
     <style>
         :root { --blue-uct: #004a99; --orange-uct: #ff9800; }
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f0f2f5; margin: 0; padding: 0; }
+        body { font-family: 'Segoe UI', sans-serif; background-color: #f4f7f9; margin: 0; padding: 0; }
         
         /* Header con Logo que vuelve al Home */
         header { background-color: white; padding: 15px 20px; display: flex; align-items: center; border-bottom: 3px solid var(--blue-uct); box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
         .logo-link { display: flex; align-items: center; text-decoration: none; color: var(--blue-uct); font-weight: bold; font-size: 1.2rem; }
-        .logo-link img { height: 40px; margin-right: 15px; transition: transform 0.2s; }
+        .logo-link img { height: 45px; margin-right: 15px; transition: transform 0.2s; }
         .logo-link img:hover { transform: scale(1.05); }
 
         .container { max-width: 1000px; margin: 30px auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
-        h1 { color: var(--blue-uct); text-align: center; margin-bottom: 30px; }
-        h3 { border-left: 5px solid var(--orange-uct); padding-left: 10px; color: #333; margin-top: 40px; }
+        h1 { color: var(--blue-uct); text-align: center; margin-bottom: 10px; }
+        .subtitle { text-align: center; color: #666; margin-bottom: 30px; font-style: italic; }
         
-        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        h3 { border-left: 5px solid var(--orange-uct); padding-left: 15px; color: #333; margin-top: 40px; background: #fdfdfd; padding-top: 10px; padding-bottom: 10px; }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; background: white; }
         th, td { padding: 15px; text-align: left; border-bottom: 1px solid #eee; }
-        th { background-color: #f8f9fa; color: var(--blue-uct); text-transform: uppercase; font-size: 0.85rem; }
-        tr:hover { background-color: #f9fcff; }
+        th { background-color: #f8f9fa; color: var(--blue-uct); text-transform: uppercase; font-size: 0.85rem; letter-spacing: 1px; }
+        tr:hover { background-color: #f0f7ff; }
         
-        .pos-badge { background: var(--blue-uct); color: white; padding: 4px 10px; border-radius: 50%; font-weight: bold; }
-        .btn-edit { background: var(--orange-uct); color: white; border: none; padding: 8px 12px; cursor: pointer; border-radius: 6px; font-size: 0.8rem; font-weight: bold; }
-        .btn-edit:hover { background: #e68a00; }
+        .pos-badge { background: var(--blue-uct); color: white; padding: 5px 12px; border-radius: 20px; font-weight: bold; min-width: 30px; display: inline-block; text-align: center; }
+        .btn-edit { background: var(--orange-uct); color: white; border: none; padding: 8px 15px; cursor: pointer; border-radius: 6px; font-size: 0.75rem; font-weight: bold; transition: 0.3s; }
+        .btn-edit:hover { background: #e68a00; transform: translateY(-1px); box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
         
-        @media (max-width: 600px) { th:nth-child(3), td:nth-child(3) { display: none; } } /* Esconde puntos en movil si es muy chico */
+        .loading-text { text-align: center; color: #999; padding: 20px; }
     </style>
 </head>
 <body>
 
 <header>
     <a href="index.html" class="logo-link">
-        <img src="https://uctenis.github.io/reservas-canchas/logo.png" alt="Logo UCTenis" onerror="this.src='https://via.placeholder.com/40?text=UCT'">
+        <img src="https://uctenis.github.io/reservas-canchas/logo.png" alt="Logo UCTenis" onerror="this.src='https://via.placeholder.com/45?text=UCT'">
         <span>UCTENIS CLUB</span>
     </a>
 </header>
 
 <div class="container">
     <h1>Ranking Oficial de Jugadores</h1>
+    <p class="subtitle">Sincronizado en tiempo real con la base de datos UCT</p>
     
     <div id="seccion-masculino">
         <h3>Ranking Masculino</h3>
@@ -50,10 +53,10 @@
                     <th>Pos</th>
                     <th>Jugador</th>
                     <th>Puntos</th>
-                    <th>Acción</th>
+                    <th>Gestión</th>
                 </tr>
             </thead>
-            <tbody id="bodyMasculino"><tr><td colspan="4">Cargando datos...</td></tr></tbody>
+            <tbody id="bodyMasculino"><tr class="loading-text"><td colspan="4">Cargando ranking masculino...</td></tr></tbody>
         </table>
     </div>
 
@@ -65,24 +68,24 @@
                     <th>Pos</th>
                     <th>Jugador</th>
                     <th>Puntos</th>
-                    <th>Acción</th>
+                    <th>Gestión</th>
                 </tr>
             </thead>
-            <tbody id="bodyFemenino"><tr><td colspan="4">Cargando datos...</td></tr></tbody>
+            <tbody id="bodyFemenino"><tr class="loading-text"><td colspan="4">Cargando ranking femenino...</td></tr></tbody>
         </table>
     </div>
 </div>
 
 <script>
-// --- CONFIGURACIÓN ---
+// --- CONFIGURACIÓN DE CONEXIÓN ---
 const API_URL = "https://script.google.com/macros/s/AKfycbzrf9Xm7UoP3d4NXxbSNZOFMLaDZk1h49N3EzlZS_xuxYDkzJyDvpmlpwQuQX8kfno/exec";
 
-// IMPORTANTE: Debes publicar CADA HOJA por separado en formato CSV para que esto funcione bien
-const URL_CSV_MAS = "PON_AQUÍ_EL_LINK_CSV_DE_LA_HOJA_RANKINGMAS";
-const URL_CSV_FEM = "PON_AQUÍ_EL_LINK_CSV_DE_LA_HOJA_RANKINGFEM";
+// TUS URLS DE PUBLICACIÓN CSV
+const URL_CSV_MAS = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQXwSh1hxd6vHhWoba0ZilbIJ9a1-UGtJ8GFMEM-FUapDG0qMxNje69JrnbAieAb0aWkmAtM46q8tML/pub?gid=1439775190&single=true&output=csv";
+const URL_CSV_FEM = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQXwSh1hxd6vHhWoba0ZilbIJ9a1-UGtJ8GFMEM-FUapDG0qMxNje69JrnbAieAb0aWkmAtM46q8tML/pub?gid=246091959&single=true&output=csv";
 
-// --- 1. CARGAR Y FILTRAR DATOS ---
-async function obtenerDatos(url, tableId, genero) {
+// --- 1. FUNCIÓN PARA CARGAR DATOS ---
+async function cargarDatos(url, tableId, genero) {
     try {
         const res = await fetch(url);
         const csv = await res.text();
@@ -92,11 +95,13 @@ async function obtenerDatos(url, tableId, genero) {
 
         filas.forEach(fila => {
             const col = fila.split(',');
-            const pos = parseInt(col[0]);
-            const nombre = col[1];
-            const puntos = col[2];
+            if (col.length < 2) return;
 
-            // REGLA: Solo los que tienen número de posición
+            const pos = parseInt(col[0]); // Columna A
+            const nombre = col[1].trim(); // Columna B
+            const puntos = col[2] ? col[2].trim() : "0"; // Columna C
+
+            // REGLA: Solo se muestran si tienen número de posición > 0
             if (!isNaN(pos) && pos > 0) {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
@@ -104,7 +109,7 @@ async function obtenerDatos(url, tableId, genero) {
                     <td><strong>${nombre}</strong></td>
                     <td>${puntos} pts</td>
                     <td>
-                        <button class="btn-edit" onclick="editarRanking('${nombre}', ${pos}, ${puntos}, '${genero}')">
+                        <button class="btn-edit" onclick="accionEditar('${nombre}', ${pos}, '${puntos}', '${genero}')">
                             EDITAR
                         </button>
                     </td>
@@ -113,45 +118,48 @@ async function obtenerDatos(url, tableId, genero) {
             }
         });
     } catch (e) {
-        console.error("Error cargando " + genero, e);
+        console.error("Error cargando datos:", e);
     }
 }
 
-// --- 2. ENVIAR CAMBIOS A GOOGLE SHEETS ---
-async function editarRanking(nombre, pos, pts, genero) {
+// --- 2. FUNCIÓN PARA EDITAR (BIDIRECCIONAL) ---
+async function accionEditar(nombre, pos, pts, genero) {
     const nPos = prompt(`Editar posición de ${nombre}:`, pos);
+    if (nPos === null) return;
+    
     const nPts = prompt(`Editar puntos de ${nombre}:`, pts);
+    if (nPts === null) return;
 
-    if (nPos !== null && nPts !== null) {
-        const payload = {
-            nombre: nombre,
-            nuevaPosicion: parseInt(nPos),
-            nuevoPuntaje: parseInt(nPts),
-            hoja: (genero === 'M') ? 'rankingmas' : 'rankingfem'
-        };
+    const payload = {
+        nombre: nombre,
+        nuevaPosicion: parseInt(nPos),
+        nuevoPuntaje: nPts,
+        hoja: (genero === 'M') ? 'rankingmas' : 'rankingfem'
+    };
 
-        alert("Sincronizando... No cierres la página.");
+    alert("Sincronizando con Google Sheets... Por favor espera.");
 
-        try {
-            await fetch(API_URL, {
-                method: 'POST',
-                mode: 'no-cors',
-                body: JSON.stringify(payload)
-            });
-            alert("¡Listo! El cambio se reflejará en unos segundos.");
-            location.reload(); // Recarga para ver cambios (si Google ya actualizó el CSV)
-        } catch (err) {
-            alert("Error al guardar.");
-        }
+    try {
+        await fetch(API_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            body: JSON.stringify(payload)
+        });
+        
+        alert("¡Éxito! El cambio ha sido enviado a la base de datos. Los cambios pueden tardar unos segundos en aparecer aquí.");
+        // Recargar después de un breve delay para que Google actualice el CSV
+        setTimeout(() => { location.reload(); }, 2000);
+    } catch (err) {
+        alert("Error al conectar con el servidor de Google.");
     }
 }
 
-// Ejecutar al cargar
+// INICIAR CARGA
 window.onload = () => {
-    obtenerDatos(URL_CSV_MAS, 'bodyMasculino', 'M');
-    obtenerDatos(URL_CSV_FEM, 'bodyFemenino', 'F');
+    cargarDatos(URL_CSV_MAS, 'bodyMasculino', 'M');
+    cargarDatos(URL_CSV_FEM, 'bodyFemenino', 'F');
 };
-
 </script>
+
 </body>
 </html>
