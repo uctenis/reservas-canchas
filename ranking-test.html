@@ -47,32 +47,38 @@
 
         <section class="info-section glass-card" id="sectionFemenino">
             <h2 class="section-title">Ranking Femenino</h2>
+            <div class="loading" id="loadingF" style="text-align:center; padding:20px; color:var(--text-secondary);">
+                Cargando ranking...
+            </div>
             <div class="ranking-table-container">
-                <table>
+                <table id="tableF" style="display:none; width: 100%;">
                     <thead>
                         <tr>
                             <th>Pos.</th>
-                            <th>Jugadora</th>
+                            <th>Nombre</th>
+                            <th>Evolución</th>
                         </tr>
                     </thead>
-                    <tbody id="tbodyF">
-                        </tbody>
+                    <tbody id="tbodyF"></tbody>
                 </table>
             </div>
         </section>
 
         <section class="info-section glass-card" id="sectionMasculino">
             <h2 class="section-title">Ranking Masculino</h2>
+            <div class="loading" id="loadingM" style="text-align:center; padding:20px; color:var(--text-secondary);">
+                Cargando ranking...
+            </div>
             <div class="ranking-table-container">
-                <table>
+                <table id="tableM" style="display:none; width: 100%;">
                     <thead>
                         <tr>
                             <th>Pos.</th>
-                            <th>Jugador</th>
+                            <th>Nombre</th>
+                            <th>Evolución</th>
                         </tr>
                     </thead>
-                    <tbody id="tbodyM">
-                        </tbody>
+                    <tbody id="tbodyM"></tbody>
                 </table>
             </div>
         </section>
@@ -87,46 +93,58 @@
         </div>
     </div>
 
-    <div class=\"modal-overlay\" id=\"playerModal\">
-        <div class=\"modal-content\"></div>
+    <div class="modal-overlay" id="playerModal">
+        <div class="modal-content"></div>
     </div>
 
     <script src="script.js"></script>
 
     <script>
+        // URLs de tus hojas de cálculo
         const CSV_FEM = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQXwSh1hxd6vHhWoba0ZilbIJ9a1-UGtJ8GFMEM-FUapDG0qMxNje69JrnbAieAb0aWkmAtM46q8tML/pub?gid=246091959&single=true&output=csv";
         const CSV_MAS = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQXwSh1hxd6vHhWoba0ZilbIJ9a1-UGtJ8GFMEM-FUapDG0qMxNje69JrnbAieAb0aWkmAtM46q8tML/pub?gid=1439775190&single=true&output=csv";
 
-        async function cargarRanking(url, tbodyId) {
+        async function cargarRanking(url, tbodyId, loadingId, tableId) {
             try {
                 const res = await fetch(url);
                 const csv = await res.text();
                 const filas = csv.split(/\r?\n/).slice(1);
                 const tbody = document.getElementById(tbodyId);
+                
                 tbody.innerHTML = "";
 
                 filas.forEach(fila => {
                     const col = fila.split(/,|;/);
                     if (col.length < 2) return;
+
                     const pos = col[0].trim();
                     const nombre = col[1].trim();
+                    const evol = col[2] ? col[2].trim() : "-";
 
+                    // REGLA: Solo mostrar si la posición es un número mayor a 0
                     if (pos !== "" && !isNaN(pos) && parseInt(pos) > 0) {
                         const tr = document.createElement('tr');
+                        // Mantenemos la función openPlayerModal de tu script.js
                         tr.innerHTML = `
                             <td><span class="pos-badge">${pos}</span></td>
-                            <td onclick="openPlayerModal('${nombre}')" style="cursor:pointer">${nombre}</td>
+                            <td onclick="openPlayerModal('${nombre}')" style="cursor:pointer; font-weight:600;">${nombre}</td>
+                            <td>${evol}</td>
                         `;
                         tbody.appendChild(tr);
                     }
                 });
-            } catch (e) { console.error(e); }
+
+                document.getElementById(loadingId).style.display = 'none';
+                document.getElementById(tableId).style.display = 'table';
+            } catch (e) { console.error("Error al cargar ranking:", e); }
         }
 
         document.addEventListener('DOMContentLoaded', () => {
-            cargarRanking(CSV_FEM, 'tbodyF');
-            cargarRanking(CSV_MAS, 'tbodyM');
+            // Conexión con las hojas
+            cargarRanking(CSV_FEM, 'tbodyF', 'loadingF', 'tableF');
+            cargarRanking(CSV_MAS, 'tbodyM', 'loadingM', 'tableM');
 
+            // Lógica original de pestañas
             const btns = document.querySelectorAll('.ranking-toggle-btn');
             const sectionFem = document.getElementById('sectionFemenino');
             const sectionMas = document.getElementById('sectionMasculino');
@@ -155,4 +173,5 @@
         });
     </script>
 </body>
+
 </html>
