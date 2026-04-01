@@ -53,7 +53,6 @@
                         <tr>
                             <th>Pos.</th>
                             <th>Jugadora</th>
-                            <th>Puntos</th>
                         </tr>
                     </thead>
                     <tbody id="tbodyF">
@@ -70,7 +69,6 @@
                         <tr>
                             <th>Pos.</th>
                             <th>Jugador</th>
-                            <th>Puntos</th>
                         </tr>
                     </thead>
                     <tbody id="tbodyM">
@@ -99,7 +97,7 @@
         const CSV_FEM = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQXwSh1hxd6vHhWoba0ZilbIJ9a1-UGtJ8GFMEM-FUapDG0qMxNje69JrnbAieAb0aWkmAtM46q8tML/pub?gid=246091959&single=true&output=csv";
         const CSV_MAS = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQXwSh1hxd6vHhWoba0ZilbIJ9a1-UGtJ8GFMEM-FUapDG0qMxNje69JrnbAieAb0aWkmAtM46q8tML/pub?gid=1439775190&single=true&output=csv";
 
-        async function cargarDatos(url, tbodyId) {
+        async function cargarRanking(url, tbodyId) {
             try {
                 const res = await fetch(url);
                 const csv = await res.text();
@@ -113,41 +111,46 @@
 
                     const pos = col[0].trim();
                     const nombre = col[1].trim();
-                    const pts = col[2] ? col[2].trim() : "0";
 
-                    // REGLA: Solo mostrar si la posición es un número válido > 0
+                    // Solo si la posición es un número mayor a 0
                     if (pos !== "" && !isNaN(pos) && parseInt(pos) > 0) {
                         const tr = document.createElement('tr');
-                        // Mantenemos la función openPlayerModal de tu script.js
+                        // Mantiene la apertura de fichas original
                         tr.innerHTML = `
                             <td><span class="pos-badge">${pos}</span></td>
-                            <td onclick="openPlayerModal('${nombre}')" style="cursor:pointer; font-weight:600;">${nombre}</td>
-                            <td>${pts}</td>
+                            <td onclick="openPlayerModal('${nombre}')" style="cursor:pointer">${nombre}</td>
                         `;
                         tbody.appendChild(tr);
                     }
                 });
-            } catch (e) { console.error("Error al cargar ranking:", e); }
+            } catch (e) { console.error(e); }
         }
 
         document.addEventListener('DOMContentLoaded', () => {
-            // Carga inicial de datos
-            cargarDatos(CSV_FEM, 'tbodyF');
-            cargarDatos(CSV_MAS, 'tbodyM');
+            cargarRanking(CSV_FEM, 'tbodyF');
+            cargarRanking(CSV_MAS, 'tbodyM');
 
-            // Lógica original de pestañas (toggle)
             const btns = document.querySelectorAll('.ranking-toggle-btn');
             const sectionFem = document.getElementById('sectionFemenino');
             const sectionMas = document.getElementById('sectionMasculino');
-            sectionMas.style.display = 'none';
+
+            function showRanking(tipo) {
+                if (tipo === 'femenino') {
+                    sectionFem.style.display = 'block';
+                    sectionMas.style.display = 'none';
+                } else {
+                    sectionFem.style.display = 'none';
+                    sectionMas.style.display = 'block';
+                }
+            }
+
+            showRanking('femenino');
 
             btns.forEach(btn => {
                 btn.addEventListener('click', () => {
                     btns.forEach(b => b.classList.remove('active'));
                     btn.classList.add('active');
-                    const target = btn.getAttribute('data-target');
-                    sectionFem.style.display = target === 'femenino' ? 'block' : 'none';
-                    sectionMas.style.display = target === 'masculino' ? 'block' : 'none';
+                    showRanking(btn.getAttribute('data-target'));
                 });
             });
 
