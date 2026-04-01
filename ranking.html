@@ -1,138 +1,157 @@
 <!DOCTYPE html>
 <html lang="es">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ranking UCTenis</title>
-    <link rel="icon" href="logo_uctenis_v03.png" type="image/png">
-    <link rel="stylesheet" href="style.css">
-
-    <!-- Estilos pequeños para los botones de cambio -->
+    <title>Ranking Oficial - UCTenis</title>
     <style>
-        .ranking-toggle-wrapper {
-            text-align: center;
-            margin: 25px 0 30px;
-        }
+        :root { --blue-uct: #004a99; --orange-uct: #ff9800; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f0f2f5; margin: 0; padding: 0; }
+        
+        /* Header con Logo que vuelve al Home */
+        header { background-color: white; padding: 15px 20px; display: flex; align-items: center; border-bottom: 3px solid var(--blue-uct); box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .logo-link { display: flex; align-items: center; text-decoration: none; color: var(--blue-uct); font-weight: bold; font-size: 1.2rem; }
+        .logo-link img { height: 40px; margin-right: 15px; transition: transform 0.2s; }
+        .logo-link img:hover { transform: scale(1.05); }
 
-        .ranking-toggle-btn {
-            margin: 0 8px;
-            cursor: pointer;
-        }
-
-        .ranking-toggle-btn.active {
-            background-color: var(--accent-color, #007aff);
-            color: #000;
-        }
+        .container { max-width: 1000px; margin: 30px auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+        h1 { color: var(--blue-uct); text-align: center; margin-bottom: 30px; }
+        h3 { border-left: 5px solid var(--orange-uct); padding-left: 10px; color: #333; margin-top: 40px; }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { padding: 15px; text-align: left; border-bottom: 1px solid #eee; }
+        th { background-color: #f8f9fa; color: var(--blue-uct); text-transform: uppercase; font-size: 0.85rem; }
+        tr:hover { background-color: #f9fcff; }
+        
+        .pos-badge { background: var(--blue-uct); color: white; padding: 4px 10px; border-radius: 50%; font-weight: bold; }
+        .btn-edit { background: var(--orange-uct); color: white; border: none; padding: 8px 12px; cursor: pointer; border-radius: 6px; font-size: 0.8rem; font-weight: bold; }
+        .btn-edit:hover { background: #e68a00; }
+        
+        @media (max-width: 600px) { th:nth-child(3), td:nth-child(3) { display: none; } } /* Esconde puntos en movil si es muy chico */
     </style>
 </head>
-
 <body>
-    <div class="main-container">
-        <header>
-            <img src="logo_uctenis_v03.png" alt="Logo UCTenis Club" class="club-logo">
-            <h1>Ranking UCTenis</h1>
-            <div class="date-today" id="lastUpdatedDate">Cargando...</div>
-        </header>
 
-        <!-- Botones para alternar ranking -->
-        <div class="ranking-toggle-wrapper">
-            <button class="btn-pill ranking-toggle-btn active" data-target="femenino">
-                Femenino
-            </button>
-            <button class="btn-pill ranking-toggle-btn" data-target="masculino">
-                Masculino
-            </button>
-        </div>
+<header>
+    <a href="index.html" class="logo-link">
+        <img src="https://uctenis.github.io/reservas-canchas/logo.png" alt="Logo UCTenis" onerror="this.src='https://via.placeholder.com/40?text=UCT'">
+        <span>UCTENIS CLUB</span>
+    </a>
+</header>
 
-        <!-- RANKING FEMENINO -->
-        <section class="info-section glass-card" id="sectionFemenino">
-            <h2 class="section-title">Ranking Femenino</h2>
-            <div class="loading" id="loadingM" style="text-align:center; padding:20px; color:var(--text-secondary);">
-                Cargando ranking...
-            </div>
-            <div class="ranking-table-container">
-                <table id="tableM" style="display:none;">
-                    <thead>
-                        <tr>
-                            <th>Pos.</th>
-                            <th>Nombre</th>
-                            <th>Evolución</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tbodyM"></tbody>
-                </table>
-            </div>
-        </section>
-
-        <!-- RANKING MASCULINO -->
-        <section class="info-section glass-card" id="sectionMasculino">
-            <h2 class="section-title">Ranking Masculino</h2>
-            <div class="loading" id="loadingH" style="text-align:center; padding:20px; color:var(--text-secondary);">
-                Cargando ranking...
-            </div>
-            <div class="ranking-table-container">
-                <table id="tableH" style="display:none;">
-                    <thead>
-                        <tr>
-                            <th>Pos.</th>
-                            <th>Nombre</th>
-                            <th>Evolución</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tbodyH"></tbody>
-                </table>
-            </div>
-        </section>
-
-        <div style="text-align:center; margin-top:40px;">
-            <a href="index.html" class="btn-pill">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" />
-                </svg>
-                Volver a Reservar
-            </a>
-        </div>
+<div class="container">
+    <h1>Ranking Oficial de Jugadores</h1>
+    
+    <div id="seccion-masculino">
+        <h3>Ranking Masculino</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Pos</th>
+                    <th>Jugador</th>
+                    <th>Puntos</th>
+                    <th>Acción</th>
+                </tr>
+            </thead>
+            <tbody id="bodyMasculino"><tr><td colspan="4">Cargando datos...</td></tr></tbody>
+        </table>
     </div>
 
-    <!-- Modal -->
-    <div class="modal-overlay" id="playerModal">
-        <div class="modal-content"></div>
+    <div id="seccion-femenino">
+        <h3>Ranking Femenino</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Pos</th>
+                    <th>Jugador</th>
+                    <th>Puntos</th>
+                    <th>Acción</th>
+                </tr>
+            </thead>
+            <tbody id="bodyFemenino"><tr><td colspan="4">Cargando datos...</td></tr></tbody>
+        </table>
     </div>
+</div>
 
-    <script src="script.js"></script>
+<script>
+// --- CONFIGURACIÓN ---
+const API_URL = "https://script.google.com/macros/s/AKfycbzrf9Xm7UoP3d4NXxbSNZOFMLaDZk1h49N3EzlZS_xuxYDkzJyDvpmlpwQuQX8kfno/exec";
 
-    <!-- Script para mostrar SOLO un ranking a la vez -->
-    <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            const btns = document.querySelectorAll('.ranking-toggle-btn');
-            const sectionFem = document.getElementById('sectionFemenino');
-            const sectionMas = document.getElementById('sectionMasculino');
+// IMPORTANTE: Debes publicar CADA HOJA por separado en formato CSV para que esto funcione bien
+const URL_CSV_MAS = "PON_AQUÍ_EL_LINK_CSV_DE_LA_HOJA_RANKINGMAS";
+const URL_CSV_FEM = "PON_AQUÍ_EL_LINK_CSV_DE_LA_HOJA_RANKINGFEM";
 
-            function showRanking(tipo) {
-                if (tipo === 'femenino') {
-                    sectionFem.style.display = 'block';
-                    sectionMas.style.display = 'none';
-                } else {
-                    sectionFem.style.display = 'none';
-                    sectionMas.style.display = 'block';
-                }
+// --- 1. CARGAR Y FILTRAR DATOS ---
+async function obtenerDatos(url, tableId, genero) {
+    try {
+        const res = await fetch(url);
+        const csv = await res.text();
+        const filas = csv.split('\n').slice(1);
+        const tbody = document.getElementById(tableId);
+        tbody.innerHTML = "";
+
+        filas.forEach(fila => {
+            const col = fila.split(',');
+            const pos = parseInt(col[0]);
+            const nombre = col[1];
+            const puntos = col[2];
+
+            // REGLA: Solo los que tienen número de posición
+            if (!isNaN(pos) && pos > 0) {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td><span class="pos-badge">${pos}</span></td>
+                    <td><strong>${nombre}</strong></td>
+                    <td>${puntos} pts</td>
+                    <td>
+                        <button class="btn-edit" onclick="editarRanking('${nombre}', ${pos}, ${puntos}, '${genero}')">
+                            EDITAR
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
             }
-
-            // Estado inicial: Femenino visible, Masculino oculto
-            showRanking('femenino');
-
-            btns.forEach(btn => {
-                btn.addEventListener('click', () => {
-                    btns.forEach(b => b.classList.remove('active'));
-                    btn.classList.add('active');
-
-                    const target = btn.getAttribute('data-target');
-                    showRanking(target);
-                });
-            });
         });
-    </script>
-</body>
+    } catch (e) {
+        console.error("Error cargando " + genero, e);
+    }
+}
 
+// --- 2. ENVIAR CAMBIOS A GOOGLE SHEETS ---
+async function editarRanking(nombre, pos, pts, genero) {
+    const nPos = prompt(`Editar posición de ${nombre}:`, pos);
+    const nPts = prompt(`Editar puntos de ${nombre}:`, pts);
+
+    if (nPos !== null && nPts !== null) {
+        const payload = {
+            nombre: nombre,
+            nuevaPosicion: parseInt(nPos),
+            nuevoPuntaje: parseInt(nPts),
+            hoja: (genero === 'M') ? 'rankingmas' : 'rankingfem'
+        };
+
+        alert("Sincronizando... No cierres la página.");
+
+        try {
+            await fetch(API_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                body: JSON.stringify(payload)
+            });
+            alert("¡Listo! El cambio se reflejará en unos segundos.");
+            location.reload(); // Recarga para ver cambios (si Google ya actualizó el CSV)
+        } catch (err) {
+            alert("Error al guardar.");
+        }
+    }
+}
+
+// Ejecutar al cargar
+window.onload = () => {
+    obtenerDatos(URL_CSV_MAS, 'bodyMasculino', 'M');
+    obtenerDatos(URL_CSV_FEM, 'bodyFemenino', 'F');
+};
+
+</script>
+</body>
 </html>
