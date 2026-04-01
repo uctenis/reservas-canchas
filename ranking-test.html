@@ -4,19 +4,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ranking UCTenis - TEST</title>
+    <title>Ranking UCTenis</title>
     <link rel="icon" href="logo_uctenis_v03.png" type="image/png">
     <link rel="stylesheet" href="style.css">
 
     <style>
-        .ranking-toggle-wrapper { text-align: center; margin: 25px 0 30px; }
-        .ranking-toggle-btn { margin: 0 8px; cursor: pointer; }
-        .ranking-toggle-btn.active { background-color: var(--accent-color, #007aff); color: #000; }
-        /* Botón de admin discreto para no romper la estética */
-        .admin-edit-btn { 
-            background: var(--accent-color, #007aff); 
-            color: white; border: none; border-radius: 4px; 
-            padding: 2px 8px; font-size: 10px; cursor: pointer; margin-left: 5px;
+        .ranking-toggle-wrapper {
+            text-align: center;
+            margin: 25px 0 30px;
+        }
+
+        .ranking-toggle-btn {
+            margin: 0 8px;
+            cursor: pointer;
+        }
+
+        .ranking-toggle-btn.active {
+            background-color: var(--accent-color, #007aff);
+            color: #000;
         }
     </style>
 </head>
@@ -24,14 +29,20 @@
 <body>
     <div class="main-container">
         <header>
-            <a href="index.html"><img src="logo_uctenis_v03.png" alt="Logo UCTenis Club" class="club-logo"></a>
+            <a href="index.html">
+                <img src="logo_uctenis_v03.png" alt="Logo UCTenis Club" class="club-logo">
+            </a>
             <h1>Ranking UCTenis</h1>
-            <div class="date-today" id="lastUpdatedDate"></div>
+            <div class="date-today" id="lastUpdatedDate">Cargando...</div>
         </header>
 
         <div class="ranking-toggle-wrapper">
-            <button class="btn-pill ranking-toggle-btn active" data-target="femenino">Femenino</button>
-            <button class="btn-pill ranking-toggle-btn" data-target="masculino">Masculino</button>
+            <button class="btn-pill ranking-toggle-btn active" data-target="femenino">
+                Femenino
+            </button>
+            <button class="btn-pill ranking-toggle-btn" data-target="masculino">
+                Masculino
+            </button>
         </div>
 
         <section class="info-section glass-card" id="sectionFemenino">
@@ -69,7 +80,12 @@
         </section>
 
         <div style="text-align:center; margin-top:40px;">
-            <a href="index.html" class="btn-pill">Volver a Reservar</a>
+            <a href="index.html" class="btn-pill">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" />
+                </svg>
+                Volver a Reservar
+            </a>
         </div>
     </div>
 
@@ -80,80 +96,61 @@
     <script src="script.js"></script>
 
     <script>
-        const API_URL = "https://script.google.com/macros/s/AKfycbzrf9Xm7UoP3d4NXxbSNZOFMLaDZk1h49N3EzlZS_xuxYDkzJyDvpmlpwQuQX8kfno/exec";
         const CSV_FEM = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQXwSh1hxd6vHhWoba0ZilbIJ9a1-UGtJ8GFMEM-FUapDG0qMxNje69JrnbAieAb0aWkmAtM46q8tML/pub?gid=246091959&single=true&output=csv";
         const CSV_MAS = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQXwSh1hxd6vHhWoba0ZilbIJ9a1-UGtJ8GFMEM-FUapDG0qMxNje69JrnbAieAb0aWkmAtM46q8tML/pub?gid=1439775190&single=true&output=csv";
 
-        async function cargarRanking(url, tbodyId, genero) {
-            const res = await fetch(url);
-            const data = await res.text();
-            const rows = data.split(/\r?\n/).slice(1);
-            const tbody = document.getElementById(tbodyId);
-            tbody.innerHTML = "";
+        async function cargarDatos(url, tbodyId) {
+            try {
+                const res = await fetch(url);
+                const csv = await res.text();
+                const filas = csv.split(/\r?\n/).slice(1);
+                const tbody = document.getElementById(tbodyId);
+                tbody.innerHTML = "";
 
-            rows.forEach(row => {
-                const col = row.split(/,|;/);
-                if (col.length < 2) return;
+                filas.forEach(fila => {
+                    const col = fila.split(/,|;/);
+                    if (col.length < 2) return;
 
-                const pos = col[0].trim();
-                const nombre = col[1].trim();
-                const pts = col[2] ? col[2].trim() : "0";
+                    const pos = col[0].trim();
+                    const nombre = col[1].trim();
+                    const pts = col[2] ? col[2].trim() : "0";
 
-                // SOLO SI TIENE POSICIÓN NUMÉRICA
-                if (pos !== "" && !isNaN(pos) && parseInt(pos) > 0) {
-                    const tr = document.createElement('tr');
-                    // Mantenemos la función abrirFicha() de tu script.js original
-                    tr.innerHTML = `
-                        <td><span class="pos-badge">${pos}</span></td>
-                        <td>
-                            <span style="cursor:pointer; color:var(--accent-color);" onclick="openPlayerModal('${nombre}')">${nombre}</span>
-                            <button class="admin-edit-btn" onclick="adminEdit('${nombre}', '${pos}', '${pts}', '${genero}')">✎</button>
-                        </td>
-                        <td>${pts}</td>
-                    `;
-                    tbody.appendChild(tr);
-                }
-            });
-        }
-
-        async function adminEdit(nombre, pos, pts, gen) {
-            const nPos = prompt(`Cambiar posición de ${nombre}:`, pos);
-            const nPts = prompt(`Cambiar puntos de ${nombre}:`, pts);
-            if (nPos !== null && nPts !== null) {
-                await fetch(API_URL, {
-                    method: 'POST',
-                    mode: 'no-cors',
-                    body: JSON.stringify({
-                        nombre: nombre, 
-                        nuevaPosicion: nPos, 
-                        nuevoPuntaje: nPts, 
-                        hoja: gen === 'M' ? 'rankingmas' : 'rankingfem'
-                    })
+                    // REGLA: Solo mostrar si la posición es un número válido > 0
+                    if (pos !== "" && !isNaN(pos) && parseInt(pos) > 0) {
+                        const tr = document.createElement('tr');
+                        // Mantenemos la función openPlayerModal de tu script.js
+                        tr.innerHTML = `
+                            <td><span class="pos-badge">${pos}</span></td>
+                            <td onclick="openPlayerModal('${nombre}')" style="cursor:pointer; font-weight:600;">${nombre}</td>
+                            <td>${pts}</td>
+                        `;
+                        tbody.appendChild(tr);
+                    }
                 });
-                alert("Actualizado. Recarga en unos segundos.");
-                location.reload();
-            }
+            } catch (e) { console.error("Error al cargar ranking:", e); }
         }
 
         document.addEventListener('DOMContentLoaded', () => {
-            cargarRanking(CSV_FEM, 'tbodyF', 'F');
-            cargarRanking(CSV_MAS, 'tbodyM', 'M');
-            
-            // Lógica de pestañas original
+            // Carga inicial de datos
+            cargarDatos(CSV_FEM, 'tbodyF');
+            cargarDatos(CSV_MAS, 'tbodyM');
+
+            // Lógica original de pestañas (toggle)
             const btns = document.querySelectorAll('.ranking-toggle-btn');
-            const secF = document.getElementById('sectionFemenino');
-            const secM = document.getElementById('sectionMasculino');
+            const sectionFem = document.getElementById('sectionFemenino');
+            const sectionMas = document.getElementById('sectionMasculino');
+            sectionMas.style.display = 'none';
 
             btns.forEach(btn => {
                 btn.addEventListener('click', () => {
                     btns.forEach(b => b.classList.remove('active'));
                     btn.classList.add('active');
-                    const t = btn.getAttribute('data-target');
-                    secF.style.display = t === 'femenino' ? 'block' : 'none';
-                    secM.style.display = t === 'masculino' ? 'block' : 'none';
+                    const target = btn.getAttribute('data-target');
+                    sectionFem.style.display = target === 'femenino' ? 'block' : 'none';
+                    sectionMas.style.display = target === 'masculino' ? 'block' : 'none';
                 });
             });
-            secM.style.display = 'none';
+
             document.getElementById('lastUpdatedDate').innerText = new Date().toLocaleDateString();
         });
     </script>
