@@ -5,19 +5,25 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ranking Oficial - UCTenis</title>
     <style>
-        /* TU ESTILO GRÁFICO ORIGINAL */
         :root { --blue-uct: #004a99; --orange-uct: #ff9800; }
         body { font-family: 'Arial', sans-serif; background-color: #f4f4f4; margin: 0; padding: 0; }
+        
+        /* Ajuste solicitado: Logo con link al Home */
         header { background-color: white; padding: 10px 20px; display: flex; align-items: center; border-bottom: 3px solid var(--blue-uct); }
         .logo-link { display: flex; align-items: center; text-decoration: none; color: var(--blue-uct); font-weight: bold; }
         .logo-link img { height: 40px; margin-right: 15px; }
+
         .container { max-width: 900px; margin: 20px auto; background: white; padding: 25px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
         h1 { color: var(--blue-uct); text-align: center; }
         h3 { border-left: 5px solid var(--orange-uct); padding-left: 10px; color: #333; margin-top: 30px; }
+        
         table { width: 100%; border-collapse: collapse; margin-top: 15px; }
         th, td { padding: 12px; border: 1px solid #ddd; text-align: left; }
         th { background-color: #f8f9fa; color: var(--blue-uct); }
+        
         .pos-badge { background: var(--blue-uct); color: white; padding: 3px 8px; border-radius: 4px; font-weight: bold; }
+        
+        /* Botón de edición con tu color naranja */
         .btn-edit { background: var(--orange-uct); color: white; border: none; padding: 6px 12px; cursor: pointer; border-radius: 4px; font-weight: bold; }
         .btn-edit:hover { background: #e68a00; }
     </style>
@@ -38,7 +44,7 @@
         <h3>Ranking Varones</h3>
         <table>
             <thead><tr><th>Pos</th><th>Jugador</th><th>Puntos</th><th>Acción</th></tr></thead>
-            <tbody id="body-mas"><tr><td colspan="4">Cargando varones...</td></tr></tbody>
+            <tbody id="body-mas"></tbody>
         </table>
     </div>
 
@@ -46,7 +52,7 @@
         <h3>Ranking Damas</h3>
         <table>
             <thead><tr><th>Pos</th><th>Jugadora</th><th>Puntos</th><th>Acción</th></tr></thead>
-            <tbody id="body-fem"><tr><td colspan="4">Cargando damas...</td></tr></tbody>
+            <tbody id="body-fem"></tbody>
         </table>
     </div>
 </div>
@@ -56,58 +62,66 @@ const API_URL = "https://script.google.com/macros/s/AKfycbzrf9Xm7UoP3d4NXxbSNZOF
 const CSV_MAS = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQXwSh1hxd6vHhWoba0ZilbIJ9a1-UGtJ8GFMEM-FUapDG0qMxNje69JrnbAieAb0aWkmAtM46q8tML/pub?gid=1439775190&single=true&output=csv";
 const CSV_FEM = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQXwSh1hxd6vHhWoba0ZilbIJ9a1-UGtJ8GFMEM-FUapDG0qMxNje69JrnbAieAb0aWkmAtM46q8tML/pub?gid=246091959&single=true&output=csv";
 
-async function cargar(url, targetId, gen) {
+// Función de carga simplificada para asegurar que lea tus columnas A, B y C
+async function cargarRanking(url, elementId, genero) {
     try {
         const res = await fetch(url);
-        const data = await res.text();
-        
-        // CORRECCIÓN CRÍTICA: Detectar si Google envía comas o punto y coma
-        const lines = data.split(/\r?\n/);
-        const separator = lines[0].includes(";") ? ";" : ",";
-        const rows = lines.slice(1);
-        
-        const tbody = document.getElementById(targetId);
+        const text = await res.text();
+        const rows = text.split('\n').slice(1);
+        const tbody = document.getElementById(elementId);
         tbody.innerHTML = "";
 
         rows.forEach(row => {
-            const col = row.split(separator);
-            if(col.length < 2) return;
-            
-            const pos = parseInt(col[0].trim());
-            const nombre = col[1] ? col[1].trim() : "";
-            const puntos = col[2] ? col[2].trim() : "0";
+            const cols = row.split(/,|;/); // Soporta tanto coma como punto y coma
+            if (cols.length < 2) return;
 
-            // REGLA: Solo mostrar si hay número de posición
+            const pos = parseInt(cols[0].trim());
+            const nombre = cols[1] ? cols[1].trim() : "";
+            const puntos = cols[2] ? cols[2].trim() : "0";
+
+            // REGLA: Solo si tiene posición numérica mayor a 0
             if (!isNaN(pos) && pos > 0) {
-                tbody.innerHTML += `<tr>
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
                     <td><span class="pos-badge">${pos}</span></td>
-                    <td><strong>${nombre}</strong></td>
+                    <td>${nombre}</td>
                     <td>${puntos} pts</td>
-                    <td><button class="btn-edit" onclick="edit('${nombre}',${pos},'${puntos}','${gen}')">Editar</button></td>
-                </tr>`;
+                    <td><button class="btn-edit" onclick="editar('${nombre}',${pos},'${puntos}','${genero}')">Editar</button></td>
+                `;
+                tbody.appendChild(tr);
             }
         });
-    } catch (e) { console.error("Error cargando " + gen, e); }
+    } catch (e) { console.error("Error cargando datos", e); }
 }
 
-async function edit(n, p, pts, g) {
-    const np = prompt(`Nueva Posición para ${n}:`, p);
-    const nt = prompt(`Nuevos Puntos para ${n}:`, pts);
-    if (np !== null && nt !== null) {
+async function editar(nombre, pos, pts, gen) {
+    const nPos = prompt(`Nueva posición para ${nombre}:`, pos);
+    const nPts = prompt(`Nuevos puntos para ${nombre}:`, pts);
+    
+    if (nPos !== null && nPts !== null) {
         alert("Sincronizando...");
-        await fetch(API_URL, {
-            method: 'POST',
-            mode: 'no-cors',
-            body: JSON.stringify({nombre: n, nuevaPosicion: np, nuevoPuntaje: nt, hoja: g == 'M' ? 'rankingmas' : 'rankingfem'})
-        });
-        alert("¡Enviado! Recarga en unos segundos.");
-        location.reload();
+        const payload = {
+            nombre: nombre,
+            nuevaPosicion: parseInt(nPos),
+            nuevoPuntaje: nPts,
+            hoja: (gen === 'M') ? 'rankingmas' : 'rankingfem'
+        };
+
+        try {
+            await fetch(API_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                body: JSON.stringify(payload)
+            });
+            alert("Cambio enviado. Recarga la página en unos segundos.");
+            location.reload();
+        } catch (e) { alert("Error al conectar"); }
     }
 }
 
 window.onload = () => {
-    cargar(CSV_MAS, 'body-mas', 'M');
-    cargar(CSV_FEM, 'body-fem', 'F');
+    cargarRanking(CSV_MAS, 'body-mas', 'M');
+    cargarRanking(CSV_FEM, 'body-fem', 'F');
 };
 </script>
 </body>
