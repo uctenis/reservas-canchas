@@ -3,7 +3,7 @@
 const CONFIG = {
     LAT: -38.7359,
     LON: -72.5904,
-    API_URL: "https://script.google.com/macros/s/AKfycbxCpCp0gy4fEENaItRbt8qX3B0zt3EsbKifX_MWSu3gC2UqMDjf1uQku9bk9qYkNBLtuw/exec"
+    API_URL: "https://script.google.com/macros/s/AKfycbzrf9Xm7UoP3d4NXxbSNZOFMLaDZk1h49N3EzlZS_xuxYDkzJyDvpmlpwQuQX8kfno/exec"
 };
 
 const MEMBERS = ["Luis Otth", "Ismael Devia", "Paulo Garrido", "Roberto Bermudez", "Roberto Espinoza", "Pablo Lagos", "Francisco Encina", "Gustavo Curaqueo", "Cristian Henriquez", "Cristian Rebolledo", "Sebastián Garrido", "Rodrigo Castro", "Matías Cáceres", "Juan Maripillán", "David Figueroa", "David Silva", "David Fonseca", "Cristian Farias", "Jaime Castillo", "José Baeza", "José Melgarejo", "Miguel Escalona", "Rodrigo Zuñiga", "Francisco Muñoz", "Sebastian Aguilar", "Victor Navarrete", "Cristobal Correa", "Jano Medina", "Miguel Angulo", "Carolina Cárdenas", "Mauricio Matus", "Angélica Encina", "Maria José", "Klaus Hennicke", "Francisco Mendez", "Violeta Moreno", "Valeria Schatter"];
