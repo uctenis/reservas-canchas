@@ -87,8 +87,8 @@
         </div>
     </div>
 
-    <div class="modal-overlay" id="playerModal">
-        <div class="modal-content"></div>
+    <div class=\"modal-overlay\" id=\"playerModal\">
+        <div class=\"modal-content\"></div>
     </div>
 
     <script src="script.js"></script>
@@ -108,14 +108,11 @@
                 filas.forEach(fila => {
                     const col = fila.split(/,|;/);
                     if (col.length < 2) return;
-
                     const pos = col[0].trim();
                     const nombre = col[1].trim();
 
-                    // Regla: Solo si la posición es un número mayor a 0
                     if (pos !== "" && !isNaN(pos) && parseInt(pos) > 0) {
                         const tr = document.createElement('tr');
-                        // Mantenemos la función openPlayerModal original de tu script.js
                         tr.innerHTML = `
                             <td><span class="pos-badge">${pos}</span></td>
                             <td onclick="openPlayerModal('${nombre}')" style="cursor:pointer">${nombre}</td>
@@ -123,15 +120,13 @@
                         tbody.appendChild(tr);
                     }
                 });
-            } catch (e) { console.error("Error cargando ranking:", e); }
+            } catch (e) { console.error(e); }
         }
 
         document.addEventListener('DOMContentLoaded', () => {
-            // Cargar datos reales
             cargarRanking(CSV_FEM, 'tbodyF');
             cargarRanking(CSV_MAS, 'tbodyM');
 
-            // Lógica de pestañas original
             const btns = document.querySelectorAll('.ranking-toggle-btn');
             const sectionFem = document.getElementById('sectionFemenino');
             const sectionMas = document.getElementById('sectionMasculino');
