@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ranking UCTenis</title>
+    <link rel="icon" href="logo_uctenis_v03.png" type="image/png">
+    <link rel="stylesheet" href="style.css">
+
+    <!-- Estilos pequeños para los botones de cambio -->
+    <style>
+        .ranking-toggle-wrapper {
+            text-align: center;
+            margin: 25px 0 30px;
+        }
+
+        .ranking-toggle-btn {
+            margin: 0 8px;
+            cursor: pointer;
+        }
+
+        .ranking-toggle-btn.active {
+            background-color: var(--accent-color, #007aff);
+            color: #000;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="main-container">
+        <header>
+            <a href="index.html">
+                <img src="logo_uctenis_v03.png" alt="Logo UCTenis Club" class="club-logo">
+            </a>
+            <h1>Ranking UCTenis</h1>
+            <div class="date-today" id="lastUpdatedDate">Cargando...</div>
+        </header>
+
+        <!-- Botones para alternar ranking -->
+        <div class="ranking-toggle-wrapper">
+            <button class="btn-pill ranking-toggle-btn active" data-target="femenino">
+                Femenino
+            </button>
+            <button class="btn-pill ranking-toggle-btn" data-target="masculino">
+                Masculino
+            </button>
+        </div>
+
+        <!-- RANKING FEMENINO -->
+        <section class="info-section glass-card" id="sectionFemenino">
+            <h2 class="section-title">Ranking Femenino</h2>
+            <div class="loading" id="loadingM" style="text-align:center; padding:20px; color:var(--text-secondary);">
+                Cargando ranking...
+            </div>
+            <div class="ranking-table-container">
+                <table id="tableM" style="display:none;">
+                    <thead>
+                        <tr>
+                            <th>Pos.</th>
+                            <th>Nombre</th>
+                            <th>Evolución</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbodyM"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- RANKING MASCULINO -->
+        <section class="info-section glass-card" id="sectionMasculino">
+            <h2 class="section-title">Ranking Masculino</h2>
+            <div class="loading" id="loadingH" style="text-align:center; padding:20px; color:var(--text-secondary);">
+                Cargando ranking...
+            </div>
+            <div class="ranking-table-container">
+                <table id="tableH" style="display:none;">
+                    <thead>
+                        <tr>
+                            <th>Pos.</th>
+                            <th>Nombre</th>
+                            <th>Evolución</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbodyH"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <div style="text-align:center; margin-top:40px;">
+            <a href="index.html" class="btn-pill">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" />
+                </svg>
+                Volver a Reservar
+            </a>
+        </div>
+    </div>
+
+    <!-- Modal -->
+    <div class="modal-overlay" id="playerModal">
+        <div class="modal-content"></div>
+    </div>
+
+    <script src="script.js"></script>
+
+    <!-- Script para mostrar SOLO un ranking a la vez -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const btns = document.querySelectorAll('.ranking-toggle-btn');
+            const sectionFem = document.getElementById('sectionFemenino');
+            const sectionMas = document.getElementById('sectionMasculino');
+
+            function showRanking(tipo) {
+                if (tipo === 'femenino') {
+                    sectionFem.style.display = 'block';
+                    sectionMas.style.display = 'none';
+                } else {
+                    sectionFem.style.display = 'none';
+                    sectionMas.style.display = 'block';
+                }
+            }
+
+            // Estado inicial: Femenino visible, Masculino oculto
+            showRanking('femenino');
+
+            btns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    btns.forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+
+                    const target = btn.getAttribute('data-target');
+                    showRanking(target);
+                });
+            });
+        });
+    </script>
+</body>
+
+</html>

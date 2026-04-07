@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UCTenis - Reserva de Canchas</title>
+
+    <link rel="icon" href="logo_uctenis_v03.png" type="image/png">
+    <link rel="manifest" href="manifest.json">
+
+    <!-- Meta Tags -->
+    <meta property="og:title" content="Reserva de Canchas UCTenis" />
+    <meta property="og:description"
+        content="Sistema de reservas de canchas de tenis CEC y CJP de la Universidad Católica de Temuco." />
+    <meta property="og:image" content="https://uctenis.github.io/reservas-canchas/logo_uctenis_v03.png" />
+    <meta property="og:type" content="website" />
+    <meta name="theme-color" content="#0f172a" />
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div class="main-container">
+        <header>
+            <img src="logo_uctenis_v03.png" alt="Logo UCTenis Club" class="club-logo">
+            <h1>Canchas de Tenis UCT</h1>
+            <div class="date-today" id="dateToday"></div>
+        </header>
+
+        <main>
+            <div class="complex-grid">
+                <!-- Complejo CEC -->
+                <div class="complex-wrapper">
+                    <div class="complex-title">
+                        <h2>Complejo CEC</h2>
+                        <p>Canchas de Arcilla</p>
+                    </div>
+                    <div class="complex-card" style="background-image: url('cec.jpg');">
+                        <div class="clickable-overlay">
+                            <a href="https://calendar.google.com/calendar/appointments/schedules/AcZssZ1pS98lJc9AnurRJsrrFELO8p7lFqT8SE5tpaJPiVixBHN83PpSWM4oqIfom2EAtwcVqooJYG7K?gv=true"
+                                target="_blank" class="court-link-zone" aria-label="Reservar Cancha CEC 1">
+                                <span class="zone-text">Reserva Cancha 1</span>
+                            </a>
+                            <a href="https://calendar.google.com/calendar/appointments/schedules/AcZssZ1ijnDghWGh6GVpsD6Q76qxlJqEdDhj9E0MvboyNI_rTAkbn0JfXE3qFoYECfCMjyEPSGpaTRk4?gv=true"
+                                target="_blank" class="court-link-zone" aria-label="Reservar Cancha CEC 2">
+                                <span class="zone-text">Reserva Cancha 2</span>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Complejo CJP -->
+                <div class="complex-wrapper">
+                    <div class="complex-title">
+                        <h2>Complejo CJP</h2>
+                        <p>Canchas de Asfalto</p>
+                    </div>
+                    <div class="complex-card" style="background-image: url('cjp.jpg');">
+                        <div class="clickable-overlay">
+                            <a href="https://calendar.google.com/calendar/appointments/schedules/AcZssZ1GpWHQQiPLKIG7X4TDDUcngRRUAB6Dbo-xM-Ponh2IWTxNwwFnT74l71-bL-toFqDC6b0mAhhu?gv=true"
+                                target="_blank" class="court-link-zone" aria-label="Reservar Cancha CJP 1">
+                                <span class="zone-text">Reserva Cancha 1</span>
+                            </a>
+                            <a href="https://calendar.google.com/calendar/appointments/schedules/AcZssZ23FAuAAPtwBFxJUeCMMAKAQlZTRGMrX3JGA8s3b0Rl9TOj0du1cb6m1cin96U30DfFV03piwMA?gv=true"
+                                target="_blank" class="court-link-zone" aria-label="Reservar Cancha CJP 2">
+                                <span class="zone-text">Reserva Cancha 2</span>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <section class="info-section glass-card">
+                <h2 class="section-title">Pronóstico del Tiempo</h2>
+                <p class="smart-suggestion" id="smartSuggestion">Consultando a los dioses del clima...</p>
+                <div class="forecast-container" id="forecast"></div>
+            </section>
+
+            <!-- Prominent Ranking Banner -->
+            <div class="ranking-banner">
+                <div class="ranking-content">
+                    <h2 class="ranking-title">Ranking UCTenis</h2>
+                    <p class="ranking-subtitle">Revisa la tabla de posiciones y el ascenso de la semana.</p>
+                </div>
+                <div class="ranking-action">
+                    <a href="ranking.html" class="btn-ranking-cta">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z" />
+                        </svg>
+                        Ver Ranking Completo
+                    </a>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <div class="tennis-message" id="tennisMessage">Generando frase motivacional...</div>
+
+            <div class="footer-links">
+
+                <a href="normas.html" class="btn-pill">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <path
+                            d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z" />
+                    </svg>
+                    Normas de Uso
+                </a>
+                <a href="https://www.instagram.com/uct.tenis" target="_blank" class="btn-pill instagram-link">
+                    <svg viewBox="0 0 448 512">
+                        <path
+                            d="M224.1 141c-63.6 0-114.9 51.3-114.9 114.9s51.3 114.9 114.9 114.9S339 319.5 339 255.9 287.7 141 224.1 141zm0 189.6c-41.1 0-74.7-33.5-74.7-74.7s33.5-74.7 74.7-74.7 74.7 33.5 74.7 74.7-33.6 74.7-74.7 74.7zm146.4-194.3c0 14.9-12 26.8-26.8 26.8-14.9 0-26.8-12-26.8-26.8s12-26.8 26.8-26.8 26.8 12 26.8 26.8zm76.1 27.2c-1.7-35.9-9.9-67.7-36.2-93.9-26.2-26.2-58-34.4-93.9-36.2-37-2.1-147.9-2.1-184.9 0-35.8 1.7-67.6 9.9-93.9 36.1s-34.4 58-36.2 93.9c-2.1 37-2.1 147.9 0 184.9 1.7 35.9 9.9 67.7 36.2 93.9s58 34.4 93.9 36.2c37 2.1 147.9 2.1 184.9 0 35.9-1.7 67.7-9.9 93.9-36.2 26.2-26.2 34.4-58 36.2-93.9 2.1-37 2.1-147.8 0-184.8zM398.8 388c-7.8 19.6-22.9 34.7-42.6 42.6-29.5 11.7-99.5 9-132.1 9s-102.7 2.6-132.1-9c-19.6-7.8-34.7-22.9-42.6-42.6-11.7-29.5-9-99.5-9-132.1s-2.6-102.7 9-132.1c7.8-19.6 22.9-34.7 42.6-42.6 29.5-11.7 99.5-9 132.1-9s102.7-2.6 132.1 9c19.6 7.8 34.7 22.9 42.6 42.6 11.7 29.5 9 99.5 9 132.1s2.7 102.7-9 132.1z" />
+                    </svg>
+                    Instagram
+                </a>
+            </div>
+
+            <div class="small-note">Al finalizar el juego en arcilla pasa el escobillón, barre las líneas y riega la
+                cancha. ¡Ocupa los basureros! Solo se permite una reserva diaria por socio.</div>
+
+            <div class="brand-legend">
+                <img src="logo_uctenis_v03.png" alt="Escudo UCTenis">
+                <span>UCTenis Club · Universidad Católica de Temuco</span>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Scripts -->
+    <script src="script.js"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW Error:', err));
+            });
+        }
+    </script>
+</body>
+
+</html>

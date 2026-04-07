@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ADMINISTRADOR Ranking</title>
+  <link rel="icon" href="logo_uctenis_v03.png" type="image/png">
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+
+  <style>
+    /* Estilos específicos para la administración que no están en style.css */
+    table { display: none; width: 100%; border-collapse: separate; border-spacing: 0 8px; }
+    tbody tr { cursor: grab; }
+    tbody tr:active { cursor: grabbing; }
+    .col-pos { width: 60px; text-align: center; font-weight: 700; color: var(--accent-tennis); }
+    .col-evol { width: 60px; text-align: center; }
+    .save-button {
+      display: none;
+      background: var(--accent-tennis);
+      color: #0f172a;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 50px;
+      font-weight: 700;
+      cursor: pointer;
+      margin-left: auto;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 12px rgba(198, 211, 0, 0.3);
+    }
+    .save-button:hover { transform: scale(1.05); box-shadow: 0 6px 16px rgba(198, 211, 0, 0.5); }
+    .save-button:disabled { background: #475569; cursor: not-allowed; opacity: 0.7; }
+    .sortable-ghost { background: rgba(198, 211, 0, 0.1); opacity: 0.5; }
+    
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+    }
+    
+    .ranking-toggle-wrapper { text-align: center; margin: 30px 0; }
+  </style>
+</head>
+
+<body>
+  <div class="main-container">
+    <header>
+      <a href="index.html">
+        <img src="logo_uctenis_v03.png" alt="Logo UCTenis Club" class="club-logo"/>
+      </a>
+      <h1>Administrador Ranking</h1>
+    </header>
+
+    <div class="ranking-toggle-wrapper">
+      <button class="btn-pill active" id="btnFem" data-target="femenino">Femenino</button>
+      <button class="btn-pill" id="btnMas" data-target="masculino">Masculino</button>
+    </div>
+
+    <!-- RANKING FEMENINO (ADMIN) -->
+    <section class="info-section glass-card" id="sectionFemenino">
+      <div class="section-header">
+        <h2 class="section-title">Ranking Femenino</h2>
+        <button class="save-button" id="saveM" onclick="saveRanking('mujeres')">Guardar Cambios</button>
+      </div>
+      <div class="loading" id="loadingM" style="text-align:center; padding:20px; color:var(--text-secondary);">
+        Cargando datos maestros...
+      </div>
+      <div class="ranking-table-container">
+        <table id="tableM" style="display:none;">
+          <thead>
+            <tr><th class="col-pos">Pos.</th><th>Nombre</th><th class="col-evol">Acción</th></tr>
+          </thead>
+          <tbody id="tbodyM"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- RANKING MASCULINO (ADMIN) -->
+    <section class="info-section glass-card" id="sectionMasculino" style="display:none;">
+      <div class="section-header">
+        <h2 class="section-title">Ranking Masculino</h2>
+        <button class="save-button" id="saveH" onclick="saveRanking('hombres')">Guardar Cambios</button>
+      </div>
+      <div class="loading" id="loadingH" style="text-align:center; padding:20px; color:var(--text-secondary);">
+        Cargando datos maestros...
+      </div>
+      <div class="ranking-table-container">
+        <table id="tableH" style="display:none;">
+          <thead>
+            <tr><th class="col-pos">Pos.</th><th>Nombre</th><th class="col-evol">Acción</th></tr>
+          </thead>
+          <tbody id="tbodyH"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const API_URL = "https://script.google.com/macros/s/AKfycbxCpCp0gy4fEENaItRbt8qX3B0zt3EsbKifX_MWSu3gC2UqMDjf1uQku9bk9qYkNBLtuw/exec";
+
+    function normName(v){
+      return (v ?? "").toString().replace(/\s+/g,' ').trim();
+    }
+    function toPos(v){
+      const n = parseInt((v ?? "").toString().trim(), 10);
+      return Number.isFinite(n) ? n : NaN;
+    }
+
+    // Solo jugadores con ranking válido (posicion > 0 + nombre)
+    function cleanRankList(lista){
+      if (!Array.isArray(lista)) return [];
+      const seen = new Set();
+      const out = [];
+      for (const p of lista){
+        const nombre = normName(p?.nombre);
+        const pos = toPos(p?.posicion);
+        if (!nombre) continue;
+        if (!Number.isFinite(pos) || pos <= 0) continue;
+
+        const key = nombre.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+
+        out.push({
+          nombre,
+          posicion: pos,
+          posicionAnterior: toPos(p?.posicionAnterior)
+        });
+      }
+      out.sort((a,b) => a.posicion - b.posicion);
+      return out;
+    }
+
+    async function cargarDatos() {
+      try {
+        const response = await fetch(`${API_URL}?v=${new Date().getTime()}`);
+        const data = await response.json();
+        if (data.status === 'error') throw new Error(data.message);
+
+        renderTabla('M', cleanRankList(data.mujeres));
+        renderTabla('H', cleanRankList(data.hombres));
+      } catch (err) {
+        document.getElementById('loadingM').innerHTML = `<div class="error-message">Error: ${err.message}</div>`;
+        document.getElementById('loadingH').innerHTML = `<div class="error-message">Error: ${err.message}</div>`;
+      }
+    }
+
+    function evolucionIcon(posActual, posAnterior){
+      let evolucionHtml = '<span class="new-entry" title="Nuevo">●</span>';
+      if (Number.isFinite(posAnterior) && posAnterior > 0) {
+        if (posActual < posAnterior) evolucionHtml = `<span class="arrow-up" title="Subió">▲</span>`;
+        else if (posActual > posAnterior) evolucionHtml = `<span class="arrow-down" title="Bajó">▼</span>`;
+        else evolucionHtml = `<span>-</span>`;
+      }
+      return evolucionHtml;
+    }
+
+    function renderTabla(gender, lista) {
+      const tbody = document.getElementById(`tbody${gender}`);
+      const table = document.getElementById(`table${gender}`);
+      const loading = document.getElementById(`loading${gender}`);
+
+      tbody.innerHTML = '';
+
+      if (!lista || lista.length === 0) {
+        loading.textContent = 'No hay jugadores con ranking.';
+        loading.style.display = 'block';
+        table.style.display = 'none';
+        return;
+      }
+
+      // Re-numera desde 1 según orden mostrado (admin)
+      lista.forEach((p, idx) => {
+        const posActual = idx + 1;
+        const posAnterior = p.posicionAnterior;
+
+        const tr = tbody.insertRow();
+        const evo = evolucionIcon(posActual, posAnterior);
+
+        if (Number.isFinite(posAnterior) && posAnterior > 0 && posActual !== posAnterior) {
+          tr.classList.add('player-highlight');
+        }
+
+        tr.innerHTML = `
+          <td class="col-pos">${posActual}</td>
+          <td class="col-nombre">${p.nombre}</td>
+          <td class="col-evol">${evo}</td>
+        `;
+      });
+
+      loading.style.display = 'none';
+      table.style.display = 'table';
+    }
+
+    function renumerarTabla(tbodyId){
+      const rows = document.getElementById(tbodyId).querySelectorAll('tr');
+      rows.forEach((row, idx) => {
+        const cell = row.querySelector('.col-pos');
+        if (cell) cell.textContent = String(idx + 1);
+      });
+    }
+
+    function initSortable() {
+      const createSortable = (tbodyId, saveButtonId) => {
+        new Sortable(document.getElementById(tbodyId), {
+          animation: 150,
+          ghostClass: 'sortable-ghost',
+          onEnd: () => {
+            renumerarTabla(tbodyId);
+            document.getElementById(saveButtonId).style.display = 'block';
+          }
+        });
+      };
+      createSortable('tbodyM', 'saveM');
+      createSortable('tbodyH', 'saveH');
+    }
+
+    // ✅ CAMBIO CLAVE: enviar POSICIÓN explícita al backend
+    function buildRankingPayloadFromDOM(tbodyId){
+      const rows = Array.from(document.getElementById(tbodyId).querySelectorAll('tr'));
+      const seen = new Set();
+      const payload = [];
+
+      for (const row of rows){
+        const nombre = normName(row.querySelector('.col-nombre')?.textContent);
+        if (!nombre) continue;
+
+        const key = nombre.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+
+        payload.push({ nombre });
+      }
+
+      // Asignar posicion 1..N de forma determinística
+      return payload.map((p, idx) => ({ posicion: idx + 1, nombre: p.nombre }));
+    }
+
+    async function saveRanking(category) {
+      const password = prompt("Ingresa la clave de administrador:");
+      if (!password) return;
+
+      const buttonId = category === 'mujeres' ? 'saveM' : 'saveH';
+      const tbodyId  = category === 'mujeres' ? 'tbodyM' : 'tbodyH';
+      const button = document.getElementById(buttonId);
+
+      button.disabled = true;
+      button.textContent = "Guardando...";
+
+      const ranking = buildRankingPayloadFromDOM(tbodyId);
+
+      if (ranking.length === 0){
+        alert("No hay jugadores con ranking válido para guardar.");
+        button.disabled = false;
+        button.textContent = 'Guardar Cambios';
+        return;
+      }
+
+      try {
+        const response = await fetch(API_URL, {
+          method: 'POST',
+          body: JSON.stringify({
+            password,
+            category,
+            // ✅ enviar lista con {posicion, nombre}
+            ranking
+          })
+        });
+
+        const result = await response.json();
+        if (result.status === 'error') throw new Error(result.message);
+
+        button.textContent = "¡Guardado!";
+        setTimeout(() => {
+          button.style.display = 'none';
+          button.textContent = 'Guardar Cambios';
+          button.disabled = false;
+          cargarDatos();
+        }, 1200);
+
+      } catch (err) {
+        alert(`Error: ${err.message}`);
+        button.disabled = false;
+        button.textContent = 'Reintentar';
+      }
+    }
+
+    function initToggle(){
+      const btnFem = document.getElementById('btnFem');
+      const btnMas = document.getElementById('btnMas');
+      const secFem = document.getElementById('sectionFemenino');
+      const secMas = document.getElementById('sectionMasculino');
+
+      function show(tipo){
+        if (tipo === 'femenino'){
+          secFem.style.display = 'block';
+          secMas.style.display = 'none';
+          btnFem.classList.add('active');
+          btnMas.classList.remove('active');
+        } else {
+          secFem.style.display = 'none';
+          secMas.style.display = 'block';
+          btnMas.classList.add('active');
+          btnFem.classList.remove('active');
+        }
+      }
+
+      btnFem.addEventListener('click', () => show('femenino'));
+      btnMas.addEventListener('click', () => show('masculino'));
+      show('femenino');
+    }
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      initToggle();
+      await cargarDatos();
+      initSortable();
+    });
+  </script>
+</body>
+</html>
