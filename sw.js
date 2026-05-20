@@ -1,34 +1,21 @@
-const CACHE_NAME = 'tenis-uct-cache-v1';
-const urlsToCache = [
-  '/',
-  'index.html',
-  'normas.html',
-  'cec.jpg',
-  'cjp.jpg',
-  'logo192.png',
-  'logo512.png'
-];
+const CACHE_NAME = 'tenis-uct-cache-v4';
+const urlsToCache = ['/', 'index.html', 'normas.html', 'reservas.html', 'ranking.html', 'cec.jpg', 'cjp.jpg', 'logo_uctenis_v03.png'];
 
 self.addEventListener('install', event => {
-  event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => {
-        console.log('Cache abierto y archivos principales guardados');
-        return cache.addAll(urlsToCache);
-      })
-  );
+  self.skipWaiting();
+  event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(urlsToCache)));
 });
 
+self.addEventListener('activate', event => {
+  event.waitUntil(
+    caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))))
+  );
+  return self.clients.claim();
+});
+
+// Network-first: siempre busca en red, cache solo como fallback
 self.addEventListener('fetch', event => {
   event.respondWith(
-    caches.match(event.request)
-      .then(response => {
-        // Si el recurso está en el caché, lo devuelve.
-        if (response) {
-          return response;
-        }
-        // Si no, lo busca en la red.
-        return fetch(event.request);
-      })
+    fetch(event.request).catch(() => caches.match(event.request))
   );
 });

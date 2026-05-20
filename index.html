@@ -1,140 +1,214 @@
 <!DOCTYPE html>
 <html lang="es">
-
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>UCTenis - Reserva de Canchas</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UCTenis – Reserva de Canchas</title>
+  <link rel="icon" href="logo_uctenis_v03.png" type="image/png">
+  <link rel="manifest" href="manifest.json">
+  <meta property="og:title" content="Reserva de Canchas UCTenis"/>
+  <meta property="og:description" content="Sistema de reservas y ranking de canchas de tenis UCT."/>
+  <meta property="og:image" content="https://uctenis.github.io/reservas-canchas/logo_uctenis_v03.png"/>
+  <meta name="theme-color" content="#0f172a"/>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    /* ── Booking Hero ── */
+    .booking-hero {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 30px;
+      align-items: center;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 28px;
+      padding: 40px;
+      margin-bottom: 40px;
+      position: relative;
+      overflow: hidden;
+    }
+    .booking-hero::before {
+      content:'';position:absolute;top:-40%;right:-20%;
+      width:400px;height:400px;
+      background:radial-gradient(circle,rgba(198,211,0,0.08) 0%,transparent 70%);
+      pointer-events:none;
+    }
+    .booking-hero-icon { font-size:3.5rem; margin-bottom:12px; }
+    .booking-hero-content h2 { font-size:2rem; margin-bottom:10px; }
+    .booking-hero-content p { color:var(--text-secondary); margin-bottom:22px; font-size:1rem; }
+    .btn-book-hero {
+      display:inline-flex; align-items:center; gap:10px;
+      padding:14px 32px;
+      background:var(--accent-tennis); color:#0f172a;
+      border-radius:50px; font-weight:700; font-size:1.05rem;
+      text-decoration:none;
+      transition:all 0.3s;
+      box-shadow:0 4px 20px rgba(198,211,0,0.3);
+    }
+    .btn-book-hero:hover { background:#d4e000; transform:translateY(-2px); box-shadow:0 8px 28px rgba(198,211,0,0.45); color:#0f172a; }
+    .court-mini-grid {
+      display:grid; grid-template-columns:1fr 1fr; gap:15px;
+    }
+    .mini-court {
+      height:150px; border-radius:14px;
+      background-size:cover; background-position:center;
+      position:relative; overflow:hidden;
+      border:1px solid rgba(255,255,255,0.08);
+      transition:transform 0.3s;
+    }
+    .mini-court:hover { transform:scale(1.03); }
+    .mini-court span {
+      position:absolute; bottom:6px; left:8px;
+      background:rgba(15,23,42,0.8); border-radius:8px;
+      padding:4px 10px; font-size:0.9rem; font-weight:700;
+      backdrop-filter:blur(4px);
+    }
 
-    <link rel="icon" href="logo_uctenis_v03.png" type="image/png">
-    <link rel="manifest" href="manifest.json">
+    /* ── User pill ── */
+    .user-bar-index { position:absolute; top:0; right:0; }
+    .user-pill {
+      display:inline-flex; align-items:center; gap:8px;
+      background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1);
+      border-radius:50px; padding:6px 14px; font-size:0.88rem;
+    }
+    .user-avatar-sm {
+      width:26px;height:26px; background:var(--accent-tennis); color:#0f172a;
+      border-radius:50%; display:flex;align-items:center;justify-content:center;
+      font-weight:800;font-size:0.85rem;
+    }
+    .btn-logout-sm { background:none;border:none;color:var(--text-secondary);cursor:pointer;font-size:0.82rem;padding:0; }
+    .btn-logout-sm:hover { color:#f87171; }
 
-    <!-- Meta Tags -->
-    <meta property="og:title" content="Reserva de Canchas UCTenis" />
-    <meta property="og:description"
-        content="Sistema de reservas de canchas de tenis CEC y CJP de la Universidad Católica de Temuco." />
-    <meta property="og:image" content="https://uctenis.github.io/reservas-canchas/logo_uctenis_v03.png" />
-    <meta property="og:type" content="website" />
-    <meta name="theme-color" content="#0f172a" />
-
-    <!-- Styles -->
-    <link rel="stylesheet" href="style.css">
+    @media (max-width:700px) {
+      .booking-hero { grid-template-columns:1fr; padding:28px 20px; }
+      .court-mini-grid { grid-template-columns:1fr 1fr; }
+      .mini-court { height:120px; }
+      .user-bar-index { position:static; margin-bottom:16px; text-align:center; }
+    }
+  </style>
 </head>
-
 <body>
-    <div class="main-container">
-        <header>
-            <img src="logo_uctenis_v03.png" alt="Logo UCTenis Club" class="club-logo">
-            <h1>Canchas de Tenis UCT</h1>
-            <div class="date-today" id="dateToday"></div>
-        </header>
+<div class="main-container">
+  <header style="position:relative">
+    <!-- User pill top-right -->
+    <div class="user-bar-index" id="userBarIndex"></div>
 
-        <main>
-            <div class="complex-grid">
-                <!-- Complejo CEC -->
-                <div class="complex-wrapper">
-                    <div class="complex-title">
-                        <h2>Complejo CEC</h2>
-                        <p>Canchas de Arcilla</p>
-                    </div>
-                    <div class="complex-card" style="background-image: url('cec.jpg');">
-                        <div class="clickable-overlay">
-                            <a href="https://calendar.google.com/calendar/appointments/schedules/AcZssZ1pS98lJc9AnurRJsrrFELO8p7lFqT8SE5tpaJPiVixBHN83PpSWM4oqIfom2EAtwcVqooJYG7K?gv=true"
-                                target="_blank" class="court-link-zone" aria-label="Reservar Cancha CEC 1">
-                                <span class="zone-text">Reserva Cancha 1</span>
-                            </a>
-                            <a href="https://calendar.google.com/calendar/appointments/schedules/AcZssZ1ijnDghWGh6GVpsD6Q76qxlJqEdDhj9E0MvboyNI_rTAkbn0JfXE3qFoYECfCMjyEPSGpaTRk4?gv=true"
-                                target="_blank" class="court-link-zone" aria-label="Reservar Cancha CEC 2">
-                                <span class="zone-text">Reserva Cancha 2</span>
-                            </a>
-                        </div>
-                    </div>
-                </div>
+    <img src="logo_uctenis_v03.png" alt="UCTenis" class="club-logo">
+    <h1>Canchas de Tenis UCT</h1>
+    <div class="date-today" id="dateToday"></div>
+  </header>
 
-                <!-- Complejo CJP -->
-                <div class="complex-wrapper">
-                    <div class="complex-title">
-                        <h2>Complejo CJP</h2>
-                        <p>Canchas de Asfalto</p>
-                    </div>
-                    <div class="complex-card" style="background-image: url('cjp.jpg');">
-                        <div class="clickable-overlay">
-                            <a href="https://calendar.google.com/calendar/appointments/schedules/AcZssZ1GpWHQQiPLKIG7X4TDDUcngRRUAB6Dbo-xM-Ponh2IWTxNwwFnT74l71-bL-toFqDC6b0mAhhu?gv=true"
-                                target="_blank" class="court-link-zone" aria-label="Reservar Cancha CJP 1">
-                                <span class="zone-text">Reserva Cancha 1</span>
-                            </a>
-                            <a href="https://calendar.google.com/calendar/appointments/schedules/AcZssZ23FAuAAPtwBFxJUeCMMAKAQlZTRGMrX3JGA8s3b0Rl9TOj0du1cb6m1cin96U30DfFV03piwMA?gv=true"
-                                target="_blank" class="court-link-zone" aria-label="Reservar Cancha CJP 2">
-                                <span class="zone-text">Reserva Cancha 2</span>
-                            </a>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <section class="info-section glass-card">
-                <h2 class="section-title">Pronóstico del Tiempo</h2>
-                <p class="smart-suggestion" id="smartSuggestion">Consultando a los dioses del clima...</p>
-                <div class="forecast-container" id="forecast"></div>
-            </section>
-
-            <!-- Prominent Ranking Banner -->
-            <div class="ranking-banner">
-                <div class="ranking-content">
-                    <h2 class="ranking-title">Ranking UCTenis</h2>
-                    <p class="ranking-subtitle">Revisa la tabla de posiciones y el ascenso de la semana.</p>
-                </div>
-                <div class="ranking-action">
-                    <a href="ranking.html" class="btn-ranking-cta">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z" />
-                        </svg>
-                        Ver Ranking Completo
-                    </a>
-                </div>
-            </div>
-        </main>
-
-        <footer>
-            <div class="tennis-message" id="tennisMessage">Generando frase motivacional...</div>
-
-            <div class="footer-links">
-
-                <a href="normas.html" class="btn-pill">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                        <path
-                            d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z" />
-                    </svg>
-                    Normas de Uso
-                </a>
-                <a href="https://www.instagram.com/uct.tenis" target="_blank" class="btn-pill instagram-link">
-                    <svg viewBox="0 0 448 512">
-                        <path
-                            d="M224.1 141c-63.6 0-114.9 51.3-114.9 114.9s51.3 114.9 114.9 114.9S339 319.5 339 255.9 287.7 141 224.1 141zm0 189.6c-41.1 0-74.7-33.5-74.7-74.7s33.5-74.7 74.7-74.7 74.7 33.5 74.7 74.7-33.6 74.7-74.7 74.7zm146.4-194.3c0 14.9-12 26.8-26.8 26.8-14.9 0-26.8-12-26.8-26.8s12-26.8 26.8-26.8 26.8 12 26.8 26.8zm76.1 27.2c-1.7-35.9-9.9-67.7-36.2-93.9-26.2-26.2-58-34.4-93.9-36.2-37-2.1-147.9-2.1-184.9 0-35.8 1.7-67.6 9.9-93.9 36.1s-34.4 58-36.2 93.9c-2.1 37-2.1 147.9 0 184.9 1.7 35.9 9.9 67.7 36.2 93.9s58 34.4 93.9 36.2c37 2.1 147.9 2.1 184.9 0 35.9-1.7 67.7-9.9 93.9-36.2 26.2-26.2 34.4-58 36.2-93.9 2.1-37 2.1-147.8 0-184.8zM398.8 388c-7.8 19.6-22.9 34.7-42.6 42.6-29.5 11.7-99.5 9-132.1 9s-102.7 2.6-132.1-9c-19.6-7.8-34.7-22.9-42.6-42.6-11.7-29.5-9-99.5-9-132.1s-2.6-102.7 9-132.1c7.8-19.6 22.9-34.7 42.6-42.6 29.5-11.7 99.5-9 132.1-9s102.7-2.6 132.1 9c19.6 7.8 34.7 22.9 42.6 42.6 11.7 29.5 9 99.5 9 132.1s2.7 102.7-9 132.1z" />
-                    </svg>
-                    Instagram
-                </a>
-            </div>
-
-            <div class="small-note">Al finalizar el juego en arcilla pasa el escobillón, barre las líneas y riega la
-                cancha. ¡Ocupa los basureros! Solo se permite una reserva diaria por socio.</div>
-
-            <div class="brand-legend">
-                <img src="logo_uctenis_v03.png" alt="Escudo UCTenis">
-                <span>UCTenis Club · Universidad Católica de Temuco</span>
-            </div>
-        </footer>
+  <main>
+    <!-- ── HERO CTA ── -->
+    <div class="booking-hero">
+      <div class="booking-hero-content">
+        <div class="booking-hero-icon">🎾</div>
+        <h2>Reserva tu cancha ahora</h2>
+        <p>Elige cancha, selecciona el día y el horario disponible — en segundos.</p>
+        <a href="reservas.html" class="btn-book-hero">Ver horarios disponibles →</a>
+      </div>
+      <div class="court-mini-grid">
+        <div class="mini-court" style="background-image:url('cec.jpg')"><span>Complejo CEC</span></div>
+        <div class="mini-court" style="background-image:url('cjp.jpg')"><span>Complejo CJP</span></div>
+      </div>
     </div>
 
-    <!-- Scripts -->
-    <script src="script.js"></script>
-    <script>
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW Error:', err));
-            });
-        }
-    </script>
-</body>
+    <!-- ── WEATHER ── -->
+    <section class="info-section glass-card">
+      <h2 class="section-title">Pronóstico del Tiempo</h2>
+      <p class="smart-suggestion" id="smartSuggestion">Consultando el clima...</p>
+      <div class="forecast-container" id="forecast"></div>
+    </section>
 
+    <!-- ── RANKING BANNER ── -->
+    <div class="ranking-banner">
+      <div class="ranking-content">
+        <h2 class="ranking-title">⚔️ Ranking & Desafíos UCTenis</h2>
+        <p class="ranking-subtitle">Ranking diferenciado Masculino / Femenino · Reta a tus rivales · Ingresa marcadores.</p>
+      </div>
+      <div class="ranking-action">
+        <a href="ranking.html" class="btn-ranking-cta">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z"/></svg>
+          Ver Ranking
+        </a>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <div class="tennis-message" id="tennisMessage">Generando frase motivacional...</div>
+    <div class="footer-links">
+      <a href="normas.html" class="btn-pill">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+        Normas de Uso
+      </a>
+      <a href="https://www.instagram.com/uct.tenis" target="_blank" class="btn-pill instagram-link">
+        <svg viewBox="0 0 448 512"><path d="M224.1 141c-63.6 0-114.9 51.3-114.9 114.9s51.3 114.9 114.9 114.9S339 319.5 339 255.9 287.7 141 224.1 141zm0 189.6c-41.1 0-74.7-33.5-74.7-74.7s33.5-74.7 74.7-74.7 74.7 33.5 74.7 74.7-33.6 74.7-74.7 74.7zm146.4-194.3c0 14.9-12 26.8-26.8 26.8-14.9 0-26.8-12-26.8-26.8s12-26.8 26.8-26.8 26.8 12 26.8 26.8zm76.1 27.2c-1.7-35.9-9.9-67.7-36.2-93.9-26.2-26.2-58-34.4-93.9-36.2-37-2.1-147.9-2.1-184.9 0-35.8 1.7-67.6 9.9-93.9 36.1s-34.4 58-36.2 93.9c-2.1 37-2.1 147.9 0 184.9 1.7 35.9 9.9 67.7 36.2 93.9s58 34.4 93.9 36.2c37 2.1 147.9 2.1 184.9 0 35.9-1.7 67.7-9.9 93.9-36.2 26.2-26.2 34.4-58 36.2-93.9 2.1-37 2.1-147.8 0-184.8zM398.8 388c-7.8 19.6-22.9 34.7-42.6 42.6-29.5 11.7-99.5 9-132.1 9s-102.7 2.6-132.1-9c-19.6-7.8-34.7-22.9-42.6-42.6-11.7-29.5-9-99.5-9-132.1s-2.6-102.7 9-132.1c7.8-19.6 22.9-34.7 42.6-42.6 29.5-11.7 99.5-9 132.1-9s102.7-2.6 132.1 9c19.6 7.8 34.7 22.9 42.6 42.6 11.7 29.5 9 99.5 9 132.1s2.7 102.7-9 132.1z"/></svg>
+        Instagram
+      </a>
+    </div>
+    <div class="small-note">Al finalizar en arcilla pasa el escobillón, barre las líneas y riega la cancha. ¡Solo una reserva diaria por socio!</div>
+    <div class="brand-legend">
+      <img src="logo_uctenis_v03.png" alt="UCTenis">
+      <span>UCTenis Club · Universidad Católica de Temuco</span>
+    </div>
+  </footer>
+</div>
+
+<!-- Firebase SDK Compat -->
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+
+<script src="db.js?v=3"></script>
+<script src="script.js?v=2"></script>
+<script>
+// ── Quick Book Links ──
+const LINKS = {
+  cec: {
+    1: 'https://calendar.app.google/kGKzcmXMWJv7vs9h7',
+    2: 'https://calendar.app.google/QGrkHxRgwacJ3ApU6'
+  },
+  cjp: {
+    1: 'https://calendar.app.google/tqq8PkCJzmHaBvGS7',
+    2: 'https://calendar.app.google/FAcvAqn4TCJDEjwP9'
+  }
+};
+
+function quickBook() {
+  const complejo = document.getElementById('qb_complejo').value || 'cec';
+  const cancha = document.getElementById('qb_cancha').value || '1';
+  const url = LINKS[complejo]?.[cancha];
+  if (url) window.open(url, '_blank');
+}
+
+// Set today as default date
+document.getElementById('qb_fecha').value = new Date().toISOString().split('T')[0];
+
+// User bar
+function renderIndexUserBar() {
+  const s = DB.getSession();
+  const bar = document.getElementById('userBarIndex');
+  if (s) {
+    bar.innerHTML = `<div class="user-pill">
+      <div class="user-avatar-sm">${s.nombre.charAt(0)}</div>
+      <span style="font-size:.88rem">${s.nombre.split(' ')[0]}</span>
+      <a href="ranking.html" style="font-size:.82rem;color:var(--accent-tennis);font-weight:600">Mis desafíos</a>
+      <button class="btn-logout-sm" onclick="DB.logout();location.reload()">✕</button>
+    </div>`;
+  } else {
+    bar.innerHTML = `<a href="ranking.html" class="btn-pill" style="font-size:.85rem;padding:8px 16px">🔑 Ingresar / Ranking</a>`;
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  DB.seed();
+  renderIndexUserBar();
+});
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(()=>{});
+  });
+}
+</script>
+</body>
 </html>

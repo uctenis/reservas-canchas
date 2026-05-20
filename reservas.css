@@ -1,0 +1,469 @@
+/* reservas.css – Sistema de reservas estilo cine UCTenis */
+
+/* ── Step indicator ── */
+.step-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  margin: 0 auto 40px;
+  max-width: 560px;
+}
+.step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  transition: color 0.3s;
+}
+.step span {
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.07);
+  border: 1.5px solid rgba(255,255,255,0.15);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.85rem;
+  font-weight: 700;
+  transition: all 0.3s;
+}
+.step.active { color: var(--text-primary); }
+.step.active span { background: var(--accent-tennis); color: #0f172a; border-color: var(--accent-tennis); box-shadow: 0 0 12px rgba(198,211,0,0.4); }
+.step.done span { background: rgba(74,222,128,0.2); border-color: #4ade80; color: #4ade80; }
+.step-line { flex: 1; height: 1px; background: rgba(255,255,255,0.1); min-width: 20px; max-width: 60px; margin: 0 4px; }
+
+/* ── Step sections ── */
+.step-section { margin-bottom: 30px; }
+.step-section.hidden { display: none; }
+.step-title { font-size: 1.6rem; margin-bottom: 6px; text-align: center; }
+.step-sub { color: var(--text-secondary); text-align: center; margin-bottom: 24px; font-size: 0.95rem; }
+.rule-note { text-align: center; font-size: 0.82rem; color: var(--text-secondary); margin-top: 14px; }
+.login-prompt { text-align: center; margin-top: 14px; font-size: 0.9rem; color: var(--text-secondary); }
+
+/* ── Court selector cards ── */
+.courts-selector {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+.court-sel-card {
+  background: var(--bg-card);
+  border: var(--glass-border);
+  border-radius: 20px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s;
+}
+.court-sel-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 0 30px rgba(59,130,246,0.25);
+  border-color: rgba(59,130,246,0.4);
+}
+.court-sel-img {
+  height: 130px;
+  background-size: cover;
+  background-position: center;
+  position: relative;
+}
+.surface-badge {
+  position: absolute;
+  bottom: 8px; left: 8px;
+  background: rgba(15,23,42,0.85);
+  border-radius: 50px;
+  padding: 3px 10px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #cbd5e1;
+  backdrop-filter: blur(4px);
+}
+.court-sel-body { padding: 14px 16px; }
+.court-sel-body h3 { font-size: 1rem; margin-bottom: 2px; }
+.court-sel-body p { font-size: 0.82rem; color: var(--text-secondary); }
+
+/* ── Date strip ── */
+.date-strip {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding: 10px 4px 16px;
+  scrollbar-width: none;
+  justify-content: flex-start;
+  -webkit-overflow-scrolling: touch;
+}
+.date-strip::-webkit-scrollbar { display: none; }
+.date-btn {
+  flex: 0 0 72px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 12px 8px;
+  background: rgba(255,255,255,0.04);
+  border: 1.5px solid rgba(255,255,255,0.08);
+  border-radius: 16px;
+  cursor: pointer;
+  color: var(--text-primary);
+  font-family: 'Outfit', sans-serif;
+  transition: all 0.25s ease;
+}
+.date-btn.date-today {
+  border-color: rgba(198,211,0,0.35);
+  background: rgba(198,211,0,0.06);
+}
+.date-btn.date-today .date-dow {
+  color: var(--accent-tennis);
+  font-weight: 800;
+}
+.date-btn:hover:not(.date-disabled) {
+  background: rgba(255,255,255,0.09);
+  border-color: rgba(255,255,255,0.2);
+  transform: translateY(-3px);
+}
+.date-btn.date-active {
+  background: var(--accent-tennis);
+  border-color: var(--accent-tennis);
+  color: #0f172a;
+  box-shadow: 0 0 20px rgba(198,211,0,0.4);
+  transform: translateY(-3px);
+}
+.date-btn.date-disabled { opacity: 0.3; cursor: not-allowed; }
+.date-dow { font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; opacity: 0.7; }
+.date-num { font-size: 1.5rem; font-weight: 800; line-height: 1; }
+.date-mon { font-size: 0.72rem; opacity: 0.65; }
+
+/* ── Complejo Banners ── */
+.complejo-banner {
+  position: relative;
+  margin: 0 auto 1.5rem auto;
+  max-width: 800px;
+  border-radius: 16px;
+  overflow: hidden;
+  height: 240px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: #0b0f19;
+}
+.complejo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+.complejo-title {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  padding: 14px 18px;
+  background: linear-gradient(transparent, rgba(0,0,0,0.85));
+  color: white;
+  font-weight: 800;
+  font-size: 1.25rem;
+}
+
+/* ── Courts Grid (Side-by-side on desktop) ── */
+.courts-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+  max-width: 1000px;
+  margin: 0 auto 2rem auto;
+}
+
+/* ── Slot grid (cinema style) ── */
+.legend-row {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+.leg { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; color: var(--text-secondary); }
+.leg::before { content:''; width:14px; height:14px; border-radius:4px; display:inline-block; }
+.leg-free::before  { background: rgba(74,222,128,0.2); border: 1px solid #4ade80; }
+.leg-busy::before  { background: rgba(248,113,113,0.2); border: 1px solid #f87171; }
+.leg-mine::before  { background: rgba(198,211,0,0.3);  border: 1px solid var(--accent-tennis); }
+.leg-sel::before   { background: rgba(59,130,246,0.4);  border: 1px solid #60a5fa; }
+
+.slots-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr); /* Exactly 3 columns on both versions! */
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.slot-card {
+  border-radius: 12px;
+  padding: 10px 8px;
+  text-align: center;
+  border: 1.5px solid transparent;
+  transition: all 0.25s ease;
+  position: relative;
+}
+.slot-free {
+  background: rgba(74,222,128,0.08);
+  border-color: rgba(74,222,128,0.3);
+  cursor: pointer;
+}
+.slot-free:hover {
+  background: rgba(74,222,128,0.18);
+  transform: translateY(-3px);
+  box-shadow: 0 6px 20px rgba(74,222,128,0.15);
+}
+.slot-busy {
+  background: rgba(248,113,113,0.07);
+  border-color: rgba(248,113,113,0.2);
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+.slot-mine {
+  background: rgba(198,211,0,0.12);
+  border-color: var(--accent-tennis);
+  cursor: default;
+}
+.slot-past {
+  background: rgba(255,255,255,0.02);
+  border-color: rgba(255,255,255,0.05);
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.slot-selected {
+  background: rgba(59,130,246,0.25) !important;
+  border-color: #60a5fa !important;
+  box-shadow: 0 0 20px rgba(59,130,246,0.3);
+  transform: translateY(-3px);
+}
+.slot-time { font-size: 1.15rem; font-weight: 800; letter-spacing: -0.01em; }
+.slot-end  { font-size: 0.7rem; color: var(--text-secondary); margin: 1px 0 4px; }
+.slot-status { font-size: 0.7rem; font-weight: 600; color: var(--text-secondary); }
+.slot-free .slot-status   { color: #4ade80; }
+.slot-busy .slot-status   { color: #f87171; }
+.slot-mine .slot-status   { color: var(--accent-tennis); }
+.slot-selected .slot-status { color: #60a5fa; }
+
+.btn-next {
+  display: block;
+  margin: 0 auto;
+  padding: 14px 40px;
+  background: var(--accent-tennis);
+  color: #0f172a;
+  border: none;
+  border-radius: 50px;
+  font-family: 'Outfit', sans-serif;
+  font-weight: 700;
+  font-size: 1.05rem;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+.btn-next:hover:not(:disabled) { background: #d4e000; transform: translateY(-2px); box-shadow: 0 6px 20px rgba(198,211,0,0.35); }
+.btn-next:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ── Confirm card ── */
+.confirm-card { text-align: center; max-width: 460px; margin: 0 auto; padding: 40px 30px; }
+.confirm-icon { font-size: 4rem; margin-bottom: 16px; }
+.confirm-card h2 { margin-bottom: 24px; font-size: 1.6rem; }
+.confirm-details { margin-bottom: 28px; text-align: left; }
+.cd-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  font-size: 0.95rem;
+}
+.cd-row:last-child { border-bottom: none; }
+.cd-row span { color: var(--text-secondary); }
+.confirm-actions { display: flex; gap: 12px; justify-content: center; }
+.btn-back {
+  padding: 12px 24px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 50px;
+  color: var(--text-primary);
+  font-family: 'Outfit', sans-serif;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.btn-back:hover { background: rgba(255,255,255,0.12); }
+.btn-confirm {
+  padding: 12px 28px;
+  background: var(--accent-tennis);
+  color: #0f172a;
+  border: none;
+  border-radius: 50px;
+  font-family: 'Outfit', sans-serif;
+  font-weight: 700;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+.btn-confirm:hover { background: #d4e000; transform: translateY(-2px); box-shadow: 0 6px 20px rgba(198,211,0,0.35); }
+
+/* ── My bookings ── */
+.my-bookings-section { margin-bottom: 30px; }
+.mybooking-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 18px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 14px;
+  margin-bottom: 10px;
+  transition: background 0.2s;
+}
+.mybooking-card.past-booking { opacity: 0.5; }
+.mb-date {
+  display: flex; flex-direction: column; align-items: center;
+  background: rgba(198,211,0,0.12);
+  border: 1px solid rgba(198,211,0,0.25);
+  border-radius: 10px;
+  padding: 8px 12px;
+  min-width: 50px;
+  text-align: center;
+}
+.mb-day   { font-size: 1.4rem; font-weight: 800; line-height: 1; color: var(--accent-tennis); }
+.mb-month { font-size: 0.7rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; }
+.mb-info  { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.mb-info strong { font-size: 0.95rem; }
+.mb-info span   { font-size: 0.82rem; color: var(--text-secondary); }
+.btn-cancel-bk {
+  padding: 6px 14px;
+  background: rgba(248,113,113,0.12);
+  border: 1px solid rgba(248,113,113,0.3);
+  border-radius: 50px;
+  color: #f87171;
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+  white-space: nowrap;
+}
+.btn-cancel-bk:hover { background: rgba(248,113,113,0.25); }
+.past-label { font-size: 0.8rem; color: var(--text-secondary); font-weight: 500; }
+
+/* ── User bar ── */
+.res-user-bar { margin-top: 10px; }
+.user-pill-res {
+  display: inline-flex; align-items: center; gap: 10px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 50px;
+  padding: 8px 18px;
+}
+.user-pill-res .av {
+  width: 30px; height: 30px;
+  background: var(--accent-tennis);
+  color: #0f172a;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 800; font-size: 0.9rem;
+}
+.user-pill-res button {
+  background: none; border: none;
+  color: var(--text-secondary);
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+.user-pill-res button:hover { color: #f87171; }
+.btn-login-res {
+  padding: 9px 22px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 50px;
+  color: var(--text-primary);
+  font-family: 'Outfit', sans-serif;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-login-res:hover { background: rgba(255,255,255,0.12); }
+
+/* ── Auth modal reutilizado ── */
+.auth-mc { max-width: 440px !important; padding: 28px !important; }
+.auth-tabs { display: flex; border-bottom: 1px solid rgba(255,255,255,0.08); margin-bottom: 22px; }
+.auth-tab { flex:1; padding:10px; background:none; border:none; border-bottom:3px solid transparent;
+  color:var(--text-secondary); font-family:'Outfit',sans-serif; font-weight:600; font-size:0.9rem; cursor:pointer; transition:all 0.2s; }
+.auth-tab.active { color:var(--accent-tennis); border-bottom-color:var(--accent-tennis); }
+.form-group { margin-bottom:14px; }
+.form-group label { display:block; font-size:0.82rem; color:var(--text-secondary); margin-bottom:5px; font-weight:500; }
+.form-group input, .form-group select {
+  width:100%; padding:11px 14px;
+  background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1);
+  border-radius:10px; color:var(--text-primary); font-family:'Outfit',sans-serif; font-size:0.9rem; appearance:none;
+}
+.form-group input:focus, .form-group select:focus { outline:none; border-color:var(--accent-tennis); }
+.form-group select option { background:#1e293b; }
+.form-row2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.btn-primary { width:100%; padding:13px; background:var(--accent-tennis); color:#0f172a; border:none;
+  border-radius:10px; font-family:'Outfit',sans-serif; font-weight:700; font-size:1rem; cursor:pointer; transition:all 0.3s; margin-top:4px; }
+.btn-primary:hover { background:#d4e000; transform:translateY(-1px); }
+.auth-err { color:#f87171; font-size:0.82rem; margin-bottom:8px; min-height:16px; }
+
+/* ── Responsive ── */
+@media (max-width:600px) {
+  .step-indicator { gap: 0; margin-bottom: 24px; }
+  .step span { width:26px; height:26px; font-size:0.78rem; }
+  .step { font-size:0; } /* hide text on mobile */
+  .step.active { font-size:0.82rem; }
+  
+  .slots-grid { 
+    grid-template-columns: repeat(3, 1fr); 
+    gap: 8px; 
+  }
+  .slot-card { 
+    padding: 12px 6px; 
+    border-radius: 12px; 
+  }
+  .slot-time { 
+    font-size: 1.15rem; 
+  }
+  .slot-end { 
+    font-size: 0.65rem; 
+    margin: 1px 0 4px; 
+  }
+  .slot-status { 
+    font-size: 0.65rem; 
+  }
+
+  .complejo-banner { height: 110px; border-radius: 12px; margin-bottom: 0.75rem; }
+  .complejo-title { padding: 8px 12px; font-size: 0.95rem; }
+  .courts-grid { grid-template-columns: 1fr; gap: 1rem; }
+
+  .courts-selector { grid-template-columns: 1fr 1fr; }
+  .confirm-card { padding:28px 16px; }
+  .form-row2 { grid-template-columns:1fr; }
+  .date-btn { flex: 0 0 58px; padding: 8px 4px; border-radius: 12px; }
+  .date-dow { font-size: 0.65rem; }
+  .date-num { font-size: 1.2rem; }
+  .date-mon { font-size: 0.65rem; }
+}
+
+/* For small phones (iPhone): force 4 columns and smaller slot buttons. Placed after other mobile rules to ensure precedence. */
+@media (max-width: 420px) {
+  .slots-grid {
+    grid-template-columns: repeat(4, 1fr) !important;
+    gap: 6px;
+  }
+  .slot-card {
+    padding: 6px 6px !important;
+    border-radius: 8px;
+  }
+  .slot-time { font-size: 0.95rem !important; }
+  .slot-end { font-size: 0.62rem !important; }
+  .slot-status { font-size: 0.62rem !important; }
+}
+
+@media (max-width: 360px) {
+  .slots-grid {
+    grid-template-columns: repeat(4, 1fr) !important;
+    gap: 5px;
+  }
+  .slot-time { font-size: 0.88rem !important; }
+  .slot-card { padding: 5px 4px !important; }
+}
