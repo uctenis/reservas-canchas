@@ -38,7 +38,14 @@ const CONFIG = {
   },
   
   // 3. Horarios permitidos (Bloques de 1.5 hrs)
-  SLOTS: ['09:00','10:30','12:00','13:30','15:00','16:30','18:00','19:30','21:00']
+  SLOTS: ['09:00','10:30','12:00','13:30','15:00','16:30','18:00','19:30','21:00'],
+  // Si cada calendario tiene disponibilidad distinta, configura aquí bloques por cancha.
+  COURT_SLOTS: {
+    cec1: ['09:00','10:30','12:00','13:30','15:00','16:30','18:00','19:30','21:00'],
+    cec2: ['09:00','10:30','12:00','13:30','15:00','16:30','18:00','19:30','21:00'],
+    cjp1: ['09:00','10:30','12:00','13:30','15:00','16:30','18:00','19:30','21:00'],
+    cjp2: ['09:00','10:30','12:00','13:30','15:00','16:30','18:00','19:30','21:00']
+  }
 };
 
 // =======================================================
@@ -123,6 +130,7 @@ function handleRequest(data) {
 
 function notifyChallenge(data) {
   const retadoEmail = text(data.retadoEmail);
+  const retadorEmail = text(data.retadorEmail);
   const retadoNombre = text(data.retadoNombre) || 'jugador/a';
   const retadorNombre = text(data.retadorNombre) || 'Un jugador';
   const fecha = text(data.fecha) || 'fecha por coordinar';
@@ -130,8 +138,18 @@ function notifyChallenge(data) {
 
   if (!retadoEmail) return { ok: false, msg: 'Correo del jugador retado no proporcionado.' };
 
+  const calendarResult = createChallengeCalendarInvite({
+    retadorNombre: retadorNombre,
+    retadorEmail: retadorEmail,
+    retadoNombre: retadoNombre,
+    retadoEmail: retadoEmail,
+    fecha: fecha,
+    cancha: cancha
+  });
+
   MailApp.sendEmail({
     to: retadoEmail,
+    cc: retadorEmail || '',
     subject: 'Nuevo desafío UCTenis',
     body: [
       'Hola ' + retadoNombre + ',',
@@ -139,6 +157,7 @@ function notifyChallenge(data) {
       retadorNombre + ' te ha enviado un desafío en el ranking UCTenis.',
       'Fecha propuesta: ' + fecha,
       'Cancha: ' + cancha,
+      calendarResult.ok ? 'También se envió una invitación de Google Calendar.' : 'No se pudo crear la invitación Calendar: ' + calendarResult.msg,
       '',
       'Ingresa a la página de ranking para aceptar, rechazar o coordinar el resultado.',
       '',
@@ -147,7 +166,59 @@ function notifyChallenge(data) {
     name: 'UCTenis'
   });
 
-  return { ok: true, msg: 'Notificación enviada por correo.' };
+  return {
+    ok: true,
+    msg: calendarResult.ok ? 'Correo e invitación Calendar enviados.' : 'Correo enviado; Calendar no se pudo crear.',
+    calendar: calendarResult
+  };
+}
+
+function createChallengeCalendarInvite(data) {
+  const fecha = text(data.fecha);
+  if (!fecha || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+    return { ok: false, msg: 'Fecha de desafío no válida.' };
+  }
+
+  const courtKey = courtKeyFromName(data.cancha);
+  const calendarId = courtKey ? CONFIG.CALENDARS[courtKey] : '';
+  const calendar = calendarId ? CalendarApp.getCalendarById(calendarId) : CalendarApp.getDefaultCalendar();
+  if (!calendar) return { ok: false, msg: 'Calendario no encontrado.' };
+
+  try {
+    const date = new Date(fecha + 'T00:00:00-04:00');
+    const guests = [text(data.retadorEmail), text(data.retadoEmail)].filter(Boolean).join(',');
+    const event = calendar.createAllDayEvent(
+      'Desafío ranking UCTenis: ' + text(data.retadorNombre) + ' vs ' + text(data.retadoNombre),
+      date,
+      {
+        description: [
+          'Desafío de ranking UCTenis.',
+          'Retador: ' + text(data.retadorNombre) + ' <' + text(data.retadorEmail) + '>',
+          'Retado: ' + text(data.retadoNombre) + ' <' + text(data.retadoEmail) + '>',
+          'Cancha propuesta: ' + text(data.cancha),
+          '',
+          'Coordinen la hora exacta y registren el resultado en la página de ranking.'
+        ].join('\n'),
+        guests: guests,
+        sendInvites: true
+      }
+    );
+    if (CalendarApp.EventTransparency && CalendarApp.EventTransparency.TRANSPARENT) {
+      event.setTransparency(CalendarApp.EventTransparency.TRANSPARENT);
+    }
+    return { ok: true, eventId: event.getId(), calendarId: calendarId || 'default' };
+  } catch (error) {
+    return { ok: false, msg: error.message };
+  }
+}
+
+function courtKeyFromName(value) {
+  const raw = norm(value).replace(/[^a-z0-9]/g, '');
+  if (raw === 'cec1') return 'cec1';
+  if (raw === 'cec2') return 'cec2';
+  if (raw === 'cjp1') return 'cjp1';
+  if (raw === 'cjp2') return 'cjp2';
+  return '';
 }
 
 function getChallenges() {
@@ -396,10 +467,11 @@ function getAvailableSlots(dateStr) {
       end: e.getEndTime().getTime()
     }));
     
-    // Filtrar los slots basados en ocupación
+    // Filtrar los slots basados en ocupación y disponibilidad general de cada calendario
     let availableSlots = [];
+    const candidateSlots = (CONFIG.COURT_SLOTS && CONFIG.COURT_SLOTS[courtKey]) ? CONFIG.COURT_SLOTS[courtKey] : CONFIG.SLOTS;
     
-    CONFIG.SLOTS.forEach(slot => {
+    candidateSlots.forEach(slot => {
       let [h, m] = slot.split(':').map(Number);
       let slotStart = new Date(dateStr + "T00:00:00-04:00");
       slotStart.setHours(h, m, 0, 0);
@@ -581,7 +653,7 @@ function updateOwnProfile(data) {
     const updated = {
       ...player,
       fechaNacimiento: payloadField(data, ['fechaNacimiento', 'fechaNac', 'birthDate'], player.fechaNacimiento),
-      categoria: payloadField(data, ['categoria', 'category'], player.categoria),
+      categoria: normalizeCategory(payloadField(data, ['categoria', 'category'], player.categoria)),
       manoHabil: payloadField(data, ['manoHabil', 'mano', 'hand'], player.manoHabil),
       reves: payloadField(data, ['reves', 'backhand'], player.reves),
       foto: payloadField(data, ['foto', 'photo', 'avatar'], player.foto),
@@ -740,7 +812,7 @@ function playerFromRow(row, rowNumber) {
     genero: normalizeGender(row[2]),
     fechaNacimiento: formatSheetDate(row[3]),
     edad: calculateAge(row[3]),
-    categoria: text(row[4]),
+    categoria: normalizeCategory(row[4]),
     manoHabil: text(row[5]),
     mano: text(row[5]),
     reves: text(row[6]),
@@ -760,7 +832,7 @@ function normalizePlayerPayload(data, existing) {
     nombre: payloadField(data, ['nombre', 'name', 'jugador'], base.nombre),
     genero: genero,
     fechaNacimiento: payloadField(data, ['fechaNacimiento', 'fechaNac', 'birthDate'], base.fechaNacimiento),
-    categoria: payloadField(data, ['categoria', 'category'], base.categoria),
+    categoria: normalizeCategory(payloadField(data, ['categoria', 'category'], base.categoria)),
     manoHabil: payloadField(data, ['manoHabil', 'mano', 'hand'], base.manoHabil || base.mano),
     reves: payloadField(data, ['reves', 'backhand'], base.reves),
     foto: payloadField(data, ['foto', 'photo', 'avatar'], base.foto),
@@ -785,7 +857,7 @@ function playerToRow(player) {
     player.nombre,
     player.genero,
     player.fechaNacimiento,
-    player.categoria,
+    normalizeCategory(player.categoria),
     player.manoHabil || player.mano,
     player.reves,
     player.foto,
@@ -802,7 +874,7 @@ function publicPlayer(player) {
     genero: player.genero,
     fechaNacimiento: player.fechaNacimiento,
     edad: player.edad || calculateAge(player.fechaNacimiento),
-    categoria: player.categoria,
+    categoria: normalizeCategory(player.categoria),
     manoHabil: player.manoHabil || player.mano,
     mano: player.mano || player.manoHabil,
     reves: player.reves,
@@ -975,6 +1047,11 @@ function normalizeGender(value) {
   return '';
 }
 
+function normalizeCategory(value) {
+  const raw = text(value);
+  return norm(raw) === 'abierta' ? 'Principiante' : raw;
+}
+
 function isAdminRequest(data) {
   if (CONFIG.ADMIN_PIN && text(data.adminPin || data.pin) !== text(CONFIG.ADMIN_PIN)) return false;
 
@@ -1013,7 +1090,7 @@ function getRanking() {
           genero: text(row[2]),
           fechaNacimiento: formatSheetDate(row[3]),
           edad: calculateAge(row[3]),
-          categoria: text(row[4]),
+          categoria: normalizeCategory(row[4]),
           manoHabil: text(row[5]),
           mano: text(row[5]),
           reves: text(row[6]),
@@ -1053,7 +1130,7 @@ function getRanking() {
           genero: genero,
           fechaNacimiento: meta.fechaNacimiento || '',
           edad: meta.edad || '',
-          categoria: meta.categoria || '',
+          categoria: normalizeCategory(meta.categoria || ''),
           manoHabil: meta.manoHabil || '',
           mano: meta.mano || meta.manoHabil || '',
           reves: meta.reves || '',

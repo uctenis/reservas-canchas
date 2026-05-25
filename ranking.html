@@ -10,17 +10,19 @@
   <meta property="og:image" content="https://uctenis.github.io/reservas-canchas/logo_uctenis_v03.png">
   <link rel="icon" href="logo_uctenis_v03.png" type="image/png">
   <link rel="stylesheet" href="style.css">
-  <link rel="stylesheet" href="ranking.css?v=8">
+  <link rel="stylesheet" href="ranking.css?v=11">
 </head>
 <body>
 <div class="main-container ranking-page">
 
   <header class="ranking-hero">
-    <a href="index.html" aria-label="Volver al inicio">
+    <a href="index.html" class="club-logo-link" aria-label="Volver al inicio">
       <img src="logo_uctenis_v03.png" alt="UCTenis" class="club-logo">
     </a>
-    <h1>Ranking y Desafíos</h1>
-    <p class="ranking-lead">Ranking oficial por género, perfiles de jugadores y gestión de desafíos.</p>
+    <div class="ranking-hero-copy">
+      <h1>Ranking UCTenis</h1>
+      <p class="ranking-lead">Escalerilla oficial del club, posiciones vigentes y desafíos entre jugadores activos.</p>
+    </div>
     <div id="userBar" class="user-bar"></div>
   </header>
 
@@ -28,8 +30,9 @@
     <button class="gender-tab active" type="button" data-gender="M" id="tabM">Masculino</button>
     <button class="gender-tab" type="button" data-gender="F" id="tabF">Femenino</button>
   </nav>
-
-  <section class="glass-card ranking-section" id="rankingSection">
+  <div class="page-grid">
+    <main class="main-col">
+      <section class="glass-card ranking-section" id="rankingSection">
     <div class="rank-header-row">
       <div>
         <h2 class="section-title" id="rankTitle">Ranking Masculino</h2>
@@ -61,7 +64,40 @@
         <tbody id="rankBody"></tbody>
       </table>
     </div>
-  </section>
+      </section>
+    </main>
+
+    <aside class="sidebar-col">
+      <div class="dashboard-top">
+    <section class="glass-card my-profile-section" id="myProfileSection" style="display:none">
+      <div class="section-heading-row">
+        <h2 class="section-title">Mi ficha</h2>
+        <span class="section-meta" id="myProfileMeta"></span>
+      </div>
+      <div id="myProfileCard"></div>
+    </section>
+
+    <section class="glass-card challenges-section" id="challengesSection">
+      <div class="section-heading-row">
+        <h2 class="section-title">Desafíos activos</h2>
+        <span class="section-meta" id="activeChallengeCount"></span>
+      </div>
+      <div id="challengesList"></div>
+    </section>
+      </div>
+
+      <section class="glass-card my-challenges-section" id="myChallengesSection" style="display:none">
+    <div class="section-heading-row">
+      <div>
+        <h2 class="section-title">Mis desafíos</h2>
+        <p class="section-copy">Historial de desafíos con fecha, resultado y ganador.</p>
+      </div>
+      <span class="section-meta" id="myChallengeCount"></span>
+    </div>
+    <div id="myChallengesList"></div>
+      </section>
+    </aside>
+  </div>
 
   <section class="glass-card inactive-section" id="inactiveSection">
     <div class="section-heading-row">
@@ -69,30 +105,6 @@
       <span class="section-meta" id="inactiveCount"></span>
     </div>
     <div class="inactive-player-list" id="inactivePlayersList"></div>
-  </section>
-
-  <section class="glass-card my-profile-section" id="myProfileSection" style="display:none">
-    <div class="section-heading-row">
-      <h2 class="section-title">Mi ficha</h2>
-      <span class="section-meta" id="myProfileMeta"></span>
-    </div>
-    <div id="myProfileCard"></div>
-  </section>
-
-  <section class="glass-card challenges-section" id="challengesSection">
-    <div class="section-heading-row">
-      <h2 class="section-title">Desafíos activos</h2>
-      <span class="section-meta" id="activeChallengeCount"></span>
-    </div>
-    <div id="challengesList"></div>
-  </section>
-
-  <section class="glass-card my-challenges-section" id="myChallengesSection" style="display:none">
-    <div class="section-heading-row">
-      <h2 class="section-title">Mis desafíos</h2>
-      <span class="section-meta" id="myChallengeCount"></span>
-    </div>
-    <div id="myChallengesList"></div>
   </section>
 
   <div class="footer-nav">
@@ -240,17 +252,50 @@
     <h3>Ingresar resultado</h3>
     <form id="fScore">
       <p id="scorePlayers" class="score-players"></p>
-      <div class="form-group">
-        <label for="scoreInput">Marcador</label>
-        <input type="text" id="scoreInput" placeholder="6-3, 4-6, 7/6(10-8)" required>
-        <small style="display:block;margin-top:6px;color:var(--text-secondary);font-size:0.85rem;">Formato tenis: set por set. El 3.º set puede anotarse como 7/6(10-8).</small>
+      <div class="score-board">
+        <div class="score-board-header">
+          <span></span>
+          <span>Set 1</span>
+          <span>Set 2</span>
+          <span>Set 3</span>
+        </div>
+        <div class="score-board-row score-player-row">
+          <span class="score-player-name" id="scorePlayerA"></span>
+          <input type="number" id="scoreSet1A" class="score-cell score-input" min="0" max="7" step="1" required>
+          <input type="number" id="scoreSet2A" class="score-cell score-input" min="0" max="7" step="1" required>
+          <input type="number" id="scoreSet3A" class="score-cell score-input" min="0" max="7" step="1">
+        </div>
+        <div class="score-board-row score-player-row">
+          <span class="score-player-name" id="scorePlayerB"></span>
+          <input type="number" id="scoreSet1B" class="score-cell score-input" min="0" max="7" step="1" required>
+          <input type="number" id="scoreSet2B" class="score-cell score-input" min="0" max="7" step="1" required>
+          <input type="number" id="scoreSet3B" class="score-cell score-input" min="0" max="7" step="1">
+        </div>
       </div>
-      <div class="form-group">
-        <label for="scoreWinner">Ganador</label>
-        <select id="scoreWinner" required></select>
+      <div class="score-tiebreaks">
+        <div class="score-tiebreak-row hidden" id="scoreTiebreakRow1">
+          <span class="score-tiebreak-label">Tie-break Set 1</span>
+          <input type="number" id="scoreTB1A" class="score-cell score-input" min="0" max="30" step="1" placeholder="7">
+          <input type="number" id="scoreTB1B" class="score-cell score-input" min="0" max="30" step="1" placeholder="5">
+        </div>
+        <div class="score-tiebreak-row hidden" id="scoreTiebreakRow2">
+          <span class="score-tiebreak-label">Tie-break Set 2</span>
+          <input type="number" id="scoreTB2A" class="score-cell score-input" min="0" max="30" step="1" placeholder="7">
+          <input type="number" id="scoreTB2B" class="score-cell score-input" min="0" max="30" step="1" placeholder="5">
+        </div>
+        <div class="score-tiebreak-row hidden" id="scoreTiebreakRow3">
+          <span class="score-tiebreak-label">Tie-break Set 3</span>
+          <input type="number" id="scoreTB3A" class="score-cell score-input" min="0" max="30" step="1" placeholder="7">
+          <input type="number" id="scoreTB3B" class="score-cell score-input" min="0" max="30" step="1" placeholder="5">
+        </div>
       </div>
+      <div class="score-summary">
+        <div class="score-summary-info">Ingresa el resultado de cada set. Si el set termina 7-6, completa el tie-break en el cuadro correspondiente.</div>
+        <div id="scoreWinnerText" class="score-winner-text">Ganador: <strong>Sin resultado</strong></div>
+      </div>
+      <input type="hidden" id="scoreWinner" name="scoreWinner" value="">
       <p class="auth-error" id="scoreError" aria-live="polite"></p>
-      <button type="submit" class="btn-primary">Confirmar resultado</button>
+      <button type="submit" class="btn-primary" id="btnSubmitScore">Confirmar resultado</button>
     </form>
   </div>
 </div>
@@ -358,6 +403,9 @@
           <p class="modal-kicker">Jugadores</p>
           <p class="admin-help-text">Lista deslizable. Edita cualquier ficha y confirma los cambios.</p>
         </div>
+        <div class="admin-search-row">
+          <input type="search" id="adminPlayerSearch" placeholder="Buscar jugador por nombre o correo" aria-label="Buscar jugadores">
+        </div>
         <div class="admin-player-list" id="adminPlayerList"></div>
       </div>
     </div>
@@ -378,6 +426,7 @@ const ADMIN_IDENTITIES = {
   emails: ['dsilvaroco@gmail.com', 'dsilva@uct.cl'],
   names: ['David Silva']
 };
+const CLOUD_TIMEOUT_MS = 4500;
 
 const OFFICIAL_STATIC_RANKING = {
   M: [
@@ -466,7 +515,14 @@ function setupEvents() {
   document.getElementById('fCompleteProfile').addEventListener('submit', handleCompleteProfile);
   document.getElementById('fChallenge').addEventListener('submit', submitChallenge);
   document.getElementById('fScore').addEventListener('submit', submitScore);
+  document.querySelectorAll('.score-input').forEach(input => {
+    input.addEventListener('input', normalizeScoreEntry);
+    input.addEventListener('input', updateScoreMatchState);
+    input.addEventListener('keydown', handleScoreInputArrows);
+  });
   document.getElementById('fAdminPlayer').addEventListener('submit', submitAdminPlayer);
+  const adminSearch = document.getElementById('adminPlayerSearch');
+  if (adminSearch) adminSearch.addEventListener('input', renderAdminPlayerList);
 
   document.addEventListener('submit', event => {
     if (event.target.id === 'fOwnProfile') submitOwnProfile(event);
@@ -515,20 +571,27 @@ async function refreshRankingPage() {
   setRankStatus('Conectando...', 'info');
   renderRankingLoading();
   await loadRankingData();
-  await syncChallengesFromCloud();
   renderAll();
+  syncChallengesFromCloud().then(() => {
+    renderChallenges();
+    renderMyChallenges();
+  });
 }
 
 async function loadRankingData() {
   try {
     if (!DB.isCloudConfigured()) throw new Error('Firestore no está disponible.');
 
-    let players = await DB.getPlayersCloud();
+    let players = await withTimeout(DB.getPlayersCloud(), CLOUD_TIMEOUT_MS, 'Firebase ranking');
     if (!players.length) {
       if (!isAdminSession()) throw new Error('Firebase aún no tiene jugadores sembrados.');
       setRankStatus('Sembrando Firebase...', 'info');
-      await DB.savePlayersCloud(buildInitialFirebaseSeed(), { email: DB.getSession()?.email || 'seed-local-preview' });
-      players = await DB.getPlayersCloud();
+      await withTimeout(
+        DB.savePlayersCloud(buildInitialFirebaseSeed(), { email: DB.getSession()?.email || 'seed-local-preview' }),
+        CLOUD_TIMEOUT_MS,
+        'Siembra Firebase'
+      );
+      players = await withTimeout(DB.getPlayersCloud(), CLOUD_TIMEOUT_MS, 'Firebase ranking');
     }
 
     const split = splitPlayersByStatus(players);
@@ -554,19 +617,58 @@ async function loadRankingData() {
 
   if (rankingState.source !== 'firebase') {
     applyLocalPlayerEdits(rankingState.lists, rankingState.inactive);
+    applyLocalChallengesToRanking();
   }
   syncLocalUsersFromPlayers(getAllPlayers());
+}
+
+function applyLocalChallengesToRanking() {
+  const completed = DB.getChallenges().filter(challenge => challenge.status === 'completado');
+  if (!completed.length) return;
+
+  ['M', 'F'].forEach(gender => {
+    const list = rankingState.lists[gender] || [];
+    const ranked = [...list];
+
+    completed
+      .filter(challenge => normalizeGender(challenge.genero) === gender)
+      .sort((a, b) => {
+        const timeA = new Date(a.actualizado || a.creado || 0).getTime() || 0;
+        const timeB = new Date(b.actualizado || b.creado || 0).getTime() || 0;
+        return timeA - timeB || String(a.id).localeCompare(String(b.id));
+      })
+      .forEach(challenge => {
+        const winnerId = challenge.ganadorId;
+        const loserId = winnerId === challenge.retadorId ? challenge.retadoId : challenge.retadorId;
+        let winnerIndex = ranked.findIndex(player => playerMatchesChallengeRef(player, winnerId));
+        let loserIndex = ranked.findIndex(player => playerMatchesChallengeRef(player, loserId));
+        if (winnerIndex < 0 || loserIndex < 0 || winnerIndex < loserIndex) return;
+        const temp = ranked[winnerIndex];
+        ranked[winnerIndex] = ranked[loserIndex];
+        ranked[loserIndex] = temp;
+      });
+
+    rankingState.lists[gender] = ranked.map((player, index) => ({ ...player, pos: index + 1 }));
+  });
 }
 
 async function syncChallengesFromCloud() {
   if (!DB.isCloudConfigured()) return;
 
   try {
-    const challenges = await DB.getChallengesCloud();
+    const challenges = await withTimeout(DB.getChallengesCloud(), CLOUD_TIMEOUT_MS, 'Firebase desafíos');
     DB.saveChallenges(challenges);
   } catch (error) {
     console.warn('No se pudieron sincronizar los desafíos desde Firebase.', error);
   }
+}
+
+function withTimeout(promise, ms, label) {
+  let timeoutId;
+  const timeout = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(`${label} demoró más de ${Math.round(ms / 1000)} segundos.`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timeoutId));
 }
 
 function buildInitialFirebaseSeed() {
@@ -690,7 +792,7 @@ function normalizePlayer(row, index, gender) {
     pg: toNumber(row?.pg ?? row?.ganados ?? row?.wins, 0),
     pp: toNumber(row?.pp ?? row?.perdidos ?? row?.losses, 0),
     edad: cleanText(row?.edad ?? row?.age) || calculateAge(row?.fechaNacimiento ?? row?.fechaNac ?? row?.birthDate),
-    categoria: cleanText(row?.categoria ?? row?.category),
+    categoria: normalizeCategory(row?.categoria ?? row?.category),
     mano: cleanText(row?.manoHabil ?? row?.mano ?? row?.hand),
     reves: cleanText(row?.reves ?? row?.backhand),
     foto: resolvePhoto(rawPhoto, id, gender),
@@ -709,12 +811,12 @@ function normalizeActiveValue(value) {
 
 function fillPlayerFromLocalProfile(player) {
   const user = findLocalUserForPlayer(player);
-  if (!user) return player;
+  if (!user) return { ...player, categoria: normalizeCategory(player.categoria) };
 
   return {
     ...player,
     localId: user.id,
-    categoria: player.categoria || user.categoria || '',
+    categoria: normalizeCategory(player.categoria || user.categoria || ''),
     mano: player.mano || user.mano || '',
     reves: player.reves || user.reves || '',
     foto: player.foto || resolvePhoto(user.foto, user.id, player.gender),
@@ -789,13 +891,15 @@ function renderRanking() {
           </div>
         </td>
         <td>${escapeHTML(player.edad || '-')}</td>
-        <td>${escapeHTML(player.categoria || '-')}</td>
+        <td>${escapeHTML(normalizeCategory(player.categoria) || '-')}</td>
         <td>${escapeHTML(player.mano || '-')}</td>
         <td>${escapeHTML(player.reves || '-')}</td>
         <td>${evolutionHtml(player)}</td>
         <td class="table-actions">
-          <button class="btn-mini-profile" type="button" data-action="show-profile" data-player-key="${escapeAttr(player.key)}">Ver</button>
-          ${challengeButton}
+          <div class="action-buttons">
+            <button class="btn-mini-profile" type="button" data-action="show-profile" data-player-key="${escapeAttr(player.key)}">Ver</button>
+            ${challengeButton}
+          </div>
         </td>
       </tr>`;
   }).join('');
@@ -848,13 +952,11 @@ function renderInactivePlayers() {
     div.innerHTML = '<p class="empty-state">No hay jugadores inactivos registrados en este ranking.</p>';
     return;
   }
-
   div.innerHTML = list.map(player => `
     <article class="inactive-player-row" data-player-key="${escapeAttr(player.key)}">
       <img class="player-avatar" src="${escapeAttr(player.foto)}" data-fallback="${escapeAttr(GENDERS[gender].fallbackAvatar)}" onerror="useFallbackAvatar(this)" alt="${escapeAttr(player.nombre)}">
       <div class="inactive-player-info">
         <strong>${escapeHTML(player.nombre)}</strong>
-        <span>${escapeHTML([player.categoria || 'Sin categoría', player.email || 'Sin correo'].join(' · '))}</span>
       </div>
       <button class="btn-mini-profile" type="button" data-action="show-profile" data-player-key="${escapeAttr(player.key)}">Ver</button>
     </article>`).join('');
@@ -967,6 +1069,7 @@ function renderMyChallenges() {
   const list = DB.getChallenges()
     .filter(challenge => sessionIds.includes(challenge.retadorId) || sessionIds.includes(challenge.retadoId))
     .filter(challenge => challenge.genero === rankingState.currentGender)
+    .filter(challenge => challenge.status !== 'rechazado')
     .sort(sortChallenges);
 
   document.getElementById('myChallengeCount').textContent = list.length ? `${list.length} total` : '';
@@ -1013,6 +1116,19 @@ function challengeCard(challenge, users, session, compact) {
     ? `${sessionIds.includes(challenge.retadorId) ? 'Reto enviado a' : 'Desafío de'} ${escapeHTML(sessionIds.includes(challenge.retadorId) ? retadoName : retadorName)}`
     : `${escapeHTML(retadorName)} <span class="vs-badge">VS</span> ${escapeHTML(retadoName)}`;
 
+  // compact view: include simple history counts
+  let compactStats = '';
+  if (compact) {
+    const allChallenges = DB.getChallenges();
+    const playerAId = retador?.id || challenge.retadorId;
+    const playerBId = retado?.id || challenge.retadoId;
+    const winsA = allChallenges.filter(c => c.ganadorId === playerAId).length;
+    const winsB = allChallenges.filter(c => c.ganadorId === playerBId).length;
+    const lossesA = allChallenges.filter(c => (c.retadorId === playerAId || c.retadoId === playerAId) && c.ganadorId && c.ganadorId !== playerAId).length;
+    const lossesB = allChallenges.filter(c => (c.retadorId === playerBId || c.retadoId === playerBId) && c.ganadorId && c.ganadorId !== playerBId).length;
+    compactStats = `<div class="chal-stats"><span>${winsA}W-${lossesA}L · ${winsB}W-${lossesB}L</span></div>`;
+  }
+
   return `
     <article class="challenge-card status-${escapeAttr(challenge.status)}">
       <div class="chal-players">${title}</div>
@@ -1022,6 +1138,7 @@ function challengeCard(challenge, users, session, compact) {
         <span class="chal-status">${escapeHTML(status)}</span>
         ${challenge.marcador ? `<span>${escapeHTML(challenge.marcador)} · Ganó ${escapeHTML(ganadorName || '-')}</span>` : ''}
       </div>
+      ${compactStats}
       ${actions ? `<div class="chal-actions">${actions}</div>` : ''}
     </article>`;
 }
@@ -1036,9 +1153,28 @@ function handleChallengeAction(event) {
   if (button.dataset.action === 'score-challenge') openScoreModal(id);
   if (button.dataset.action === 'edit-challenge') openEditChallengeModal(id);
   if (button.dataset.action === 'delete-challenge') {
-    if (!confirm('¿Eliminar este desafío? Se marcará como rechazado.')) return;
-    respondChallenge(id, false);
+    if (!confirm('¿Eliminar este desafío? Se marcará como rechazado y quedará en el historial.')) return;
+    deleteChallenge(id);
   }
+}
+
+async function deleteChallenge(id) {
+  if (DB.isCloudConfigured()) {
+    try {
+      const challenge = await DB.updateChallengeCloud(id, {
+        status: 'rechazado',
+        deletedAt: new Date().toISOString()
+      });
+      upsertLocalChallenge(challenge);
+    } catch (error) {
+      console.warn('No se pudo eliminar el desafío en Firebase. Usando respaldo local.', error);
+      DB.respondChallenge(id, false);
+    }
+  } else {
+    DB.respondChallenge(id, false);
+  }
+  renderChallenges();
+  renderMyChallenges();
 }
 
 function openAuthModal() {
@@ -1149,7 +1285,7 @@ async function handleCompleteProfile(event) {
         nombre: data.nombre,
         email: data.email,
         genero: data.genero,
-        categoria: data.categoria,
+        categoria: normalizeCategory(data.categoria),
         mano: data.mano,
         reves: data.reves,
         foto: data.foto,
@@ -1163,7 +1299,7 @@ async function handleCompleteProfile(event) {
         nombre: data.nombre,
         email: data.email,
         genero: data.genero,
-        categoria: data.categoria,
+        categoria: normalizeCategory(data.categoria),
         mano: data.mano,
         reves: data.reves,
         foto: data.foto,
@@ -1194,6 +1330,15 @@ function openChallengeModal(playerKey) {
     return;
   }
 
+  document.getElementById('fChallenge').reset();
+  document.getElementById('chal_id').value = '';
+  document.getElementById('chal_fecha').min = todayISO();
+  document.getElementById('chal_fecha').value = todayISO();
+  const submit = document.getElementById('btnSubmitChallenge');
+  submit.disabled = false;
+  submit.textContent = 'Enviar desafío';
+  delete submit.dataset.editChallengeId;
+
   ensureSessionInUsers();
   const sessionPlayer = getSessionPlayer(session);
   if (!sessionPlayer) {
@@ -1219,7 +1364,6 @@ function openChallengeModal(playerKey) {
   if (sessionPlayer.gender !== rankingState.currentGender) switchGender(sessionPlayer.gender);
 
   const select = document.getElementById('chal_retado');
-  const submit = document.getElementById('btnSubmitChallenge');
   const target = playerKey ? getPlayerByKey(playerKey) : null;
   const rivals = getChallengeablePlayers(sessionPlayer)
     .map(player => ({ player, user: ensureLocalUserForPlayer(player) }))
@@ -1232,6 +1376,7 @@ function openChallengeModal(playerKey) {
   } else {
     select.disabled = false;
     submit.disabled = false;
+    submit.textContent = 'Enviar desafío';
     select.innerHTML = rivals.map(({ player, user }) => {
       const selected = target && samePlayer(player, target) ? 'selected' : '';
       return `<option value="${escapeAttr(user.id)}" ${selected}>${player.pos} · ${escapeHTML(user.nombre)}</option>`;
@@ -1261,91 +1406,95 @@ async function submitChallenge(event) {
   const retadoPlayer = retado ? findPlayerForUser(retado) : null;
   const submitBtn = document.getElementById('btnSubmitChallenge');
   const editId = submitBtn.dataset.editChallengeId;
+  const restoreButton = setButtonBusy(submitBtn, editId ? 'Guardando...' : 'Enviando...');
 
-  if (!retado) {
-    error.textContent = 'Selecciona un rival válido.';
-    return;
-  }
-  if (!retadorPlayer) {
-    error.textContent = 'Tu cuenta no está enlazada a una ficha del ranking.';
-    return;
-  }
-  if (!isPlayerActive(retadorPlayer)) {
-    error.textContent = 'Tu ficha está inactiva para la escalerilla.';
-    return;
-  }
-  if (!retadoPlayer || !canChallengePlayer(retadoPlayer)) {
-    error.textContent = 'Solo puedes retar a jugadores ubicados hasta 3 puestos por encima de ti.';
-    return;
-  }
-  if (!fecha || fecha < todayISO()) {
-    error.textContent = 'Selecciona una fecha válida.';
-    return;
-  }
-  if (retado.genero !== retadorPlayer.gender) {
-    error.textContent = 'Solo puedes desafiar jugadores de tu mismo ranking.';
-    return;
-  }
-  if (retado.id === session.id || normalizeKey(retado.nombre) === normalizeKey(session.nombre)) {
-    error.textContent = 'No puedes desafiarte a ti mismo.';
-    return;
-  }
+  try {
+    if (!retado) {
+      error.textContent = 'Selecciona un rival válido.';
+      return;
+    }
+    if (!retadorPlayer) {
+      error.textContent = 'Tu cuenta no está enlazada a una ficha del ranking.';
+      return;
+    }
+    if (!isPlayerActive(retadorPlayer)) {
+      error.textContent = 'Tu ficha está inactiva para la escalerilla.';
+      return;
+    }
+    if (!retadoPlayer || !canChallengePlayer(retadoPlayer)) {
+      error.textContent = 'Solo puedes retar a jugadores ubicados hasta 3 puestos por encima de ti.';
+      return;
+    }
+    if (!fecha || fecha < todayISO()) {
+      error.textContent = 'Selecciona una fecha válida.';
+      return;
+    }
+    if (retado.genero !== retadorPlayer.gender) {
+      error.textContent = 'Solo puedes desafiar jugadores de tu mismo ranking.';
+      return;
+    }
+    if (retado.id === session.id || normalizeKey(retado.nombre) === normalizeKey(session.nombre)) {
+      error.textContent = 'No puedes desafiarte a ti mismo.';
+      return;
+    }
 
-  // If editing an existing challenge, update it instead of creating a new one
-  if (editId) {
-    const patch = {
-      fecha,
-      cancha,
-      retadoId,
-      retadoNombre: retado.nombre,
-      retadoEmail: retado.email || ''
-    };
-    try {
-      if (DB.isCloudConfigured()) {
-        const updated = await DB.updateChallengeCloud(editId, patch);
-        upsertLocalChallenge(updated);
-      } else {
+    if (editId) {
+      const patch = {
+        fecha,
+        cancha,
+        retadoId,
+        retadoNombre: retado.nombre,
+        retadoEmail: retado.email || ''
+      };
+      try {
+        if (DB.isCloudConfigured()) {
+          const updated = await DB.updateChallengeCloud(editId, patch);
+          upsertLocalChallenge(updated);
+        } else {
+          const list = DB.getChallenges().map(c => c.id === editId ? { ...c, ...patch, actualizado: new Date().toISOString() } : c);
+          DB.saveChallenges(list);
+        }
+      } catch (err) {
+        console.warn('No se pudo actualizar el desafío en la nube; se actualizó localmente.', err);
         const list = DB.getChallenges().map(c => c.id === editId ? { ...c, ...patch, actualizado: new Date().toISOString() } : c);
         DB.saveChallenges(list);
       }
-    } catch (err) {
-      console.warn('No se pudo actualizar el desafío en la nube; se actualizó localmente.', err);
-      const list = DB.getChallenges().map(c => c.id === editId ? { ...c, ...patch, actualizado: new Date().toISOString() } : c);
-      DB.saveChallenges(list);
+      delete submitBtn.dataset.editChallengeId;
+      closeModal('challengeModal');
+      renderChallenges();
+      renderMyChallenges();
+      return;
     }
-    delete submitBtn.dataset.editChallengeId;
+
+    const sessionIds = getSessionChallengeIds(session);
+    const existing = DB.getChallenges().find(challenge =>
+      ['pendiente', 'aceptado'].includes(challenge.status) &&
+      ((sessionIds.includes(challenge.retadorId) && challenge.retadoId === retadoId) ||
+       (challenge.retadorId === retadoId && sessionIds.includes(challenge.retadoId)))
+    );
+
+    if (existing) {
+      error.textContent = 'Ya hay un desafío pendiente o aceptado con ese jugador.';
+      return;
+    }
+
+    await createChallengeRemoteOrLocal({
+      retadorId: session.id,
+      retadorNombre: session.nombre,
+      retadorEmail: session.email || '',
+      retadoId: retadoId,
+      retadoNombre: retado.nombre,
+      retadoEmail: retado.email || '',
+      genero: retadorPlayer.gender,
+      fecha: fecha,
+      cancha: cancha
+    });
     closeModal('challengeModal');
     renderChallenges();
     renderMyChallenges();
-    return;
+  } finally {
+    restoreButton();
   }
-
-  const sessionIds = getSessionChallengeIds(session);
-  const existing = DB.getChallenges().find(challenge =>
-    ['pendiente', 'aceptado'].includes(challenge.status) &&
-    ((sessionIds.includes(challenge.retadorId) && challenge.retadoId === retadoId) ||
-     (challenge.retadorId === retadoId && sessionIds.includes(challenge.retadoId)))
-  );
-
-  if (existing) {
-    error.textContent = 'Ya hay un desafío pendiente o aceptado con ese jugador.';
-    return;
-  }
-
-  const challenge = await createChallengeRemoteOrLocal({
-    retadorId: session.id,
-    retadorNombre: session.nombre,
-    retadorEmail: session.email || '',
-    retadoId: retadoId,
-    retadoNombre: retado.nombre,
-    retadoEmail: retado.email || '',
-    genero: retadorPlayer.gender,
-    fecha: fecha,
-    cancha: cancha
-  });
-  closeModal('challengeModal');
-  renderChallenges();
-  renderMyChallenges();
 }
 
 async function createChallengeRemoteOrLocal(payload) {
@@ -1393,8 +1542,9 @@ async function notifyChallenge(challenge, retador, retado) {
   if (!window.CONFIG?.API_URL || !retado?.email || retado.email.endsWith('@uctenis.local')) return;
 
   try {
-    await fetch(window.CONFIG.API_URL, {
+    const response = await fetch(window.CONFIG.API_URL, {
       method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({
         action: 'notify_challenge',
         retadorNombre: retador.nombre,
@@ -1406,6 +1556,10 @@ async function notifyChallenge(challenge, retador, retado) {
         genero: challenge.genero
       })
     });
+    const result = await response.json().catch(() => null);
+    if (!response.ok || result?.ok === false) {
+      throw new Error(result?.msg || 'No se pudo confirmar el envío del correo y Calendar.');
+    }
   } catch (error) {
     console.warn('No se pudo enviar la notificación del desafío.', error);
   }
@@ -1440,33 +1594,271 @@ function openScoreModal(challengeId) {
 
   rankingState.currentChallengeId = challengeId;
   document.getElementById('scorePlayers').textContent = `${retadorName} vs ${retadoName} · ${formatShortDate(challenge.fecha)}`;
-  document.getElementById('scoreWinner').innerHTML = `
-    <option value="${escapeAttr(challenge.retadorId)}">${escapeHTML(retadorName)}</option>
-    <option value="${escapeAttr(challenge.retadoId)}">${escapeHTML(retadoName)}</option>`;
-  document.getElementById('scoreInput').value = '';
+  document.getElementById('scorePlayerA').textContent = retadorName;
+  document.getElementById('scorePlayerB').textContent = retadoName;
+  document.getElementById('scoreSet1A').value = '';
+  document.getElementById('scoreSet1B').value = '';
+  document.getElementById('scoreSet2A').value = '';
+  document.getElementById('scoreSet2B').value = '';
+  document.getElementById('scoreSet3A').value = '';
+  document.getElementById('scoreSet3B').value = '';
+  document.getElementById('scoreWinner').value = '';
   document.getElementById('scoreError').textContent = '';
+  document.getElementById('scoreWinnerText').innerHTML = 'Ganador: <strong>Sin resultado</strong>';
+
+  if (challenge.marcador) {
+    const sets = challenge.marcador.split(',').map(part => part.trim()).filter(Boolean);
+    sets.forEach((set, index) => {
+      const parsed = parseSetScore(set);
+      if (!parsed) return;
+      const aInput = document.getElementById(`scoreSet${index + 1}A`);
+      const bInput = document.getElementById(`scoreSet${index + 1}B`);
+      aInput.value = parsed.a;
+      bInput.value = parsed.b;
+      if (parsed.tiebreak) {
+        document.getElementById(`scoreTB${index + 1}A`).value = parsed.tiebreak.a;
+        document.getElementById(`scoreTB${index + 1}B`).value = parsed.tiebreak.b;
+      }
+    });
+  }
+
+  updateScoreMatchState();
   openModal('scoreModal');
+}
+
+function parseSetScore(value) {
+  const raw = String(value || '').trim();
+  const tiebreakMatch = raw.match(/^(\d+)\s*[-/]\s*(\d+)\s*\(?(\d+)\s*[-/]\s*(\d+)\)?$/);
+  if (tiebreakMatch) {
+    return {
+      a: Number(tiebreakMatch[1]),
+      b: Number(tiebreakMatch[2]),
+      tiebreak: { a: Number(tiebreakMatch[3]), b: Number(tiebreakMatch[4]) }
+    };
+  }
+  const match = raw.match(/^(\d+)\s*[-/]\s*(\d+)$/);
+  if (!match) return null;
+  return { a: Number(match[1]), b: Number(match[2]) };
+}
+
+function normalizeScoreEntry(event) {
+  const input = event.target;
+  const digits = String(input.value || '').replace(/[^0-9]/g, '');
+  const min = Number(input.min || 0);
+  const max = Number(input.max || 999);
+  let value = digits === '' ? '' : Number(digits);
+  if (value !== '') {
+    if (value > max) value = max;
+    if (value < min) value = min;
+  }
+  input.value = value === '' ? '' : String(value);
+}
+
+function handleScoreInputArrows(event) {
+  const el = event.target;
+  const key = event.key;
+  const id = el.id || '';
+  // Only handle arrow navigation for numeric score inputs
+  if (!id.startsWith('score')) return;
+
+  const match = id.match(/^score(Set(\d)([AB]))$/i) || id.match(/^(scoreSet(\d)(A|B))$/i);
+  // Fallback parsing by parts: expected ids like scoreSet1A, scoreTB1A, etc.
+  const parts = id.match(/^score(Set)?(TB)?(\d)(A|B)$/i);
+  if (!parts) return;
+  // Determine coordinates: setNumber and player (A=0 top, B=1 bottom)
+  const setNumber = Number(parts[3]);
+  const player = parts[4];
+
+  const colIds = [1,2,3];
+  const playerRow = player === 'A' ? 'A' : 'B';
+
+  let targetId = null;
+  if (key === 'ArrowRight') {
+    const idx = colIds.indexOf(setNumber);
+    const next = colIds[idx+1] || colIds[idx];
+    targetId = `scoreSet${next}${player}`;
+  } else if (key === 'ArrowLeft') {
+    const idx = colIds.indexOf(setNumber);
+    const prev = colIds[idx-1] || colIds[idx];
+    targetId = `scoreSet${prev}${player}`;
+  } else if (key === 'ArrowDown') {
+    const other = player === 'A' ? 'B' : 'A';
+    targetId = `scoreSet${setNumber}${other}`;
+  } else if (key === 'ArrowUp') {
+    const other = player === 'A' ? 'B' : 'A';
+    targetId = `scoreSet${setNumber}${other}`;
+  }
+
+  if (targetId) {
+    event.preventDefault();
+    const target = document.getElementById(targetId);
+    if (target) target.focus();
+  }
+}
+
+function getScoreValue(inputId) {
+  const raw = document.getElementById(inputId).value.trim();
+  if (raw === '') return null;
+  const score = Number(raw);
+  return Number.isInteger(score) && score >= 0 ? score : null;
+}
+
+function isValidTennisSetScore(a, b) {
+  if (a === null || b === null) return false;
+  if (a === b) return false;
+  const winner = Math.max(a, b);
+  const loser = Math.min(a, b);
+  if (winner <= 6) return winner === 6 && loser <= 4;
+  if (winner === 7) return loser === 5 || loser === 6;
+  return false;
+}
+
+function isValidTiebreakScore(a, b) {
+  if (a === null || b === null) return false;
+  if (a === b) return false;
+  const max = Math.max(a, b);
+  const min = Math.min(a, b);
+  if (max < 7) return false;
+  return (max - min) >= 2;
+}
+
+function updateTiebreakVisibility() {
+  [1, 2, 3].forEach(setNumber => {
+    const a = getScoreValue(`scoreSet${setNumber}A`);
+    const b = getScoreValue(`scoreSet${setNumber}B`);
+    const row = document.getElementById(`scoreTiebreakRow${setNumber}`);
+    const aTb = document.getElementById(`scoreTB${setNumber}A`);
+    const bTb = document.getElementById(`scoreTB${setNumber}B`);
+
+    if ((a === 7 && b === 6) || (a === 6 && b === 7)) {
+      row.classList.remove('hidden');
+      aTb.required = true;
+      bTb.required = true;
+    } else {
+      row.classList.add('hidden');
+      aTb.required = false;
+      bTb.required = false;
+      aTb.value = '';
+      bTb.value = '';
+    }
+  });
+}
+
+function buildScoreResult() {
+  const challenge = DB.getChallenges().find(item => item.id === rankingState.currentChallengeId);
+  const sets = [1, 2, 3].map(setNumber => {
+    const a = getScoreValue(`scoreSet${setNumber}A`);
+    const b = getScoreValue(`scoreSet${setNumber}B`);
+    if (a === null && b === null) return null;
+    if (a === null || b === null) return { valid: false, error: `Completa ambos puntajes en el set ${setNumber}.` };
+    if (!isValidTennisSetScore(a, b)) return { valid: false, error: `El resultado del set ${setNumber} no es válido. Usa 6-4, 7-5 o 7-6.` };
+
+    let label = `${a}-${b}`;
+    if ((a === 7 && b === 6) || (a === 6 && b === 7)) {
+      const tbA = getScoreValue(`scoreTB${setNumber}A`);
+      const tbB = getScoreValue(`scoreTB${setNumber}B`);
+      if (tbA === null || tbB === null) {
+        return { valid: false, error: `Completa el tie-break del set ${setNumber}.` };
+      }
+      if (!isValidTiebreakScore(tbA, tbB)) {
+        return { valid: false, error: `Tie-break inválido en el set ${setNumber}. Debe terminar por 2 puntos.` };
+      }
+      label = `${a}-${b}(${tbA}-${tbB})`;
+    }
+
+    // Map winner to actual player id to avoid A/B ambiguity
+    const winnerId = challenge ? (a > b ? challenge.retadorId : challenge.retadoId) : (a > b ? 'A' : 'B');
+    return { a, b, winnerId, label };
+  });
+
+  const completed = sets.filter(set => set && set.valid !== false);
+  if (completed.length < 2) {
+    return { valid: false, error: 'Ingresa al menos dos sets para definir el ganador.' };
+  }
+
+  if (sets.some(set => set && set.valid === false)) {
+    return { valid: false, error: sets.find(set => set && set.valid === false).error };
+  }
+
+  const results = completed.map(set => set.label);
+  const wins = completed.reduce((acc, set) => {
+    acc[set.winnerId] = (acc[set.winnerId] || 0) + 1;
+    return acc;
+  }, {});
+
+  const ids = Object.keys(wins);
+  if (ids.length !== 2 && completed.length === 3) {
+    return { valid: false, error: 'Revisa los scores: el partido debe tener un ganador claro en 2 de 3 sets.' };
+  }
+
+  const [idA, idB] = ids;
+  const winsA = wins[idA] || 0;
+  const winsB = wins[idB] || 0;
+
+  if (winsA === winsB) {
+    if (completed.length === 3) {
+      return { valid: false, error: 'Revisa los scores: el partido debe tener un ganador claro en 2 de 3 sets.' };
+    }
+    return { valid: false, error: 'Ingresa el tercer set para definir el ganador.' };
+  }
+
+  const winnerId = winsA > winsB ? idA : idB;
+  return {
+    valid: true,
+    marcador: results.join(', '),
+    winnerId,
+    sets: completed,
+    wins
+  };
+}
+
+function updateScoreMatchState() {
+  updateTiebreakVisibility();
+  const scoreResult = buildScoreResult();
+  const winnerText = document.getElementById('scoreWinnerText');
+  const hiddenWinner = document.getElementById('scoreWinner');
+  const submitButton = document.getElementById('btnSubmitScore');
+  const challenge = DB.getChallenges().find(item => item.id === rankingState.currentChallengeId);
+
+  if (!challenge) {
+    winnerText.innerHTML = 'Ganador: <strong>Sin desafío seleccionado</strong>';
+    submitButton.disabled = true;
+    return;
+  }
+
+  if (!scoreResult.valid) {
+    winnerText.innerHTML = `Ganador: <strong>Sin resultado</strong>`;
+    hiddenWinner.value = '';
+    submitButton.disabled = true;
+    return;
+  }
+
+  const winnerId = scoreResult.winnerId || '';
+  const winnerName = winnerId === challenge.retadorId ? (challenge.retadorNombre || '') : (winnerId === challenge.retadoId ? (challenge.retadoNombre || '') : '');
+  winnerText.innerHTML = `Ganador: <strong>${escapeHTML(winnerName || 'Jugador')}</strong> (${scoreResult.marcador})`;
+  hiddenWinner.value = winnerId;
+  submitButton.disabled = false;
 }
 
 async function submitScore(event) {
   event.preventDefault();
-  const marcador = document.getElementById('scoreInput').value.trim();
-  const ganadorId = document.getElementById('scoreWinner').value;
   const challenge = DB.getChallenges().find(item => item.id === rankingState.currentChallengeId);
   const error = document.getElementById('scoreError');
+  error.textContent = '';
 
   if (!challenge) {
     error.textContent = 'No se encontró el desafío.';
     return;
   }
-  if (!isValidScore(marcador)) {
-    error.textContent = 'Ingresa un marcador válido. Ejemplo: 6-3, 4-6, 7/6(10-8).';
+
+  const scoreResult = buildScoreResult();
+  if (!scoreResult.valid) {
+    error.textContent = scoreResult.error;
     return;
   }
-  if (![challenge.retadorId, challenge.retadoId].includes(ganadorId)) {
-    error.textContent = 'Selecciona un ganador válido.';
-    return;
-  }
+
+  const marcador = scoreResult.marcador;
+  const ganadorId = scoreResult.winnerId || '';
 
   let savedInCloud = false;
   if (DB.isCloudConfigured()) {
@@ -1500,13 +1892,17 @@ async function applyChallengeResultToCloudRanking(challenge) {
   const list = [...(rankingState.lists[gender] || [])];
   if (!gender || !list.length) return;
 
-  const winnerIndex = list.findIndex(player => playerMatchesChallengeRef(player, challenge.ganadorId));
+  // try exact id match first (more reliable), fallback to flexible matcher
+  let winnerIndex = list.findIndex(p => p.id === challenge.ganadorId || p.localId === challenge.ganadorId);
+  if (winnerIndex < 0) winnerIndex = list.findIndex(player => playerMatchesChallengeRef(player, challenge.ganadorId));
   const loserId = challenge.ganadorId === challenge.retadorId ? challenge.retadoId : challenge.retadorId;
-  const loserIndex = list.findIndex(player => playerMatchesChallengeRef(player, loserId));
+  let loserIndex = list.findIndex(p => p.id === loserId || p.localId === loserId);
+  if (loserIndex < 0) loserIndex = list.findIndex(player => playerMatchesChallengeRef(player, loserId));
   if (winnerIndex < 0 || loserIndex < 0 || winnerIndex < loserIndex) return;
 
-  const moved = list.splice(winnerIndex, 1)[0];
-  list.splice(loserIndex, 0, moved);
+  const temp = list[winnerIndex];
+  list[winnerIndex] = list[loserIndex];
+  list[loserIndex] = temp;
 
   const updated = list.map((player, index) => ({
     ...player,
@@ -1532,11 +1928,14 @@ function playerMatchesChallengeRef(player, ref) {
 }
 
 function refreshLocalRankingIfNeeded() {
-  if (rankingState.source !== 'local') return;
+  // If ranking is served from Firebase, do not overwrite cloud data.
+  if (rankingState.source === 'firebase') return;
+  // For static or local sources, recalculate local ranking and refresh lists.
   rankingState.lists = {
     M: normalizeLocalRanking('M').map(fillPlayerFromLocalProfile),
     F: normalizeLocalRanking('F').map(fillPlayerFromLocalProfile)
   };
+  applyLocalChallengesToRanking();
 }
 
 function showPlayerProfile(playerKey) {
@@ -1559,7 +1958,7 @@ function showPlayerProfile(playerKey) {
     <ul class="modal-stats">
       <li><span class="label">Posición actual</span><span class="value">${active ? player.pos : 'Inactivo'}</span></li>
       <li><span class="label">Posición anterior</span><span class="value">${player.prev || '-'}</span></li>
-      <li><span class="label">Categoría</span><span class="value">${escapeHTML(player.categoria || '-')}</span></li>
+      <li><span class="label">Categoría</span><span class="value">${escapeHTML(normalizeCategory(player.categoria) || '-')}</span></li>
       <li><span class="label">Edad</span><span class="value">${escapeHTML(player.edad || '-')}</span></li>
       <li><span class="label">Mano</span><span class="value">${escapeHTML(player.mano || '-')}</span></li>
       <li><span class="label">Revés</span><span class="value">${escapeHTML(player.reves || '-')}</span></li>
@@ -1637,7 +2036,7 @@ async function submitOwnProfile(event) {
   const payload = {
     ...player,
     fechaNacimiento: document.getElementById('ownFechaNacimiento').value,
-    categoria: document.getElementById('ownCategoria').value,
+    categoria: normalizeCategory(document.getElementById('ownCategoria').value),
     mano: document.getElementById('ownMano').value,
     reves: document.getElementById('ownReves').value,
     foto: document.getElementById('ownFoto').value.trim(),
@@ -1672,15 +2071,23 @@ function openAdminModal() {
 
 function renderAdminPlayerList() {
   const div = document.getElementById('adminPlayerList');
-  const players = getAllPlayers()
+  const rawPlayers = getAllPlayers();
+  const q = (document.getElementById('adminPlayerSearch')?.value || '').toLowerCase().trim();
+  const players = rawPlayers
     .sort((a, b) => a.gender.localeCompare(b.gender) || Number(isPlayerActive(b)) - Number(isPlayerActive(a)) || (a.pos || 9999) - (b.pos || 9999) || a.nombre.localeCompare(b.nombre, 'es'));
 
-  if (!players.length) {
+  const filtered = q ? players.filter(p => (
+    (p.nombre || '').toLowerCase().includes(q) ||
+    (p.email || '').toLowerCase().includes(q) ||
+    String(p.id || p.localId || p.key || '').toLowerCase().includes(q)
+  )) : players;
+
+  if (!filtered.length) {
     div.innerHTML = '<p class="empty-state">No hay jugadores cargados.</p>';
     return;
   }
 
-  div.innerHTML = players.map(player => `
+  div.innerHTML = filtered.map(player => `
     <article class="admin-player-row ${isPlayerActive(player) ? '' : 'is-inactive'}">
       <div class="admin-player-rank" aria-label="${isPlayerActive(player) ? `Posición ${player.pos}` : 'Inactivo'}">${isPlayerActive(player) ? player.pos : 'I'}</div>
       <div class="admin-player-info">
@@ -1765,7 +2172,7 @@ async function submitAdminPlayer(event) {
       genero: genero,
       posicion: document.getElementById('adminPosicion').value || '',
       fechaNacimiento: document.getElementById('adminFechaNacimiento').value,
-      categoria: document.getElementById('adminCategoria').value,
+      categoria: normalizeCategory(document.getElementById('adminCategoria').value),
       mano: document.getElementById('adminMano').value,
       reves: document.getElementById('adminReves').value,
       foto: document.getElementById('adminFoto').value.trim(),
@@ -1786,15 +2193,43 @@ async function submitAdminPlayer(event) {
 
     try {
       await DB.savePlayerCloud(player, adminPayload(session));
+      // Always persist edit locally so the UI and offline state reflect the change immediately
+      savePlayerEditLocally(player);
+      // Upsert into local users so recalcRanking can pick up explicit posiciones
+      const localUser = {
+        id: player.id,
+        nombre: player.nombre,
+        email: player.email,
+        genero: player.genero || player.gender,
+        categoria: player.categoria,
+        mano: player.mano,
+        reves: player.reves,
+        foto: player.foto,
+        pos: toNumber(player.posicion ?? player.pos, NaN)
+      };
+      DB.upsertUserLocal(localUser);
       successMsg.textContent = player.activo
         ? 'Cambios guardados en Firebase.'
         : 'Jugador guardado como inactivo en Firebase.';
-      await refreshRankingPage();
+      // Refresh ranking source-aware: prefer cloud refresh when available
+      if (DB.isCloudConfigured()) {
+        await refreshRankingPage();
+        // Apply any local admin edits on top of cloud data to reflect immediate admin changes
+        applyLocalPlayerEdits(rankingState.lists, rankingState.inactive);
+        renderAll();
+      } else {
+        refreshLocalRankingIfNeeded();
+        renderAll();
+      }
+      closeModal('adminModal');
     } catch (cloudErr) {
       console.warn('No se pudo guardar en Firebase:', cloudErr.message);
       savePlayerEditLocally(player);
-      applyLocalPlayerEdits(rankingState.lists, rankingState.inactive);
+      // Also persist into local users to make posicion visible to recalcRanking
+      DB.upsertUserLocal({ id: player.id, nombre: player.nombre, genero: player.genero || player.gender, pos: toNumber(player.posicion ?? player.pos, NaN) });
+      refreshLocalRankingIfNeeded();
       renderAll();
+      closeModal('adminModal');
       successMsg.textContent = 'Guardado solo en esta vista local; Firebase no respondió.';
     }
 
@@ -1855,7 +2290,7 @@ function syncLocalUsersFromPlayers(players) {
       email: player.email || existing?.email || `ranking+${slugify(id)}@uctenis.local`,
       password: existing?.password || 'ranking-only',
       genero: player.gender,
-      categoria: player.categoria || existing?.categoria || 'Principiante',
+      categoria: normalizeCategory(player.categoria || existing?.categoria || 'Principiante'),
       mano: player.mano || existing?.mano || 'Derecha',
       reves: player.reves || existing?.reves || 'Dos manos',
       foto: player.foto || existing?.foto || '',
@@ -1881,7 +2316,7 @@ function ensureLocalUserForPlayer(player) {
     email: player.email || `ranking+${slugify(id)}@uctenis.local`,
     password: 'ranking-only',
     genero: player.gender,
-    categoria: player.categoria || 'Principiante',
+    categoria: normalizeCategory(player.categoria || 'Principiante'),
     mano: player.mano || 'Derecha',
     reves: player.reves || 'Dos manos',
     foto: player.foto || '',
@@ -1915,7 +2350,7 @@ function syncSessionWithRankingPlayer() {
     nombre: player.nombre || session.nombre,
     email: session.email || player.email || '',
     genero: player.gender || session.genero,
-    categoria: player.categoria || session.categoria || 'Principiante',
+    categoria: normalizeCategory(player.categoria || session.categoria || 'Principiante'),
     mano: player.mano || session.mano || 'Derecha',
     reves: player.reves || session.reves || 'Dos manos',
     foto: player.foto || session.foto || ''
@@ -2024,7 +2459,7 @@ function profileToSessionUser(player, current = DB.getSession()) {
     nombre: player.nombre || current?.nombre || '',
     email: current?.email || player.email || '',
     genero: player.genero || player.gender || current?.genero || '',
-    categoria: player.categoria || current?.categoria || 'Principiante',
+    categoria: normalizeCategory(player.categoria || current?.categoria || 'Principiante'),
     mano: player.mano || player.manoHabil || current?.mano || 'Derecha',
     reves: player.reves || current?.reves || 'Dos manos',
     foto: player.foto || current?.foto || ''
@@ -2205,8 +2640,14 @@ function extractPhotoStem(photo) {
   return match ? match[1] : '';
 }
 
+function normalizeCategory(value) {
+  const raw = cleanText(value);
+  if (!raw) return '';
+  return normalizeKey(raw) === 'abierta' ? 'Principiante' : raw;
+}
+
 function compactMeta(player) {
-  return [player.categoria, player.mano, player.reves].filter(Boolean).join(' · ') || 'Perfil por completar';
+  return [normalizeCategory(player.categoria), player.mano, player.reves].filter(Boolean).join(' · ') || 'Perfil por completar';
 }
 
 function statusLabel(status) {
@@ -2233,6 +2674,48 @@ function isValidScore(value) {
     return basicSet.test(set) || tieBreakSet.test(set);
   });
 }
+
+// --- Test helper: simulate a completed challenge and refresh ranking ---
+async function simulateResultSwapDavidVsGustavo() {
+  try {
+    const params = new URLSearchParams(location.search);
+    if (params.get('test') !== 'simulateResult') return;
+
+    console.log('Simulación: buscando jugadores David Silva y Gustavo Curaqueo...');
+    const players = getAllPlayers();
+    const david = players.find(p => normalizeKey(p.nombre).includes('davidsilva') || normalizeKey(p.nombre).includes('david') && normalizeKey(p.nombre).includes('silva')) || players.find(p => /David Silva/i.test(p.nombre));
+    const gustavo = players.find(p => normalizeKey(p.nombre).includes('gustavocuraqueo') || /Gustavo Curaqueo/i.test(p.nombre));
+    if (!david || !gustavo) {
+      console.warn('No encontré a David Silva o Gustavo Curaqueo en los jugadores cargados. Abortando prueba.');
+      return;
+    }
+
+    console.log('Posiciones antes:', david.nombre, david.pos, ' / ', gustavo.nombre, gustavo.pos);
+
+    // Crear desafío local y marcar resultado (David ganador)
+    const fecha = todayISO();
+    const chal = DB.createChallenge(david.id, gustavo.id, david.gender, fecha, 'CEC 1');
+    const marcador = '6-4,6-4';
+    DB.submitResult(chal.id, marcador, david.id);
+
+    // Forzar recálculo local y re-render
+    refreshLocalRankingIfNeeded();
+    renderAll();
+
+    const updated = getAllPlayers();
+    const newDavid = updated.find(p => p.id === david.id || p.localId === david.id || normalizeKey(p.nombre) === normalizeKey(david.nombre));
+    const newGus = updated.find(p => p.id === gustavo.id || p.localId === gustavo.id || normalizeKey(p.nombre) === normalizeKey(gustavo.nombre));
+    console.log('Posiciones después:', newDavid.nombre, newDavid.pos, ' / ', newGus.nombre, newGus.pos);
+    alert(`Prueba completada. Revisa la consola para ver posiciones antes/después.`);
+  } catch (err) {
+    console.error('Error en la prueba simulada:', err);
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  // Ejecutar la prueba con ?test=simulateResult
+  setTimeout(() => simulateResultSwapDavidVsGustavo(), 800);
+});
 
 // =========== EDICIONES LOCALES DE JUGADORES ===========
 function getLocalPlayerEdits() {
@@ -2314,7 +2797,7 @@ function mergeEditedPlayer(current, edit, gender) {
     email: edit.email || current?.email || '',
     fechaNacimiento,
     edad: calculateAge(fechaNacimiento) || current?.edad || '',
-    categoria: edit.categoria || current?.categoria || '',
+    categoria: normalizeCategory(edit.categoria || current?.categoria || ''),
     mano: edit.mano || edit.manoHabil || current?.mano || '',
     reves: edit.reves || current?.reves || '',
     foto: edit.foto || current?.foto || '',

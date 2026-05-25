@@ -72,7 +72,7 @@ function playerToSessionUser(player, current = {}) {
     nombre: player.nombre || current.nombre || '',
     email: player.email || current.email || '',
     genero: player.genero || player.gender || current.genero || '',
-    categoria: player.categoria || current.categoria || 'Principiante',
+    categoria: normalizeCategoryForDb(player.categoria || current.categoria || 'Principiante'),
     mano: player.mano || player.manoHabil || current.mano || 'Derecha',
     reves: player.reves || current.reves || 'Dos manos',
     foto: player.foto || current.foto || '',
@@ -80,11 +80,19 @@ function playerToSessionUser(player, current = {}) {
   };
 }
 
+function normalizeCategoryForDb(value) {
+  const raw = String(value || '').trim();
+  return raw.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') === 'abierta'
+    ? 'Principiante'
+    : raw;
+}
+
 const DB = {
 
   // ──────────────── USUARIOS ────────────────
   getUsers() {
-    return JSON.parse(localStorage.getItem('uctenis_users') || '[]');
+    return JSON.parse(localStorage.getItem('uctenis_users') || '[]')
+      .map(user => ({ ...user, categoria: normalizeCategoryForDb(user.categoria || 'Principiante') }));
   },
   saveUsers(users) {
     localStorage.setItem('uctenis_users', JSON.stringify(users));
@@ -110,7 +118,7 @@ const DB = {
       email: data.email,
       password: data.password || 'google-auth-no-pass',
       genero: data.genero, // 'M' o 'F'
-      categoria: data.categoria || 'Principiante',
+      categoria: normalizeCategoryForDb(data.categoria || 'Principiante'),
       mano: data.mano || 'Derecha',
       reves: data.reves || 'Dos manos',
       foto: data.foto || '',
@@ -252,7 +260,7 @@ const DB = {
       email: data.email,
       password: 'google-auth-no-pass',
       genero: data.genero,
-      categoria: data.categoria,
+      categoria: normalizeCategoryForDb(data.categoria),
       mano: data.mano || 'Derecha',
       reves: data.reves || 'Dos manos',
       foto: data.foto || ''
@@ -417,26 +425,46 @@ const DB = {
     const users = this.getUsers().filter(u => u.genero === genero);
     const challenges = this.getChallenges().filter(c => c.status === 'completado' && c.genero === genero);
 
-    const stats = {};
-    users.forEach(u => {
-      stats[u.id] = { id: u.id, nombre: u.nombre, pts: 0, pj: 0, pg: 0, pp: 0 };
+    // Build ladder baseline from users. If a user has an explicit position (pos or posicion), respect it.
+    const ranking = users.map((user, index) => {
+      const explicitPos = Number.isFinite(user.pos) && user.pos > 0
+        ? Number(user.pos)
+        : (Number.isFinite(user.posicion) && user.posicion > 0 ? Number(user.posicion) : null);
+      return { id: user.id, nombre: user.nombre, pos: explicitPos ?? (index + 1) };
     });
 
-    challenges.forEach(c => {
-      if (!stats[c.retadorId] || !stats[c.retadoId]) return;
-      stats[c.retadorId].pj++;
-      stats[c.retadoId].pj++;
-      if (c.ganadorId === c.retadorId) {
-        stats[c.retadorId].pts += 3; stats[c.retadorId].pg++;
-        stats[c.retadoId].pp++;
-      } else {
-        stats[c.retadoId].pts += 3; stats[c.retadoId].pg++;
-        stats[c.retadorId].pp++;
+    // If any explicit positions were provided, sort by them to establish the baseline order.
+    const hasExplicit = ranking.some(r => Number.isFinite(r.pos) && r.pos > 0 && users.some(u => Number.isFinite(u.pos) || Number.isFinite(u.posicion)));
+    if (hasExplicit) {
+      ranking.sort((a, b) => (a.pos || 9999) - (b.pos || 9999) || String(a.id).localeCompare(String(b.id)));
+    }
+    const findIndex = id => ranking.findIndex(item => item.id === id);
+
+    const sortedChallenges = [...challenges].sort((a, b) => {
+      const getTime = challenge => {
+        const dateValue = challenge.actualizado || challenge.creado;
+        const parsed = dateValue ? new Date(dateValue).getTime() : NaN;
+        return Number.isFinite(parsed) ? parsed : 0;
+      };
+      const timeA = getTime(a);
+      const timeB = getTime(b);
+      return timeA - timeB || String(a.id).localeCompare(String(b.id));
+    });
+
+    sortedChallenges.forEach(challenge => {
+      const winnerId = challenge.ganadorId;
+      const loserId = winnerId === challenge.retadorId ? challenge.retadoId : challenge.retadorId;
+      const winnerIndex = findIndex(winnerId);
+      const loserIndex = findIndex(loserId);
+      if (winnerIndex < 0 || loserIndex < 0) return;
+      if (winnerIndex > loserIndex) {
+        const temp = ranking[winnerIndex];
+        ranking[winnerIndex] = ranking[loserIndex];
+        ranking[loserIndex] = temp;
       }
     });
 
-    const sorted = Object.values(stats).sort((a, b) => b.pts - a.pts || b.pg - a.pg);
-    const ranked = sorted.map((p, i) => ({ ...p, pos: i + 1 }));
+    const ranked = ranking.map((player, index) => ({ ...player, pos: index + 1 }));
     this.saveRanking(genero, ranked);
     return ranked;
   },
@@ -665,8 +693,8 @@ const DB = {
       { nombre: 'Ismael Devia', email: 'ismael@uct.cl', genero: 'M', categoria: 'Primera' },
       { nombre: 'Paulo Garrido', email: 'paulo@uct.cl', genero: 'M', categoria: 'Segunda' },
       { nombre: 'Roberto Bermudez', email: 'roberto@uct.cl', genero: 'M', categoria: 'Segunda' },
-      { nombre: 'Francisco Encina', email: 'fencina@uct.cl', genero: 'M', categoria: 'Abierta' },
-      { nombre: 'Gustavo Curaqueo', email: 'gcuraqueo@uct.cl', genero: 'M', categoria: 'Abierta' },
+      { nombre: 'Francisco Encina', email: 'fencina@uct.cl', genero: 'M', categoria: 'Principiante' },
+      { nombre: 'Gustavo Curaqueo', email: 'gcuraqueo@uct.cl', genero: 'M', categoria: 'Principiante' },
       { nombre: 'Cristian Henriquez', email: 'chenriquez@uct.cl', genero: 'M', categoria: 'Primera' },
       { nombre: 'Matías Cáceres', email: 'mcaceres@uct.cl', genero: 'M', categoria: 'Segunda' },
     ];
@@ -674,7 +702,7 @@ const DB = {
       { nombre: 'Carolina Cárdenas', email: 'ccardeneas@uct.cl', genero: 'F', categoria: 'Primera' },
       { nombre: 'Angélica Encina', email: 'aencina@uct.cl', genero: 'F', categoria: 'Primera' },
       { nombre: 'Violeta Moreno', email: 'vmoreno@uct.cl', genero: 'F', categoria: 'Segunda' },
-      { nombre: 'Valeria Schatter', email: 'vschatter@uct.cl', genero: 'F', categoria: 'Abierta' },
+      { nombre: 'Valeria Schatter', email: 'vschatter@uct.cl', genero: 'F', categoria: 'Principiante' },
       { nombre: 'María José', email: 'mjose@uct.cl', genero: 'F', categoria: 'Segunda' },
     ];
     [...hombres, ...mujeres].forEach(u => {
