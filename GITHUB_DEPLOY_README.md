@@ -10,17 +10,16 @@ Resumen: crear un repo privado en GitHub, subir el proyecto local, habilitar Git
 2) Preparar tu copia local (Windows PowerShell o CMD)
 - Abre terminal en la carpeta del proyecto (la que contiene `index.html`, `ranking.html`, etc.).
 
+En este repositorio ya se creó una rama local `staging` con los cambios preparados. Si quieres usar otro remoto privado en tu cuenta, reemplaza la URL en el paso de `git remote add origin`.
+
 PowerShell (recomendado):
 ```powershell
 # entra al folder del proyecto
 cd "g:\Mi unidad\uctenis (personal)\pagina canchas uct\marzo 2026\reservas-canchas-main\reservas-canchas-main"
-# inicializa git si aún no lo has hecho
+# si no tienes git inicializado, hazlo
 git init
-# añade todos los archivos
-git add --all
-git commit -m "Initial staging copy"
-# crea rama staging
-git branch -M staging
+# cambia a la rama staging creada
+git checkout staging
 # añade el remoto (reemplaza USERNAME y repo name)
 git remote add origin git@github.com:USERNAME/reservas-canchas-staging.git
 # empuja la rama staging al remoto
