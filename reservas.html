@@ -333,7 +333,10 @@ function renderSlotsByCourt(apiData) {
       const availableBlocks = Array.isArray(courtData) ? courtData : [];
       const courtError = courtData && !Array.isArray(courtData) ? (courtData.error || 'Error de sincronización') : null;
       
-      let slotsHtml = DB.SLOTS.map(slot => {
+      // Si el API trae la lista de franjas jugables configuradas para hoy, usamos esa. Sino, por compatibilidad usamos DB.SLOTS
+      const playableSlots = (apiData.playable && Array.isArray(apiData.playable[court.id])) ? apiData.playable[court.id] : DB.SLOTS;
+      
+      let slotsHtml = playableSlots.map(slot => {
         const isMine = myBooked && myBooked.slot === slot;
         const isFreeInGoogle = availableBlocks.includes(slot);
         const isBusy = !isFreeInGoogle && !isMine;
@@ -362,6 +365,10 @@ function renderSlotsByCourt(apiData) {
           <div class="slot-status">${courtError ? courtError : isMine ? 'Tu reserva' : isBusy ? 'Ocupado' : isPast ? 'Pasado' : isTooClose ? 'Límite 4h' : 'Disponible'}</div>
         </div>`;
       }).join('');
+
+      if (playableSlots.length === 0) {
+        slotsHtml = `<div style="grid-column: 1/-1; color: var(--text-secondary); text-align: center; padding: 10px; font-size: 0.9rem;">🚫 Cancha no disponible para hoy</div>`;
+      }
 
       html += `
         <div class="court-row" style="background: var(--bg-card); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color);">

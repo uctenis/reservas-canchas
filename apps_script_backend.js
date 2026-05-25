@@ -39,7 +39,17 @@ const CONFIG = {
   
   // 3. Horarios permitidos (Bloques de 1.5 hrs)
   SLOTS: ['09:00','10:30','12:00','13:30','15:00','16:30','18:00','19:30','21:00'],
-  // Si cada calendario tiene disponibilidad distinta, configura aquí bloques por cancha.
+  
+  // Puedes configurar las franjas horarias permitidas por cancha.
+  // Puede ser un array simple (mismos horarios todos los días) o un objeto mapeado por día de la semana.
+  // Días: 0 = Domingo, 1 = Lunes, 2 = Martes, 3 = Miércoles, 4 = Jueves, 5 = Viernes, 6 = Sábado.
+  // Ejemplo:
+  //   cec1: {
+  //     1: ['18:00', '19:30', '21:00'], // Lunes de 18 a 22:30
+  //     6: ['09:00', '10:30', '12:00', '13:30', '15:00', '16:30', '18:00'], // Sábados
+  //     0: [], // Domingos cerrado
+  //     default: ['09:00','10:30','12:00','13:30','15:00','16:30','18:00','19:30','21:00']
+  //   }
   COURT_SLOTS: {
     cec1: ['09:00','10:30','12:00','13:30','15:00','16:30','18:00','19:30','21:00'],
     cec2: ['09:00','10:30','12:00','13:30','15:00','16:30','18:00','19:30','21:00'],
@@ -442,7 +452,8 @@ function getAvailableSlots(dateStr) {
   const endOfDay = new Date(date.getTime());
   endOfDay.setHours(23, 59, 59, 999);
   
-  let result = { ok: true, date: dateStr, courts: {} };
+  const dayOfWeek = date.getDay(); // 0 = Domingo, 1 = Lunes, etc.
+  let result = { ok: true, date: dateStr, courts: {}, playable: {} };
   
   // Revisar disponibilidad en cada calendario
   for (let courtKey in CONFIG.CALENDARS) {
@@ -451,6 +462,7 @@ function getAvailableSlots(dateStr) {
     
     if (!calendar) {
       result.courts[courtKey] = { error: "Calendario no encontrado" };
+      result.playable[courtKey] = [];
       continue;
     }
     
@@ -459,18 +471,36 @@ function getAvailableSlots(dateStr) {
       events = calendar.getEvents(startOfDay, endOfDay);
     } catch (e) {
       result.courts[courtKey] = { error: "No se pudo leer el calendario: " + e.message };
+      result.playable[courtKey] = [];
       continue;
     }
     
-    let busyTimes = events.map(e => ({
-      start: e.getStartTime().getTime(),
-      end: e.getEndTime().getTime()
-    }));
+    // Filtrar para considerar ocupados SOLO los bloques de reservas de UCTenis o desafíos de ranking
+    let busyTimes = events
+      .filter(e => {
+        const title = (e.getTitle() || '').toLowerCase();
+        return title.includes('reserva uctenis') || title.includes('desafío ranking') || title.includes('desafio ranking');
+      })
+      .map(e => ({
+        start: e.getStartTime().getTime(),
+        end: e.getEndTime().getTime()
+      }));
     
-    // Filtrar los slots basados en ocupación y disponibilidad general de cada calendario
+    // Obtener los slots candidatos para esta cancha y este día específico de la semana
+    let candidateSlots = CONFIG.SLOTS;
+    if (CONFIG.COURT_SLOTS && CONFIG.COURT_SLOTS[courtKey]) {
+      const courtConfig = CONFIG.COURT_SLOTS[courtKey];
+      if (Array.isArray(courtConfig)) {
+        candidateSlots = courtConfig;
+      } else {
+        candidateSlots = courtConfig[dayOfWeek] || courtConfig['default'] || CONFIG.SLOTS;
+      }
+    }
+    
+    // Guardamos la lista de todas las franjas "jugables" definidas para este día
+    result.playable[courtKey] = candidateSlots;
+    
     let availableSlots = [];
-    const candidateSlots = (CONFIG.COURT_SLOTS && CONFIG.COURT_SLOTS[courtKey]) ? CONFIG.COURT_SLOTS[courtKey] : CONFIG.SLOTS;
-    
     candidateSlots.forEach(slot => {
       let [h, m] = slot.split(':').map(Number);
       let slotStart = new Date(dateStr + "T00:00:00-04:00");
