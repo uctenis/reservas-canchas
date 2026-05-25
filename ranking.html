@@ -770,6 +770,11 @@ function normalizePlayers(list, gender) {
   }));
 }
 
+function findStaticPlayer(id, name, gender) {
+  const list = OFFICIAL_STATIC_RANKING[gender] || [];
+  return list.find(p => p.id === id || normalizeKey(p.nombre) === normalizeKey(name));
+}
+
 function normalizePlayer(row, index, gender) {
   const nombre = cleanText(row?.nombre ?? row?.name ?? row?.jugador ?? row?.player);
   const rawPhoto = cleanText(row?.foto ?? row?.photo ?? row?.imagen ?? row?.avatar);
@@ -779,6 +784,15 @@ function normalizePlayer(row, index, gender) {
   const prev = toNumber(row?.posicionAnterior ?? row?.posAnterior ?? row?.previousPosition ?? row?.prev, NaN);
   const activeValue = row?.activo ?? row?.active ?? row?.participaRanking ?? row?.participa ?? row?.estado;
 
+  const staticPlayer = findStaticPlayer(id, nombre, gender);
+
+  const fechaNacimiento = cleanText(row?.fechaNacimiento ?? row?.fechaNac ?? row?.birthDate) || staticPlayer?.fechaNacimiento || '';
+  const email = cleanText(row?.email ?? row?.correo) || staticPlayer?.email || '';
+  const categoria = normalizeCategory(row?.categoria ?? row?.category) || staticPlayer?.categoria || '';
+  const mano = cleanText(row?.manoHabil ?? row?.mano ?? row?.hand) || staticPlayer?.mano || '';
+  const reves = cleanText(row?.reves ?? row?.backhand) || staticPlayer?.reves || '';
+  const foto = resolvePhoto(rawPhoto, id, gender) || staticPlayer?.foto || '';
+
   return {
     id,
     nombre,
@@ -786,18 +800,18 @@ function normalizePlayer(row, index, gender) {
     genero: gender,
     pos,
     prev,
-    fechaNacimiento: cleanText(row?.fechaNacimiento ?? row?.fechaNac ?? row?.birthDate),
+    fechaNacimiento,
     pts: toNumber(row?.pts ?? row?.puntos ?? row?.points, 0),
     pj: toNumber(row?.pj ?? row?.partidos ?? row?.played, 0),
     pg: toNumber(row?.pg ?? row?.ganados ?? row?.wins, 0),
     pp: toNumber(row?.pp ?? row?.perdidos ?? row?.losses, 0),
-    edad: cleanText(row?.edad ?? row?.age) || calculateAge(row?.fechaNacimiento ?? row?.fechaNac ?? row?.birthDate),
-    categoria: normalizeCategory(row?.categoria ?? row?.category),
-    mano: cleanText(row?.manoHabil ?? row?.mano ?? row?.hand),
-    reves: cleanText(row?.reves ?? row?.backhand),
-    foto: resolvePhoto(rawPhoto, id, gender),
-    email: cleanText(row?.email ?? row?.correo),
-    notas: cleanText(row?.notas ?? row?.notes),
+    edad: cleanText(row?.edad ?? row?.age) || calculateAge(fechaNacimiento),
+    categoria,
+    mano,
+    reves,
+    foto,
+    email,
+    notas: cleanText(row?.notes ?? row?.notas),
     activo: normalizeActiveValue(activeValue)
   };
 }
