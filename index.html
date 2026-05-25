@@ -180,8 +180,11 @@ function quickBook() {
   if (url) window.open(url, '_blank');
 }
 
-// Set today as default date
-document.getElementById('qb_fecha').value = new Date().toISOString().split('T')[0];
+// Set today as default date when the quick-book form exists.
+const quickBookDate = document.getElementById('qb_fecha');
+if (quickBookDate) {
+  quickBookDate.value = new Date().toISOString().split('T')[0];
+}
 
 // User bar
 function renderIndexUserBar() {

@@ -1984,8 +1984,8 @@ function openOwnProfileEditor() {
     <h3>Editar ficha técnica</h3>
     <form id="fOwnProfile">
       <div class="form-group">
-        <label>Jugador</label>
-        <input type="text" value="${escapeAttr(player.nombre)}" disabled>
+        <label for="ownNombre">Jugador</label>
+        <input type="text" id="ownNombre" value="${escapeAttr(player.nombre)}" required>
       </div>
       <div class="form-row">
         <div class="form-group">
@@ -2033,8 +2033,15 @@ async function submitOwnProfile(event) {
     return;
   }
 
+  if (!cleanText(document.getElementById('ownNombre').value)) {
+    error.textContent = 'Ingresa tu nombre.';
+    restoreButton();
+    return;
+  }
+
   const payload = {
     ...player,
+    nombre: cleanText(document.getElementById('ownNombre').value),
     fechaNacimiento: document.getElementById('ownFechaNacimiento').value,
     categoria: normalizeCategory(document.getElementById('ownCategoria').value),
     mano: document.getElementById('ownMano').value,
@@ -2135,6 +2142,40 @@ function fillAdminForm(playerKey) {
   document.getElementById('btnAdminSave').textContent = 'Actualizar jugador';
 }
 
+function buildAdminReorderedPlayers(player, genero) {
+  const active = [...(rankingState.lists[genero] || [])].filter(isPlayerActive);
+  const currentIndex = active.findIndex(item => playerMatchesEdit(item, player));
+  const currentPlayer = currentIndex >= 0 ? active.splice(currentIndex, 1)[0] : {};
+  const desiredPosition = Math.max(1, Math.floor(toNumber(player.posicion, active.length + 1)));
+  const insertAt = Math.max(0, Math.min(active.length, desiredPosition - 1));
+  const merged = {
+    ...currentPlayer,
+    ...player,
+    id: player.id || currentPlayer.id || `rank_${genero}_${slugify(player.email || player.nombre || Date.now())}`,
+    genero,
+    gender: genero,
+    activo: true,
+    participaRanking: true
+  };
+
+  active.splice(insertAt, 0, merged);
+
+  return active.map((item, index) => {
+    const previousPosition = toNumber(item.posicionAnterior ?? item.prev ?? item.posicion ?? item.pos, index + 1);
+    return {
+      ...item,
+      genero,
+      gender: genero,
+      activo: true,
+      participaRanking: true,
+      posicionAnterior: previousPosition,
+      prev: previousPosition,
+      posicion: index + 1,
+      pos: index + 1
+    };
+  });
+}
+
 async function submitAdminPlayer(event) {
   event.preventDefault();
   const session = DB.getSession();
@@ -2191,26 +2232,39 @@ async function submitAdminPlayer(event) {
       player.posicion = (rankingState.lists[genero] || []).length + 1;
     }
 
+    const reorderedPlayers = player.activo ? buildAdminReorderedPlayers(player, genero) : null;
+    const savedPlayer = reorderedPlayers
+      ? reorderedPlayers.find(item => playerMatchesEdit(item, player)) || player
+      : player;
+
     try {
-      await DB.savePlayerCloud(player, adminPayload(session));
-      // Always persist edit locally so the UI and offline state reflect the change immediately
-      savePlayerEditLocally(player);
-      // Upsert into local users so recalcRanking can pick up explicit posiciones
-      const localUser = {
-        id: player.id,
-        nombre: player.nombre,
-        email: player.email,
-        genero: player.genero || player.gender,
-        categoria: player.categoria,
-        mano: player.mano,
-        reves: player.reves,
-        foto: player.foto,
-        pos: toNumber(player.posicion ?? player.pos, NaN)
-      };
-      DB.upsertUserLocal(localUser);
+      if (reorderedPlayers) {
+        await DB.savePlayersCloud(reorderedPlayers, adminPayload(session));
+      } else {
+        await DB.savePlayerCloud(player, adminPayload(session));
+      }
+      // Always persist the full reordered ladder locally so moves are visible immediately.
+      savePlayerEditsLocally(reorderedPlayers || savedPlayer);
+      (reorderedPlayers || [savedPlayer]).forEach(item => {
+        DB.upsertUserLocal({
+          id: item.id,
+          nombre: item.nombre,
+          email: item.email,
+          genero: item.genero || item.gender,
+          categoria: item.categoria,
+          mano: item.mano,
+          reves: item.reves,
+          foto: item.foto,
+          pos: toNumber(item.posicion ?? item.pos, NaN)
+        });
+      });
       successMsg.textContent = player.activo
         ? 'Cambios guardados en Firebase.'
         : 'Jugador guardado como inactivo en Firebase.';
+      if (reorderedPlayers) {
+        rankingState.lists[genero] = renumberRankingList(reorderedPlayers, genero);
+        renderAll();
+      }
       // Refresh ranking source-aware: prefer cloud refresh when available
       if (DB.isCloudConfigured()) {
         await refreshRankingPage();
@@ -2224,10 +2278,26 @@ async function submitAdminPlayer(event) {
       closeModal('adminModal');
     } catch (cloudErr) {
       console.warn('No se pudo guardar en Firebase:', cloudErr.message);
-      savePlayerEditLocally(player);
-      // Also persist into local users to make posicion visible to recalcRanking
-      DB.upsertUserLocal({ id: player.id, nombre: player.nombre, genero: player.genero || player.gender, pos: toNumber(player.posicion ?? player.pos, NaN) });
-      refreshLocalRankingIfNeeded();
+      savePlayerEditsLocally(reorderedPlayers || player);
+      (reorderedPlayers || [player]).forEach(item => {
+        DB.upsertUserLocal({
+          id: item.id,
+          nombre: item.nombre,
+          email: item.email,
+          genero: item.genero || item.gender,
+          categoria: item.categoria,
+          mano: item.mano,
+          reves: item.reves,
+          foto: item.foto,
+          pos: toNumber(item.posicion ?? item.pos, NaN)
+        });
+      });
+      if (reorderedPlayers) {
+        rankingState.lists[genero] = renumberRankingList(reorderedPlayers, genero);
+        applyLocalPlayerEdits(rankingState.lists, rankingState.inactive);
+      } else {
+        refreshLocalRankingIfNeeded();
+      }
       renderAll();
       closeModal('adminModal');
       successMsg.textContent = 'Guardado solo en esta vista local; Firebase no respondió.';
@@ -2735,6 +2805,12 @@ function savePlayerEditLocally(player) {
     savedAt: new Date().toISOString()
   };
   localStorage.setItem('admin_player_edits', JSON.stringify(edits));
+}
+
+function savePlayerEditsLocally(players) {
+  (Array.isArray(players) ? players : [players])
+    .filter(Boolean)
+    .forEach(player => savePlayerEditLocally(player));
 }
 
 function applyLocalPlayerEdits(lists, inactiveLists = rankingState.inactive) {

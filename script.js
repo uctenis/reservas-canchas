@@ -6,7 +6,7 @@ if (typeof window.CONFIG === 'undefined') {
 Object.assign(window.CONFIG, {
     LAT: -38.7359,
     LON: -72.5904,
-    API_URL: "https://script.google.com/macros/s/AKfycbyRdIxH7V1iakJ0egfk72RPSt9ngwM8dR6wReZNTMIEOFtvx8v8VD1K1QoumfJXZofk7Q/exec"
+    API_URL: "https://script.google.com/macros/s/AKfycbwDUwcnh-dTImn2Y5vdV88c8IhKVe3FG3FQhzZtR5rGH3H7Y7QsyFegvDXtpHmLussHVg/exec"
 });
 const CONFIG = window.CONFIG;
 
@@ -263,7 +263,7 @@ async function loadRanking() {
     lastUpdatedEl.textContent = 'Actualizado: ' + new Date().toLocaleDateString('es-CL', { year: 'numeric', month: 'long', day: 'numeric' });
 
     try {
-        const response = await fetch(`${CONFIG.API_URL}?v=${new Date().getTime()}`);
+        const response = await fetch(`${CONFIG.API_URL}?action=get_ranking&v=${new Date().getTime()}`);
         const data = await response.json();
 
         if (data.status === 'error') throw new Error(data.message);
