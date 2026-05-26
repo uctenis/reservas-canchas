@@ -221,38 +221,41 @@
 <div class="modal-overlay" id="challengeModal" aria-hidden="true">
   <div class="modal-content">
     <button class="modal-close-btn" type="button" data-close-modal="challengeModal" aria-label="Cerrar">×</button>
-    <p class="modal-kicker">Desafío</p>
-    <h3>Lanzar desafío</h3>
-    <form id="fChallenge">
-      <div class="form-group">
-        <label for="chal_retado">Retar a</label>
-        <select id="chal_retado" required></select>
-      </div>
-      <div class="form-row">
+    <div id="challengeModalFormContainer">
+      <p class="modal-kicker">Desafío</p>
+      <h3>Lanzar desafío</h3>
+      <form id="fChallenge">
         <div class="form-group">
-          <label for="chal_fecha">Fecha propuesta</label>
-          <input type="date" id="chal_fecha" required>
+          <label for="chal_retado">Retar a</label>
+          <select id="chal_retado" required></select>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="chal_fecha">Fecha propuesta</label>
+            <input type="date" id="chal_fecha" required>
+          </div>
+          <div class="form-group">
+            <label for="chal_cancha">Cancha</label>
+            <select id="chal_cancha" required>
+              <option value="cec1">CEC 1 (Arcilla)</option>
+              <option value="cec2">CEC 2 (Arcilla)</option>
+              <option value="cjp1">CJP 1 (Asfalto)</option>
+              <option value="cjp2">CJP 2 (Asfalto)</option>
+            </select>
+          </div>
         </div>
         <div class="form-group">
-          <label for="chal_cancha">Cancha</label>
-          <select id="chal_cancha" required>
-            <option value="cec1">CEC 1 (Arcilla)</option>
-            <option value="cec2">CEC 2 (Arcilla)</option>
-            <option value="cjp1">CJP 1 (Asfalto)</option>
-            <option value="cjp2">CJP 2 (Asfalto)</option>
+          <label for="chal_hora">Horario disponible</label>
+          <select id="chal_hora" required disabled>
+            <option value="">Selecciona fecha y cancha...</option>
           </select>
         </div>
-      </div>
-      <div class="form-group">
-        <label for="chal_hora">Horario disponible</label>
-        <select id="chal_hora" required disabled>
-          <option value="">Selecciona fecha y cancha...</option>
-        </select>
-      </div>
-      <input type="hidden" id="chal_id" value="">
-      <p class="auth-error" id="challengeError" aria-live="polite"></p>
-      <button type="submit" class="btn-primary" id="btnSubmitChallenge">Enviar desafío</button>
-    </form>
+        <input type="hidden" id="chal_id" value="">
+        <p class="auth-error" id="challengeError" aria-live="polite"></p>
+        <button type="submit" class="btn-primary" id="btnSubmitChallenge">Enviar desafío</button>
+      </form>
+    </div>
+    <div id="challengeModalSuccessContainer" style="display:none;"></div>
   </div>
 </div>
 
@@ -1516,6 +1519,11 @@ function openChallengeModal(playerKey) {
     return;
   }
 
+  const formContainer = document.getElementById('challengeModalFormContainer');
+  const successContainer = document.getElementById('challengeModalSuccessContainer');
+  if (formContainer) formContainer.style.display = 'block';
+  if (successContainer) successContainer.style.display = 'none';
+
   document.getElementById('fChallenge').reset();
   document.getElementById('chal_id').value = '';
   document.getElementById('chal_fecha').min = todayISO();
@@ -1685,7 +1693,7 @@ async function submitChallenge(event) {
     }
 
     // 2. Crear y enviar desafío
-    await createChallengeRemoteOrLocal({
+    const saved = await createChallengeRemoteOrLocal({
       retadorId: session.id,
       retadorNombre: session.nombre,
       retadorEmail: session.email || '',
@@ -1701,7 +1709,7 @@ async function submitChallenge(event) {
       courtLabel: courtLabel
     });
 
-    closeModal('challengeModal');
+    showChallengeSuccess(saved, retado, retadoPlayer);
     renderChallenges();
     renderMyChallenges();
   } catch (err) {
@@ -1838,8 +1846,7 @@ async function createChallengeRemoteOrLocal(payload) {
     savedChallenge = local;
   }
 
-  // Auto-open WhatsApp message chat window
-  triggerWhatsAppChallenge(savedChallenge, payload.retadoTelefono);
+  // Return saved challenge without triggering immediate popups (handled in UI modal)
   return savedChallenge;
 }
 
@@ -1861,8 +1868,96 @@ function triggerWhatsAppChallenge(challenge, telefono) {
   const text = `🎾 ¡Hola! Te he desafiado en UCTenis.\n\n📅 Fecha: ${dateFormatted}${slotStr}\n🏟️ Cancha: ${courtName}\n\nPor favor, ingresa a la página para aceptar o rechazar el desafío:\nhttps://uctenis.github.io/reservas-canchas-staging/ranking.html\n\n¡Nos vemos en la cancha! 🏆`;
   
   const waUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`;
-  window.open(waUrl, '_blank');
   return waUrl;
+}
+
+window.triggerManualWhatsApp = function() {
+  const phoneInput = document.getElementById('manualPhone');
+  if (!phoneInput) return;
+  const rawPhone = phoneInput.value.trim();
+  const cleanPhone = rawPhone.replace(/[^0-9]/g, '');
+  if (cleanPhone.length < 8) {
+    alert('Por favor ingresa un número de teléfono válido.');
+    return;
+  }
+  const challenge = JSON.parse(decodeURIComponent(phoneInput.dataset.challenge));
+  const dateStr = challenge.fecha || '';
+  const courtName = challenge.cancha || 'cancha por definir';
+  
+  let dateFormatted = dateStr;
+  try {
+    const parts = dateStr.split('-');
+    if (parts.length === 3) {
+      dateFormatted = `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
+  } catch (e) {}
+
+  const slotStr = challenge.slot ? ` · Hora: ${challenge.slot}` : '';
+  const text = `🎾 ¡Hola! Te he desafiado en UCTenis.\n\n📅 Fecha: ${dateFormatted}${slotStr}\n🏟️ Cancha: ${courtName}\n\nPor favor, ingresa a la página para aceptar o rechazar el desafío:\nhttps://uctenis.github.io/reservas-canchas-staging/ranking.html\n\n¡Nos vemos en la cancha! 🏆`;
+  
+  const waUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`;
+  window.open(waUrl, '_blank');
+  closeModal('challengeModal');
+};
+
+function showChallengeSuccess(challenge, retado, retadoPlayer) {
+  const formContainer = document.getElementById('challengeModalFormContainer');
+  const successContainer = document.getElementById('challengeModalSuccessContainer');
+  if (!successContainer || !formContainer) return;
+  
+  formContainer.style.display = 'none';
+  successContainer.style.display = 'block';
+  
+  const retadoPhone = retadoPlayer?.telefono || '';
+  const cleanPhone = retadoPhone.replace(/[^0-9]/g, '');
+  
+  let waUrl = '';
+  if (cleanPhone) {
+    waUrl = triggerWhatsAppChallenge(challenge, cleanPhone);
+  }
+  
+  let whatsappBlock = '';
+  if (cleanPhone) {
+    whatsappBlock = `
+      <p style="font-size:0.88rem; color:var(--text-primary); margin-bottom:12px; line-height:1.4;">
+        Para notificar de inmediato a <strong>${escapeHTML(retado.nombre)}</strong> por WhatsApp, haz clic aquí:
+      </p>
+      <a href="${waUrl}" target="_blank" class="btn-primary" style="background:#25d366; color:#fff; border:none; box-shadow:0 6px 20px rgba(37,211,102,0.25); text-decoration:none; display:inline-flex; align-items:center; gap:8px; width:100%; justify-content:center; min-height:44px; font-weight:700; border-radius:12px; margin-bottom:6px;" onclick="closeModal('challengeModal')">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.5-5.739-1.45L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.42 9.864-9.864.002-2.637-1.01-5.116-2.853-6.958C16.638 1.94 14.159.93 11.528.93c-5.437 0-9.864 4.426-9.868 9.87-.001 1.77.476 3.498 1.381 5.03l-.995 3.641 3.737-.98c1.474.805 3.09 1.233 4.864 1.233zm11.236-7.647c-.29-.146-1.718-.848-1.983-.944-.266-.097-.459-.146-.653.146-.193.29-.748.944-.917 1.137-.168.193-.338.217-.628.072-.29-.145-1.223-.45-2.33-1.439-.86-.767-1.44-1.716-1.609-2.007-.169-.29-.018-.447.127-.591.13-.13.29-.338.435-.508.145-.169.193-.29.29-.483.097-.193.048-.362-.024-.508-.073-.145-.653-1.573-.895-2.153-.235-.567-.475-.49-.653-.499-.169-.008-.362-.01-.555-.01-.193 0-.507.073-.772.362-.266.29-1.014.99-1.014 2.416 0 1.425 1.038 2.802 1.182 2.995.145.193 2.043 3.12 4.949 4.373.692.298 1.232.476 1.654.61.695.22 1.328.19 1.829.115.557-.084 1.718-.702 1.96-1.378.24-.677.24-1.257.17-1.378-.07-.121-.266-.193-.556-.34z"/></svg>
+        Enviar WhatsApp
+      </a>
+      <span style="font-size: 0.72rem; color:var(--text-secondary); display:block; margin-top:4px;">Se abrirá WhatsApp con el texto ya redactado.</span>
+    `;
+  } else {
+    whatsappBlock = `
+      <p style="font-size:0.85rem; color:#f87171; margin-bottom:10px; line-height:1.4;">
+        ⚠️ <strong>${escapeHTML(retado.nombre)}</strong> no tiene registrado su número de WhatsApp en el sistema.
+      </p>
+      <p style="font-size:0.8rem; color:var(--text-secondary); margin-bottom:12px; line-height:1.4;">
+        Se enviará la alerta al correo <strong>${escapeHTML(retado.email || '')}</strong>, pero si conoces su celular puedes enviarle la notificación manualmente aquí:
+      </p>
+      <div style="display:flex; gap:8px; margin-top:8px;">
+        <input type="tel" id="manualPhone" placeholder="Ej: +56912345678" value="+569" data-challenge="${encodeURIComponent(JSON.stringify(challenge))}" style="flex:1; background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.1); border-radius:10px; color:#fff; padding:8px 12px; font-size:0.88rem;">
+        <button type="button" class="btn-primary" style="padding:0 14px; min-height:36px; border-radius:10px; font-size:0.82rem; background:var(--accent-tennis); color:#000;" onclick="triggerManualWhatsApp()">Enviar</button>
+      </div>
+    `;
+  }
+  
+  successContainer.innerHTML = `
+    <div style="text-align:center; padding:15px 5px 5px;">
+      <div style="width:54px; height:54px; background:rgba(74,222,128,0.1); border-radius:50%; display:flex; align-items:center; justify-content:center; margin:0 auto 12px; border:2px solid #4ade80">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="#4ade80"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>
+      </div>
+      <h3 style="margin-bottom:6px; color:#4ade80; font-size:1.4rem;">¡Desafío Creado!</h3>
+      <p style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:20px;">La cancha se reservó con éxito en el calendario del club.</p>
+      
+      <div class="whatsapp-card-wrapper" style="background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.06); border-radius:16px; padding:14px; margin-bottom:20px; text-align:left;">
+        ${whatsappBlock}
+      </div>
+      
+      <button type="button" class="btn-primary" onclick="closeModal('challengeModal')" style="width:100%; min-height:40px; border-radius:12px;">Entendido</button>
+    </div>
+  `;
 }
 
 function upsertLocalChallenge(challenge) {
