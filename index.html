@@ -268,6 +268,107 @@
     }
     .live-footer a:hover { text-decoration: underline; }
 
+    /* Highlight user's matches */
+    .match-card.is-my-match {
+      border: 2px solid var(--accent-tennis) !important;
+      position: relative;
+      box-shadow: 0 0 15px rgba(198, 211, 0, 0.2);
+    }
+    .my-match-label {
+      position: absolute;
+      top: -10px;
+      right: 12px;
+      background: var(--accent-tennis);
+      color: #000;
+      font-size: 0.65rem;
+      font-weight: 900;
+      padding: 2px 8px;
+      border-radius: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+      z-index: 5;
+    }
+
+    /* Chat bubble comments styling */
+    .match-comments-chat {
+      margin-top: 14px;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      padding-top: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      text-align: left;
+    }
+    .chat-bubble {
+      position: relative;
+      max-width: 85%;
+      padding: 8px 12px;
+      border-radius: 12px;
+      font-size: 0.78rem;
+      line-height: 1.3;
+      color: var(--text-primary);
+    }
+    .chat-bubble.retador {
+      align-self: flex-start;
+      background: rgba(59, 130, 246, 0.12);
+      border: 1px solid rgba(59, 130, 246, 0.2);
+      border-bottom-left-radius: 2px;
+    }
+    .chat-bubble.retado {
+      align-self: flex-end;
+      background: rgba(198, 211, 0, 0.08);
+      border: 1px solid rgba(198, 211, 0, 0.2);
+      border-bottom-right-radius: 2px;
+    }
+    .chat-author {
+      display: block;
+      font-size: 0.65rem;
+      font-weight: 800;
+      margin-bottom: 3px;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+    }
+    .chat-bubble.retador .chat-author {
+      color: #93c5fd;
+    }
+    .chat-bubble.retado .chat-author {
+      color: #e2f100;
+    }
+
+    /* Reactions styling */
+    .reactions-bar {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+      padding-top: 10px;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .reaction-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 20px;
+      padding: 4px 10px;
+      color: var(--text-secondary);
+      font-size: 0.78rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .reaction-btn:hover {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(255, 255, 255, 0.15);
+      color: var(--text-primary);
+      transform: translateY(-1px);
+    }
+    .reaction-btn.active {
+      background: rgba(198, 211, 0, 0.12);
+      border-color: rgba(198, 211, 0, 0.35);
+      color: var(--accent-tennis);
+    }
+
     @media (max-width:700px) {
       .booking-hero { grid-template-columns:1fr; padding:28px 20px; }
       .court-mini-grid { grid-template-columns:1fr 1fr; }
@@ -401,6 +502,68 @@
 // Admin emails (must match db.js)
 const ADMIN_EMAILS = ['uctenisclub@gmail.com', 'dsilva@uct.cl'];
 
+function escapeHTML(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+async function toggleReaction(challengeId, emojiKey) {
+  const session = DB.getSession();
+  if (!session) {
+    alert("Inicia sesión para reaccionar a los partidos.");
+    return;
+  }
+  
+  const challenges = DB.getChallenges();
+  const challenge = challenges.find(c => c.id === challengeId);
+  if (!challenge) return;
+  
+  const reacciones = challenge.reacciones || {};
+  if (!reacciones.fire) reacciones.fire = [];
+  if (!reacciones.laugh) reacciones.laugh = [];
+  if (!reacciones.clap) reacciones.clap = [];
+  if (!reacciones.trophy) reacciones.trophy = [];
+  
+  const userId = session.email ? session.email.toLowerCase().trim() : session.id;
+  const userList = reacciones[emojiKey] || [];
+  
+  const index = userList.indexOf(userId);
+  if (index >= 0) {
+    userList.splice(index, 1);
+  } else {
+    userList.push(userId);
+  }
+  
+  reacciones[emojiKey] = userList;
+  
+  try {
+    let updated;
+    if (DB.isCloudConfigured()) {
+      updated = await DB.updateChallengeCloud(challengeId, { reacciones });
+    } else {
+      updated = { ...challenge, reacciones, actualizado: new Date().toISOString() };
+    }
+    // Update locally
+    const list = DB.getChallenges();
+    const idx = list.findIndex(item => item.id === challengeId);
+    if (idx >= 0) list[idx] = { ...list[idx], ...updated };
+    else list.push(updated);
+    DB.saveChallenges(list);
+    
+    // Re-render immediately
+    loadLiveData();
+  } catch (error) {
+    console.error("Error toggling reaction:", error);
+    alert("Error al registrar reacción: " + error.message);
+  }
+}
+window.toggleReaction = toggleReaction;
+
 // User bar
 function renderIndexUserBar() {
   const s = DB.getSession();
@@ -436,6 +599,7 @@ async function loadLiveData() {
   if (DB.isCloudConfigured()) {
     try {
       challenges = await DB.getChallengesCloud();
+      DB.saveChallenges(challenges); // sync to local
     } catch(e) {
       challenges = DB.getChallenges();
     }
@@ -460,6 +624,32 @@ async function loadLiveData() {
       console.warn("Error fetching players from Firestore:", e);
     }
   }
+
+  // Resolve session challenge IDs
+  const session = DB.getSession();
+  const sessionIds = [];
+  if (session) {
+    sessionIds.push(session.id);
+    const emailLower = (session.email || '').toLowerCase().trim();
+    const nameLower = (session.nombre || '').toLowerCase().trim();
+    if (playersMap[emailLower]) sessionIds.push(playersMap[emailLower].id);
+    if (playersMap[nameLower]) sessionIds.push(playersMap[nameLower].id);
+  }
+
+  const isMyChallenge = (c) => {
+    if (!session) return false;
+    const emailLower = (session.email || '').toLowerCase().trim();
+    const nameLower = (session.nombre || '').toLowerCase().trim();
+    
+    const retadorEmail = (c.retadorEmail || '').toLowerCase().trim();
+    const retadoEmail = (c.retadoEmail || '').toLowerCase().trim();
+    const retadorName = (c.retadorNombre || '').toLowerCase().trim();
+    const retadoName = (c.retadoNombre || '').toLowerCase().trim();
+    
+    return sessionIds.includes(c.retadorId) || sessionIds.includes(c.retadoId) ||
+           retadorEmail === emailLower || retadoEmail === emailLower ||
+           retadorName === nameLower || retadoName === nameLower;
+  };
 
   // Resolve player photo based on Firestore or static fallbacks
   function getPlayerPhoto(playerName) {
@@ -541,7 +731,12 @@ async function loadLiveData() {
       const courtStr = c.courtLabel || c.cancha || 'Cancha';
       const dateStr = formatDateShort(c.fecha);
       
-      return `<div class="match-card">
+      const isMyMatch = isMyChallenge(c);
+      const myMatchLabel = isMyMatch ? `<div class="my-match-label">Tu Desafío</div>` : '';
+      const cardClass = isMyMatch ? 'match-card is-my-match' : 'match-card';
+      
+      return `<div class="${cardClass}">
+        ${myMatchLabel}
         <div class="match-header">
           <span class="match-court">${courtStr}</span>
           <span class="match-date">${dateStr}</span>
@@ -579,7 +774,63 @@ async function loadLiveData() {
       const dateStr = formatDateShort(c.fecha);
       const scoreStr = c.marcador || 'v/d';
       
-      return `<div class="match-card">
+      // Comments rendering
+      let commentsHtml = '';
+      if (c.retadorComentario || c.retadoComentario) {
+        commentsHtml = `<div class="match-comments-chat">`;
+        if (c.retadorComentario) {
+          const author = (c.retadorNombre || 'Retador').split(' ')[0];
+          commentsHtml += `
+            <div class="chat-bubble retador">
+              <span class="chat-author">${escapeHTML(author)}</span>
+              <span>"${escapeHTML(c.retadorComentario)}"</span>
+            </div>`;
+        }
+        if (c.retadoComentario) {
+          const author = (c.retadoNombre || 'Retado').split(' ')[0];
+          commentsHtml += `
+            <div class="chat-bubble retado">
+              <span class="chat-author">${escapeHTML(author)}</span>
+              <span>"${escapeHTML(c.retadoComentario)}"</span>
+            </div>`;
+        }
+        commentsHtml += `</div>`;
+      }
+      
+      // Reactions rendering
+      const reactions = c.reacciones || { fire: [], laugh: [], clap: [], trophy: [] };
+      const userId = session ? (session.email ? session.email.toLowerCase().trim() : session.id) : null;
+      
+      const fireCount = (reactions.fire || []).length;
+      const laughCount = (reactions.laugh || []).length;
+      const clapCount = (reactions.clap || []).length;
+      const trophyCount = (reactions.trophy || []).length;
+      
+      const hasFire = userId && (reactions.fire || []).includes(userId);
+      const hasLaugh = userId && (reactions.laugh || []).includes(userId);
+      const hasClap = userId && (reactions.clap || []).includes(userId);
+      const hasTrophy = userId && (reactions.trophy || []).includes(userId);
+      
+      const fireClass = hasFire ? 'reaction-btn active' : 'reaction-btn';
+      const laughClass = hasLaugh ? 'reaction-btn active' : 'reaction-btn';
+      const clapClass = hasClap ? 'reaction-btn active' : 'reaction-btn';
+      const trophyClass = hasTrophy ? 'reaction-btn active' : 'reaction-btn';
+      
+      const reactionsHtml = `
+        <div class="reactions-bar">
+          <button class="${fireClass}" onclick="toggleReaction('${c.id}', 'fire')">🔥 <span>${fireCount}</span></button>
+          <button class="${laughClass}" onclick="toggleReaction('${c.id}', 'laugh')">😂 <span>${laughCount}</span></button>
+          <button class="${clapClass}" onclick="toggleReaction('${c.id}', 'clap')">👏 <span>${clapCount}</span></button>
+          <button class="${trophyClass}" onclick="toggleReaction('${c.id}', 'trophy')">🏆 <span>${trophyCount}</span></button>
+        </div>
+      `;
+      
+      const isMyMatch = isMyChallenge(c);
+      const myMatchLabel = isMyMatch ? `<div class="my-match-label">Tu Desafío</div>` : '';
+      const cardClass = isMyMatch ? 'match-card is-my-match' : 'match-card';
+      
+      return `<div class="${cardClass}">
+        ${myMatchLabel}
         <div class="match-header">
           <span class="match-court">${courtStr}</span>
           <span class="match-date">${dateStr}</span>
@@ -597,12 +848,97 @@ async function loadLiveData() {
             <span class="match-player-name">${loserName.split(' ').slice(0,2).join(' ')}</span>
           </div>
         </div>
+        ${commentsHtml}
+        ${reactionsHtml}
       </div>`;
     }).join('');
   } else {
     resultsEl.innerHTML = '<div class="live-empty"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="opacity:.4;margin-bottom:8px"><path d="M12 1l3.09 6.26L22 8.27l-5 4.87 1.18 6.88L12 16.77l-6.18 3.25L7 13.14 2 8.27l6.91-1.01L12 1z"/></svg><br>Aún no hay resultados</div>';
   }
+
+  // Check for pending challenges alert
+  checkPendingChallengesAlert(challenges);
 }
+
+function checkPendingChallengesAlert(challenges) {
+  const session = DB.getSession();
+  if (!session) return;
+
+  if (sessionStorage.getItem('challenge_alert_shown') === 'true') return;
+
+  if (!challenges || !challenges.length) return;
+
+  const emailLower = (session.email || '').toLowerCase().trim();
+  const nameLower = (session.nombre || '').toLowerCase().trim();
+
+  // Find if they have a pending challenge as retado
+  const pending = challenges.filter(c => {
+    if (c.status !== 'pendiente') return false;
+    const isRetado = (c.retadoId && c.retadoId === session.id) ||
+                     (c.retadoEmail && c.retadoEmail.toLowerCase().trim() === emailLower) ||
+                     (c.retadoNombre && c.retadoNombre.toLowerCase().trim() === nameLower);
+    return isRetado;
+  });
+
+  if (pending.length > 0) {
+    showFloatingAlert(pending.length);
+  }
+}
+
+function showFloatingAlert(count) {
+  const alertDiv = document.createElement('div');
+  alertDiv.id = 'floating-challenge-alert';
+  alertDiv.style.position = 'fixed';
+  alertDiv.style.bottom = '24px';
+  alertDiv.style.right = '24px';
+  alertDiv.style.backgroundColor = 'rgba(15, 23, 42, 0.95)';
+  alertDiv.style.border = '2px solid var(--accent-tennis)';
+  alertDiv.style.borderRadius = '16px';
+  alertDiv.style.padding = '16px 20px';
+  alertDiv.style.boxShadow = '0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 0 15px rgba(198, 211, 0, 0.2)';
+  alertDiv.style.zIndex = '9999';
+  alertDiv.style.maxWidth = '320px';
+  alertDiv.style.display = 'flex';
+  alertDiv.style.flexDirection = 'column';
+  alertDiv.style.gap = '12px';
+  alertDiv.style.backdropFilter = 'blur(10px)';
+  alertDiv.style.animation = 'slideInUp 0.5s cubic-bezier(0.16, 1, 0.3, 1)';
+
+  alertDiv.innerHTML = `
+    <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+      <span style="font-size:1.1rem; font-weight:800; color:var(--accent-tennis);">⚔️ ¡Tienes un desafío!</span>
+      <button onclick="closeFloatingAlert()" style="background:none; border:none; color:var(--text-secondary); cursor:pointer; font-size:1.1rem; padding:0 4px;">✕</button>
+    </div>
+    <p style="font-size:0.85rem; color:var(--text-primary); margin:0;">Tienes <strong>${count}</strong> desafío${count > 1 ? 's' : ''} pendiente${count > 1 ? 's' : ''} por responder.</p>
+    <a href="ranking.html" onclick="closeFloatingAlert()" style="display:block; text-align:center; background:var(--accent-tennis); color:#000; font-weight:900; font-size:0.8rem; padding:8px 12px; border-radius:8px; text-decoration:none; transition:transform 0.2s;" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">Responder en Ranking</a>
+  `;
+
+  if (!document.getElementById('floating-alert-styles')) {
+    const style = document.createElement('style');
+    style.id = 'floating-alert-styles';
+    style.innerHTML = `
+      @keyframes slideInUp {
+        from { transform: translateY(100px); opacity: 0; }
+        to { transform: translateY(0); opacity: 1; }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  document.body.appendChild(alertDiv);
+  sessionStorage.setItem('challenge_alert_shown', 'true');
+}
+
+function closeFloatingAlert() {
+  const alertEl = document.getElementById('floating-challenge-alert');
+  if (alertEl) {
+    alertEl.style.transition = 'all 0.3s ease';
+    alertEl.style.opacity = '0';
+    alertEl.style.transform = 'translateY(20px)';
+    setTimeout(() => alertEl.remove(), 300);
+  }
+}
+window.closeFloatingAlert = closeFloatingAlert;
 
 document.addEventListener('DOMContentLoaded', () => {
   DB.seed();

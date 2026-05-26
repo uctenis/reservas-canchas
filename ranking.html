@@ -639,7 +639,11 @@ async function refreshRankingPage() {
   syncChallengesFromCloud().then(() => {
     applyLocalChallengesToRanking();
     renderAll();
-  }).catch(err => console.warn('Error sincronizando desafíos:', err));
+    checkPendingChallengesAlert();
+  }).catch(err => {
+    console.warn('Error sincronizando desafíos:', err);
+    checkPendingChallengesAlert();
+  });
 }
 
 function loadStaticRanking() {
@@ -707,6 +711,81 @@ function applyLocalChallengesToRanking() {
     rankingState.lists[gender] = ranked.map((player, index) => ({ ...player, pos: index + 1 }));
   });
 }
+
+function checkPendingChallengesAlert() {
+  const session = DB.getSession();
+  if (!session) return;
+
+  if (sessionStorage.getItem('challenge_alert_shown') === 'true') return;
+
+  const challenges = DB.getChallenges();
+  if (!challenges || !challenges.length) return;
+
+  const sessionIds = getSessionChallengeIds(session);
+
+  const pending = challenges.filter(c =>
+    c.status === 'pendiente' && sessionIds.includes(c.retadoId)
+  );
+
+  if (pending.length > 0) {
+    showFloatingAlert(pending.length);
+  }
+}
+
+function showFloatingAlert(count) {
+  const alertDiv = document.createElement('div');
+  alertDiv.id = 'floating-challenge-alert';
+  alertDiv.style.position = 'fixed';
+  alertDiv.style.bottom = '24px';
+  alertDiv.style.right = '24px';
+  alertDiv.style.backgroundColor = 'rgba(15, 23, 42, 0.95)';
+  alertDiv.style.border = '2px solid var(--accent-tennis)';
+  alertDiv.style.borderRadius = '16px';
+  alertDiv.style.padding = '16px 20px';
+  alertDiv.style.boxShadow = '0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 0 15px rgba(198, 211, 0, 0.2)';
+  alertDiv.style.zIndex = '9999';
+  alertDiv.style.maxWidth = '320px';
+  alertDiv.style.display = 'flex';
+  alertDiv.style.flexDirection = 'column';
+  alertDiv.style.gap = '12px';
+  alertDiv.style.backdropFilter = 'blur(10px)';
+  alertDiv.style.animation = 'slideInUp 0.5s cubic-bezier(0.16, 1, 0.3, 1)';
+
+  alertDiv.innerHTML = `
+    <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+      <span style="font-size:1.1rem; font-weight:800; color:var(--accent-tennis);">⚔️ ¡Tienes un desafío!</span>
+      <button onclick="closeFloatingAlert()" style="background:none; border:none; color:var(--text-secondary); cursor:pointer; font-size:1.1rem; padding:0 4px;">✕</button>
+    </div>
+    <p style="font-size:0.85rem; color:var(--text-primary); margin:0;">Tienes <strong>${count}</strong> desafío${count > 1 ? 's' : ''} pendiente${count > 1 ? 's' : ''} por responder.</p>
+    <button onclick="scrollToMyChallenges(); closeFloatingAlert();" style="display:block; width:100%; border:none; text-align:center; background:var(--accent-tennis); color:#000; font-weight:900; font-size:0.85rem; padding:8px 12px; border-radius:8px; cursor:pointer; font-family:var(--font-sans); transition:transform 0.2s;" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">Responder Desafío</button>
+  `;
+
+  if (!document.getElementById('floating-alert-styles')) {
+    const style = document.createElement('style');
+    style.id = 'floating-alert-styles';
+    style.innerHTML = `
+      @keyframes slideInUp {
+        from { transform: translateY(100px); opacity: 0; }
+        to { transform: translateY(0); opacity: 1; }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  document.body.appendChild(alertDiv);
+  sessionStorage.setItem('challenge_alert_shown', 'true');
+}
+
+function closeFloatingAlert() {
+  const alertEl = document.getElementById('floating-challenge-alert');
+  if (alertEl) {
+    alertEl.style.transition = 'all 0.3s ease';
+    alertEl.style.opacity = '0';
+    alertEl.style.transform = 'translateY(20px)';
+    setTimeout(() => alertEl.remove(), 300);
+  }
+}
+window.closeFloatingAlert = closeFloatingAlert;
 
 async function syncChallengesFromCloud() {
   if (!DB.isCloudConfigured()) return;
@@ -1218,22 +1297,26 @@ function challengeCard(challenge, users, session, compact) {
   const expiredBadge = isExpired ? `<span class="badge-expired" style="background:rgba(251,191,36,0.12); border:1px solid rgba(251,191,36,0.3); color:#fbbf24; padding:2px 6px; border-radius:4px; font-size:0.72rem; font-weight:900; text-transform:uppercase;">⚠️ Sin resultado</span>` : '';
 
   let actions = '';
-  if (canRespond) {
-    actions += `
-      <button class="btn-accept" type="button" data-action="accept-challenge" data-challenge-id="${escapeAttr(challenge.id)}">Aceptar</button>
-      <button class="btn-reject" type="button" data-action="reject-challenge" data-challenge-id="${escapeAttr(challenge.id)}">Rechazar</button>`;
-  }
-  if (canScore) {
-    actions += `<button class="btn-score" type="button" data-action="score-challenge" data-challenge-id="${escapeAttr(challenge.id)}">Ingresar resultado</button>`;
-  }
-  const isLoser = involved && challenge.status === 'completado' && challenge.ganadorId && !sessionIds.includes(challenge.ganadorId);
-  if (isLoser) {
-    actions += `<button class="btn-dispute" type="button" data-action="dispute-challenge" data-challenge-id="${escapeAttr(challenge.id)}">⚠️ Disputar resultado</button>`;
-  }
-  if (canManage) {
-    actions += `
-      <button class="btn-edit" type="button" data-action="edit-challenge" data-challenge-id="${escapeAttr(challenge.id)}">Editar</button>
-      <button class="btn-delete" type="button" data-action="delete-challenge" data-challenge-id="${escapeAttr(challenge.id)}">Eliminar</button>`;
+  if (challenge.status === 'completado') {
+    if (involved || isAdmin) {
+      actions += `
+        <button class="btn-score" type="button" data-action="score-challenge" data-challenge-id="${escapeAttr(challenge.id)}">Editar resultado</button>
+        <button class="btn-delete" type="button" data-action="delete-challenge" data-challenge-id="${escapeAttr(challenge.id)}">Eliminar</button>`;
+    }
+  } else {
+    if (canRespond) {
+      actions += `
+        <button class="btn-accept" type="button" data-action="accept-challenge" data-challenge-id="${escapeAttr(challenge.id)}">Aceptar</button>
+        <button class="btn-reject" type="button" data-action="reject-challenge" data-challenge-id="${escapeAttr(challenge.id)}">Rechazar</button>`;
+    }
+    if (canScore) {
+      actions += `<button class="btn-score" type="button" data-action="score-challenge" data-challenge-id="${escapeAttr(challenge.id)}">Ingresar resultado</button>`;
+    }
+    if (canManage) {
+      actions += `
+        <button class="btn-edit" type="button" data-action="edit-challenge" data-challenge-id="${escapeAttr(challenge.id)}">Editar</button>
+        <button class="btn-delete" type="button" data-action="delete-challenge" data-challenge-id="${escapeAttr(challenge.id)}">Eliminar</button>`;
+    }
   }
 
   const title = compact && session
@@ -1253,6 +1336,40 @@ function challengeCard(challenge, users, session, compact) {
     compactStats = `<div class="chal-stats"><span>${winsA}W-${lossesA}L · ${winsB}W-${lossesB}L</span></div>`;
   }
 
+  // Comments for completed challenges
+  let commentHtml = '';
+  if (challenge.status === 'completado') {
+    const showAddComment = session && involved;
+    const myComment = session && involved 
+      ? (sessionIds.includes(challenge.retadorId) ? (challenge.retadorComentario || '') : (challenge.retadoComentario || '')) 
+      : '';
+    
+    let existingComments = '';
+    if (challenge.retadorComentario) {
+      existingComments += `<div style="font-size:0.78rem; margin-bottom:4px; color:var(--text-primary);">💬 <strong>${escapeHTML(retadorName)}:</strong> "${escapeHTML(challenge.retadorComentario)}"</div>`;
+    }
+    if (challenge.retadoComentario) {
+      existingComments += `<div style="font-size:0.78rem; margin-bottom:4px; color:var(--text-primary);">💬 <strong>${escapeHTML(retadoName)}:</strong> "${escapeHTML(challenge.retadoComentario)}"</div>`;
+    }
+    
+    let commentInputHtml = '';
+    if (showAddComment) {
+      commentInputHtml = `
+        <div style="display:flex; gap:8px; margin-top:8px;">
+          <input type="text" id="comment-${challenge.id}" placeholder="Escribe un comentario del partido..." value="${escapeAttr(myComment)}" style="flex:1; background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:#fff; padding:6px 10px; font-size:0.8rem;">
+          <button type="button" class="btn-primary" style="padding:0 12px; min-height:30px; font-size:0.75rem; border-radius:8px; background:var(--accent-tennis); color:#000;" onclick="saveChallengeComment('${challenge.id}')">Comentar</button>
+        </div>`;
+    }
+    
+    if (existingComments || commentInputHtml) {
+      commentHtml = `
+        <div class="chal-comments" style="margin-top:12px; border-top:1px solid rgba(255,255,255,0.05); padding-top:10px; text-align:left;">
+          ${existingComments}
+          ${commentInputHtml}
+        </div>`;
+    }
+  }
+
   return `
     <article class="challenge-card status-${escapeAttr(challenge.status)}">
       <div class="chal-players">${title}</div>
@@ -1264,6 +1381,7 @@ function challengeCard(challenge, users, session, compact) {
         ${challenge.marcador ? `<span>${escapeHTML(challenge.marcador)} · Ganó ${escapeHTML(ganadorName || '-')}</span>` : ''}
       </div>
       ${compactStats}
+      ${commentHtml}
       ${actions ? `<div class="chal-actions">${actions}</div>` : ''}
     </article>`;
 }
@@ -1328,6 +1446,66 @@ async function disputeChallenge(id, button) {
     button.innerHTML = originalHtml;
   }
 }
+
+async function saveChallengeComment(challengeId) {
+  const input = document.getElementById(`comment-${challengeId}`);
+  if (!input) return;
+  const commentText = input.value.trim();
+  if (!commentText) {
+    alert("Por favor escribe un comentario.");
+    return;
+  }
+
+  const session = DB.getSession();
+  if (!session) {
+    alert("Inicia sesión para dejar un comentario.");
+    return;
+  }
+
+  const challenge = DB.getChallenges().find(c => c.id === challengeId);
+  if (!challenge) return;
+
+  const sessionIds = getSessionChallengeIds(session);
+  const isRetador = sessionIds.includes(challenge.retadorId);
+  const isRetado = sessionIds.includes(challenge.retadoId);
+
+  if (!isRetador && !isRetado) {
+    alert("No tienes permiso para comentar en este desafío.");
+    return;
+  }
+
+  const patch = {};
+  if (isRetador) {
+    patch.retadorComentario = commentText;
+  } else {
+    patch.retadoComentario = commentText;
+  }
+
+  const btn = input.nextElementSibling;
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Guardando...';
+
+  try {
+    let updated;
+    if (DB.isCloudConfigured()) {
+      updated = await DB.updateChallengeCloud(challengeId, patch);
+    } else {
+      updated = { ...challenge, ...patch, actualizado: new Date().toISOString() };
+    }
+    upsertLocalChallenge(updated);
+    alert("Comentario guardado con éxito.");
+    renderChallenges();
+    renderMyChallenges();
+  } catch (error) {
+    console.error("Error saving comment:", error);
+    alert("Error al guardar el comentario: " + error.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalText;
+  }
+}
+window.saveChallengeComment = saveChallengeComment;
 
 async function deleteChallenge(id) {
   if (DB.isCloudConfigured()) {
