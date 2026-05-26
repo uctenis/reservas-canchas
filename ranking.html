@@ -163,7 +163,7 @@
 
         <div class="form-group">
           <label for="cpTelefono">Teléfono (WhatsApp)</label>
-          <input type="tel" id="cpTelefono" placeholder="+56912345678" value="+56" required>
+          <input type="tel" id="cpTelefono" placeholder="+56912345678" value="+569" required>
         </div>
 
         <div class="form-row">
@@ -351,7 +351,7 @@
             </div>
             <div class="form-group">
               <label for="adminTelefono">Teléfono (WhatsApp)</label>
-              <input type="tel" id="adminTelefono" placeholder="+56912345678" value="+56">
+              <input type="tel" id="adminTelefono" placeholder="+56912345678" value="+569">
             </div>
           </div>
           <div class="form-group">
@@ -441,6 +441,7 @@ const ADMIN_IDENTITIES = {
   emails: ['uctenisclub@gmail.com', 'dsilva@uct.cl'],
   names: ['UCTenis Club', 'David Silva']
 };
+const PURE_ADMIN_EMAILS = ['uctenisclub@gmail.com'];
 const CLOUD_TIMEOUT_MS = 4500;
 
 const OFFICIAL_STATIC_RANKING = {
@@ -721,7 +722,7 @@ function splitPlayersByStatus(players) {
   (Array.isArray(players) ? players : [])
     .filter(player => {
       const email = normalizeEmail(player.email || '');
-      return !ADMIN_IDENTITIES.emails.some(adm => normalizeEmail(adm) === email);
+      return !PURE_ADMIN_EMAILS.some(adm => normalizeEmail(adm) === email);
     })
     .forEach(player => {
       const gender = normalizeGender(player.genero || player.gender) || 'M';
@@ -2274,7 +2275,7 @@ function openOwnProfileEditor() {
       <div class="form-row">
         <div class="form-group">
           <label for="ownTelefono">Teléfono (WhatsApp)</label>
-          <input type="tel" id="ownTelefono" value="${escapeAttr(player.telefono || '+56')}" placeholder="+56912345678" required>
+          <input type="tel" id="ownTelefono" value="${escapeAttr(player.telefono || '+569')}" placeholder="+56912345678" required>
         </div>
         <div class="form-group">
           <label for="ownFoto">Foto actual o URL</label>
@@ -2420,7 +2421,7 @@ function resetAdminForm() {
   document.getElementById('adminPlayerId').value = '';
   document.getElementById('adminGenero').value = rankingState.currentGender;
   document.getElementById('adminEstado').value = 'activo';
-  document.getElementById('adminTelefono').value = '+56';
+  document.getElementById('adminTelefono').value = '+569';
   document.getElementById('adminNotas').value = '';
   document.getElementById('adminCategoria').value = 'Principiante';
   document.getElementById('adminMano').value = 'Derecha';
@@ -2439,7 +2440,7 @@ function fillAdminForm(playerKey) {
   document.getElementById('adminGenero').value = player.gender;
   document.getElementById('adminPosicion').value = player.pos || '';
   document.getElementById('adminEstado').value = isPlayerActive(player) ? 'activo' : 'inactivo';
-  document.getElementById('adminTelefono').value = player.telefono || '+56';
+  document.getElementById('adminTelefono').value = player.telefono || '+569';
   document.getElementById('adminNotas').value = player.notes || player.notas || '';
   document.getElementById('adminFechaNacimiento').value = dateForInput(player.fechaNacimiento);
   document.getElementById('adminCategoria').value = player.categoria || 'Principiante';

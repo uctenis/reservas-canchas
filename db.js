@@ -44,6 +44,7 @@ const FIREBASE_COLLECTIONS = {
 };
 
 const FIREBASE_ADMIN_EMAILS = ['uctenisclub@gmail.com', 'dsilva@uct.cl'];
+const PURE_ADMIN_EMAILS = ['uctenisclub@gmail.com'];
 
 function normalizeEmailForDb(email) {
   return String(email || '').trim().toLowerCase();
@@ -69,13 +70,19 @@ function makeFirebaseDocId(value, prefix = 'doc') {
 function formatPhoneNumber(num) {
   let cleaned = String(num || '').replace(/[^0-9]/g, '');
   if (!cleaned) return '';
-  if (cleaned.startsWith('56')) {
+  if (cleaned.startsWith('569')) {
     return '+' + cleaned;
   }
   if (cleaned.length === 9 && cleaned.startsWith('9')) {
     return '+56' + cleaned;
   }
-  return '+' + cleaned;
+  if (cleaned.length === 8) {
+    return '+569' + cleaned;
+  }
+  if (cleaned.startsWith('56')) {
+    return '+' + cleaned;
+  }
+  return '+569' + cleaned;
 }
 
 function playerToSessionUser(player, current = {}) {
@@ -151,7 +158,7 @@ const DB = {
 
   isAllowedAccessEmail(email) {
     const normalized = normalizeEmailForDb(email);
-    return FIREBASE_ADMIN_EMAILS.some(adm => normalizeEmailForDb(adm) === normalized);
+    return PURE_ADMIN_EMAILS.some(adm => normalizeEmailForDb(adm) === normalized);
   },
 
   async validateMemberAPI(email) {
@@ -188,8 +195,8 @@ const DB = {
       const result = await firebaseAuth.signInWithPopup(provider);
       const user = result.user;
 
-      const isAdmin = FIREBASE_ADMIN_EMAILS.some(adm => normalizeEmailForDb(adm) === normalizeEmailForDb(user.email));
-      if (isAdmin) {
+      const isPureAdmin = PURE_ADMIN_EMAILS.some(adm => normalizeEmailForDb(adm) === normalizeEmailForDb(user.email));
+      if (isPureAdmin) {
         const adminUser = {
           id: makeFirebaseDocId(user.email, 'admin'),
           nombre: user.displayName || 'Administrador UCTenis',
@@ -241,8 +248,8 @@ const DB = {
 
   async loginWithGoogleMock(email, nombre) {
     const normalized = normalizeEmailForDb(email);
-    const isAdmin = FIREBASE_ADMIN_EMAILS.some(adm => normalizeEmailForDb(adm) === normalized);
-    if (isAdmin) {
+    const isPureAdmin = PURE_ADMIN_EMAILS.some(adm => normalizeEmailForDb(adm) === normalized);
+    if (isPureAdmin) {
       const adminUser = {
         id: makeFirebaseDocId(email, 'admin'),
         nombre: nombre || 'Administrador UCTenis',
