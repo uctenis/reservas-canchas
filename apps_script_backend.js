@@ -22,7 +22,7 @@ const CONFIG = {
   // Perfil administrador dentro de la pagina.
   // Si quieres endurecerlo mas, agrega un ADMIN_PIN y envialo desde el front.
   ADMINS: {
-    emails: ["ucteniclub@gmail.com", "dsilva@uct.cl"],
+    emails: ["uctenisclub@gmail.com", "dsilva@uct.cl"],
     names: ["UCTenis Club", "David Silva"]
   },
   ADMIN_PIN: "",

@@ -7,7 +7,7 @@ if (typeof window.CONFIG === 'undefined') {
 }
 
 // =========================================================================
-// ⚙️ CONFIGURACIÓN DE FIREBASE (Creado desde ucteniclub@gmail.com)
+// ⚙️ CONFIGURACIÓN DE FIREBASE (Creado desde uctenisclub@gmail.com)
 // =========================================================================
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyDxNdwD8hHQmN2efhRwflL7RkpC-RFs3ow",
@@ -43,7 +43,7 @@ const FIREBASE_COLLECTIONS = {
   challenges: 'ranking_challenges'
 };
 
-const FIREBASE_ADMIN_EMAILS = ['ucteniclub@gmail.com', 'dsilva@uct.cl'];
+const FIREBASE_ADMIN_EMAILS = ['uctenisclub@gmail.com', 'dsilva@uct.cl'];
 
 function normalizeEmailForDb(email) {
   return String(email || '').trim().toLowerCase();
