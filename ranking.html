@@ -3043,7 +3043,7 @@ function isAdminSession(session = DB.getSession()) {
 function isPlayerAdminSession(session = DB.getSession()) {
   if (!session) return false;
   const email = normalizeEmail(session.email);
-  return PURE_ADMIN_EMAILS.some(item => normalizeEmail(item) === email);
+  return ADMIN_IDENTITIES.emails.some(item => normalizeEmail(item) === email);
 }
 
 function actorPayload(session = DB.getSession()) {
