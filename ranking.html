@@ -718,10 +718,15 @@ function buildInitialFirebaseSeed() {
 
 function splitPlayersByStatus(players) {
   const grouped = { M: [], F: [] };
-  (Array.isArray(players) ? players : []).forEach(player => {
-    const gender = normalizeGender(player.genero || player.gender) || 'M';
-    grouped[gender].push({ ...player, genero: gender });
-  });
+  (Array.isArray(players) ? players : [])
+    .filter(player => {
+      const email = normalizeEmail(player.email || '');
+      return !ADMIN_IDENTITIES.emails.some(adm => normalizeEmail(adm) === email);
+    })
+    .forEach(player => {
+      const gender = normalizeGender(player.genero || player.gender) || 'M';
+      grouped[gender].push({ ...player, genero: gender });
+    });
 
   const active = { M: [], F: [] };
   const inactive = { M: [], F: [] };

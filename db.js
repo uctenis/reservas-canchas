@@ -150,7 +150,8 @@ const DB = {
   },
 
   isAllowedAccessEmail(email) {
-    return true; // Permitir cualquier correo, ya no restringido a @uct.cl
+    const normalized = normalizeEmailForDb(email);
+    return FIREBASE_ADMIN_EMAILS.some(adm => normalizeEmailForDb(adm) === normalized);
   },
 
   async validateMemberAPI(email) {
@@ -184,13 +185,24 @@ const DB = {
 
     try {
       const provider = new firebase.auth.GoogleAuthProvider();
-      // Ya no restringimos a uct.cl para permitir cuentas gmail ordinarias
       const result = await firebaseAuth.signInWithPopup(provider);
       const user = result.user;
 
-      if (!this.isAllowedAccessEmail(user.email)) {
-        await firebaseAuth.signOut();
-        return { ok: false, msg: 'Acceso restringido a cuentas autorizadas.' };
+      const isAdmin = FIREBASE_ADMIN_EMAILS.some(adm => normalizeEmailForDb(adm) === normalizeEmailForDb(user.email));
+      if (isAdmin) {
+        const adminUser = {
+          id: makeFirebaseDocId(user.email, 'admin'),
+          nombre: user.displayName || 'Administrador UCTenis',
+          email: user.email,
+          genero: 'M',
+          categoria: 'Primera',
+          foto: user.photoURL || '',
+          telefono: '',
+          isAdmin: true
+        };
+        this.upsertUserLocal(adminUser);
+        localStorage.setItem('uctenis_session', JSON.stringify(adminUser));
+        return { ok: true, user: adminUser, isNew: false };
       }
 
       const validation = await this.validateMemberAPI(user.email);
@@ -219,13 +231,8 @@ const DB = {
         return { ok: true, user: localUser, isNew: false };
       }
 
-      return {
-        ok: true,
-        isNew: true,
-        email: user.email,
-        nombre: user.displayName || '',
-        foto: user.photoURL || ''
-      };
+      await firebaseAuth.signOut();
+      return { ok: false, msg: 'Acceso denegado: Tu correo no se encuentra registrado en el ranking.' };
     } catch (error) {
       console.error('Error en Google Sign-in:', error);
       return { ok: false, msg: 'Error de autenticación con Google: ' + error.message };
@@ -233,8 +240,22 @@ const DB = {
   },
 
   async loginWithGoogleMock(email, nombre) {
-    if (!this.isAllowedAccessEmail(email)) {
-      return { ok: false, msg: 'Acceso restringido: debes usar una cuenta institucional @uct.cl o una cuenta administradora autorizada.' };
+    const normalized = normalizeEmailForDb(email);
+    const isAdmin = FIREBASE_ADMIN_EMAILS.some(adm => normalizeEmailForDb(adm) === normalized);
+    if (isAdmin) {
+      const adminUser = {
+        id: makeFirebaseDocId(email, 'admin'),
+        nombre: nombre || 'Administrador UCTenis',
+        email: email,
+        genero: 'M',
+        categoria: 'Primera',
+        foto: '',
+        telefono: '',
+        isAdmin: true
+      };
+      this.upsertUserLocal(adminUser);
+      localStorage.setItem('uctenis_session', JSON.stringify(adminUser));
+      return { ok: true, user: adminUser, isNew: false };
     }
 
     const validation = await this.validateMemberAPI(email);
