@@ -469,6 +469,11 @@ function selectSlot(courtId, slot, el) {
     sel.court = DB.COURTS.find(c => c.id === courtId);
     sel.slot = slot;
     document.getElementById('btnConfirmSlot').disabled = false;
+    
+    // Scroll immediately to continue button
+    setTimeout(() => {
+      document.getElementById('btnConfirmSlot').scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }, 100);
   }
   updateSelectedSlotInfo();
 }
@@ -529,75 +534,116 @@ function onChallengeTypeChange() {
   }
 }
 
-function loadChallengeablePlayers() {
+async function loadChallengeablePlayers() {
   const session = DB.getSession();
   if (!session) return;
   const list = document.getElementById('challengeeList');
   list.innerHTML = '<div style="color:var(--text-secondary);font-size:0.88rem;text-align:center;padding:12px">Cargando jugadores...</div>';
 
-  // Intentar cargar desde Firebase/localStorage
-  let allPlayers = [];
   try {
-    // Obtener desde localStorage (sincronizados por ranking.html)
-    const rankM = JSON.parse(localStorage.getItem('uctenis_ranking_m') || '[]');
-    const rankF = JSON.parse(localStorage.getItem('uctenis_ranking_f') || '[]');
-    allPlayers = [...rankM, ...rankF];
-  } catch(e) {}
+    let allPlayers = [];
+    if (DB.isCloudConfigured()) {
+      try {
+        const cloudPlayers = await DB.getPlayersCloud();
+        allPlayers = cloudPlayers.map(p => ({
+          ...p,
+          gender: p.genero || p.gender,
+          pos: parseInt(p.pos || p.posicion)
+        }));
+      } catch (cloudErr) {
+        console.warn('No se pudo cargar jugadores desde Firebase en reservas.html. Usando copia local.', cloudErr);
+      }
+    }
 
-  // Si no hay en localStorage, usar usuarios del DB
-  if (!allPlayers.length) {
-    allPlayers = DB.getUsers().map((u, i) => ({ ...u, pos: i + 1, gender: u.genero }));
+    if (!allPlayers.length) {
+      allPlayers = DB.getUsers().map((u, i) => ({ ...u, pos: i + 1, gender: u.genero }));
+    }
+
+    // Filter out pure admins
+    const pureAdminEmails = ['uctenisclub@gmail.com'];
+    allPlayers = allPlayers.filter(p => !pureAdminEmails.some(adm => adm.toLowerCase() === (p.email || '').toLowerCase().trim()));
+
+    // Encontrar al jugador actual (por email o nombre) en la lista de todos los jugadores
+    const meRaw = allPlayers.find(p =>
+      (p.email && p.email.toLowerCase() === session.email?.toLowerCase()) ||
+      (p.nombre && p.nombre.toLowerCase() === session.nombre?.toLowerCase())
+    );
+
+    if (!meRaw) {
+      list.innerHTML = '<div style="color:#fbbf24;font-size:0.88rem;text-align:center;padding:12px">⚠️ No estás en el ranking activo aún o no tienes una ficha creada. Habla con el administrador.</div>';
+      return;
+    }
+
+    const myGender = meRaw.genero || meRaw.gender || 'M';
+
+    // Obtener los jugadores activos del mismo género
+    let genderPlayers = allPlayers.filter(p => {
+      const g = p.genero || p.gender || 'M';
+      const active = p.activo ?? p.participaRanking;
+      return g === myGender && (active === undefined || active !== false);
+    });
+
+    // Ordenar jugadores por posicion (pos o posicion)
+    genderPlayers.sort((a, b) => {
+      const posA = parseInt(a.pos || a.posicion || 9999);
+      const posB = parseInt(b.pos || b.posicion || 9999);
+      return posA - posB || (a.nombre || '').localeCompare(b.nombre || '', 'es');
+    });
+
+    // Renumerar para evitar inconsistencias o vacíos en la numeración
+    genderPlayers = genderPlayers.map((p, index) => ({
+      ...p,
+      pos: index + 1
+    }));
+
+    // Buscar la ficha de "me" en el ranking del género
+    const me = genderPlayers.find(p =>
+      (p.email && p.email.toLowerCase() === session.email?.toLowerCase()) ||
+      (p.nombre && p.nombre.toLowerCase() === session.nombre?.toLowerCase())
+    );
+
+    if (!me) {
+      list.innerHTML = '<div style="color:#fbbf24;font-size:0.88rem;text-align:center;padding:12px">⚠️ No estás activo en la lista de ranking del género seleccionado.</div>';
+      return;
+    }
+
+    const myPos = me.pos;
+
+    if (myPos === 1) {
+      list.innerHTML = `<div style="color:var(--text-secondary);font-size:0.88rem;text-align:center;padding:12px">👑 <strong>Eres el número 1 del ranking.</strong><br><small>No puedes realizar desafíos a posiciones superiores; debes esperar a que otros jugadores te desafíen.</small></div>`;
+      document.getElementById('challengeeHint').textContent = '';
+      return;
+    }
+
+    // Candidatos: mismo género, hasta 3 posiciones superiores (pos < myPos y myPos - pos <= 3)
+    const candidates = genderPlayers.filter(p => p.pos < myPos && myPos - p.pos <= 3);
+
+    if (!candidates.length) {
+      list.innerHTML = `<div style="color:var(--text-secondary);font-size:0.88rem;text-align:center;padding:12px">No hay jugadores disponibles para retar en este momento.<br><small>Debes estar en el ranking y haber jugadores en las 3 posiciones superiores (tu pos: #${myPos}).</small></div>`;
+      return;
+    }
+
+    document.getElementById('challengeeHint').textContent = `Puedes retar a estos ${candidates.length} jugador${candidates.length > 1 ? 'es' : ''} (hasta 3 posiciones superiores a la tuya – pos. ${myPos})`;
+
+    list.innerHTML = candidates.map(p => {
+      const pPos = p.pos || p.posicion || '?';
+      const foto = p.foto ? p.foto : (myGender === 'F' ? 'fotos/default_avatar_m.png' : 'fotos/default_avatar_h.png');
+      return `<div class="challengee-card" id="challengee_${p.id || p.nombre}" onclick="selectChallengee('${p.id || ''}', '${(p.nombre || '').replace(/'/g,"\\'")}', this)">
+        <div class="challengee-avatar">
+          <img src="${foto}" onerror="this.src='fotos/default_avatar_h.png'" alt="${p.nombre}">
+          <span class="challengee-rank">#${pPos}</span>
+        </div>
+        <div class="challengee-info">
+          <strong>${p.nombre}</strong>
+          <span>${p.categoria || ''}</span>
+        </div>
+        <div class="challengee-check" id="check_${p.id || p.nombre}">✓</div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    console.error('Error cargando retadores en reservas.html:', e);
+    list.innerHTML = `<div style="color:#f87171;font-size:0.88rem;text-align:center;padding:12px">Error: ${e.message}</div>`;
   }
-
-  // Encontrar al jugador actual (por email o nombre)
-  const me = allPlayers.find(p =>
-    (p.email && p.email.toLowerCase() === session.email?.toLowerCase()) ||
-    (p.nombre && p.nombre.toLowerCase() === session.nombre?.toLowerCase())
-  );
-
-  if (!me) {
-    list.innerHTML = '<div style="color:#fbbf24;font-size:0.88rem;text-align:center;padding:12px">⚠️ No estás en el ranking activo aún. Habla con el administrador.</div>';
-    return;
-  }
-
-  const myPos = me.pos || me.posicion || 999;
-  const myGender = me.gender || me.genero || 'M';
-
-  // Candidatos: mismo género, hasta 2 posiciones superiores (pos < myPos)
-  const candidates = allPlayers
-    .filter(p => {
-      const pGender = p.gender || p.genero;
-      const pPos = p.pos || p.posicion;
-      return pGender === myGender &&
-        pPos < myPos &&
-        myPos - pPos <= 2 &&
-        p.nombre !== me.nombre &&
-        (p.email?.toLowerCase() !== session.email?.toLowerCase());
-    })
-    .sort((a, b) => (b.pos || b.posicion || 0) - (a.pos || a.posicion || 0));
-
-  if (!candidates.length) {
-    list.innerHTML = '<div style="color:var(--text-secondary);font-size:0.88rem;text-align:center;padding:12px">No hay jugadores disponibles para retar en este momento.<br><small>Debes estar en el ranking y haber jugadores en las 2 posiciones superiores.</small></div>';
-    return;
-  }
-
-  document.getElementById('challengeeHint').textContent = `Puedes retar a estos ${candidates.length} jugador${candidates.length > 1 ? 'es' : ''} (hasta 2 posiciones superiores a la tuya – pos. ${myPos})`;
-
-  list.innerHTML = candidates.map(p => {
-    const pPos = p.pos || p.posicion || '?';
-    const foto = p.foto ? p.foto : (myGender === 'F' ? 'fotos/default_avatar_m.png' : 'fotos/default_avatar_h.png');
-    return `<div class="challengee-card" id="challengee_${p.id || p.nombre}" onclick="selectChallengee('${p.id || ''}', '${(p.nombre || '').replace(/'/g,"\\'")}', this)">
-      <div class="challengee-avatar">
-        <img src="${foto}" onerror="this.src='fotos/default_avatar_h.png'" alt="${p.nombre}">
-        <span class="challengee-rank">#${pPos}</span>
-      </div>
-      <div class="challengee-info">
-        <strong>${p.nombre}</strong>
-        <span>${p.categoria || ''}</span>
-      </div>
-      <div class="challengee-check" id="check_${p.id || p.nombre}">✓</div>
-    </div>`;
-  }).join('');
 }
 
 function selectChallengee(id, nombre, el) {

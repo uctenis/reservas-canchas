@@ -235,13 +235,19 @@
         </div>
         <div class="form-group">
           <label for="chal_cancha">Cancha</label>
-          <select id="chal_cancha">
-            <option value="CEC 1">CEC 1</option>
-            <option value="CEC 2">CEC 2</option>
-            <option value="CJP 1">CJP 1</option>
-            <option value="CJP 2">CJP 2</option>
+          <select id="chal_cancha" required>
+            <option value="cec1">CEC 1 (Arcilla)</option>
+            <option value="cec2">CEC 2 (Arcilla)</option>
+            <option value="cjp1">CJP 1 (Asfalto)</option>
+            <option value="cjp2">CJP 2 (Asfalto)</option>
           </select>
         </div>
+      </div>
+      <div class="form-group">
+        <label for="chal_hora">Horario disponible</label>
+        <select id="chal_hora" required disabled>
+          <option value="">Selecciona fecha y cancha...</option>
+        </select>
       </div>
       <input type="hidden" id="chal_id" value="">
       <p class="auth-error" id="challengeError" aria-live="polite"></p>
@@ -530,6 +536,8 @@ function setupEvents() {
   document.getElementById('btnMockLogin').addEventListener('click', handleMockLogin);
   document.getElementById('fCompleteProfile').addEventListener('submit', handleCompleteProfile);
   document.getElementById('fChallenge').addEventListener('submit', submitChallenge);
+  document.getElementById('chal_fecha').addEventListener('change', updateChallengeAvailableSlots);
+  document.getElementById('chal_cancha').addEventListener('change', updateChallengeAvailableSlots);
   document.getElementById('fScore').addEventListener('submit', submitScore);
   document.querySelectorAll('.score-input').forEach(input => {
     input.addEventListener('input', normalizeScoreEntry);
@@ -1216,7 +1224,7 @@ function challengeCard(challenge, users, session, compact) {
       <div class="chal-players">${title}</div>
       <div class="chal-meta">
         <span>${escapeHTML(formatShortDate(challenge.fecha))}</span>
-        <span>${escapeHTML(challenge.cancha || 'Cancha por definir')}</span>
+        <span>${escapeHTML(challenge.cancha || 'Cancha por definir')}${challenge.slot ? ` · ${escapeHTML(challenge.slot)}` : ''}</span>
         <span class="chal-status">${escapeHTML(status)}</span>
         ${expiredBadge}
         ${challenge.marcador ? `<span>${escapeHTML(challenge.marcador)} · Ganó ${escapeHTML(ganadorName || '-')}</span>` : ''}
@@ -1518,6 +1526,7 @@ function openChallengeModal(playerKey) {
   document.getElementById('challengeError').textContent = target && !canChallengePlayer(target)
     ? 'Solo puedes retar a jugadores ubicados hasta 3 puestos por encima de ti.'
     : '';
+  updateChallengeAvailableSlots();
   openModal('challengeModal');
 }
 
@@ -1531,49 +1540,73 @@ async function submitChallenge(event) {
 
   const retadoId = document.getElementById('chal_retado').value;
   const fecha = document.getElementById('chal_fecha').value;
-  const cancha = document.getElementById('chal_cancha').value;
+  const courtId = document.getElementById('chal_cancha').value;
+  const slot = document.getElementById('chal_hora').value;
   const error = document.getElementById('challengeError');
   const retado = DB.getUsers().find(user => user.id === retadoId);
   const retadorPlayer = getSessionPlayer(session);
   const retadoPlayer = retado ? findPlayerForUser(retado) : null;
   const submitBtn = document.getElementById('btnSubmitChallenge');
   const editId = submitBtn.dataset.editChallengeId;
+
+  if (!retado) {
+    error.textContent = 'Selecciona un rival válido.';
+    return;
+  }
+  if (!retadorPlayer) {
+    error.textContent = 'Tu cuenta no está enlazada a una ficha del ranking.';
+    return;
+  }
+  if (!isPlayerActive(retadorPlayer)) {
+    error.textContent = 'Tu ficha está inactiva para la escalerilla.';
+    return;
+  }
+  if (!retadoPlayer || !canChallengePlayer(retadoPlayer)) {
+    error.textContent = 'Solo puedes retar a jugadores ubicados hasta 3 puestos por encima de ti.';
+    return;
+  }
+  if (!fecha || fecha < todayISO()) {
+    error.textContent = 'Selecciona una fecha válida.';
+    return;
+  }
+  if (!slot) {
+    error.textContent = 'Selecciona un horario disponible.';
+    return;
+  }
+  if (retado.genero !== retadorPlayer.gender) {
+    error.textContent = 'Solo puedes desafiar jugadores de tu mismo ranking.';
+    return;
+  }
+  if (retado.id === session.id || normalizeKey(retado.nombre) === normalizeKey(session.nombre)) {
+    error.textContent = 'No puedes desafiarte a ti mismo.';
+    return;
+  }
+
+  const sessionIds = getSessionChallengeIds(session);
+  const existing = DB.getChallenges().find(challenge =>
+    ['pendiente', 'aceptado'].includes(challenge.status) &&
+    ((sessionIds.includes(challenge.retadorId) && challenge.retadoId === retadoId) ||
+     (challenge.retadorId === retadoId && sessionIds.includes(challenge.retadoId)))
+  );
+
+  if (existing && !editId) {
+    error.textContent = 'Ya hay un desafío pendiente o aceptado con ese jugador.';
+    return;
+  }
+
+  const courtObj = DB.COURTS.find(c => c.id === courtId);
+  const courtLabel = courtObj ? courtObj.label : courtId;
+
   const restoreButton = setButtonBusy(submitBtn, editId ? 'Guardando...' : 'Enviando...');
 
   try {
-    if (!retado) {
-      error.textContent = 'Selecciona un rival válido.';
-      return;
-    }
-    if (!retadorPlayer) {
-      error.textContent = 'Tu cuenta no está enlazada a una ficha del ranking.';
-      return;
-    }
-    if (!isPlayerActive(retadorPlayer)) {
-      error.textContent = 'Tu ficha está inactiva para la escalerilla.';
-      return;
-    }
-    if (!retadoPlayer || !canChallengePlayer(retadoPlayer)) {
-      error.textContent = 'Solo puedes retar a jugadores ubicados hasta 3 puestos por encima de ti.';
-      return;
-    }
-    if (!fecha || fecha < todayISO()) {
-      error.textContent = 'Selecciona una fecha válida.';
-      return;
-    }
-    if (retado.genero !== retadorPlayer.gender) {
-      error.textContent = 'Solo puedes desafiar jugadores de tu mismo ranking.';
-      return;
-    }
-    if (retado.id === session.id || normalizeKey(retado.nombre) === normalizeKey(session.nombre)) {
-      error.textContent = 'No puedes desafiarte a ti mismo.';
-      return;
-    }
-
     if (editId) {
       const patch = {
         fecha,
-        cancha,
+        cancha: courtLabel,
+        slot,
+        courtId,
+        courtLabel,
         retadoId,
         retadoNombre: retado.nombre,
         retadoEmail: retado.email || ''
@@ -1598,18 +1631,14 @@ async function submitChallenge(event) {
       return;
     }
 
-    const sessionIds = getSessionChallengeIds(session);
-    const existing = DB.getChallenges().find(challenge =>
-      ['pendiente', 'aceptado'].includes(challenge.status) &&
-      ((sessionIds.includes(challenge.retadorId) && challenge.retadoId === retadoId) ||
-       (challenge.retadorId === retadoId && sessionIds.includes(challenge.retadoId)))
-    );
-
-    if (existing) {
-      error.textContent = 'Ya hay un desafío pendiente o aceptado con ese jugador.';
+    // 1. Reservar la cancha en Google Calendar
+    const r = await DB.createBookingAPI(session.id, courtId, fecha, slot);
+    if (!r.ok) {
+      error.textContent = 'Error al reservar la cancha: ' + r.msg;
       return;
     }
 
+    // 2. Crear y enviar desafío
     await createChallengeRemoteOrLocal({
       retadorId: session.id,
       retadorNombre: session.nombre,
@@ -1620,14 +1649,107 @@ async function submitChallenge(event) {
       retadoTelefono: retadoPlayer?.telefono || '',
       genero: retadorPlayer.gender,
       fecha: fecha,
-      cancha: cancha
+      cancha: courtLabel,
+      slot: slot,
+      courtId: courtId,
+      courtLabel: courtLabel
     });
+
     closeModal('challengeModal');
     renderChallenges();
     renderMyChallenges();
+  } catch (err) {
+    console.error('Error al enviar el desafío:', err);
+    error.textContent = 'Error al procesar el desafío. Intenta nuevamente.';
   } finally {
     restoreButton();
   }
+}
+
+async function updateChallengeAvailableSlots() {
+  const fecha = document.getElementById('chal_fecha').value;
+  const canchaId = document.getElementById('chal_cancha').value;
+  const selectHora = document.getElementById('chal_hora');
+  const submitBtn = document.getElementById('btnSubmitChallenge');
+  const errorEl = document.getElementById('challengeError');
+
+  if (!fecha || !canchaId) {
+    selectHora.innerHTML = '<option value="">Selecciona fecha y cancha...</option>';
+    selectHora.disabled = true;
+    return;
+  }
+
+  selectHora.innerHTML = '<option value="">Cargando horarios... ⌛</option>';
+  selectHora.disabled = true;
+  submitBtn.disabled = true;
+
+  try {
+    const apiData = await DB.getSlotsAPI(fecha);
+    if (!apiData || !apiData.ok) {
+      selectHora.innerHTML = '<option value="">Error al cargar horarios</option>';
+      errorEl.textContent = 'Error al sincronizar con Google Calendar. Intenta nuevamente.';
+      return;
+    }
+
+    const availableBlocks = (apiData.courts && Array.isArray(apiData.courts[canchaId])) ? apiData.courts[canchaId] : [];
+    const playableSlots = (apiData.playable && Array.isArray(apiData.playable[canchaId])) ? apiData.playable[canchaId] : DB.SLOTS;
+
+    // Filter slots using 4-hour offset limit
+    const now = new Date();
+    const activeSlots = playableSlots.filter(slot => {
+      const isFree = availableBlocks.includes(slot);
+      if (!isFree) return false;
+
+      const [sh, sm] = slot.split(':').map(Number);
+      const [sy, smo, sd] = fecha.split('-').map(Number);
+      const slotDate = new Date(sy, smo - 1, sd, sh, sm, 0);
+      const fourHoursFromNow = new Date(now.getTime() + 4 * 60 * 60 * 1000);
+      return slotDate >= fourHoursFromNow;
+    });
+
+    if (activeSlots.length === 0) {
+      selectHora.innerHTML = '<option value="">Sin horarios disponibles</option>';
+      selectHora.disabled = true;
+      errorEl.textContent = 'No hay horarios disponibles en esta cancha para el día seleccionado.';
+    } else {
+      selectHora.innerHTML = activeSlots.map(slot => {
+        const [sh, sm] = slot.split(':').map(Number);
+        let eh = sh + 1, em = sm + 30;
+        if (em >= 60) { eh++; em -= 60; }
+        const endStr = `${String(eh).padStart(2,'0')}:${String(em).padStart(2,'0')}`;
+        return `<option value="${slot}">${slot} - ${endStr}</option>`;
+      }).join('');
+      selectHora.disabled = false;
+      submitBtn.disabled = false;
+      errorEl.textContent = '';
+    }
+  } catch (err) {
+    console.error('Error obteniendo horarios:', err);
+    selectHora.innerHTML = '<option value="">Error al obtener horarios</option>';
+    selectHora.disabled = true;
+    errorEl.textContent = 'Error de conexión con el backend de reservas.';
+  }
+}
+
+function openEditChallengeModal(challengeId) {
+  const challenge = DB.getChallenges().find(c => c.id === challengeId);
+  if (!challenge) return;
+  openChallengeModal(challenge.retadoId);
+  const submitBtn = document.getElementById('btnSubmitChallenge');
+  submitBtn.dataset.editChallengeId = challengeId;
+  submitBtn.textContent = 'Guardar Cambios';
+  document.getElementById('chal_fecha').value = challenge.fecha;
+  // Match cancha selection
+  const courtOption = Array.from(document.getElementById('chal_cancha').options)
+    .find(opt => opt.value === challenge.courtId || opt.text === challenge.cancha);
+  if (courtOption) {
+    document.getElementById('chal_cancha').value = courtOption.value;
+  }
+  updateChallengeAvailableSlots().then(() => {
+    if (challenge.slot) {
+      document.getElementById('chal_hora').value = challenge.slot;
+    }
+  });
 }
 
 async function createChallengeRemoteOrLocal(payload) {
@@ -1659,7 +1781,10 @@ async function createChallengeRemoteOrLocal(payload) {
       retadorNombre: payload.retadorNombre,
       retadorEmail: payload.retadorEmail,
       retadoNombre: payload.retadoNombre,
-      retadoEmail: payload.retadoEmail
+      retadoEmail: payload.retadoEmail,
+      slot: payload.slot || '',
+      courtId: payload.courtId || '',
+      courtLabel: payload.courtLabel || ''
     });
     upsertLocalChallenge(local);
     await notifyChallenge(local, { nombre: payload.retadorNombre, email: payload.retadorEmail }, { nombre: payload.retadoNombre, email: payload.retadoEmail });
@@ -1684,7 +1809,8 @@ function triggerWhatsAppChallenge(challenge, telefono) {
     }
   } catch (e) {}
 
-  const text = `🎾 ¡Hola! Te he desafiado en UCTenis.\n\n📅 Fecha: ${dateFormatted}\n🏟️ Cancha: ${courtName}\n\nPor favor, ingresa a la página para aceptar o rechazar el desafío:\nhttps://uctenis.github.io/reservas-canchas-staging/ranking.html\n\n¡Nos vemos en la cancha! 🏆`;
+  const slotStr = challenge.slot ? ` · Hora: ${challenge.slot}` : '';
+  const text = `🎾 ¡Hola! Te he desafiado en UCTenis.\n\n📅 Fecha: ${dateFormatted}${slotStr}\n🏟️ Cancha: ${courtName}\n\nPor favor, ingresa a la página para aceptar o rechazar el desafío:\nhttps://uctenis.github.io/reservas-canchas-staging/ranking.html\n\n¡Nos vemos en la cancha! 🏆`;
   
   const waUrl = cleanPhone 
     ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`
@@ -1705,17 +1831,33 @@ async function notifyChallenge(challenge, retador, retado) {
   if (!window.CONFIG?.API_URL || !retado?.email || retado.email.endsWith('@uctenis.local')) return;
 
   try {
+    let fechaLabel = challenge.fecha;
+    try {
+      const DAYS_LONG = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+      const MONTHS_LONG = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+      const [y, m, d] = challenge.fecha.split('-');
+      const dateParts = challenge.fecha.split('-').map(Number);
+      const wd = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]).getDay();
+      fechaLabel = `${DAYS_LONG[wd]}, ${parseInt(d)} de ${MONTHS_LONG[parseInt(m)-1]} ${y}`;
+    } catch(e) {
+      console.warn('Error formatting date label:', e);
+    }
+
     const response = await fetch(window.CONFIG.API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({
         action: 'notify_challenge',
+        challengeId: challenge.id,
         retadorNombre: retador.nombre,
         retadorEmail: retador.email || '',
         retadoNombre: retado.nombre,
-        retadoEmail: retado.email,
+        retadoId: challenge.retadoId,
         fecha: challenge.fecha,
-        cancha: challenge.cancha,
+        fechaLabel: fechaLabel,
+        slot: challenge.slot || '',
+        cancha: challenge.cancha || '',
+        courtId: challenge.courtId || '',
         genero: challenge.genero
       })
     });
