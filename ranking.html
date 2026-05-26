@@ -592,59 +592,79 @@ function setupEvents() {
 }
 
 async function refreshRankingPage() {
-  setRankStatus('Conectando...', 'info');
-  renderRankingLoading();
-  await loadRankingData();
-  renderAll();
+  // PASO 1: Mostrar datos estáticos de inmediato para que la tabla NUNCA quede vacía
+  try {
+    loadStaticRanking();
+    renderAll();
+  } catch (staticErr) {
+    console.error('Error cargando ranking estático:', staticErr);
+  }
+
+  // PASO 2: Intentar actualizar con Firebase en segundo plano
+  if (DB.isCloudConfigured()) {
+    setRankStatus('Conectando...', 'info');
+    try {
+      let players = await withTimeout(DB.getPlayersCloud(), CLOUD_TIMEOUT_MS, 'Firebase ranking');
+      const needsSeeding = players.length < 5;
+      if (needsSeeding) {
+        if (!isPlayerAdminSession()) throw new Error('Firebase aún no tiene jugadores sembrados.');
+        setRankStatus('Sembrando Firebase...', 'info');
+        await withTimeout(
+          DB.savePlayersCloud(buildInitialFirebaseSeed(), { email: DB.getSession()?.email || 'seed-local-preview' }),
+          CLOUD_TIMEOUT_MS,
+          'Siembra Firebase'
+        );
+        players = await withTimeout(DB.getPlayersCloud(), CLOUD_TIMEOUT_MS, 'Firebase ranking');
+      }
+      const split = splitPlayersByStatus(players);
+      rankingState.lists = split.active;
+      rankingState.inactive = split.inactive;
+      rankingState.source = 'firebase';
+      rankingState.loadedAt = new Date();
+      finalizeRankingLoad();
+      renderAll();
+      setRankStatus('Firebase conectado', 'ok');
+    } catch (cloudErr) {
+      console.warn('Firebase no disponible, mostrando datos locales.', cloudErr);
+      setRankStatus('Copia local', 'warn');
+    }
+  } else {
+    setRankStatus('Modo local', 'info');
+  }
+
+  // PASO 3: Sincronizar desafíos
   syncChallengesFromCloud().then(() => {
     renderChallenges();
     renderMyChallenges();
-  });
+  }).catch(err => console.warn('Error sincronizando desafíos:', err));
 }
 
-async function loadRankingData() {
+function loadStaticRanking() {
+  const split = splitPlayersByStatus(buildInitialFirebaseSeed());
+  rankingState.lists = split.active;
+  rankingState.inactive = split.inactive;
+  rankingState.source = 'static';
+  rankingState.loadedAt = new Date();
+  finalizeRankingLoad();
+}
+
+function finalizeRankingLoad() {
   try {
-    if (!DB.isCloudConfigured()) throw new Error('Firestore no está disponible.');
+    rankingState.lists.M = rankingState.lists.M.map(fillPlayerFromLocalProfile);
+    rankingState.lists.F = rankingState.lists.F.map(fillPlayerFromLocalProfile);
+    rankingState.inactive.M = rankingState.inactive.M.map(fillPlayerFromLocalProfile);
+    rankingState.inactive.F = rankingState.inactive.F.map(fillPlayerFromLocalProfile);
+  } catch (e) { console.warn('Error enriqueciendo perfiles:', e); }
 
-    let players = await withTimeout(DB.getPlayersCloud(), CLOUD_TIMEOUT_MS, 'Firebase ranking');
-    const needsSeeding = players.length < 5;
-    if (needsSeeding) {
-      if (!isPlayerAdminSession()) throw new Error('Firebase aún no tiene jugadores sembrados.');
-      setRankStatus('Sembrando Firebase...', 'info');
-      await withTimeout(
-        DB.savePlayersCloud(buildInitialFirebaseSeed(), { email: DB.getSession()?.email || 'seed-local-preview' }),
-        CLOUD_TIMEOUT_MS,
-        'Siembra Firebase'
-      );
-      players = await withTimeout(DB.getPlayersCloud(), CLOUD_TIMEOUT_MS, 'Firebase ranking');
+  try {
+    if (rankingState.source !== 'firebase') {
+      applyLocalPlayerEdits(rankingState.lists, rankingState.inactive);
+      applyLocalChallengesToRanking();
     }
+  } catch (e) { console.warn('Error aplicando ediciones locales:', e); }
 
-    const split = splitPlayersByStatus(players);
-    rankingState.lists = split.active;
-    rankingState.inactive = split.inactive;
-    rankingState.source = 'firebase';
-    rankingState.loadedAt = new Date();
-    setRankStatus('Firebase conectado', 'ok');
-  } catch (error) {
-    console.warn('No se pudo cargar Firebase. Usando copia local oficial.', error);
-    const split = splitPlayersByStatus(buildInitialFirebaseSeed());
-    rankingState.lists = split.active;
-    rankingState.inactive = split.inactive;
-    rankingState.source = 'static';
-    rankingState.loadedAt = new Date();
-    setRankStatus('Copia local', 'warn');
-  }
-
-  rankingState.lists.M = rankingState.lists.M.map(fillPlayerFromLocalProfile);
-  rankingState.lists.F = rankingState.lists.F.map(fillPlayerFromLocalProfile);
-  rankingState.inactive.M = rankingState.inactive.M.map(fillPlayerFromLocalProfile);
-  rankingState.inactive.F = rankingState.inactive.F.map(fillPlayerFromLocalProfile);
-
-  if (rankingState.source !== 'firebase') {
-    applyLocalPlayerEdits(rankingState.lists, rankingState.inactive);
-    applyLocalChallengesToRanking();
-  }
-  syncLocalUsersFromPlayers(getAllPlayers());
+  try { syncLocalUsersFromPlayers(getAllPlayers()); }
+  catch (e) { console.warn('Error sincronizando usuarios locales:', e); }
 }
 
 function applyLocalChallengesToRanking() {
@@ -1420,9 +1440,14 @@ async function handleCompleteProfile(event) {
       return;
     }
 
+    // Buscar si ya existe una ficha con el mismo nombre en el ranking para vincular
+    const existingPlayer = getAllPlayers().find(p => normalizeKey(p.nombre) === normalizeKey(data.nombre));
+    const playerId = existingPlayer ? existingPlayer.id : result.user.id;
+    const position = (existingPlayer && Number.isFinite(existingPlayer.pos)) ? existingPlayer.pos : (rankingState.lists[data.genero] || []).length + 1;
+
     try {
       await DB.savePlayerCloud({
-        id: result.user.id,
+        id: playerId,
         nombre: data.nombre,
         email: data.email,
         genero: data.genero,
@@ -1432,12 +1457,17 @@ async function handleCompleteProfile(event) {
         foto: data.foto,
         telefono: data.telefono,
         activo: true,
-        posicion: (rankingState.lists[data.genero] || []).length + 1
+        posicion: position
       }, actorPayload(result.user));
+
+      if (existingPlayer) {
+        result.user.id = existingPlayer.id;
+        localStorage.setItem('uctenis_session', JSON.stringify(result.user));
+      }
     } catch (cloudErr) {
       console.warn('No se pudo guardar la ficha inicial en Firebase.', cloudErr);
       savePlayerEditLocally({
-        id: result.user.id,
+        id: playerId,
         nombre: data.nombre,
         email: data.email,
         genero: data.genero,
@@ -1447,8 +1477,13 @@ async function handleCompleteProfile(event) {
         foto: data.foto,
         telefono: data.telefono,
         activo: true,
-        posicion: (rankingState.lists[data.genero] || []).length + 1
+        posicion: position
       });
+
+      if (existingPlayer) {
+        result.user.id = existingPlayer.id;
+        localStorage.setItem('uctenis_session', JSON.stringify(result.user));
+      }
     }
 
     closeModal('authModal');

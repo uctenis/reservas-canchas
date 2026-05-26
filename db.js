@@ -165,13 +165,41 @@ const DB = {
     if (!email) return { ok: false, msg: 'Correo no proporcionado.' };
     if (this.isAllowedAccessEmail(email)) return { ok: true, source: 'domain' };
 
+    // 1. Buscar en el ranking estático oficial si está disponible
+    if (typeof OFFICIAL_STATIC_RANKING !== 'undefined') {
+      const emailLower = email.toLowerCase().trim();
+      const foundStatic = [
+        ...(OFFICIAL_STATIC_RANKING.M || []),
+        ...(OFFICIAL_STATIC_RANKING.F || [])
+      ].find(p => p.email && p.email.toLowerCase().trim() === emailLower);
+      if (foundStatic) {
+        return { ok: true, source: 'static', player: foundStatic };
+      }
+    }
+
+    // 2. Buscar en usuarios locales
     const localUser = this.getUsers().find(user => normalizeEmailForDb(user.email) === normalizeEmailForDb(email));
     if (localUser) return { ok: true, source: 'local' };
 
+    // 3. Buscar en jugadores de Firebase
     const cloudPlayer = await this.findPlayerByEmailCloud(email);
     if (cloudPlayer) return { ok: true, source: 'firebase', player: cloudPlayer };
 
-    return { ok: false, msg: 'Acceso restringido a jugadores UCTenis registrados en Firebase.' };
+    // 4. Consultar a la API de Google Sheets a través de Apps Script
+    if (window.CONFIG && window.CONFIG.API_URL) {
+      try {
+        const params = new URLSearchParams({ action: 'validate_member', email: email.toLowerCase().trim() });
+        const res = await fetch(`${window.CONFIG.API_URL}?${params.toString()}`);
+        const data = await res.json();
+        if (data.ok) {
+          return { ok: true, source: 'sheets', player: data.player };
+        }
+      } catch (err) {
+        console.warn('Error validando miembro contra la API de Sheets:', err);
+      }
+    }
+
+    return { ok: false, msg: 'Acceso restringido a jugadores UCTenis registrados en Firebase o Google Sheets.' };
   },
 
   async registerUserAPI(data) {
@@ -238,8 +266,14 @@ const DB = {
         return { ok: true, user: localUser, isNew: false };
       }
 
-      await firebaseAuth.signOut();
-      return { ok: false, msg: 'Acceso denegado: Tu correo no se encuentra registrado en el ranking.' };
+      // Si fue validado por Sheets/Ranking pero no existe ficha en Firebase aún, permitir registro/vinculación
+      return {
+        ok: true,
+        isNew: true,
+        email: user.email,
+        nombre: user.displayName || '',
+        foto: user.photoURL || ''
+      };
     } catch (error) {
       console.error('Error en Google Sign-in:', error);
       return { ok: false, msg: 'Error de autenticación con Google: ' + error.message };
