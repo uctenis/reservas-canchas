@@ -423,8 +423,8 @@ const GENDERS = {
   F: { label: 'Femenino', apiKeys: ['female', 'mujeres', 'femenino', 'women'], fallbackAvatar: 'fotos/default_avatar_m.png' }
 };
 const ADMIN_IDENTITIES = {
-  emails: ['dsilvaroco@gmail.com', 'dsilva@uct.cl'],
-  names: ['David Silva']
+  emails: ['ucteniclub@gmail.com', 'dsilva@uct.cl'],
+  names: ['UCTenis Club', 'David Silva']
 };
 const CLOUD_TIMEOUT_MS = 4500;
 
@@ -1031,8 +1031,39 @@ function renderMyProfile() {
   const allowed = getChallengeablePlayers(player);
   const fallback = GENDERS[player.gender].fallbackAvatar;
   const active = isPlayerActive(player);
+  const sessionIds = getSessionChallengeIds(session);
+  const pendingChallenges = DB.getChallenges().filter(c =>
+    c.status === 'pendiente' && sessionIds.includes(c.retadoId)
+  );
+
+  const todayIso = new Date().toISOString().split('T')[0];
+  const expiredChallenges = DB.getChallenges().filter(c =>
+    ['pendiente', 'aceptado'].includes(c.status) &&
+    c.fecha < todayIso &&
+    (sessionIds.includes(c.retadorId) || sessionIds.includes(c.retadoId))
+  );
+
+  let alertsHtml = '';
+  if (pendingChallenges.length > 0) {
+    alertsHtml += `
+      <div class="pending-challenge-alert pulse-badge" style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 8px; padding: 12px; margin-bottom: 14px; display: flex; flex-direction: column; gap: 8px; align-items: stretch;">
+        <span style="color: #fca5a5; font-size: 0.88rem; font-weight: 800; text-align: center;">⚔️ Tienes ${pendingChallenges.length} desafío${pendingChallenges.length > 1 ? 's' : ''} pendiente${pendingChallenges.length > 1 ? 's' : ''} por responder!</span>
+        <button class="btn-alert-link" style="background: var(--court-green); color: #08111f; border: none; border-radius: 6px; padding: 6px 12px; font-family: var(--font-sans); font-weight: 900; font-size: 0.8rem; cursor: pointer; text-align: center; transition: transform 0.18s ease;" onclick="scrollToMyChallenges()">Ver y responder</button>
+      </div>
+    `;
+  }
+  if (expiredChallenges.length > 0) {
+    alertsHtml += `
+      <div class="pending-challenge-alert" style="background: rgba(251, 191, 36, 0.15); border: 1px solid rgba(251, 191, 36, 0.4); border-radius: 8px; padding: 12px; margin-bottom: 14px; display: flex; flex-direction: column; gap: 8px; align-items: stretch;">
+        <span style="color: #fde047; font-size: 0.88rem; font-weight: 800; text-align: center;">⚠️ Tienes ${expiredChallenges.length} desafío${expiredChallenges.length > 1 ? 's' : ''} vencido${expiredChallenges.length > 1 ? 's' : ''} sin resultado!</span>
+        <button class="btn-alert-link" style="background: var(--warning); color: #08111f; border: none; border-radius: 6px; padding: 6px 12px; font-family: var(--font-sans); font-weight: 900; font-size: 0.8rem; cursor: pointer; text-align: center; transition: transform 0.18s ease;" onclick="scrollToMyChallenges()">Ver mis desafíos</button>
+      </div>
+    `;
+  }
+
   meta.textContent = active ? `Ranking ${GENDERS[player.gender].label}` : `Inactivo · ${GENDERS[player.gender].label}`;
   card.innerHTML = `
+    ${alertsHtml}
     <div class="my-profile-card">
       <img class="player-avatar profile-avatar" src="${escapeAttr(player.foto)}" data-fallback="${escapeAttr(fallback)}" onerror="useFallbackAvatar(this)" alt="${escapeAttr(player.nombre)}">
       <div class="my-profile-main">
@@ -1050,6 +1081,13 @@ function renderMyProfile() {
       : active
         ? 'No tienes rivales disponibles sobre tu posición según la regla de máximo 3 puestos.'
         : 'Tu ficha está inactiva para la escalerilla; sigues figurando como jugador del club.'}</p>`;
+}
+
+function scrollToMyChallenges() {
+  const el = document.getElementById('myChallengesSection');
+  if (el) {
+    el.scrollIntoView({ behavior: 'smooth' });
+  }
 }
 
 function renderChallenges() {
@@ -1111,6 +1149,10 @@ function challengeCard(challenge, users, session, compact) {
   const canManage = (involved && ['pendiente', 'aceptado'].includes(challenge.status)) || isAdmin;
   const status = statusLabel(challenge.status);
 
+  const todayIso = new Date().toISOString().split('T')[0];
+  const isExpired = challenge.fecha < todayIso && ['pendiente', 'aceptado'].includes(challenge.status);
+  const expiredBadge = isExpired ? `<span class="badge-expired" style="background:rgba(251,191,36,0.12); border:1px solid rgba(251,191,36,0.3); color:#fbbf24; padding:2px 6px; border-radius:4px; font-size:0.72rem; font-weight:900; text-transform:uppercase;">⚠️ Sin resultado</span>` : '';
+
   let actions = '';
   if (canRespond) {
     actions += `
@@ -1119,6 +1161,10 @@ function challengeCard(challenge, users, session, compact) {
   }
   if (canScore) {
     actions += `<button class="btn-score" type="button" data-action="score-challenge" data-challenge-id="${escapeAttr(challenge.id)}">Ingresar resultado</button>`;
+  }
+  const isLoser = involved && challenge.status === 'completado' && challenge.ganadorId && !sessionIds.includes(challenge.ganadorId);
+  if (isLoser) {
+    actions += `<button class="btn-dispute" type="button" data-action="dispute-challenge" data-challenge-id="${escapeAttr(challenge.id)}">⚠️ Disputar resultado</button>`;
   }
   if (canManage) {
     actions += `
@@ -1150,6 +1196,7 @@ function challengeCard(challenge, users, session, compact) {
         <span>${escapeHTML(formatShortDate(challenge.fecha))}</span>
         <span>${escapeHTML(challenge.cancha || 'Cancha por definir')}</span>
         <span class="chal-status">${escapeHTML(status)}</span>
+        ${expiredBadge}
         ${challenge.marcador ? `<span>${escapeHTML(challenge.marcador)} · Ganó ${escapeHTML(ganadorName || '-')}</span>` : ''}
       </div>
       ${compactStats}
@@ -1165,10 +1212,56 @@ function handleChallengeAction(event) {
   if (button.dataset.action === 'accept-challenge') respondChallenge(id, true);
   if (button.dataset.action === 'reject-challenge') respondChallenge(id, false);
   if (button.dataset.action === 'score-challenge') openScoreModal(id);
+  if (button.dataset.action === 'dispute-challenge') disputeChallenge(id, button);
   if (button.dataset.action === 'edit-challenge') openEditChallengeModal(id);
   if (button.dataset.action === 'delete-challenge') {
     if (!confirm('¿Eliminar este desafío? Se marcará como rechazado y quedará en el historial.')) return;
     deleteChallenge(id);
+  }
+}
+
+async function disputeChallenge(id, button) {
+  const challenge = DB.getChallenges().find(c => c.id === id);
+  if (!challenge) return;
+  
+  if (!confirm('¿Deseas enviar una disputa por este resultado al administrador del club?')) return;
+  
+  const originalHtml = button.innerHTML;
+  button.disabled = true;
+  button.innerHTML = 'Enviando... ⌛';
+  
+  const session = DB.getSession();
+  const users = DB.getUsers();
+  const retador = users.find(u => u.id === challenge.retadorId);
+  const retado = users.find(u => u.id === challenge.retadoId);
+  const contrarioName = session.id === challenge.retadorId ? (challenge.retadoNombre || retado?.nombre) : (challenge.retadorNombre || retador?.nombre);
+  
+  try {
+    const response = await fetch(window.CONFIG.API_URL, {
+      method: 'POST',
+      body: JSON.stringify({
+        action: 'notify_dispute',
+        challengeId: challenge.id,
+        disputanteNombre: session.nombre,
+        disputanteEmail: session.email,
+        contrarioNombre: contrarioName,
+        marcador: challenge.marcador,
+        fecha: challenge.fecha
+      })
+    });
+    
+    const result = await response.json().catch(() => null);
+    if (response.ok && result?.ok !== false) {
+      alert('Disputa enviada con éxito al administrador. Se revisará el caso.');
+      button.innerHTML = 'Disputado ⚠️';
+      button.disabled = true;
+    } else {
+      throw new Error(result?.msg || 'Error del servidor');
+    }
+  } catch (error) {
+    alert('No se pudo enviar la disputa: ' + error.message);
+    button.disabled = false;
+    button.innerHTML = originalHtml;
   }
 }
 
@@ -1884,7 +1977,42 @@ async function submitScore(event) {
         ganadorId
       });
       upsertLocalChallenge(updated);
-      if (!wasCompleted) await applyChallengeResultToCloudRanking({ ...updated, marcador, ganadorId });
+      if (!wasCompleted) {
+        await applyChallengeResultToCloudRanking({ ...updated, marcador, ganadorId });
+        
+        // Send notification email to the loser
+        try {
+          const users = DB.getUsers();
+          const retadorUser = users.find(u => u.id === challenge.retadorId);
+          const retadoUser = users.find(u => u.id === challenge.retadoId);
+          const retadorEmail = challenge.retadorEmail || retadorUser?.email;
+          const retadoEmail = challenge.retadoEmail || retadoUser?.email;
+          
+          const ganadorNombre = ganadorId === challenge.retadorId ? (challenge.retadorNombre || retadorUser?.nombre) : (challenge.retadoNombre || retadoUser?.nombre);
+          const ganadorEmail = ganadorId === challenge.retadorId ? retadorEmail : retadoEmail;
+          const perdedorNombre = ganadorId === challenge.retadorId ? (challenge.retadoNombre || retadoUser?.nombre) : (challenge.retadorNombre || retadorUser?.nombre);
+          const perdedorEmail = ganadorId === challenge.retadorId ? retadoEmail : retadorEmail;
+
+          if (perdedorEmail) {
+            fetch(window.CONFIG.API_URL, {
+              method: 'POST',
+              body: JSON.stringify({
+                action: 'notify_result',
+                challengeId: challenge.id,
+                ganadorNombre,
+                ganadorEmail,
+                perdedorNombre,
+                perdedorEmail,
+                marcador,
+                fecha: challenge.fecha,
+                cancha: challenge.cancha
+              })
+            }).catch(err => console.warn('Error al enviar correo de resultado:', err));
+          }
+        } catch (err) {
+          console.warn('Error al preparar correo de resultado:', err);
+        }
+      }
       savedInCloud = true;
     } catch (cloudError) {
       console.warn('No se pudo guardar el resultado en Firebase. Usando respaldo local.', cloudError);
@@ -1962,6 +2090,66 @@ function showPlayerProfile(playerKey) {
   const editButton = canEdit
     ? '<button class="btn-primary btn-profile-edit" type="button" data-action="edit-own-profile">Editar ficha</button>'
     : '';
+
+  // Get challenges history
+  const playerChallenges = DB.getChallenges().filter(c =>
+    playerMatchesChallengeRef(player, c.retadorId) || playerMatchesChallengeRef(player, c.retadoId)
+  );
+
+  const wins = playerChallenges.filter(c => c.status === 'completado' && playerMatchesChallengeRef(player, c.ganadorId)).length;
+  const losses = playerChallenges.filter(c => c.status === 'completado' && c.ganadorId && !playerMatchesChallengeRef(player, c.ganadorId)).length;
+  const pending = playerChallenges.filter(c => ['pendiente', 'aceptado'].includes(c.status)).length;
+
+  const users = DB.getUsers();
+  const lastMatches = playerChallenges
+    .filter(c => c.status === 'completado')
+    .sort((a,b) => (b.fecha || '').localeCompare(a.fecha || ''))
+    .slice(0, 3);
+
+  let lastMatchesHtml = '';
+  if (lastMatches.length > 0) {
+    lastMatchesHtml = `
+      <div style="margin-top: 15px;">
+        <span style="font-size:0.8rem; color:var(--text-secondary); font-weight:800;">Últimos partidos:</span>
+        <ul style="list-style:none; padding:0; margin:5px 0 0; display:flex; flex-direction:column; gap:6px;">
+          ${lastMatches.map(c => {
+            const oppName = playerMatchesChallengeRef(player, c.retadorId)
+              ? (c.retadoNombre || users.find(u=>u.id===c.retadoId)?.nombre || 'Jugador')
+              : (c.retadorNombre || users.find(u=>u.id===c.retadorId)?.nombre || 'Jugador');
+            const won = playerMatchesChallengeRef(player, c.ganadorId);
+            return `
+              <li style="display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.02); padding:6px 10px; border-radius:6px; border-left:3px solid ${won ? '#4ade80' : '#f87171'}; font-size:0.82rem;">
+                <span style="color:var(--text-primary);">vs ${escapeHTML(oppName)}</span>
+                <strong style="color:var(--text-secondary); font-variant-numeric:tabular-nums;">${escapeHTML(c.marcador)}</strong>
+              </li>
+            `;
+          }).join('')}
+        </ul>
+      </div>
+    `;
+  }
+
+  const historyHtml = `
+    <div class="modal-history" style="margin-top: 20px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.08);">
+      <h3 style="margin-top:0; margin-bottom:10px; font-size:1rem; color:var(--text-primary); font-weight:800;">Historial de Desafíos</h3>
+      <div style="display:flex; justify-content:space-around; background:rgba(255,255,255,0.03); padding:10px; border-radius:8px; border:1px solid rgba(255,255,255,0.05);">
+        <div style="text-align:center;">
+          <span style="display:block; font-size:0.7rem; color:#4ade80; font-weight:800; text-transform:uppercase;">Ganados</span>
+          <strong style="font-size:1.2rem; color:var(--text-primary);">${wins}</strong>
+        </div>
+        <div style="text-align:center;">
+          <span style="display:block; font-size:0.7rem; color:#f87171; font-weight:800; text-transform:uppercase;">Perdidos</span>
+          <strong style="font-size:1.2rem; color:var(--text-primary);">${losses}</strong>
+        </div>
+        <div style="text-align:center;">
+          <span style="display:block; font-size:0.7rem; color:#fbbf24; font-weight:800; text-transform:uppercase;">Pendientes</span>
+          <strong style="font-size:1.2rem; color:var(--text-primary);">${pending}</strong>
+        </div>
+      </div>
+      ${lastMatchesHtml}
+    </div>
+  `;
+
   document.getElementById('profileContent').innerHTML = `
     <button class="modal-close-btn" type="button" data-close-modal="profileModal" aria-label="Cerrar">×</button>
     <div class="modal-header">
@@ -1978,6 +2166,7 @@ function showPlayerProfile(playerKey) {
       <li><span class="label">Revés</span><span class="value">${escapeHTML(player.reves || '-')}</span></li>
       <li><span class="label">Correo</span><span class="value">${escapeHTML(player.email || '-')}</span></li>
     </ul>
+    ${historyHtml}
     ${editButton}`;
   openModal('profileModal');
 }

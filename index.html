@@ -78,11 +78,113 @@
     .btn-logout-sm { background:none;border:none;color:var(--text-secondary);cursor:pointer;font-size:0.82rem;padding:0; }
     .btn-logout-sm:hover { color:#f87171; }
 
+    /* ── Live Challenges Section ── */
+    .live-section {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      margin-bottom: 40px;
+    }
+    .live-card {
+      background: var(--bg-card);
+      border: var(--glass-border);
+      border-radius: 20px;
+      padding: 22px;
+      backdrop-filter: blur(12px);
+    }
+    .live-card-title {
+      font-size: 1rem;
+      font-weight: 700;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .live-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      background: rgba(248,113,113,0.15);
+      border: 1px solid rgba(248,113,113,0.35);
+      border-radius: 20px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      color: #f87171;
+      animation: pulse-live 2s ease-in-out infinite;
+    }
+    @keyframes pulse-live {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
+    .challenge-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .challenge-item:last-child { border-bottom: none; }
+    .challenge-vs {
+      flex: 1;
+      font-size: 0.88rem;
+    }
+    .challenge-vs strong { display: block; color: var(--text-primary); }
+    .challenge-vs span { color: var(--text-secondary); font-size: 0.75rem; }
+    .challenge-status-badge {
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 20px;
+    }
+    .status-pendiente { background: rgba(251,191,36,0.15); color: #fbbf24; border: 1px solid rgba(251,191,36,0.3); }
+    .status-aceptado  { background: rgba(74,222,128,0.12); color: #4ade80; border: 1px solid rgba(74,222,128,0.3); }
+
+    .result-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .result-item:last-child { border-bottom: none; }
+    .result-winner {
+      font-size: 0.88rem;
+      flex: 1;
+    }
+    .result-winner strong { display: block; color: var(--accent-tennis); font-size: 0.9rem; }
+    .result-winner span { color: var(--text-secondary); font-size: 0.75rem; }
+    .result-score {
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      background: rgba(255,255,255,0.06);
+      border-radius: 8px;
+      padding: 4px 10px;
+    }
+    .live-empty {
+      text-align: center;
+      padding: 20px 0;
+      color: var(--text-secondary);
+      font-size: 0.88rem;
+    }
+    .live-footer {
+      margin-top: 12px;
+      text-align: center;
+    }
+    .live-footer a {
+      font-size: 0.82rem;
+      color: var(--accent-tennis);
+      font-weight: 600;
+    }
+    .live-footer a:hover { text-decoration: underline; }
+
     @media (max-width:700px) {
       .booking-hero { grid-template-columns:1fr; padding:28px 20px; }
       .court-mini-grid { grid-template-columns:1fr 1fr; }
       .mini-court { height:120px; }
       .user-bar-index { position:static; margin-bottom:16px; text-align:center; }
+      .live-section { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -109,6 +211,25 @@
       <div class="court-mini-grid">
         <div class="mini-court" style="background-image:url('cec.jpg')"><span>Complejo CEC</span></div>
         <div class="mini-court" style="background-image:url('cjp.jpg')"><span>Complejo CJP</span></div>
+      </div>
+    </div>
+
+    <!-- ── LIVE: Desafíos Activos + Últimos Resultados ── -->
+    <div class="live-section" id="liveSection" style="display:none;">
+      <!-- Desafíos Activos -->
+      <div class="live-card">
+        <div class="live-card-title">
+          ⚔️ Desafíos Activos
+          <span class="live-badge">● EN VIVO</span>
+        </div>
+        <div id="activeChallengesList"><div class="live-empty">Cargando...</div></div>
+        <div class="live-footer"><a href="ranking.html">Ver todos los desafíos →</a></div>
+      </div>
+      <!-- Últimos Resultados -->
+      <div class="live-card">
+        <div class="live-card-title">🏆 Últimos Resultados</div>
+        <div id="latestResultsList"><div class="live-empty">Cargando...</div></div>
+        <div class="live-footer"><a href="ranking.html">Ver ranking completo →</a></div>
       </div>
     </div>
 
@@ -145,6 +266,9 @@
         <svg viewBox="0 0 448 512"><path d="M224.1 141c-63.6 0-114.9 51.3-114.9 114.9s51.3 114.9 114.9 114.9S339 319.5 339 255.9 287.7 141 224.1 141zm0 189.6c-41.1 0-74.7-33.5-74.7-74.7s33.5-74.7 74.7-74.7 74.7 33.5 74.7 74.7-33.6 74.7-74.7 74.7zm146.4-194.3c0 14.9-12 26.8-26.8 26.8-14.9 0-26.8-12-26.8-26.8s12-26.8 26.8-26.8 26.8 12 26.8 26.8zm76.1 27.2c-1.7-35.9-9.9-67.7-36.2-93.9-26.2-26.2-58-34.4-93.9-36.2-37-2.1-147.9-2.1-184.9 0-35.8 1.7-67.6 9.9-93.9 36.1s-34.4 58-36.2 93.9c-2.1 37-2.1 147.9 0 184.9 1.7 35.9 9.9 67.7 36.2 93.9s58 34.4 93.9 36.2c37 2.1 147.9 2.1 184.9 0 35.9-1.7 67.7-9.9 93.9-36.2 26.2-26.2 34.4-58 36.2-93.9 2.1-37 2.1-147.8 0-184.8zM398.8 388c-7.8 19.6-22.9 34.7-42.6 42.6-29.5 11.7-99.5 9-132.1 9s-102.7 2.6-132.1-9c-19.6-7.8-34.7-22.9-42.6-42.6-11.7-29.5-9-99.5-9-132.1s-2.6-102.7 9-132.1c7.8-19.6 22.9-34.7 42.6-42.6 29.5-11.7 99.5-9 132.1-9s102.7-2.6 132.1 9c19.6 7.8 34.7 22.9 42.6 42.6 11.7 29.5 9 99.5 9 132.1s2.7 102.7-9 132.1z"/></svg>
         Instagram
       </a>
+      <a href="admin-horarios.html" class="btn-pill" id="adminHorariosLink" style="display:none;">
+        🗓️ Admin Horarios
+      </a>
     </div>
     <div class="small-note">Al finalizar en arcilla pasa el escobillón, barre las líneas y riega la cancha. ¡Solo una reserva diaria por socio!</div>
     <div class="brand-legend">
@@ -157,40 +281,23 @@
 <!-- Firebase SDK Compat -->
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
 
-<script src="db.js?v=20260525"></script>
-<script src="script.js?v=20260525"></script>
+<script src="db.js?v=20260526"></script>
+<script src="script.js?v=20260526"></script>
 <script>
-// ── Quick Book Links ──
-const LINKS = {
-  cec: {
-    1: 'https://calendar.app.google/kGKzcmXMWJv7vs9h7',
-    2: 'https://calendar.app.google/QGrkHxRgwacJ3ApU6'
-  },
-  cjp: {
-    1: 'https://calendar.app.google/tqq8PkCJzmHaBvGS7',
-    2: 'https://calendar.app.google/FAcvAqn4TCJDEjwP9'
-  }
-};
-
-function quickBook() {
-  const complejo = document.getElementById('qb_complejo').value || 'cec';
-  const cancha = document.getElementById('qb_cancha').value || '1';
-  const url = LINKS[complejo]?.[cancha];
-  if (url) window.open(url, '_blank');
-}
-
-// Set today as default date when the quick-book form exists.
-const quickBookDate = document.getElementById('qb_fecha');
-if (quickBookDate) {
-  quickBookDate.value = new Date().toISOString().split('T')[0];
-}
+// Admin emails (must match db.js)
+const ADMIN_EMAILS = ['ucteniclub@gmail.com', 'dsilva@uct.cl'];
 
 // User bar
 function renderIndexUserBar() {
   const s = DB.getSession();
   const bar = document.getElementById('userBarIndex');
   if (s) {
+    // Show admin link if admin
+    if (ADMIN_EMAILS.includes((s.email || '').toLowerCase())) {
+      document.getElementById('adminHorariosLink').style.display = 'inline-flex';
+    }
     bar.innerHTML = `<div class="user-pill">
       <div class="user-avatar-sm">${s.nombre.charAt(0)}</div>
       <span style="font-size:.88rem">${s.nombre.split(' ')[0]}</span>
@@ -202,9 +309,90 @@ function renderIndexUserBar() {
   }
 }
 
+// ── Live Challenges & Results from Firebase/localStorage ──
+function formatDateShort(iso) {
+  if (!iso) return '';
+  const [y, m, d] = iso.split('-');
+  const months = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  return `${parseInt(d)} ${months[parseInt(m)-1]}`;
+}
+
+async function loadLiveData() {
+  let challenges = [];
+  
+  // Try Firebase first
+  if (DB.isCloudConfigured()) {
+    try {
+      challenges = await DB.getChallengesCloud();
+    } catch(e) {
+      challenges = DB.getChallenges();
+    }
+  } else {
+    challenges = DB.getChallenges();
+  }
+
+  if (!challenges.length) return; // Don't show section if no data
+
+  document.getElementById('liveSection').style.display = 'grid';
+
+  // Active challenges (pendiente or aceptado)
+  const active = challenges
+    .filter(c => c.status === 'pendiente' || c.status === 'aceptado')
+    .sort((a, b) => (b.creado || '').localeCompare(a.creado || ''))
+    .slice(0, 4);
+
+  // Latest results (completado)
+  const results = challenges
+    .filter(c => c.status === 'completado' && c.ganadorId)
+    .sort((a, b) => (b.actualizado || b.creado || '').localeCompare(a.actualizado || a.creado || ''))
+    .slice(0, 3);
+
+  // Render active challenges
+  const activeEl = document.getElementById('activeChallengesList');
+  if (active.length) {
+    activeEl.innerHTML = active.map(c => {
+      const statusClass = c.status === 'aceptado' ? 'status-aceptado' : 'status-pendiente';
+      const statusLabel = c.status === 'aceptado' ? '✅ Aceptado' : '⏳ Pendiente';
+      const retadorName = c.retadorNombre || 'Jugador';
+      const retadoName = c.retadoNombre || 'Jugador';
+      return `<div class="challenge-item">
+        <div style="font-size:1.3rem">⚔️</div>
+        <div class="challenge-vs">
+          <strong>${retadorName} vs ${retadoName}</strong>
+          <span>${c.courtLabel || c.cancha || ''} · ${formatDateShort(c.fecha)}</span>
+        </div>
+        <span class="challenge-status-badge ${statusClass}">${statusLabel}</span>
+      </div>`;
+    }).join('');
+  } else {
+    activeEl.innerHTML = '<div class="live-empty">🎾 No hay desafíos activos</div>';
+  }
+
+  // Render latest results
+  const resultsEl = document.getElementById('latestResultsList');
+  if (results.length) {
+    resultsEl.innerHTML = results.map(c => {
+      const winnerName = c.ganadorId === c.retadorId ? (c.retadorNombre || 'Jugador') : (c.retadoNombre || 'Jugador');
+      const loserName  = c.ganadorId === c.retadorId ? (c.retadoNombre || 'Jugador') : (c.retadorNombre || 'Jugador');
+      return `<div class="result-item">
+        <div style="font-size:1.3rem">🏆</div>
+        <div class="result-winner">
+          <strong>🥇 ${winnerName}</strong>
+          <span>vs ${loserName} · ${formatDateShort(c.fecha)}</span>
+        </div>
+        ${c.marcador ? `<span class="result-score">${c.marcador}</span>` : ''}
+      </div>`;
+    }).join('');
+  } else {
+    resultsEl.innerHTML = '<div class="live-empty">🏆 Aún no hay resultados</div>';
+  }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   DB.seed();
   renderIndexUserBar();
+  // Load live challenges after a short delay to allow Firebase to initialize
+  setTimeout(() => loadLiveData(), 800);
 });
 
 if ('serviceWorker' in navigator) {

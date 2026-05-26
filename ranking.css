@@ -1631,3 +1631,70 @@ body {
     flex-direction: column;
   }
 }
+
+/* ── Custom Styles for Pending Challenges Alert, Expired Badges, & Dispute Buttons ── */
+.pending-challenge-alert {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: stretch;
+}
+.btn-alert-link {
+  background: var(--court-green);
+  color: #08111f;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-family: var(--font-sans);
+  font-weight: 900;
+  font-size: 0.8rem;
+  cursor: pointer;
+  text-align: center;
+  transition: transform 0.18s ease, background-color 0.18s ease;
+}
+.btn-alert-link:hover {
+  transform: translateY(-1px);
+  background: #d4e000;
+}
+
+@keyframes pulse-badge {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.5); }
+  50% { box-shadow: 0 0 0 8px rgba(239,68,68,0); }
+}
+.pulse-badge {
+  animation: pulse-badge 2s ease-in-out infinite;
+}
+
+/* Expired challenge badge */
+.badge-expired {
+  background: rgba(251, 191, 36, 0.12);
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  color: #fbbf24;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+/* Dispute button styling */
+.btn-dispute {
+  background: rgba(248, 113, 113, 0.12);
+  border: 1px solid rgba(248, 113, 113, 0.28);
+  color: #fca5a5;
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: 0.75rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background 0.18s, color 0.18s, transform 0.18s;
+  margin-top: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+.btn-dispute:hover {
+  background: rgba(248, 113, 113, 0.22);
+  transform: translateY(-1px);
+}

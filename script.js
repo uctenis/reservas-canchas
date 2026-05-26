@@ -6,7 +6,7 @@ if (typeof window.CONFIG === 'undefined') {
 Object.assign(window.CONFIG, {
     LAT: -38.7359,
     LON: -72.5904,
-    API_URL: "https://script.google.com/macros/s/AKfycbw49kxC5nNqyjzw99WShdx7V09LUFaPspxazluauE00hw8iSQ0jQCTkz6ROYYTDx9VSSA/exec"
+    API_URL: "https://script.google.com/macros/s/AKfycbwMDM2xSfPgSSHpgj4Kg7ffl7DxWAWdCVugo5UBJr0aDH0lNfUl0NxXlz6DCr6LDZ86/exec"
 });
 const CONFIG = window.CONFIG;
 

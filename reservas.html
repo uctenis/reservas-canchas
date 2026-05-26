@@ -44,12 +44,10 @@
       <span class="leg leg-sel">Seleccionado</span>
     </div>
     
-    <!-- Contenedor dinámico de canchas y horarios -->
     <div id="courtsSlotsContainer"></div>
     
     <p class="rule-note">⏱ Cada bloque = 1.5 horas · Máx. 1 reserva por día</p>
     
-    <!-- Info del bloque seleccionado -->
     <div id="selectedSlotInfo" style="text-align: center; margin-top: 20px; margin-bottom: 12px; min-height: 24px; color: var(--accent-tennis); font-weight: 600; font-size: 1.05rem;">
       ⚠️ Ningún horario seleccionado
     </div>
@@ -63,8 +61,8 @@
   <!-- PASO 3: CONFIRM -->
   <section id="stepConfirm" class="step-section hidden">
     <div class="confirm-card glass-card">
-      <div class="confirm-icon">🎾</div>
-      <h2>Confirma tu reserva</h2>
+      <div class="confirm-icon" id="confirmIcon">🎾</div>
+      <h2 id="confirmTitle">Confirma tu reserva</h2>
       <div class="confirm-details" id="confirmDetails"></div>
       <div class="confirm-actions">
         <button class="btn-back" onclick="goStep(2)">← Cambiar Horario</button>
@@ -89,13 +87,11 @@
   <div class="modal-content auth-mc" style="max-width:420px; border-radius:24px; overflow:hidden;">
     <button class="modal-close-btn" onclick="closeAuth()">×</button>
     
-    <!-- MAIN LOGIN VIEW -->
     <div id="authMainView" style="padding: 10px 5px;">
       <div style="font-size:3.5rem; text-align:center; margin-bottom:12px;">🔑</div>
       <h3 style="margin-bottom:8px;font-size:1.4rem;text-align:center;color:var(--text-primary);">Ingresar a UCTenis</h3>
       <p style="color:var(--text-secondary);font-size:0.9rem;text-align:center;margin-bottom:24px;">Identifícate con tu cuenta institucional para continuar.</p>
       
-      <!-- Botón de Google Real -->
       <div id="googleBtnContainer" style="margin-bottom: 12px;">
         <button onclick="handleGoogleLogin()" class="btn-primary" style="display:flex;align-items:center;justify-content:center;gap:12px;background:#ffffff;color:#1f2937;font-weight:600;border:1px solid #e5e7eb;box-shadow:0 2px 4px rgba(0,0,0,0.05);transition:all 0.2s;width:100%;padding:12px;border-radius:12px;">
           <svg width="20" height="20" viewBox="0 0 24 24"><path fill="#EA4335" d="M12 5.04c1.66 0 3.2.57 4.38 1.69l3.27-3.27C17.68 1.54 14.98 1 12 1 7.35 1 3.37 3.67 1.39 7.56l3.89 3.02C6.21 7.62 8.87 5.04 12 5.04z"/><path fill="#4285F4" d="M23.49 12.27c0-.81-.07-1.59-.2-2.34H12v4.44h6.44c-.28 1.48-1.12 2.73-2.38 3.58l3.69 2.87c2.16-1.99 3.74-4.92 3.74-8.55z"/><path fill="#FBBC05" d="M5.28 14.42c-.22-.66-.35-1.37-.35-2.1s.13-1.44.35-2.1L1.39 7.2C.5 8.98 0 10.94 0 13s.5 4.02 1.39 5.8l3.89-3.02z"/><path fill="#34A853" d="M12 23c3.24 0 5.97-1.07 7.96-2.91l-3.69-2.87c-1.12.75-2.54 1.21-4.27 1.21-3.13 0-5.79-2.58-6.73-5.54L1.39 15.9C3.37 19.8 7.35 23 12 23z"/></svg>
@@ -103,7 +99,6 @@
         </button>
       </div>
 
-      <!-- Alerta de Firebase no Configurado / Selector de Mock para testing local -->
       <div id="mockLoginContainer" style="margin-top: 15px; padding: 15px; border-radius: 16px; background: rgba(251,191,36,0.06); border: 1px dashed rgba(251,191,36,0.25);">
         <p style="color:#fbbf24; font-size:0.82rem; line-height:1.4; margin:0 0 12px 0; text-align:center;">
           ⚠️ <strong>Modo Simulación Activo</strong><br>Firebase no configurado en `db.js`
@@ -185,12 +180,72 @@
   </div>
 </div>
 
+<!-- CHALLENGE MODAL -->
+<div class="modal-overlay" id="challengeModal">
+  <div class="modal-content" style="max-width:480px; border-radius:24px; padding:0; overflow:hidden;">
+    <div class="challenge-modal-header">
+      <div class="challenge-modal-icon">⚔️</div>
+      <h3>¿Es un Desafío de Ranking?</h3>
+      <p>Selecciona el tipo de reserva para esta hora</p>
+    </div>
+    <div class="challenge-modal-body">
+      <!-- Tipo de reserva -->
+      <div class="challenge-type-options">
+        <label class="challenge-type-option" id="optNormal">
+          <input type="radio" name="challengeType" value="normal" checked onchange="onChallengeTypeChange()">
+          <div class="challenge-type-card">
+            <span class="challenge-type-icon">🎾</span>
+            <div>
+              <strong>Reserva Normal</strong>
+              <p>Entreno, práctica libre o partido amistoso</p>
+            </div>
+          </div>
+        </label>
+        <label class="challenge-type-option" id="optChallenge">
+          <input type="radio" name="challengeType" value="challenge" onchange="onChallengeTypeChange()">
+          <div class="challenge-type-card">
+            <span class="challenge-type-icon">⚔️</span>
+            <div>
+              <strong>Desafío de Ranking</strong>
+              <p>Reta a un jugador para subir en la escalerilla</p>
+            </div>
+          </div>
+        </label>
+      </div>
+
+      <!-- Selector jugador retado (solo visible si es desafío) -->
+      <div id="challengeeSection" style="display:none; margin-top:20px;">
+        <div class="challengee-header">
+          <span>⚡</span>
+          <div>
+            <strong>Selecciona al jugador retado</strong>
+            <p id="challengeeHint">Puedes retar a los 2 jugadores inmediatamente superiores en el ranking</p>
+          </div>
+        </div>
+        <div id="challengeeList" class="challengee-list"></div>
+        <p id="challengeeError" class="challengee-error" style="display:none;"></p>
+      </div>
+
+      <div class="challenge-modal-actions">
+        <button class="btn-back" onclick="closeChallengeModal()">← Volver</button>
+        <button class="btn-confirm" id="btnChallengeConfirm" onclick="proceedFromChallengeModal()">Continuar →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- SUCCESS MODAL -->
 <div class="modal-overlay" id="successModal">
   <div class="modal-content" style="text-align:center;padding:40px">
-    <div style="font-size:4rem;margin-bottom:16px">🎉</div>
-    <h2 style="margin-bottom:12px">¡Reserva confirmada!</h2>
-    <p id="successMsg" style="color:var(--text-secondary);margin-bottom:24px"></p>
+    <div style="font-size:4rem;margin-bottom:16px" id="successIcon">🎉</div>
+    <h2 style="margin-bottom:12px" id="successTitle">¡Reserva confirmada!</h2>
+    <p id="successMsg" style="color:var(--text-secondary);margin-bottom:16px"></p>
+    <div id="whatsappLinkContainer" style="margin-bottom:20px; display:none;">
+      <a id="whatsappLink" href="#" target="_blank" class="btn-whatsapp">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg>
+        Notificar por WhatsApp
+      </a>
+    </div>
     <button class="btn-primary" style="max-width: 200px; margin: 0 auto;" onclick="closeSuccess()">Perfecto</button>
   </div>
 </div>
@@ -198,21 +253,44 @@
 <!-- Firebase SDK Compat -->
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
 
-<script src="db.js?v=20260525"></script>
+<script src="db.js?v=20260526"></script>
 <script>
 // ── STATE ──
-let sel = { court: null, date: null, slot: null };
+// isChallenge: boolean, retadoId: string|null, retadoNombre: string|null
+let sel = { court: null, date: null, slot: null, isChallenge: false, retadoId: null, retadoNombre: null };
 let currentStep = 1;
+
+// ── HELPERS ──
+// FIX: Genera ISO local (sin conversión UTC que provoca desfase de 1 día en Chile UTC-4)
+function localISO(d) {
+  const y = d.getFullYear();
+  const mo = String(d.getMonth() + 1).padStart(2, '0');
+  const dy = String(d.getDate()).padStart(2, '0');
+  return `${y}-${mo}-${dy}`;
+}
+
+const DAYS_LONG  = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+const DAYS_SHORT = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+const MONTHS_LONG  = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+const MONTHS_SHORT = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+
+// Dado un ISO yyyy-mm-dd, retorna el día de semana correcto en hora local
+function dayOfWeekFromISO(iso) {
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(y, m - 1, d).getDay(); // hora local, sin UTC shift
+}
 
 // ── INIT ──
 document.addEventListener('DOMContentLoaded', () => {
   DB.seed();
   renderUserBar();
-  renderDateStrip(); // Ahora el paso 1 es la fecha
+  renderDateStrip();
   renderMyBookings();
-  document.getElementById('authModal').addEventListener('click', e => { if (e.target.id==='authModal') closeAuth(); });
-  document.getElementById('successModal').addEventListener('click', e => { if (e.target.id==='successModal') closeSuccess(); });
+  document.getElementById('authModal').addEventListener('click', e => { if (e.target.id === 'authModal') closeAuth(); });
+  document.getElementById('successModal').addEventListener('click', e => { if (e.target.id === 'successModal') closeSuccess(); });
+  document.getElementById('challengeModal').addEventListener('click', e => { if (e.target.id === 'challengeModal') closeChallengeModal(); });
   document.getElementById('btnFinalConfirm').addEventListener('click', finalConfirm);
 });
 
@@ -220,13 +298,13 @@ document.addEventListener('DOMContentLoaded', () => {
 function goStep(n) {
   currentStep = n;
   ['stepDate','stepSlot','stepConfirm'].forEach((id,i) => {
-    document.getElementById(id).classList.toggle('hidden', i+1 !== n);
+    document.getElementById(id).classList.toggle('hidden', i + 1 !== n);
   });
   document.querySelectorAll('.step').forEach((el,i) => {
-    el.classList.toggle('active', i+1 === n);
-    el.classList.toggle('done',  i+1 < n);
+    el.classList.toggle('active', i + 1 === n);
+    el.classList.toggle('done',  i + 1 < n);
   });
-  window.scrollTo({top:0,behavior:'smooth'});
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function tryGoStep(n) {
@@ -246,19 +324,18 @@ function renderDateStrip() {
   const strip = document.getElementById('dateStrip');
   strip.innerHTML = '';
   const today = new Date();
-  const days = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
-  const months = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 
   for (let i = 0; i < 14; i++) {
-    const d = new Date(today);
-    d.setDate(today.getDate() + i);
+    const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() + i);
     const isSun = d.getDay() === 0;
     const isToday = i === 0;
-    const iso = d.toISOString().split('T')[0];
+    const iso = localISO(d); // ✅ FIX: usa fecha local, no UTC
+
     const btn = document.createElement('button');
     btn.className = 'date-btn' + (isSun ? ' date-disabled' : '') + (isToday ? ' date-today' : '');
     btn.disabled = isSun;
-    btn.innerHTML = `<span class="date-dow">${isToday ? 'HOY' : days[d.getDay()]}</span><span class="date-num">${d.getDate()}</span><span class="date-mon">${months[d.getMonth()]}</span>`;
+    btn.dataset.iso = iso;
+    btn.innerHTML = `<span class="date-dow">${isToday ? 'HOY' : DAYS_SHORT[d.getDay()]}</span><span class="date-num">${d.getDate()}</span><span class="date-mon">${MONTHS_SHORT[d.getMonth()]}</span>`;
     btn.onclick = () => {
       document.querySelectorAll('.date-btn').forEach(b => b.classList.remove('date-active'));
       btn.classList.add('date-active');
@@ -270,13 +347,10 @@ function renderDateStrip() {
 
 async function selectDate(iso) {
   sel.date = iso;
-  const [y,m,d] = iso.split('-');
-  const days = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
-  const months = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
-  const wd = new Date(iso+'T12:00:00').getDay();
-  document.getElementById('slotSubtitle').textContent = `📅 ${days[wd]} ${parseInt(d)} de ${months[parseInt(m)-1]} ${y}`;
+  const wd = dayOfWeekFromISO(iso);
+  const [y, m, d] = iso.split('-');
+  document.getElementById('slotSubtitle').textContent = `📅 ${DAYS_LONG[wd]} ${parseInt(d)} de ${MONTHS_LONG[parseInt(m) - 1]} ${y}`;
   
-  // Mostrar estado de carga y traer disponibilidad real
   const container = document.getElementById('courtsSlotsContainer');
   container.innerHTML = '<div style="text-align:center; padding: 40px; color: var(--text-secondary);">Sincronizando con Google Calendar... ⌛</div>';
   goStep(2);
@@ -303,7 +377,6 @@ function renderSlotsByCourt(apiData) {
     return;
   }
 
-  // Agrupar canchas por complejo para mostrar la foto
   const complejos = [
     { name: 'Complejo CEC (Arcilla)', img: 'cec.jpg', courts: DB.COURTS.filter(c => c.id.startsWith('cec')) },
     { name: 'Complejo CJP (Asfalto)', img: 'cjp.jpg', courts: DB.COURTS.filter(c => c.id.startsWith('cjp')) }
@@ -316,24 +389,17 @@ function renderSlotsByCourt(apiData) {
       <div class="complejo-section" style="margin-bottom: 2rem;">
         <div class="complejo-banner">
           <img src="${comp.img}" alt="${comp.name}" class="complejo-img">
-          <div class="complejo-title">
-            ${comp.name}
-          </div>
+          <div class="complejo-title">${comp.name}</div>
         </div>
         <div class="courts-grid">
     `;
 
     comp.courts.forEach(court => {
-      // Mis reservas locales para mostrar "Tu reserva"
       const booked = DB.getCourtBookings(court.id, sel.date);
       const myBooked = session ? booked.find(b => b.userId === session.id) : null;
-      
-      // Bloques disponibles desde el API de Google Calendar
       const courtData = apiData.courts[court.id];
       const availableBlocks = Array.isArray(courtData) ? courtData : [];
       const courtError = courtData && !Array.isArray(courtData) ? (courtData.error || 'Error de sincronización') : null;
-      
-      // Si el API trae la lista de franjas jugables configuradas para hoy, usamos esa. Sino, por compatibilidad usamos DB.SLOTS
       const playableSlots = (apiData.playable && Array.isArray(apiData.playable[court.id])) ? apiData.playable[court.id] : DB.SLOTS;
       
       let slotsHtml = playableSlots.map(slot => {
@@ -343,7 +409,8 @@ function renderSlotsByCourt(apiData) {
         
         const now = new Date();
         const [sh, sm] = slot.split(':').map(Number);
-        const slotDate = new Date(sel.date + 'T' + slot + ':00');
+        const [sy, smo, sd] = sel.date.split('-').map(Number);
+        const slotDate = new Date(sy, smo - 1, sd, sh, sm, 0);
         const isPast = slotDate < now;
         const fourHoursFromNow = new Date(now.getTime() + 4 * 60 * 60 * 1000);
         const isTooClose = slotDate < fourHoursFromNow;
@@ -387,9 +454,6 @@ function renderSlotsByCourt(apiData) {
   if (!session) {
     container.insertAdjacentHTML('afterend', '<p class="login-prompt">🔑 <a onclick="openAuth()" style="color:var(--accent-tennis);cursor:pointer;font-weight:600">Inicia sesión</a> para reservar un horario.</p>');
   }
-  if (alreadyHasBooking && !DB.COURTS.some(c => DB.getCourtBookings(c.id, sel.date).find(b => b.userId === session?.id))) {
-    container.insertAdjacentHTML('afterend', '<p class="rule-note" style="color:#fbbf24">⚠️ Ya tienes una reserva este día.</p>');
-  }
 }
 
 function selectSlot(courtId, slot, el) {
@@ -413,12 +477,12 @@ function updateSelectedSlotInfo() {
   const info = document.getElementById('selectedSlotInfo');
   if (!info) return;
   if (sel.slot && sel.court && sel.date) {
-    const [y,m,d] = sel.date.split('-');
-    const months = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+    const wd = dayOfWeekFromISO(sel.date);
+    const [y, m, d] = sel.date.split('-');
     const [sh, sm] = sel.slot.split(':').map(Number);
     let eh = sh + 1, em = sm + 30; if (em >= 60) { eh++; em -= 60; }
     const endStr = `${String(eh).padStart(2,'0')}:${String(em).padStart(2,'0')}`;
-    info.innerHTML = `📍 Cancha: <strong>${sel.court.label}</strong> · Horario: <strong>${sel.slot} – ${endStr} hs</strong> · Fecha: <strong>${parseInt(d)} de ${months[parseInt(m)-1]}</strong>`;
+    info.innerHTML = `📍 Cancha: <strong>${sel.court.label}</strong> · Horario: <strong>${sel.slot} – ${endStr} hs</strong> · <strong>${DAYS_LONG[wd]} ${parseInt(d)} de ${MONTHS_LONG[parseInt(m) - 1]}</strong>`;
   } else {
     info.innerHTML = `⚠️ Ningún horario seleccionado`;
   }
@@ -430,50 +494,286 @@ async function refreshSlotAvailability() {
   renderSlotsByCourt(apiDisponibilidad);
 }
 
+// ── "Continuar" desde paso 2 → abrir modal de desafío ──
 document.getElementById('btnConfirmSlot').addEventListener('click', () => {
   if (!sel.slot || !sel.court) return;
-  // Build confirm card
-  const [y,m,d] = sel.date.split('-');
-  const months = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
-  const [sh, sm] = sel.slot.split(':').map(Number);
-  let endH = sh+1, endM = sm+30; if(endM>=60){endH++;endM-=60;}
-  const endStr = `${String(endH).padStart(2,'0')}:${String(endM).padStart(2,'0')}`;
-  document.getElementById('confirmDetails').innerHTML = `
-    <div class="cd-row"><span>🎾 Cancha</span><strong>${sel.court.label}</strong></div>
-    <div class="cd-row"><span>🏗️ Superficie</span><strong>${sel.court.surface}</strong></div>
-    <div class="cd-row"><span>📅 Fecha</span><strong>${parseInt(d)} de ${months[parseInt(m)-1]} ${y}</strong></div>
-    <div class="cd-row"><span>⏰ Horario</span><strong>${sel.slot} – ${endStr}</strong></div>
-    <div class="cd-row"><span>⏱ Duración</span><strong>1 hora 30 min</strong></div>`;
-  goStep(3);
+  openChallengeModal();
 });
 
-// ── STEP 4: CONFIRM ──
+// ── CHALLENGE MODAL ──
+function openChallengeModal() {
+  // reset state
+  sel.isChallenge = false;
+  sel.retadoId = null;
+  sel.retadoNombre = null;
+  document.querySelector('input[name="challengeType"][value="normal"]').checked = true;
+  document.getElementById('challengeeSection').style.display = 'none';
+  document.getElementById('challengeeError').style.display = 'none';
+  document.getElementById('challengeeList').innerHTML = '';
+  document.getElementById('challengeModal').classList.add('visible');
+}
+
+function closeChallengeModal() {
+  document.getElementById('challengeModal').classList.remove('visible');
+}
+
+function onChallengeTypeChange() {
+  const isChallenge = document.querySelector('input[name="challengeType"]:checked').value === 'challenge';
+  document.getElementById('challengeeSection').style.display = isChallenge ? 'block' : 'none';
+  document.getElementById('challengeeError').style.display = 'none';
+  sel.retadoId = null;
+  sel.retadoNombre = null;
+
+  if (isChallenge) {
+    loadChallengeablePlayers();
+  }
+}
+
+function loadChallengeablePlayers() {
+  const session = DB.getSession();
+  if (!session) return;
+  const list = document.getElementById('challengeeList');
+  list.innerHTML = '<div style="color:var(--text-secondary);font-size:0.88rem;text-align:center;padding:12px">Cargando jugadores...</div>';
+
+  // Intentar cargar desde Firebase/localStorage
+  let allPlayers = [];
+  try {
+    // Obtener desde localStorage (sincronizados por ranking.html)
+    const rankM = JSON.parse(localStorage.getItem('uctenis_ranking_m') || '[]');
+    const rankF = JSON.parse(localStorage.getItem('uctenis_ranking_f') || '[]');
+    allPlayers = [...rankM, ...rankF];
+  } catch(e) {}
+
+  // Si no hay en localStorage, usar usuarios del DB
+  if (!allPlayers.length) {
+    allPlayers = DB.getUsers().map((u, i) => ({ ...u, pos: i + 1, gender: u.genero }));
+  }
+
+  // Encontrar al jugador actual (por email o nombre)
+  const me = allPlayers.find(p =>
+    (p.email && p.email.toLowerCase() === session.email?.toLowerCase()) ||
+    (p.nombre && p.nombre.toLowerCase() === session.nombre?.toLowerCase())
+  );
+
+  if (!me) {
+    list.innerHTML = '<div style="color:#fbbf24;font-size:0.88rem;text-align:center;padding:12px">⚠️ No estás en el ranking activo aún. Habla con el administrador.</div>';
+    return;
+  }
+
+  const myPos = me.pos || me.posicion || 999;
+  const myGender = me.gender || me.genero || 'M';
+
+  // Candidatos: mismo género, hasta 2 posiciones superiores (pos < myPos)
+  const candidates = allPlayers
+    .filter(p => {
+      const pGender = p.gender || p.genero;
+      const pPos = p.pos || p.posicion;
+      return pGender === myGender &&
+        pPos < myPos &&
+        myPos - pPos <= 2 &&
+        p.nombre !== me.nombre &&
+        (p.email?.toLowerCase() !== session.email?.toLowerCase());
+    })
+    .sort((a, b) => (b.pos || b.posicion || 0) - (a.pos || a.posicion || 0));
+
+  if (!candidates.length) {
+    list.innerHTML = '<div style="color:var(--text-secondary);font-size:0.88rem;text-align:center;padding:12px">No hay jugadores disponibles para retar en este momento.<br><small>Debes estar en el ranking y haber jugadores en las 2 posiciones superiores.</small></div>';
+    return;
+  }
+
+  document.getElementById('challengeeHint').textContent = `Puedes retar a estos ${candidates.length} jugador${candidates.length > 1 ? 'es' : ''} (hasta 2 posiciones superiores a la tuya – pos. ${myPos})`;
+
+  list.innerHTML = candidates.map(p => {
+    const pPos = p.pos || p.posicion || '?';
+    const foto = p.foto ? p.foto : (myGender === 'F' ? 'fotos/default_avatar_m.png' : 'fotos/default_avatar_h.png');
+    return `<div class="challengee-card" id="challengee_${p.id || p.nombre}" onclick="selectChallengee('${p.id || ''}', '${(p.nombre || '').replace(/'/g,"\\'")}', this)">
+      <div class="challengee-avatar">
+        <img src="${foto}" onerror="this.src='fotos/default_avatar_h.png'" alt="${p.nombre}">
+        <span class="challengee-rank">#${pPos}</span>
+      </div>
+      <div class="challengee-info">
+        <strong>${p.nombre}</strong>
+        <span>${p.categoria || ''}</span>
+      </div>
+      <div class="challengee-check" id="check_${p.id || p.nombre}">✓</div>
+    </div>`;
+  }).join('');
+}
+
+function selectChallengee(id, nombre, el) {
+  document.querySelectorAll('.challengee-card').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  sel.retadoId = id;
+  sel.retadoNombre = nombre;
+  document.getElementById('challengeeError').style.display = 'none';
+}
+
+function proceedFromChallengeModal() {
+  const type = document.querySelector('input[name="challengeType"]:checked').value;
+  sel.isChallenge = type === 'challenge';
+
+  if (sel.isChallenge && !sel.retadoId && !sel.retadoNombre) {
+    const err = document.getElementById('challengeeError');
+    err.textContent = '⚠️ Selecciona un jugador para retar.';
+    err.style.display = 'block';
+    return;
+  }
+
+  closeChallengeModal();
+  buildConfirmCard();
+  goStep(3);
+}
+
+// ── STEP 3: BUILD CONFIRM CARD ──
+function buildConfirmCard() {
+  const wd = dayOfWeekFromISO(sel.date);
+  const [y, m, d] = sel.date.split('-');
+  const [sh, sm] = sel.slot.split(':').map(Number);
+  let endH = sh + 1, endM = sm + 30; if (endM >= 60) { endH++; endM -= 60; }
+  const endStr = `${String(endH).padStart(2,'0')}:${String(endM).padStart(2,'0')}`;
+
+  const fechaLabel = `${DAYS_LONG[wd]}, ${parseInt(d)} de ${MONTHS_LONG[parseInt(m) - 1]} ${y}`;
+
+  if (sel.isChallenge) {
+    document.getElementById('confirmIcon').textContent = '⚔️';
+    document.getElementById('confirmTitle').textContent = 'Confirma tu Desafío';
+    document.getElementById('confirmDetails').innerHTML = `
+      <div class="cd-row cd-challenge-badge"><span>⚔️ Tipo</span><strong class="badge-challenge">Desafío de Ranking</strong></div>
+      <div class="cd-row"><span>🎯 Retado</span><strong>${sel.retadoNombre}</strong></div>
+      <div class="cd-row"><span>🎾 Cancha</span><strong>${sel.court.label}</strong></div>
+      <div class="cd-row"><span>🏗️ Superficie</span><strong>${sel.court.surface}</strong></div>
+      <div class="cd-row"><span>📅 Fecha</span><strong>${fechaLabel}</strong></div>
+      <div class="cd-row"><span>⏰ Horario</span><strong>${sel.slot} – ${endStr}</strong></div>
+      <div class="cd-row"><span>⏱ Duración</span><strong>1 hora 30 min</strong></div>`;
+  } else {
+    document.getElementById('confirmIcon').textContent = '🎾';
+    document.getElementById('confirmTitle').textContent = 'Confirma tu reserva';
+    document.getElementById('confirmDetails').innerHTML = `
+      <div class="cd-row"><span>🎾 Cancha</span><strong>${sel.court.label}</strong></div>
+      <div class="cd-row"><span>🏗️ Superficie</span><strong>${sel.court.surface}</strong></div>
+      <div class="cd-row"><span>📅 Fecha</span><strong>${fechaLabel}</strong></div>
+      <div class="cd-row"><span>⏰ Horario</span><strong>${sel.slot} – ${endStr}</strong></div>
+      <div class="cd-row"><span>⏱ Duración</span><strong>1 hora 30 min</strong></div>`;
+  }
+}
+
+// ── STEP 3: CONFIRM (Normal o Desafío) ──
 async function finalConfirm() {
   const btn = document.getElementById('btnFinalConfirm');
   btn.disabled = true;
-  btn.innerHTML = 'Agendando cita en Google Calendar... ⌛';
+  btn.innerHTML = sel.isChallenge ? 'Enviando desafío... ⌛' : 'Agendando cita en Google Calendar... ⌛';
 
   const s = DB.getSession();
-  // Llamar al API real de Google
+  
+  if (sel.isChallenge) {
+    await finalConfirmChallenge(s, btn);
+  } else {
+    await finalConfirmNormal(s, btn);
+  }
+}
+
+async function finalConfirmNormal(s, btn) {
   const r = await DB.createBookingAPI(s.id, sel.court.id, sel.date, sel.slot);
   
   if (!r.ok) {
     alert(r.msg);
     btn.disabled = false;
-    btn.innerHTML = 'Confirmar Reserva';
+    btn.innerHTML = '✅ Confirmar reserva';
     return;
   }
   
-  const [y,m,d] = sel.date.split('-');
-  const months = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  const wd = dayOfWeekFromISO(sel.date);
+  const [y, m, d] = sel.date.split('-');
+  document.getElementById('successIcon').textContent = '🎉';
+  document.getElementById('successTitle').textContent = '¡Reserva confirmada!';
   document.getElementById('successMsg').textContent =
-    `${sel.court.label} · ${parseInt(d)} de ${months[parseInt(m)-1]} ${y} · ${sel.slot}`;
+    `${sel.court.label} · ${DAYS_LONG[wd]}, ${parseInt(d)} de ${MONTHS_LONG[parseInt(m) - 1]} ${y} · ${sel.slot}`;
+  document.getElementById('whatsappLinkContainer').style.display = 'none';
   document.getElementById('successModal').classList.add('visible');
   renderMyBookings();
   await refreshSlotAvailability();
-  
-  // Reset
-  sel = { court: null, date: null, slot: null };
+  sel = { court: null, date: null, slot: null, isChallenge: false, retadoId: null, retadoNombre: null };
+  btn.disabled = false;
+  btn.innerHTML = '✅ Confirmar reserva';
+  setTimeout(() => goStep(1), 200);
+}
+
+async function finalConfirmChallenge(s, btn) {
+  // 1. Crear la reserva en Google Calendar
+  const r = await DB.createBookingAPI(s.id, sel.court.id, sel.date, sel.slot);
+  if (!r.ok) {
+    alert('Error al reservar la cancha: ' + r.msg);
+    btn.disabled = false;
+    btn.innerHTML = '✅ Confirmar reserva';
+    return;
+  }
+
+  // 2. Crear el desafío localmente
+  const challenge = DB.createChallenge(s.id, sel.retadoId, s.genero || 'M', sel.date, sel.court.label);
+
+  // 3. Enviar notificación al retado (correo + calendar invite)
+  let whatsappUrl = null;
+  try {
+    const wd = dayOfWeekFromISO(sel.date);
+    const [y, m, d] = sel.date.split('-');
+    const response = await fetch(window.CONFIG.API_URL, {
+      method: 'POST',
+      body: JSON.stringify({
+        action: 'notify_challenge',
+        challengeId: challenge.id,
+        retadorNombre: s.nombre,
+        retadorEmail: s.email,
+        retadoNombre: sel.retadoNombre,
+        retadoId: sel.retadoId,
+        fecha: sel.date,
+        fechaLabel: `${DAYS_LONG[wd]}, ${parseInt(d)} de ${MONTHS_LONG[parseInt(m)-1]} ${y}`,
+        slot: sel.slot,
+        cancha: sel.court.label,
+        courtId: sel.court.id
+      })
+    });
+    const data = await response.json();
+    if (data.whatsappUrl) whatsappUrl = data.whatsappUrl;
+  } catch(e) {
+    console.warn('No se pudo enviar notificación de desafío:', e);
+  }
+
+  // 4. Guardar desafío en Firebase si está disponible
+  if (DB.isCloudConfigured()) {
+    try {
+      await DB.saveChallengeCloud({
+        ...challenge,
+        retadorNombre: s.nombre,
+        retadoNombre: sel.retadoNombre,
+        slot: sel.slot,
+        courtId: sel.court.id,
+        courtLabel: sel.court.label
+      });
+    } catch(e) {
+      console.warn('Error guardando desafío en Firebase:', e);
+    }
+  }
+
+  const wd = dayOfWeekFromISO(sel.date);
+  const [y, m, d] = sel.date.split('-');
+  document.getElementById('successIcon').textContent = '⚔️';
+  document.getElementById('successTitle').textContent = '¡Desafío enviado!';
+  document.getElementById('successMsg').textContent =
+    `Has retado a ${sel.retadoNombre} · ${DAYS_LONG[wd]}, ${parseInt(d)} de ${MONTHS_LONG[parseInt(m)-1]} ${y} · ${sel.slot} · ${sel.court.label}`;
+
+  if (whatsappUrl) {
+    document.getElementById('whatsappLink').href = whatsappUrl;
+    document.getElementById('whatsappLinkContainer').style.display = 'block';
+  } else {
+    document.getElementById('whatsappLinkContainer').style.display = 'none';
+  }
+
+  document.getElementById('successModal').classList.add('visible');
+  renderMyBookings();
+  await refreshSlotAvailability();
+  sel = { court: null, date: null, slot: null, isChallenge: false, retadoId: null, retadoNombre: null };
+  btn.disabled = false;
+  btn.innerHTML = '✅ Confirmar reserva';
   setTimeout(() => goStep(1), 200);
 }
 
@@ -490,12 +790,10 @@ function renderMyBookings() {
   if (!session) { sec.style.display = 'none'; return; }
   sec.style.display = 'block';
 
-  // Sincronizar en segundo plano con Google Calendar
   if (DB.isFirebaseConfigured() && !isSyncingBookings) {
     isSyncingBookings = true;
     DB.syncUserBookingsAPI(session.id).then(() => {
       isSyncingBookings = false;
-      // Re-renderizar con los datos reales de Google Calendar
       const list = DB.getUserBookings(session.id);
       renderMyBookingsUI(list);
     }).catch(e => {
@@ -516,18 +814,19 @@ function renderMyBookingsUI(list) {
   }
   const courts = {};
   DB.COURTS.forEach(c => courts[c.id] = c.label);
-  const months = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
   div.innerHTML = list.map(b => {
-    const [y,mo,d] = b.fecha.split('-');
-    const [sh,sm] = b.slot.split(':').map(Number);
-    let eh=sh+1,em=sm+30; if(em>=60){eh++;em-=60;}
+    const wd = dayOfWeekFromISO(b.fecha);
+    const [y, mo, d] = b.fecha.split('-');
+    const [sh, sm] = b.slot.split(':').map(Number);
+    let eh = sh + 1, em = sm + 30; if (em >= 60) { eh++; em -= 60; }
     const endStr = `${String(eh).padStart(2,'0')}:${String(em).padStart(2,'0')}`;
-    const isPast = new Date(b.fecha+'T'+b.slot+':00') < new Date();
-    return `<div class="mybooking-card${isPast?' past-booking':''}">
-      <div class="mb-date"><span class="mb-day">${parseInt(d)}</span><span class="mb-month">${months[parseInt(mo)-1]}</span></div>
+    const [sy, smo, sd] = b.fecha.split('-').map(Number);
+    const isPast = new Date(sy, smo - 1, sd, sh, sm) < new Date();
+    return `<div class="mybooking-card${isPast ? ' past-booking' : ''}">
+      <div class="mb-date"><span class="mb-day">${parseInt(d)}</span><span class="mb-month">${MONTHS_SHORT[parseInt(mo)-1]}</span></div>
       <div class="mb-info">
         <strong>${courts[b.courtId] || b.courtId}</strong>
-        <span>${b.slot} – ${endStr}</span>
+        <span>${DAYS_SHORT[wd]} · ${b.slot} – ${endStr}</span>
       </div>
       <div class="mb-actions">
         ${!isPast ? `<button class="btn-cancel-bk" onclick="cancelBooking('${b.id}')">Cancelar</button>` : '<span class="past-label">Finalizada</span>'}
@@ -542,7 +841,6 @@ async function cancelBooking(id) {
   const booking = DB.getBookings().find(b => b.id === id);
   if (!booking) return;
 
-  // Si está configurada la API real, llamamos al backend
   if (DB.isFirebaseConfigured()) {
     const loader = document.createElement('div');
     loader.style = "position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);display:flex;flex-direction:column;justify-content:center;align-items:center;z-index:9999;color:white;font-weight:bold;font-size:1.2rem;gap:12px;";
@@ -592,12 +890,9 @@ function openAuth() {
   const isConfigured = DB.isFirebaseConfigured();
   document.getElementById('googleBtnContainer').style.display = isConfigured ? 'block' : 'none';
   document.getElementById('mockLoginContainer').style.display = isConfigured ? 'none' : 'block';
-  
-  // Reset views
   document.getElementById('authMainView').style.display = 'block';
   document.getElementById('authCompleteProfileView').style.display = 'none';
   document.getElementById('authErr').textContent = '';
-  
   document.getElementById('authModal').classList.add('visible');
 }
 
@@ -610,19 +905,15 @@ async function handleGoogleLogin() {
   const errEl = document.getElementById('authErr');
   const btn = document.querySelector('#googleBtnContainer button');
   const originalText = btn.innerHTML;
-  
   btn.disabled = true;
   btn.innerHTML = '⌛ Iniciando sesión...';
-  
   const r = await DB.loginWithGoogle();
-  
   if (!r.ok) {
     errEl.textContent = r.msg;
     btn.disabled = false;
     btn.innerHTML = originalText;
     return;
   }
-  
   await handleLoginResponse(r);
   btn.disabled = false;
   btn.innerHTML = originalText;
@@ -634,24 +925,19 @@ async function handleMockLogin() {
   const nombre = document.getElementById('mockNombre').value.trim();
   const btn = document.querySelector('#mockLoginContainer button');
   const originalText = btn.innerHTML;
-  
   if (!email) {
     document.getElementById('authErr').textContent = 'Ingresa un correo para simular.';
     return;
   }
-  
   btn.disabled = true;
   btn.innerHTML = 'Sincronizando... ⌛';
-  
   const r = await DB.loginWithGoogleMock(email, nombre);
-  
   if (!r.ok) {
     document.getElementById('authErr').textContent = r.msg;
     btn.disabled = false;
     btn.innerHTML = originalText;
     return;
   }
-  
   await handleLoginResponse(r);
   btn.disabled = false;
   btn.innerHTML = originalText;
@@ -659,16 +945,13 @@ async function handleMockLogin() {
 
 async function handleLoginResponse(r) {
   if (r.isNew) {
-    // Mostrar completar perfil
     document.getElementById('authMainView').style.display = 'none';
     document.getElementById('authCompleteProfileView').style.display = 'block';
-    
     document.getElementById('cpEmail').value = r.email;
     document.getElementById('cpFoto').value = r.foto || '';
     document.getElementById('cpNombre').value = r.nombre || '';
     document.getElementById('cpErr').textContent = '';
   } else {
-    // Éxito: cerrar modal e iniciar sesión
     closeAuth();
     renderUserBar();
     renderMyBookings();
@@ -679,7 +962,6 @@ async function handleLoginResponse(r) {
 async function handleCompleteProfile(e) {
   e.preventDefault();
   document.getElementById('cpErr').textContent = '';
-  
   const data = {
     email: document.getElementById('cpEmail').value,
     foto: document.getElementById('cpFoto').value,
@@ -689,18 +971,15 @@ async function handleCompleteProfile(e) {
     mano: document.getElementById('cpMano').value,
     reves: document.getElementById('cpReves').value
   };
-  
   if (!data.genero) {
     document.getElementById('cpErr').textContent = 'Por favor selecciona tu género.';
     return;
   }
-  
   const r = DB.completeGoogleRegistration(data);
   if (!r.ok) {
     document.getElementById('cpErr').textContent = r.msg;
     return;
   }
-  
   closeAuth();
   renderUserBar();
   renderMyBookings();

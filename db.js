@@ -2,20 +2,21 @@
 
 if (typeof window.CONFIG === 'undefined') {
   window.CONFIG = {
-    API_URL: "https://script.google.com/macros/s/AKfycbw49kxC5nNqyjzw99WShdx7V09LUFaPspxazluauE00hw8iSQ0jQCTkz6ROYYTDx9VSSA/exec"
+    API_URL: "https://script.google.com/macros/s/AKfycbwMDM2xSfPgSSHpgj4Kg7ffl7DxWAWdCVugo5UBJr0aDH0lNfUl0NxXlz6DCr6LDZ86/exec"
   };
 }
 
 // =========================================================================
-// ⚙️ CONFIGURACIÓN DE FIREBASE (Creado desde dsilvaroco@gmail.com)
+// ⚙️ CONFIGURACIÓN DE FIREBASE (Creado desde ucteniclub@gmail.com)
 // =========================================================================
 const FIREBASE_CONFIG = {
-  apiKey: "AIzaSyD0rw37KXsqIQTIWYEbTiiA775aissX65E",
-  authDomain: "uctenis.firebaseapp.com",
-  projectId: "uctenis",
-  storageBucket: "uctenis.firebasestorage.app",
-  messagingSenderId: "646912426490",
-  appId: "1:646912426490:web:70d8b5831f63b3e4a06443"
+  apiKey: "AIzaSyDxNdwD8hHQmN2efhRwflL7RkpC-RFs3ow",
+  authDomain: "uctenis-club.firebaseapp.com",
+  projectId: "uctenis-club",
+  storageBucket: "uctenis-club.firebasestorage.app",
+  messagingSenderId: "223552986034",
+  appId: "1:223552986034:web:13b34a6a246fb254eca2ab",
+  measurementId: "G-2NKXS8BMNC"
 };
 
 let firebaseAuth = null;
@@ -42,7 +43,7 @@ const FIREBASE_COLLECTIONS = {
   challenges: 'ranking_challenges'
 };
 
-const FIREBASE_ADMIN_EMAILS = ['dsilvaroco@gmail.com', 'dsilva@uct.cl'];
+const FIREBASE_ADMIN_EMAILS = ['ucteniclub@gmail.com', 'dsilva@uct.cl'];
 
 function normalizeEmailForDb(email) {
   return String(email || '').trim().toLowerCase();

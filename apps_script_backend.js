@@ -22,8 +22,8 @@ const CONFIG = {
   // Perfil administrador dentro de la pagina.
   // Si quieres endurecerlo mas, agrega un ADMIN_PIN y envialo desde el front.
   ADMINS: {
-    emails: ["dsilvaroco@gmail.com"],
-    names: ["David Silva"]
+    emails: ["ucteniclub@gmail.com", "dsilva@uct.cl"],
+    names: ["UCTenis Club", "David Silva"]
   },
   ADMIN_PIN: "",
   PHOTO_FOLDER_NAME: "UCTenis fotos jugadores",
@@ -31,10 +31,10 @@ const CONFIG = {
   // 2. IDs de los 4 Google Calendars para cada cancha
   // Ve a Configuración del Calendario -> Integrar el calendario -> ID del calendario
   CALENDARS: {
-    "cec1": "c_896f78aef408c7a0320b6481be58f97a057ac1fa3ad807dfe2f04e76fdf6f9e9@group.calendar.google.com",
-    "cec2": "c_f8deb1dea527c9ecbfe9493ed0ea5654ee96be7f9a4b97e6820dd0037e9cc274@group.calendar.google.com",
-    "cjp1": "c_8bcc4b6316875b8f4a8b65819d320274e1a751a8529809240a545ae940e096fd@group.calendar.google.com",
-    "cjp2": "c_79adf76d4594e2ef0fa0eea9350207d63c54f6c30928d0e94466dea49f04de3d@group.calendar.google.com"
+    "cec1": "e500541f01f115243cc82fdd8cb8af53885461cb6d91e8f6e2c22ed07557c23c@group.calendar.google.com",
+    "cec2": "5ed0d53a5c6913b60c1886bd04748fac22783d81209501200038e5dc6352b323@group.calendar.google.com",
+    "cjp1": "9c053fe813a0903f56d9aa39efa99dc495dc041115b662940e5d1735bec43ff3@group.calendar.google.com",
+    "cjp2": "0562d62a2046c1253e0f7b0e9f3d0c11dd850e79219eb050aa1a9770cf6b7702@group.calendar.google.com"
   },
   
   // 3. Horarios permitidos (Bloques de 1.5 hrs)
@@ -138,6 +138,12 @@ function handleRequest(data) {
       case "notify_challenge":
         response = notifyChallenge(data);
         break;
+      case "notify_result":
+        response = notifyResult(data);
+        break;
+      case "notify_dispute":
+        response = notifyDispute(data);
+        break;
       case "get_challenges":
         response = getChallenges();
         break;
@@ -159,6 +165,9 @@ function handleRequest(data) {
       case "update_own_profile":
         response = updateOwnProfile(data);
         break;
+      case "admin_free_special_slots":
+        response = adminFreeSpecialSlots(data);
+        break;
     }
 
     return ContentService.createTextOutput(JSON.stringify(response))
@@ -176,7 +185,9 @@ function notifyChallenge(data) {
   const retadoNombre = text(data.retadoNombre) || 'jugador/a';
   const retadorNombre = text(data.retadorNombre) || 'Un jugador';
   const fecha = text(data.fecha) || 'fecha por coordinar';
+  const fechaLabel = fecha;
   const cancha = text(data.cancha) || 'cancha por definir';
+  const slot = text(data.slot) || '';
 
   if (!retadoEmail) return { ok: false, msg: 'Correo del jugador retado no proporcionado.' };
 
@@ -189,30 +200,197 @@ function notifyChallenge(data) {
     cancha: cancha
   });
 
+  const rankingUrl = 'https://uctenis.github.io/reservas-canchas/ranking.html';
+  const slotLine = slot ? '<tr><td style="padding:6px 12px;color:#555;">Hora</td><td style="padding:6px 12px;font-weight:600;">' + slot + '</td></tr>' : '';
+  const calendarLine = calendarResult.ok
+    ? '<p style="color:#27ae60;margin:0 0 8px;">✅ También se envió una invitación de Google Calendar.</p>'
+    : '<p style="color:#e74c3c;margin:0 0 8px;">⚠️ No se pudo crear la invitación Calendar: ' + calendarResult.msg + '</p>';
+
+  const htmlBody = [
+    '<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;border:1px solid #e0e0e0;border-radius:10px;overflow:hidden;">',
+    '  <div style="background:#1a6b3a;padding:24px;text-align:center;">',
+    '    <h1 style="color:#fff;margin:0;font-size:22px;">🎾 UCTenis</h1>',
+    '    <p style="color:#c8e6c9;margin:6px 0 0;">¡Tienes un nuevo desafío!</p>',
+    '  </div>',
+    '  <div style="padding:24px;">',
+    '    <p style="font-size:16px;margin:0 0 16px;">Hola <strong>' + retadoNombre + '</strong>,</p>',
+    '    <p style="margin:0 0 16px;"><strong>' + retadorNombre + '</strong> te ha retado en el ranking UCTenis.</p>',
+    '    <table style="width:100%;border-collapse:collapse;margin-bottom:20px;">',
+    '      <tr style="background:#f5f5f5;"><td style="padding:6px 12px;color:#555;">Fecha</td><td style="padding:6px 12px;font-weight:600;">' + fechaLabel + '</td></tr>',
+    '      <tr><td style="padding:6px 12px;color:#555;">Cancha</td><td style="padding:6px 12px;font-weight:600;">' + cancha + '</td></tr>',
+    slotLine,
+    '    </table>',
+    calendarLine,
+    '    <div style="text-align:center;margin:20px 0;">',
+    '      <a href="' + rankingUrl + '" style="background:#1a6b3a;color:#fff;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px;">Aceptar o Rechazar desafío</a>',
+    '    </div>',
+    '    <p style="color:#888;font-size:12px;margin:16px 0 0;">UCTenis — Plataforma de ranking universitario</p>',
+    '  </div>',
+    '</div>'
+  ].join('\n');
+
   MailApp.sendEmail({
     to: retadoEmail,
     cc: retadorEmail || '',
-    subject: 'Nuevo desafío UCTenis',
-    body: [
-      'Hola ' + retadoNombre + ',',
-      '',
-      retadorNombre + ' te ha enviado un desafío en el ranking UCTenis.',
-      'Fecha propuesta: ' + fecha,
-      'Cancha: ' + cancha,
-      calendarResult.ok ? 'También se envió una invitación de Google Calendar.' : 'No se pudo crear la invitación Calendar: ' + calendarResult.msg,
-      '',
-      'Ingresa a la página de ranking para aceptar, rechazar o coordinar el resultado.',
-      '',
-      'UCTenis'
-    ].join('\n'),
+    subject: '🎾 ¡Te desafían en UCTenis! ' + retadorNombre + ' te reta',
+    htmlBody: htmlBody,
     name: 'UCTenis'
   });
+
+  const waText = '🎾 ¡Hola ' + retadoNombre + '! ' + retadorNombre + ' te ha retado en UCTenis. Fecha: ' + fechaLabel + (slot ? ', ' + slot : '') + ' en ' + cancha + '. Acepta o rechaza en: ' + rankingUrl;
+  const whatsappUrl = 'https://wa.me/?text=' + encodeURIComponent(waText);
 
   return {
     ok: true,
     msg: calendarResult.ok ? 'Correo e invitación Calendar enviados.' : 'Correo enviado; Calendar no se pudo crear.',
-    calendar: calendarResult
+    calendar: calendarResult,
+    whatsappUrl: whatsappUrl
   };
+}
+
+function notifyResult(data) {
+  const challengeId = text(data.challengeId);
+  const ganadorNombre = text(data.ganadorNombre) || 'El ganador';
+  const ganadorEmail = text(data.ganadorEmail);
+  const perdedorNombre = text(data.perdedorNombre) || 'El perdedor';
+  const perdedorEmail = text(data.perdedorEmail);
+  const marcador = text(data.marcador) || 'sin marcador';
+  const fecha = text(data.fecha) || '';
+  const cancha = text(data.cancha) || '';
+
+  if (!perdedorEmail) return { ok: false, msg: 'Correo del jugador perdedor no proporcionado.' };
+
+  const rankingUrl = 'https://uctenis.github.io/reservas-canchas/ranking.html';
+  const fechaLine = fecha ? '<tr style="background:#f5f5f5;"><td style="padding:6px 12px;color:#555;">Fecha</td><td style="padding:6px 12px;font-weight:600;">' + fecha + '</td></tr>' : '';
+  const canchaLine = cancha ? '<tr><td style="padding:6px 12px;color:#555;">Cancha</td><td style="padding:6px 12px;font-weight:600;">' + cancha + '</td></tr>' : '';
+
+  const htmlBody = [
+    '<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;border:1px solid #e0e0e0;border-radius:10px;overflow:hidden;">',
+    '  <div style="background:#1a6b3a;padding:24px;text-align:center;">',
+    '    <h1 style="color:#fff;margin:0;font-size:22px;">🎾 UCTenis</h1>',
+    '    <p style="color:#c8e6c9;margin:6px 0 0;">Resultado de desafío registrado</p>',
+    '  </div>',
+    '  <div style="padding:24px;">',
+    '    <p style="font-size:16px;margin:0 0 16px;">Hola <strong>' + perdedorNombre + '</strong>,</p>',
+    '    <p style="margin:0 0 16px;">Se ha registrado el resultado de tu desafío contra <strong>' + ganadorNombre + '</strong>.</p>',
+    '    <table style="width:100%;border-collapse:collapse;margin-bottom:20px;">',
+    fechaLine,
+    canchaLine,
+    '      <tr style="background:#f5f5f5;"><td style="padding:6px 12px;color:#555;">Marcador</td><td style="padding:6px 12px;font-weight:600;">' + marcador + '</td></tr>',
+    '      <tr><td style="padding:6px 12px;color:#555;">Ganador</td><td style="padding:6px 12px;font-weight:600;color:#1a6b3a;">' + ganadorNombre + '</td></tr>',
+    '    </table>',
+    '    <p style="margin:0 0 16px;color:#555;">Si el resultado no es correcto, puedes disputarlo ingresando a la página de ranking.</p>',
+    '    <div style="text-align:center;margin:20px 0;">',
+    '      <a href="' + rankingUrl + '" style="background:#1a6b3a;color:#fff;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px;">Ver Ranking / Disputar</a>',
+    '    </div>',
+    '    <p style="color:#888;font-size:12px;margin:16px 0 0;">UCTenis — Plataforma de ranking universitario</p>',
+    '  </div>',
+    '</div>'
+  ].join('\n');
+
+  MailApp.sendEmail({
+    to: perdedorEmail,
+    cc: ganadorEmail || '',
+    subject: '🎾 Resultado UCTenis: ' + ganadorNombre + ' vs ' + perdedorNombre,
+    htmlBody: htmlBody,
+    name: 'UCTenis'
+  });
+
+  return { ok: true };
+}
+
+function notifyDispute(data) {
+  const challengeId = text(data.challengeId);
+  const disputanteNombre = text(data.disputanteNombre) || 'Un jugador';
+  const disputanteEmail = text(data.disputanteEmail);
+  const contrarioNombre = text(data.contrarioNombre) || 'su oponente';
+  const marcador = text(data.marcador) || 'sin marcador';
+  const fecha = text(data.fecha) || '';
+
+  const adminEmails = (CONFIG.ADMINS.emails || []).filter(Boolean).join(',');
+  if (!adminEmails) return { ok: false, msg: 'No hay correos de administrador configurados.' };
+
+  const rankingUrl = 'https://uctenis.github.io/reservas-canchas/ranking.html';
+
+  const htmlBody = [
+    '<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;border:1px solid #e0e0e0;border-radius:10px;overflow:hidden;">',
+    '  <div style="background:#c0392b;padding:24px;text-align:center;">',
+    '    <h1 style="color:#fff;margin:0;font-size:22px;">🎾 UCTenis — Disputa de Resultado</h1>',
+    '  </div>',
+    '  <div style="padding:24px;">',
+    '    <p style="font-size:16px;margin:0 0 16px;">Un jugador ha disputado un resultado registrado.</p>',
+    '    <table style="width:100%;border-collapse:collapse;margin-bottom:20px;">',
+    '      <tr style="background:#f5f5f5;"><td style="padding:6px 12px;color:#555;">Disputante</td><td style="padding:6px 12px;font-weight:600;">' + disputanteNombre + (disputanteEmail ? ' &lt;' + disputanteEmail + '&gt;' : '') + '</td></tr>',
+    '      <tr><td style="padding:6px 12px;color:#555;">Contrario</td><td style="padding:6px 12px;font-weight:600;">' + contrarioNombre + '</td></tr>',
+    '      <tr style="background:#f5f5f5;"><td style="padding:6px 12px;color:#555;">Marcador disputado</td><td style="padding:6px 12px;font-weight:600;">' + marcador + '</td></tr>',
+    fecha ? '<tr><td style="padding:6px 12px;color:#555;">Fecha del desafío</td><td style="padding:6px 12px;font-weight:600;">' + fecha + '</td></tr>' : '',
+    challengeId ? '<tr style="background:#f5f5f5;"><td style="padding:6px 12px;color:#555;">ID Desafío</td><td style="padding:6px 12px;font-family:monospace;">' + challengeId + '</td></tr>' : '',
+    '    </table>',
+    '    <div style="text-align:center;margin:20px 0;">',
+    '      <a href="' + rankingUrl + '" style="background:#c0392b;color:#fff;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px;">Revisar en Ranking</a>',
+    '    </div>',
+    '    <p style="color:#888;font-size:12px;margin:16px 0 0;">UCTenis — Notificación automática del sistema</p>',
+    '  </div>',
+    '</div>'
+  ].join('\n');
+
+  MailApp.sendEmail({
+    to: adminEmails,
+    subject: '⚠️ Disputa de resultado UCTenis: ' + disputanteNombre + ' vs ' + contrarioNombre,
+    htmlBody: htmlBody,
+    name: 'UCTenis'
+  });
+
+  return { ok: true };
+}
+
+function adminFreeSpecialSlots(data) {
+  const adminEmail = text(data.adminEmail);
+  const fecha = text(data.fecha);
+  const courts = data.courts;
+
+  if (!isAdminRequest({ adminEmail: adminEmail })) {
+    return { ok: false, msg: 'Acceso reservado al administrador.' };
+  }
+  if (!fecha || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+    return { ok: false, msg: 'Fecha inválida. Usa formato YYYY-MM-DD.' };
+  }
+  if (!Array.isArray(courts) || courts.length === 0) {
+    return { ok: false, msg: 'Debes proporcionar al menos una cancha.' };
+  }
+
+  const ss = SpreadsheetApp.openById(CONFIG.SHEET_MIEMBROS_ID);
+  let sheet = ss.getSheetByName('horarios_especiales');
+  if (!sheet) {
+    sheet = ss.insertSheet('horarios_especiales');
+    sheet.getRange(1, 1, 1, 3).setValues([['fecha', 'courtId', 'tipo']]);
+  }
+
+  const existing = sheet.getDataRange().getValues();
+  let saved = 0;
+
+  courts.forEach(function(courtId) {
+    const courtIdStr = text(courtId);
+    if (!courtIdStr) return;
+
+    // Look for existing row for this fecha+courtId
+    let foundRow = -1;
+    for (let i = 1; i < existing.length; i++) {
+      if (text(existing[i][0]) === fecha && text(existing[i][1]) === courtIdStr) {
+        foundRow = i + 1; // 1-indexed row number in sheet
+        break;
+      }
+    }
+
+    if (foundRow > 0) {
+      sheet.getRange(foundRow, 1, 1, 3).setValues([[fecha, courtIdStr, 'all_day']]);
+    } else {
+      sheet.appendRow([fecha, courtIdStr, 'all_day']);
+    }
+    saved++;
+  });
+
+  return { ok: true, saved: saved };
 }
 
 function createChallengeCalendarInvite(data) {
@@ -486,6 +664,26 @@ function getAvailableSlots(dateStr) {
   
   const dayOfWeek = date.getDay(); // 0 = Domingo, 1 = Lunes, etc.
   let result = { ok: true, date: dateStr, courts: {}, playable: {} };
+
+  // Leer horarios_especiales para detectar canchas con slots libres todo el día
+  const specialCourts = {};
+  try {
+    const ss = SpreadsheetApp.openById(CONFIG.SHEET_MIEMBROS_ID);
+    const specialSheet = ss.getSheetByName('horarios_especiales');
+    if (specialSheet) {
+      const specialData = specialSheet.getDataRange().getValues();
+      for (let i = 1; i < specialData.length; i++) {
+        const rowFecha = text(specialData[i][0]);
+        const rowCourt = text(specialData[i][1]);
+        const rowTipo  = text(specialData[i][2]);
+        if (rowFecha === dateStr && rowCourt && rowTipo === 'all_day') {
+          specialCourts[rowCourt] = true;
+        }
+      }
+    }
+  } catch (specialErr) {
+    // Si falla la lectura de horarios_especiales, continuar normalmente
+  }
   
   // Revisar disponibilidad en cada calendario
   for (let courtKey in CONFIG.CALENDARS) {
@@ -519,14 +717,19 @@ function getAvailableSlots(dateStr) {
       }));
     
     // Obtener los slots candidatos para esta cancha y este día específico de la semana
-    let candidateSlots = CONFIG.SLOTS;
-    if (CONFIG.COURT_SLOTS && CONFIG.COURT_SLOTS[courtKey]) {
+    // Si esta cancha tiene un override de horario especial (all_day), usar TODOS los slots de CONFIG.SLOTS
+    let candidateSlots;
+    if (specialCourts[courtKey]) {
+      candidateSlots = CONFIG.SLOTS;
+    } else if (CONFIG.COURT_SLOTS && CONFIG.COURT_SLOTS[courtKey]) {
       const courtConfig = CONFIG.COURT_SLOTS[courtKey];
       if (Array.isArray(courtConfig)) {
         candidateSlots = courtConfig;
       } else {
         candidateSlots = courtConfig[dayOfWeek] || courtConfig['default'] || CONFIG.SLOTS;
       }
+    } else {
+      candidateSlots = CONFIG.SLOTS;
     }
     
     // Guardamos la lista de todas las franjas "jugables" definidas para este día

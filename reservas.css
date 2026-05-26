@@ -42,52 +42,12 @@
 .rule-note { text-align: center; font-size: 0.82rem; color: var(--text-secondary); margin-top: 14px; }
 .login-prompt { text-align: center; margin-top: 14px; font-size: 0.9rem; color: var(--text-secondary); }
 
-/* ── Court selector cards ── */
-.courts-selector {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 16px;
-}
-.court-sel-card {
-  background: var(--bg-card);
-  border: var(--glass-border);
-  border-radius: 20px;
-  overflow: hidden;
-  cursor: pointer;
-  transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s;
-}
-.court-sel-card:hover {
-  transform: translateY(-6px);
-  box-shadow: 0 0 30px rgba(59,130,246,0.25);
-  border-color: rgba(59,130,246,0.4);
-}
-.court-sel-img {
-  height: 130px;
-  background-size: cover;
-  background-position: center;
-  position: relative;
-}
-.surface-badge {
-  position: absolute;
-  bottom: 8px; left: 8px;
-  background: rgba(15,23,42,0.85);
-  border-radius: 50px;
-  padding: 3px 10px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: #cbd5e1;
-  backdrop-filter: blur(4px);
-}
-.court-sel-body { padding: 14px 16px; }
-.court-sel-body h3 { font-size: 1rem; margin-bottom: 2px; }
-.court-sel-body p { font-size: 0.82rem; color: var(--text-secondary); }
-
 /* ── Date strip ── */
 .date-strip {
   display: flex;
   gap: 10px;
   overflow-x: auto;
-  padding: 10px 4px 16px;
+  padding: 10px 4px 20px;
   scrollbar-width: none;
   justify-content: flex-start;
   -webkit-overflow-scrolling: touch;
@@ -107,6 +67,7 @@
   color: var(--text-primary);
   font-family: 'Outfit', sans-serif;
   transition: all 0.25s ease;
+  position: relative;
 }
 .date-btn.date-today {
   border-color: rgba(198,211,0,0.35);
@@ -121,12 +82,20 @@
   border-color: rgba(255,255,255,0.2);
   transform: translateY(-3px);
 }
+/* ✨ ENHANCED active date: more prominent ring + scale + brighter glow */
 .date-btn.date-active {
   background: var(--accent-tennis);
   border-color: var(--accent-tennis);
   color: #0f172a;
-  box-shadow: 0 0 20px rgba(198,211,0,0.4);
-  transform: translateY(-3px);
+  box-shadow: 0 0 0 3px rgba(198,211,0,0.35), 0 0 28px rgba(198,211,0,0.55);
+  transform: translateY(-5px) scale(1.08);
+  z-index: 2;
+}
+.date-btn.date-active .date-dow,
+.date-btn.date-active .date-num,
+.date-btn.date-active .date-mon {
+  color: #0f172a;
+  opacity: 1;
 }
 .date-btn.date-disabled { opacity: 0.3; cursor: not-allowed; }
 .date-dow { font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; opacity: 0.7; }
@@ -162,7 +131,7 @@
   font-size: 1.25rem;
 }
 
-/* ── Courts Grid (Side-by-side on desktop) ── */
+/* ── Courts Grid ── */
 .courts-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -171,7 +140,7 @@
   margin: 0 auto 2rem auto;
 }
 
-/* ── Slot grid (cinema style) ── */
+/* ── Slot grid ── */
 .legend-row {
   display: flex;
   gap: 16px;
@@ -188,7 +157,7 @@
 
 .slots-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr); /* Exactly 3 columns on both versions! */
+  grid-template-columns: repeat(3, 1fr);
   gap: 8px;
   margin-bottom: 12px;
 }
@@ -200,41 +169,19 @@
   transition: all 0.25s ease;
   position: relative;
 }
-.slot-free {
-  background: rgba(74,222,128,0.08);
-  border-color: rgba(74,222,128,0.3);
-  cursor: pointer;
-}
-.slot-free:hover {
-  background: rgba(74,222,128,0.18);
-  transform: translateY(-3px);
-  box-shadow: 0 6px 20px rgba(74,222,128,0.15);
-}
-.slot-busy {
-  background: rgba(248,113,113,0.07);
-  border-color: rgba(248,113,113,0.2);
-  opacity: 0.7;
-  cursor: not-allowed;
-}
-.slot-mine {
-  background: rgba(198,211,0,0.12);
-  border-color: var(--accent-tennis);
-  cursor: default;
-}
-.slot-past {
-  background: rgba(255,255,255,0.02);
-  border-color: rgba(255,255,255,0.05);
-  opacity: 0.4;
-  cursor: not-allowed;
-}
+.slot-free   { background: rgba(74,222,128,0.08); border-color: rgba(74,222,128,0.3); cursor: pointer; }
+.slot-free:hover { background: rgba(74,222,128,0.18); transform: translateY(-3px); box-shadow: 0 6px 20px rgba(74,222,128,0.15); }
+.slot-busy   { background: rgba(248,113,113,0.07); border-color: rgba(248,113,113,0.2); opacity: 0.7; cursor: not-allowed; }
+.slot-mine   { background: rgba(198,211,0,0.12); border-color: var(--accent-tennis); cursor: default; }
+.slot-past   { background: rgba(255,255,255,0.02); border-color: rgba(255,255,255,0.05); opacity: 0.4; cursor: not-allowed; }
 .slot-selected {
   background: rgba(59,130,246,0.25) !important;
   border-color: #60a5fa !important;
   box-shadow: 0 0 20px rgba(59,130,246,0.3);
   transform: translateY(-3px);
 }
-.slot-time { font-size: 1.15rem; font-weight: 800; letter-spacing: -0.01em; }
-.slot-end  { font-size: 0.7rem; color: var(--text-secondary); margin: 1px 0 4px; }
+.slot-time   { font-size: 1.15rem; font-weight: 800; letter-spacing: -0.01em; }
+.slot-end    { font-size: 0.7rem; color: var(--text-secondary); margin: 1px 0 4px; }
 .slot-status { font-size: 0.7rem; font-weight: 600; color: var(--text-secondary); }
 .slot-free .slot-status   { color: #4ade80; }
 .slot-busy .slot-status   { color: #f87171; }
@@ -273,6 +220,8 @@
 }
 .cd-row:last-child { border-bottom: none; }
 .cd-row span { color: var(--text-secondary); }
+.cd-challenge-badge { background: rgba(198,211,0,0.06); border-radius: 8px; padding: 10px 12px; border: 1px solid rgba(198,211,0,0.2); margin-bottom: 8px; }
+.badge-challenge { color: var(--accent-tennis); font-size: 0.95rem; }
 .confirm-actions { display: flex; gap: 12px; justify-content: center; }
 .btn-back {
   padding: 12px 24px;
@@ -299,6 +248,192 @@
   transition: all 0.3s;
 }
 .btn-confirm:hover { background: #d4e000; transform: translateY(-2px); box-shadow: 0 6px 20px rgba(198,211,0,0.35); }
+
+/* ── Challenge Modal ── */
+.challenge-modal-header {
+  background: linear-gradient(135deg, #0f172a 0%, #1a2540 100%);
+  padding: 32px 28px 20px;
+  text-align: center;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+}
+.challenge-modal-icon {
+  font-size: 3rem;
+  margin-bottom: 10px;
+  animation: pulse-icon 2s ease-in-out infinite;
+}
+@keyframes pulse-icon {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+.challenge-modal-header h3 {
+  font-size: 1.3rem;
+  margin-bottom: 6px;
+  color: var(--text-primary);
+}
+.challenge-modal-header p {
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+}
+.challenge-modal-body {
+  padding: 24px;
+}
+
+/* ── Challenge type options ── */
+.challenge-type-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.challenge-type-option {
+  cursor: pointer;
+  display: block;
+}
+.challenge-type-option input[type="radio"] {
+  display: none;
+}
+.challenge-type-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1.5px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.03);
+  transition: all 0.2s ease;
+}
+.challenge-type-card:hover {
+  border-color: rgba(255,255,255,0.2);
+  background: rgba(255,255,255,0.06);
+}
+.challenge-type-option input[type="radio"]:checked + .challenge-type-card {
+  border-color: var(--accent-tennis);
+  background: rgba(198,211,0,0.08);
+  box-shadow: 0 0 0 1px rgba(198,211,0,0.25);
+}
+.challenge-type-icon { font-size: 1.8rem; flex-shrink: 0; }
+.challenge-type-card strong { display: block; font-size: 0.95rem; color: var(--text-primary); margin-bottom: 2px; }
+.challenge-type-card p { font-size: 0.78rem; color: var(--text-secondary); margin: 0; }
+
+/* ── Challengee section ── */
+.challengee-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  background: rgba(198,211,0,0.06);
+  border: 1px solid rgba(198,211,0,0.2);
+  border-radius: 12px;
+  margin-bottom: 14px;
+  font-size: 1.5rem;
+}
+.challengee-header > div strong { display: block; font-size: 0.9rem; color: var(--text-primary); }
+.challengee-header > div p { font-size: 0.78rem; color: var(--text-secondary); margin: 2px 0 0; }
+.challengee-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 220px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+.challengee-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1.5px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.03);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+.challengee-card:hover {
+  border-color: rgba(255,255,255,0.2);
+  background: rgba(255,255,255,0.07);
+}
+.challengee-card.selected {
+  border-color: var(--accent-tennis);
+  background: rgba(198,211,0,0.08);
+  box-shadow: 0 0 0 1px rgba(198,211,0,0.2);
+}
+.challengee-avatar {
+  position: relative;
+  flex-shrink: 0;
+}
+.challengee-avatar img {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid rgba(255,255,255,0.1);
+}
+.challengee-rank {
+  position: absolute;
+  bottom: -4px;
+  right: -4px;
+  background: var(--accent-tennis);
+  color: #0f172a;
+  font-size: 0.62rem;
+  font-weight: 800;
+  border-radius: 20px;
+  padding: 1px 5px;
+}
+.challengee-info { flex: 1; }
+.challengee-info strong { display: block; font-size: 0.9rem; color: var(--text-primary); }
+.challengee-info span { font-size: 0.75rem; color: var(--text-secondary); }
+.challengee-check {
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.05);
+  border: 1.5px solid rgba(255,255,255,0.1);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.75rem;
+  color: transparent;
+  transition: all 0.2s;
+}
+.challengee-card.selected .challengee-check {
+  background: var(--accent-tennis);
+  border-color: var(--accent-tennis);
+  color: #0f172a;
+  font-weight: 800;
+}
+.challengee-error {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: rgba(248,113,113,0.1);
+  border: 1px solid rgba(248,113,113,0.3);
+  border-radius: 8px;
+  color: #f87171;
+  font-size: 0.82rem;
+}
+.challenge-modal-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 20px;
+}
+
+/* ── WhatsApp button ── */
+.btn-whatsapp {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px;
+  background: #25D366;
+  color: white;
+  border-radius: 50px;
+  font-weight: 700;
+  font-size: 0.95rem;
+  text-decoration: none;
+  transition: all 0.2s;
+}
+.btn-whatsapp:hover {
+  background: #1ebe5c;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(37,211,102,0.35);
+  color: white;
+}
 
 /* ── My bookings ── */
 .my-bookings-section { margin-bottom: 30px; }
@@ -384,7 +519,7 @@
 }
 .btn-login-res:hover { background: rgba(255,255,255,0.12); }
 
-/* ── Auth modal reutilizado ── */
+/* ── Auth modal ── */
 .auth-mc { max-width: 440px !important; padding: 28px !important; }
 .auth-tabs { display: flex; border-bottom: 1px solid rgba(255,255,255,0.08); margin-bottom: 22px; }
 .auth-tab { flex:1; padding:10px; background:none; border:none; border-bottom:3px solid transparent;
@@ -405,65 +540,51 @@
 .btn-primary:hover { background:#d4e000; transform:translateY(-1px); }
 .auth-err { color:#f87171; font-size:0.82rem; margin-bottom:8px; min-height:16px; }
 
+/* ── Global pulse animation (for challenge badges) ── */
+@keyframes pulse-badge {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(248,113,113,0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(248,113,113,0); }
+}
+.pulse-badge { animation: pulse-badge 2s ease-in-out infinite; }
+
 /* ── Responsive ── */
 @media (max-width:600px) {
   .step-indicator { gap: 0; margin-bottom: 24px; }
   .step span { width:26px; height:26px; font-size:0.78rem; }
-  .step { font-size:0; } /* hide text on mobile */
+  .step { font-size:0; }
   .step.active { font-size:0.82rem; }
   
-  .slots-grid { 
-    grid-template-columns: repeat(3, 1fr); 
-    gap: 8px; 
-  }
-  .slot-card { 
-    padding: 12px 6px; 
-    border-radius: 12px; 
-  }
-  .slot-time { 
-    font-size: 1.15rem; 
-  }
-  .slot-end { 
-    font-size: 0.65rem; 
-    margin: 1px 0 4px; 
-  }
-  .slot-status { 
-    font-size: 0.65rem; 
-  }
+  .slots-grid { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .slot-card { padding: 12px 6px; border-radius: 12px; }
+  .slot-time { font-size: 1.15rem; }
+  .slot-end { font-size: 0.65rem; margin: 1px 0 4px; }
+  .slot-status { font-size: 0.65rem; }
 
   .complejo-banner { height: 110px; border-radius: 12px; margin-bottom: 0.75rem; }
   .complejo-title { padding: 8px 12px; font-size: 0.95rem; }
   .courts-grid { grid-template-columns: 1fr; gap: 1rem; }
 
-  .courts-selector { grid-template-columns: 1fr 1fr; }
   .confirm-card { padding:28px 16px; }
   .form-row2 { grid-template-columns:1fr; }
   .date-btn { flex: 0 0 58px; padding: 8px 4px; border-radius: 12px; }
   .date-dow { font-size: 0.65rem; }
   .date-num { font-size: 1.2rem; }
   .date-mon { font-size: 0.65rem; }
+  
+  .challenge-type-card { padding: 10px 12px; }
+  .challenge-type-icon { font-size: 1.4rem; }
 }
 
-/* For small phones (iPhone): force 4 columns and smaller slot buttons. Placed after other mobile rules to ensure precedence. */
 @media (max-width: 420px) {
-  .slots-grid {
-    grid-template-columns: repeat(4, 1fr) !important;
-    gap: 6px;
-  }
-  .slot-card {
-    padding: 6px 6px !important;
-    border-radius: 8px;
-  }
+  .slots-grid { grid-template-columns: repeat(4, 1fr) !important; gap: 6px; }
+  .slot-card { padding: 6px 6px !important; border-radius: 8px; }
   .slot-time { font-size: 0.95rem !important; }
   .slot-end { font-size: 0.62rem !important; }
   .slot-status { font-size: 0.62rem !important; }
 }
 
 @media (max-width: 360px) {
-  .slots-grid {
-    grid-template-columns: repeat(4, 1fr) !important;
-    gap: 5px;
-  }
+  .slots-grid { grid-template-columns: repeat(4, 1fr) !important; gap: 5px; }
   .slot-time { font-size: 0.88rem !important; }
   .slot-card { padding: 5px 4px !important; }
 }

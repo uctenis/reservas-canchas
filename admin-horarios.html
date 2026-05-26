@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Horarios Especiales – UCTenis</title>
+  <link rel="icon" href="logo_uctenis_v03.png" type="image/png">
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .admin-horarios-container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    .admin-section {
+      background: var(--bg-card);
+      border: var(--glass-border);
+      border-radius: 20px;
+      padding: 28px;
+      margin-bottom: 24px;
+    }
+    .admin-section h2 {
+      font-size: 1.15rem;
+      margin-bottom: 18px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-bottom: 16px;
+    }
+    .form-field label {
+      display: block;
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+      font-weight: 500;
+    }
+    .form-field input[type="date"],
+    .form-field select {
+      width: 100%;
+      padding: 10px 14px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 10px;
+      color: var(--text-primary);
+      font-size: 0.9rem;
+      font-family: inherit;
+    }
+    .form-field input[type="date"]:focus,
+    .form-field select:focus {
+      outline: none;
+      border-color: var(--accent-tennis);
+    }
+    .courts-checkboxes {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+    .court-checkbox-label {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      background: rgba(255,255,255,0.03);
+      border: 1.5px solid rgba(255,255,255,0.08);
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-size: 0.9rem;
+    }
+    .court-checkbox-label input[type="checkbox"] {
+      width: 16px; height: 16px;
+      accent-color: var(--accent-tennis);
+    }
+    .court-checkbox-label:has(input:checked) {
+      border-color: var(--accent-tennis);
+      background: rgba(198,211,0,0.06);
+    }
+    .type-options {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 18px;
+      flex-wrap: wrap;
+    }
+    .type-option {
+      flex: 1;
+      min-width: 140px;
+    }
+    .type-option input[type="radio"] { display: none; }
+    .type-option-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      padding: 12px;
+      background: rgba(255,255,255,0.03);
+      border: 1.5px solid rgba(255,255,255,0.08);
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: center;
+      font-size: 0.85rem;
+    }
+    .type-option input[type="radio"]:checked + .type-option-card {
+      border-color: var(--accent-tennis);
+      background: rgba(198,211,0,0.08);
+    }
+    .type-option-icon { font-size: 1.6rem; }
+
+    .btn-save {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 28px;
+      background: var(--accent-tennis);
+      color: #0f172a;
+      border: none;
+      border-radius: 50px;
+      font-family: inherit;
+      font-weight: 700;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    .btn-save:hover { background: #d4e000; transform: translateY(-2px); box-shadow: 0 6px 20px rgba(198,211,0,0.35); }
+    .btn-save:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+    /* Special dates list */
+    .special-date-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 12px;
+      margin-bottom: 8px;
+    }
+    .special-date-info { flex: 1; }
+    .special-date-info strong { display: block; font-size: 0.9rem; color: var(--text-primary); }
+    .special-date-info span { font-size: 0.78rem; color: var(--text-secondary); }
+    .btn-del {
+      padding: 5px 12px;
+      background: rgba(248,113,113,0.12);
+      border: 1px solid rgba(248,113,113,0.3);
+      border-radius: 20px;
+      color: #f87171;
+      font-size: 0.78rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+      font-family: inherit;
+    }
+    .btn-del:hover { background: rgba(248,113,113,0.25); }
+
+    .alert-box {
+      padding: 12px 16px;
+      border-radius: 10px;
+      font-size: 0.88rem;
+      margin-bottom: 16px;
+      display: none;
+    }
+    .alert-success { background: rgba(74,222,128,0.1); border: 1px solid rgba(74,222,128,0.3); color: #4ade80; }
+    .alert-error   { background: rgba(248,113,113,0.1); border: 1px solid rgba(248,113,113,0.3); color: #f87171; }
+    .alert-warn    { background: rgba(251,191,36,0.1); border: 1px solid rgba(251,191,36,0.3); color: #fbbf24; }
+
+    #accessDenied { text-align:center; padding: 60px 20px; }
+    #accessDenied .icon { font-size: 4rem; margin-bottom: 16px; }
+
+    @media (max-width: 600px) {
+      .form-row { grid-template-columns: 1fr; }
+      .courts-checkboxes { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+<div class="main-container">
+  <header>
+    <a href="index.html"><img src="logo_uctenis_v03.png" alt="UCTenis" class="club-logo" style="width:70px;margin-bottom:10px"></a>
+    <h1 style="font-size:2.2rem">🗓️ Admin Horarios</h1>
+    <p style="color:var(--text-secondary);font-size:0.95rem">Gestiona fechas especiales y horarios disponibles</p>
+  </header>
+
+  <!-- Acceso denegado (si no es admin) -->
+  <div id="accessDenied" style="display:none">
+    <div class="icon">🔒</div>
+    <h2 style="margin-bottom:12px">Acceso Restringido</h2>
+    <p style="color:var(--text-secondary);margin-bottom:24px">Esta sección es solo para administradores de UCTenis.</p>
+    <a href="index.html" class="btn-pill">← Volver al inicio</a>
+  </div>
+
+  <!-- Panel admin -->
+  <div id="adminPanel" style="display:none" class="admin-horarios-container">
+
+    <!-- Crear Fecha Especial -->
+    <div class="admin-section">
+      <h2>➕ Agregar Fecha Especial</h2>
+      <p style="color:var(--text-secondary);font-size:0.85rem;margin-bottom:18px">
+        Una "fecha especial" permite habilitar todos los horarios en canchas específicas para un día puntual (ej. torneo, feriado donde se habilita todo el día).
+      </p>
+
+      <div id="alertBox" class="alert-box"></div>
+
+      <div class="form-row">
+        <div class="form-field">
+          <label>📅 Fecha especial</label>
+          <input type="date" id="specialDate">
+        </div>
+        <div class="form-field">
+          <label>📝 Descripción (opcional)</label>
+          <input type="text" id="specialDesc" placeholder="Ej: Torneo anual" style="padding: 10px 14px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: var(--text-primary); font-size: 0.9rem; width: 100%; font-family: inherit;">
+        </div>
+      </div>
+
+      <p style="font-size:0.82rem;color:var(--text-secondary);margin-bottom:10px;font-weight:600;">🎾 Canchas que aplica</p>
+      <div class="courts-checkboxes">
+        <label class="court-checkbox-label">
+          <input type="checkbox" id="court_cec1" value="cec1" checked>
+          CEC 1 (Arcilla)
+        </label>
+        <label class="court-checkbox-label">
+          <input type="checkbox" id="court_cec2" value="cec2" checked>
+          CEC 2 (Arcilla)
+        </label>
+        <label class="court-checkbox-label">
+          <input type="checkbox" id="court_cjp1" value="cjp1" checked>
+          CJP 1 (Asfalto)
+        </label>
+        <label class="court-checkbox-label">
+          <input type="checkbox" id="court_cjp2" value="cjp2" checked>
+          CJP 2 (Asfalto)
+        </label>
+      </div>
+
+      <p style="font-size:0.82rem;color:var(--text-secondary);margin-bottom:10px;font-weight:600;">⏰ Acción</p>
+      <div class="type-options">
+        <label class="type-option">
+          <input type="radio" name="specialType" value="all_day" checked>
+          <div class="type-option-card">
+            <span class="type-option-icon">🌅</span>
+            <strong>Todos los horarios</strong>
+            <span style="color:var(--text-secondary);font-size:0.75rem">Habilita 09:00–21:00</span>
+          </div>
+        </label>
+        <label class="type-option">
+          <input type="radio" name="specialType" value="closed">
+          <div class="type-option-card">
+            <span class="type-option-icon">🚫</span>
+            <strong>Cerrar canchas</strong>
+            <span style="color:var(--text-secondary);font-size:0.75rem">Sin disponibilidad ese día</span>
+          </div>
+        </label>
+      </div>
+
+      <div style="display:flex;justify-content:flex-end;">
+        <button class="btn-save" id="btnSave" onclick="saveSpecialDate()">
+          💾 Guardar Fecha Especial
+        </button>
+      </div>
+    </div>
+
+    <!-- Lista de Fechas Especiales -->
+    <div class="admin-section">
+      <h2>📋 Fechas Especiales Guardadas</h2>
+      <div id="specialDatesList">
+        <p style="color:var(--text-secondary);font-size:0.88rem;text-align:center;padding:20px">Cargando...</p>
+      </div>
+    </div>
+
+    <div style="text-align:center;margin-top:10px;">
+      <a href="index.html" class="btn-pill">← Volver al inicio</a>
+    </div>
+  </div>
+</div>
+
+<!-- Firebase SDK Compat -->
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+<script src="db.js?v=20260526"></script>
+<script>
+const ADMIN_EMAILS = ['ucteniclub@gmail.com', 'dsilva@uct.cl'];
+const COURTS = [
+  { id: 'cec1', label: 'CEC 1 (Arcilla)' },
+  { id: 'cec2', label: 'CEC 2 (Arcilla)' },
+  { id: 'cjp1', label: 'CJP 1 (Asfalto)' },
+  { id: 'cjp2', label: 'CJP 2 (Asfalto)' }
+];
+
+// Special dates stored locally (Firestore not needed for this)
+const SPECIAL_DATES_KEY = 'uctenis_special_dates';
+
+function getSpecialDates() {
+  return JSON.parse(localStorage.getItem(SPECIAL_DATES_KEY) || '[]');
+}
+
+function saveSpecialDates(list) {
+  localStorage.setItem(SPECIAL_DATES_KEY, JSON.stringify(list));
+}
+
+function showAlert(msg, type = 'success') {
+  const box = document.getElementById('alertBox');
+  box.className = `alert-box alert-${type}`;
+  box.textContent = msg;
+  box.style.display = 'block';
+  setTimeout(() => { box.style.display = 'none'; }, 4000);
+}
+
+// ── Verify admin access ──
+document.addEventListener('DOMContentLoaded', () => {
+  // Set today's date as default
+  const today = new Date();
+  const y = today.getFullYear();
+  const m = String(today.getMonth() + 1).padStart(2, '0');
+  const d = String(today.getDate()).padStart(2, '0');
+  document.getElementById('specialDate').value = `${y}-${m}-${d}`;
+
+  const session = DB.getSession();
+  if (!session || !ADMIN_EMAILS.includes((session.email || '').toLowerCase())) {
+    document.getElementById('accessDenied').style.display = 'block';
+  } else {
+    document.getElementById('adminPanel').style.display = 'block';
+    renderSpecialDatesList();
+  }
+});
+
+async function saveSpecialDate() {
+  const fecha = document.getElementById('specialDate').value;
+  if (!fecha) { showAlert('Selecciona una fecha.', 'error'); return; }
+
+  const selectedCourts = Array.from(document.querySelectorAll('.courts-checkboxes input[type="checkbox"]:checked'))
+    .map(cb => cb.value);
+  if (!selectedCourts.length) { showAlert('Selecciona al menos una cancha.', 'error'); return; }
+
+  const type = document.querySelector('input[name="specialType"]:checked').value;
+  const desc = document.getElementById('specialDesc').value.trim();
+  const session = DB.getSession();
+
+  const btn = document.getElementById('btnSave');
+  btn.disabled = true;
+  btn.textContent = 'Guardando...';
+
+  // 1. Save locally
+  const list = getSpecialDates().filter(item => !(item.fecha === fecha && selectedCourts.includes(item.courtId)));
+  selectedCourts.forEach(courtId => {
+    list.push({ fecha, courtId, type, desc, savedAt: new Date().toISOString() });
+  });
+  saveSpecialDates(list);
+
+  // 2. Try to save to backend (Apps Script → Google Sheets)
+  try {
+    if (window.CONFIG && window.CONFIG.API_URL) {
+      const res = await fetch(window.CONFIG.API_URL, {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'admin_free_special_slots',
+          fecha,
+          courts: selectedCourts,
+          type,
+          desc,
+          adminEmail: session.email
+        })
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.msg || 'Error en backend');
+    }
+  } catch(e) {
+    console.warn('Backend save failed, using local only:', e);
+    showAlert('✅ Guardado localmente (el servidor no pudo sincronizar, pero funcionará en este dispositivo).', 'warn');
+    btn.disabled = false;
+    btn.textContent = '💾 Guardar Fecha Especial';
+    renderSpecialDatesList();
+    return;
+  }
+
+  showAlert(`✅ Fecha especial guardada para ${selectedCourts.length} cancha(s) el ${fecha}.`);
+  btn.disabled = false;
+  btn.textContent = '💾 Guardar Fecha Especial';
+  renderSpecialDatesList();
+}
+
+function deleteSpecialDate(fecha, courtId) {
+  if (!confirm(`¿Eliminar fecha especial para ${courtId} el ${fecha}?`)) return;
+  const list = getSpecialDates().filter(item => !(item.fecha === fecha && item.courtId === courtId));
+  saveSpecialDates(list);
+  renderSpecialDatesList();
+  showAlert(`Fecha especial eliminada.`);
+}
+
+function renderSpecialDatesList() {
+  const list = getSpecialDates().sort((a, b) => a.fecha.localeCompare(b.fecha));
+  const container = document.getElementById('specialDatesList');
+  if (!list.length) {
+    container.innerHTML = '<p style="color:var(--text-secondary);font-size:0.88rem;text-align:center;padding:20px">No hay fechas especiales configuradas.</p>';
+    return;
+  }
+  const months = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  const typeLabels = { all_day: '🌅 Todos los horarios', closed: '🚫 Cerrado' };
+  container.innerHTML = list.map(item => {
+    const [y, m, d] = item.fecha.split('-');
+    const courtLabel = COURTS.find(c => c.id === item.courtId)?.label || item.courtId;
+    return `<div class="special-date-item">
+      <div style="font-size:1.8rem">🗓️</div>
+      <div class="special-date-info">
+        <strong>${parseInt(d)} ${months[parseInt(m)-1]} ${y} · ${courtLabel}</strong>
+        <span>${typeLabels[item.type] || item.type}${item.desc ? ' · ' + item.desc : ''}</span>
+      </div>
+      <button class="btn-del" onclick="deleteSpecialDate('${item.fecha}', '${item.courtId}')">🗑️ Eliminar</button>
+    </div>`;
+  }).join('');
+}
+</script>
+</body>
+</html>
