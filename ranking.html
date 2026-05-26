@@ -396,6 +396,12 @@
             <button type="submit" class="btn-primary" id="btnAdminSave">Guardar jugador</button>
             <button type="button" class="btn-secondary" id="btnAdminClear" data-action="admin-clear-form">Limpiar</button>
           </div>
+          <div class="admin-maintenance" style="margin-top: 24px; padding-top: 16px; border-top: 1px solid rgba(255, 255, 255, 0.1);">
+            <p class="modal-kicker">Mantenimiento</p>
+            <button type="button" class="btn-warning" id="btnAdminSeed" style="width: 100%; padding: 10px; background-color: #d97706; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;" onclick="manualSeedDatabase(event)">
+              🌱 Sembrar Jugadores Oficiales
+            </button>
+          </div>
         </form>
       </div>
       <div class="admin-list-column">
@@ -583,11 +589,8 @@ async function loadRankingData() {
     if (!DB.isCloudConfigured()) throw new Error('Firestore no está disponible.');
 
     let players = await withTimeout(DB.getPlayersCloud(), CLOUD_TIMEOUT_MS, 'Firebase ranking');
-    const onlyHasAdmin = players.length === 1 && players.every(p => {
-      const email = p.email || '';
-      return ADMIN_IDENTITIES.emails.some(adm => adm.toLowerCase() === email.toLowerCase());
-    });
-    if (!players.length || onlyHasAdmin) {
+    const needsSeeding = players.length < 5;
+    if (needsSeeding) {
       if (!isAdminSession()) throw new Error('Firebase aún no tiene jugadores sembrados.');
       setRankStatus('Sembrando Firebase...', 'info');
       await withTimeout(
@@ -2281,6 +2284,42 @@ function openAdminModal() {
   resetAdminForm();
   renderAdminPlayerList();
   openModal('adminModal');
+}
+
+async function manualSeedDatabase(event) {
+  if (event) event.preventDefault();
+  if (!confirm('¿Estás seguro de que deseas sembrar los jugadores oficiales en Firebase? Esto agregará a todos los jugadores del ranking estático inicial.')) {
+    return;
+  }
+  const btn = document.getElementById('btnAdminSeed');
+  const errEl = document.getElementById('adminErr');
+  const successEl = document.getElementById('adminSuccess');
+  
+  btn.disabled = true;
+  const originalText = btn.innerHTML;
+  btn.innerHTML = '🌱 Sembrando...';
+  errEl.textContent = '';
+  successEl.textContent = '';
+
+  try {
+    const seed = buildInitialFirebaseSeed();
+    await withTimeout(
+      DB.savePlayersCloud(seed, adminPayload()),
+      15000,
+      'Siembra manual Firebase'
+    );
+    successEl.textContent = '¡Jugadores oficiales sembrados con éxito!';
+    alert('¡Jugadores oficiales sembrados con éxito!');
+    await refreshRankingPage();
+    renderAdminPlayerList();
+  } catch (error) {
+    console.error('Error al sembrar:', error);
+    errEl.textContent = 'Error: ' + error.message;
+    alert('Error al sembrar: ' + error.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = originalText;
+  }
 }
 
 function renderAdminPlayerList() {
