@@ -125,54 +125,135 @@
       0%, 100% { opacity: 1; }
       50% { opacity: 0.6; }
     }
-    .challenge-item {
+    /* Match Card Design (Sports Web Style) */
+    .match-card {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 18px;
+      padding: 14px 16px;
+      margin-bottom: 16px;
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+    .match-card:hover {
+      background: rgba(255, 255, 255, 0.04);
+      border-color: rgba(255, 255, 255, 0.1);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    }
+    .match-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-secondary);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+      padding-bottom: 8px;
+    }
+    .match-court {
+      font-weight: 600;
+      color: var(--text-secondary);
+    }
+    .match-date {
+      font-weight: 500;
+    }
+    .match-players-row {
       display: flex;
       align-items: center;
-      gap: 10px;
-      padding: 10px 0;
-      border-bottom: 1px solid rgba(255,255,255,0.05);
+      justify-content: space-between;
+      gap: 8px;
     }
-    .challenge-item:last-child { border-bottom: none; }
-    .challenge-vs {
+    .match-player-block {
       flex: 1;
-      font-size: 0.88rem;
-    }
-    .challenge-vs strong { display: block; color: var(--text-primary); }
-    .challenge-vs span { color: var(--text-secondary); font-size: 0.75rem; }
-    .challenge-status-badge {
-      font-size: 0.7rem;
-      font-weight: 700;
-      padding: 3px 8px;
-      border-radius: 20px;
-    }
-    .status-pendiente { background: rgba(251,191,36,0.15); color: #fbbf24; border: 1px solid rgba(251,191,36,0.3); }
-    .status-aceptado  { background: rgba(74,222,128,0.12); color: #4ade80; border: 1px solid rgba(74,222,128,0.3); }
-
-    .result-item {
       display: flex;
+      flex-direction: column;
       align-items: center;
-      gap: 10px;
-      padding: 10px 0;
-      border-bottom: 1px solid rgba(255,255,255,0.05);
+      gap: 6px;
+      text-align: center;
+      max-width: 42%;
     }
-    .result-item:last-child { border-bottom: none; }
-    .result-winner {
-      font-size: 0.88rem;
-      flex: 1;
+    .match-player-avatar {
+      width: 46px;
+      height: 46px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 2px solid rgba(255, 255, 255, 0.1);
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+      transition: all 0.3s ease;
+      background-color: #1e293b;
     }
-    .result-winner strong { display: block; color: var(--accent-tennis); font-size: 0.9rem; }
-    .result-winner span { color: var(--text-secondary); font-size: 0.75rem; }
-    .result-score {
+    .match-card:hover .match-player-avatar {
+      border-color: rgba(255, 255, 255, 0.25);
+    }
+    .match-player-block.is-winner .match-player-avatar {
+      border-color: var(--accent-tennis);
+      box-shadow: 0 0 12px rgba(198, 211, 0, 0.3);
+    }
+    .match-player-name {
       font-size: 0.82rem;
-      font-weight: 700;
+      font-weight: 600;
       color: var(--text-primary);
-      background: rgba(255,255,255,0.06);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      width: 100%;
+    }
+    .match-player-block.is-winner .match-player-name {
+      color: var(--accent-tennis);
+    }
+    .match-player-block.is-loser .match-player-name {
+      color: var(--text-secondary);
+      font-weight: 400;
+    }
+    .match-player-block.is-loser .match-player-avatar {
+      opacity: 0.65;
+      filter: grayscale(0.2);
+    }
+    .match-middle {
+      width: 70px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+    .match-vs-badge {
+      font-size: 0.72rem;
+      font-weight: 800;
+      padding: 3px 8px;
+      border-radius: 12px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+    .match-vs-badge.status-pendiente {
+      background: rgba(251, 191, 36, 0.1);
+      color: #fbbf24;
+      border: 1px solid rgba(251, 191, 36, 0.25);
+    }
+    .match-vs-badge.status-aceptado {
+      background: rgba(74, 222, 128, 0.1);
+      color: #4ade80;
+      border: 1px solid rgba(74, 222, 128, 0.25);
+    }
+    .match-score-badge {
+      font-size: 0.85rem;
+      font-weight: 800;
+      color: var(--text-primary);
+      background: rgba(255, 255, 255, 0.06);
       border-radius: 8px;
       padding: 4px 10px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      white-space: nowrap;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
     }
     .live-empty {
       text-align: center;
-      padding: 20px 0;
+      padding: 24px 0;
       color: var(--text-secondary);
       font-size: 0.88rem;
     }
@@ -366,6 +447,73 @@ async function loadLiveData() {
 
   document.getElementById('liveSection').style.display = 'grid';
 
+  // Fetch all players to get their photos and details
+  let playersMap = {};
+  if (DB.isCloudConfigured()) {
+    try {
+      const players = await DB.getPlayersCloud();
+      players.forEach(p => {
+        if (p.nombre) playersMap[p.nombre.toLowerCase().trim()] = p;
+        if (p.id) playersMap[p.id.toLowerCase().trim()] = p;
+      });
+    } catch(e) {
+      console.warn("Error fetching players from Firestore:", e);
+    }
+  }
+
+  // Resolve player photo based on Firestore or static fallbacks
+  function getPlayerPhoto(playerName) {
+    const nameKey = (playerName || '').toLowerCase().trim();
+    if (playersMap[nameKey]) {
+      const p = playersMap[nameKey];
+      if (p.foto && p.foto.trim() !== '') return p.foto;
+      const g = String(p.genero || p.gender || '').toUpperCase();
+      if (g === 'F' || g === 'FEMENINO' || g === 'MUJER' || g === 'MUJERES') {
+        return 'fotos/default_avatar_m.png';
+      }
+      return 'fotos/default_avatar_h.png';
+    }
+    
+    // Known female players
+    const femaleNames = ['carolina cardenas', 'carolina cárdenas', 'angelica encina', 'angélica encina', 'maria jose', 'maria josé', 'valeria schatter', 'violeta moreno'];
+    if (femaleNames.includes(nameKey)) {
+      return 'fotos/default_avatar_m.png';
+    }
+    
+    // Static files list mapping
+    const staticAvatars = {
+      'david silva': 'fotos/m001.png',
+      'ismael devia': 'fotos/m002.png',
+      'miguel escalona': 'fotos/m005.png',
+      'luis otth': 'fotos/m004.png',
+      'gustavo curaqueo': 'fotos/m009.png',
+      'jaime castillo': 'fotos/m011.png',
+      'matías cáceres': 'fotos/m007.png',
+      'matias caceres': 'fotos/m007.png',
+      'rodrigo castro': 'fotos/m006.png',
+      'klaus hennicke': 'fotos/m017.png',
+      'josé melgarejo': 'fotos/m016.png',
+      'jose melgarejo': 'fotos/m016.png',
+      'juan maripillan': 'fotos/m008.png',
+      'juan maripillán': 'fotos/m008.png',
+      'cristian rebolledo': 'fotos/m010.png',
+      'francisco encina': 'fotos/m003.png',
+      'cristian farias': 'fotos/m012.png',
+      'miguel angulo': 'fotos/m015.png',
+      'roberto bermudez': 'fotos/m018.png',
+      'roberto bermúdez': 'fotos/m018.png',
+      'violeta moreno': 'fotos/f004.png',
+      'carolina cárdenas': 'fotos/f001.png',
+      'carolina cardenas': 'fotos/f001.png',
+      'angela encina': 'fotos/f002.png',
+      'angelica encina': 'fotos/f002.png',
+      'maria jose': 'fotos/f003.png',
+      'valeria schatter': 'fotos/f005.png'
+    };
+    if (staticAvatars[nameKey]) return staticAvatars[nameKey];
+    return 'fotos/default_avatar_h.png';
+  }
+
   // Active challenges (pendiente or aceptado)
   const active = challenges
     .filter(c => c.status === 'pendiente' || c.status === 'aceptado')
@@ -383,24 +531,38 @@ async function loadLiveData() {
   if (active.length) {
     activeEl.innerHTML = active.map(c => {
       const statusClass = c.status === 'aceptado' ? 'status-aceptado' : 'status-pendiente';
-      const statusLabel = c.status === 'aceptado'
-        ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg> Aceptado'
-        : '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg> Pendiente';
+      const statusText = c.status === 'aceptado' ? 'Aceptado' : 'Pendiente';
       const retadorName = c.retadorNombre || 'Jugador';
       const retadoName = c.retadoNombre || 'Jugador';
-      return `<div class="challenge-item">
-        <div style="width:32px;height:32px;background:rgba(248,113,113,0.12);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="#f87171"><path d="M7 2v11h3v9l7-12h-4l4-8z"/></svg>
+      
+      const photoRetador = getPlayerPhoto(retadorName);
+      const photoRetado = getPlayerPhoto(retadoName);
+      
+      const courtStr = c.courtLabel || c.cancha || 'Cancha';
+      const dateStr = formatDateShort(c.fecha);
+      
+      return `<div class="match-card">
+        <div class="match-header">
+          <span class="match-court">${courtStr}</span>
+          <span class="match-date">${dateStr}</span>
         </div>
-        <div class="challenge-vs">
-          <strong>${retadorName} vs ${retadoName}</strong>
-          <span>${c.courtLabel || c.cancha || ''} · ${formatDateShort(c.fecha)}</span>
+        <div class="match-players-row">
+          <div class="match-player-block">
+            <img src="${photoRetador}" class="match-player-avatar" alt="${retadorName}" onerror="this.src='fotos/default_avatar_h.png'">
+            <span class="match-player-name">${retadorName.split(' ').slice(0,2).join(' ')}</span>
+          </div>
+          <div class="match-middle">
+            <span class="match-vs-badge ${statusClass}">${statusText}</span>
+          </div>
+          <div class="match-player-block">
+            <img src="${photoRetado}" class="match-player-avatar" alt="${retadoName}" onerror="this.src='fotos/default_avatar_h.png'">
+            <span class="match-player-name">${retadoName.split(' ').slice(0,2).join(' ')}</span>
+          </div>
         </div>
-        <span class="challenge-status-badge ${statusClass}">${statusLabel}</span>
       </div>`;
     }).join('');
   } else {
-    activeEl.innerHTML = '<div class="live-empty"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="opacity:.4;margin-bottom:6px"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg><br>No hay desafíos activos</div>';
+    activeEl.innerHTML = '<div class="live-empty"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="opacity:.4;margin-bottom:8px"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg><br>No hay desafíos activos</div>';
   }
 
   // Render latest results
@@ -409,19 +571,36 @@ async function loadLiveData() {
     resultsEl.innerHTML = results.map(c => {
       const winnerName = c.ganadorId === c.retadorId ? (c.retadorNombre || 'Jugador') : (c.retadoNombre || 'Jugador');
       const loserName  = c.ganadorId === c.retadorId ? (c.retadoNombre || 'Jugador') : (c.retadorNombre || 'Jugador');
-      return `<div class="result-item">
-        <div style="width:32px;height:32px;background:rgba(251,191,36,0.12);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="#fbbf24"><path d="M12 1l3.09 6.26L22 8.27l-5 4.87 1.18 6.88L12 16.77l-6.18 3.25L7 13.14 2 8.27l6.91-1.01L12 1z"/></svg>
+      
+      const photoWinner = getPlayerPhoto(winnerName);
+      const photoLoser = getPlayerPhoto(loserName);
+      
+      const courtStr = c.courtLabel || c.cancha || 'Cancha';
+      const dateStr = formatDateShort(c.fecha);
+      const scoreStr = c.marcador || 'v/d';
+      
+      return `<div class="match-card">
+        <div class="match-header">
+          <span class="match-court">${courtStr}</span>
+          <span class="match-date">${dateStr}</span>
         </div>
-        <div class="result-winner">
-          <strong>${winnerName}</strong>
-          <span>vs ${loserName} · ${formatDateShort(c.fecha)}</span>
+        <div class="match-players-row">
+          <div class="match-player-block is-winner">
+            <img src="${photoWinner}" class="match-player-avatar" alt="${winnerName}" onerror="this.src='fotos/default_avatar_h.png'">
+            <span class="match-player-name">🏆 ${winnerName.split(' ').slice(0,2).join(' ')}</span>
+          </div>
+          <div class="match-middle">
+            <span class="match-score-badge">${scoreStr}</span>
+          </div>
+          <div class="match-player-block is-loser">
+            <img src="${photoLoser}" class="match-player-avatar" alt="${loserName}" onerror="this.src='fotos/default_avatar_h.png'">
+            <span class="match-player-name">${loserName.split(' ').slice(0,2).join(' ')}</span>
+          </div>
         </div>
-        ${c.marcador ? `<span class="result-score">${c.marcador}</span>` : ''}
       </div>`;
     }).join('');
   } else {
-    resultsEl.innerHTML = '<div class="live-empty"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="opacity:.4;margin-bottom:6px"><path d="M12 1l3.09 6.26L22 8.27l-5 4.87 1.18 6.88L12 16.77l-6.18 3.25L7 13.14 2 8.27l6.91-1.01L12 1z"/></svg><br>Aún no hay resultados</div>';
+    resultsEl.innerHTML = '<div class="live-empty"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="opacity:.4;margin-bottom:8px"><path d="M12 1l3.09 6.26L22 8.27l-5 4.87 1.18 6.88L12 16.77l-6.18 3.25L7 13.14 2 8.27l6.91-1.01L12 1z"/></svg><br>Aún no hay resultados</div>';
   }
 }
 
