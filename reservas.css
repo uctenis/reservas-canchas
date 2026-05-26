@@ -1,5 +1,10 @@
 /* reservas.css – Sistema de reservas estilo cine UCTenis */
 
+/* ── Variables locales ── */
+:root {
+  --border-color: rgba(255,255,255,0.1);
+}
+
 /* ── Step indicator ── */
 .step-indicator {
   display: flex;
