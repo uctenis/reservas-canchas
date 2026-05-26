@@ -4,118 +4,164 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>ADMINISTRADOR Ranking</title>
-  <link rel="icon" href="favicon.png" type="image/png">
+  <script>
+    window.location.replace('ranking.html');
+  </script>
+  <link rel="icon" href="logo_uctenis_v03.png" type="image/png">
+  <link rel="stylesheet" href="style.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
 
   <style>
-    :root{
-      --background-color:#001f33;
-      --text-color:#f5f5f7;
-      --subtle-text-color:#a1a1a6;
-      --accent-color:#c6d300;
-      --card-background:rgba(255,255,255,0.05);
-    }
-    body{
-      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-      margin:0;padding:0;background:var(--background-color);color:var(--text-color)
-    }
-    .main-container{max-width:900px;margin:0 auto;padding:40px 20px;}
-    .header-section{text-align:center;margin-bottom:14px}
-    .uct-logo{
-      width:clamp(96px,14vw,168px);height:auto;display:block;margin:0 auto 12px;
-      filter: drop-shadow(0 2px 6px rgba(0,0,0,.35));
-    }
-    h1{font-size:36px;font-weight:700;letter-spacing:-1px;margin:0}
-
-    .ranking-toggle-wrapper{ text-align:center; margin: 18px 0 22px; }
-    .btn-pill{
-      display:inline-flex;align-items:center;justify-content:center;
-      background: rgba(255,255,255,0.08);
-      color: var(--text-color);
-      border: 1px solid rgba(255,255,255,0.12);
-      padding: 10px 18px;
-      border-radius: 999px;
+    /* Estilos específicos para la administración que no están en style.css */
+    table { display: none; width: 100%; border-collapse: separate; border-spacing: 0 8px; }
+    tbody tr { cursor: grab; }
+    tbody tr:active { cursor: grabbing; }
+    .col-pos { width: 60px; text-align: center; font-weight: 700; color: var(--accent-tennis); }
+    .col-evol { width: 60px; text-align: center; }
+    .save-button {
+      display: none;
+      background: var(--accent-tennis);
+      color: #0f172a;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 50px;
       font-weight: 700;
       cursor: pointer;
-      margin: 0 8px;
-      transition: transform .15s ease, background-color .15s ease, border-color .15s ease;
-      user-select:none;
+      margin-left: auto;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 12px rgba(198, 211, 0, 0.3);
     }
-    .btn-pill:hover{ transform: translateY(-1px); border-color: rgba(255,255,255,0.22); }
-    .btn-pill.active{
-      background: var(--accent-color);
-      color: var(--background-color);
-      border-color: var(--accent-color);
+    .save-button:hover { transform: scale(1.05); box-shadow: 0 6px 16px rgba(198, 211, 0, 0.5); }
+    .save-button:disabled { background: #475569; cursor: not-allowed; opacity: 0.7; }
+    .sortable-ghost { background: rgba(198, 211, 0, 0.1); opacity: 0.5; }
+    .admin-search-row { margin-bottom: 16px; }
+    .search-box {
+      width: 100%;
+      max-width: 440px;
+      padding: 12px 16px;
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,0.14);
+      background: rgba(255,255,255,0.04);
+      color: #f8fafc;
+      font-size: 0.95rem;
+      outline: none;
     }
-
-    .section{background:var(--card-background);border-radius:18px;padding:18px 16px;margin-bottom:24px;}
-    .section-header{display:flex; align-items:center; margin:6px 6px 12px;}
-    .section-header h2{font-size:22px;margin:0;}
-
-    table{width:100%;border-collapse:collapse;display:none;}
-    th,td{padding:12px 15px;text-align:left;border-bottom:1px solid rgba(255,255,255,.1)}
-    tbody tr {cursor: grab;}
-    tbody tr:active {cursor: grabbing;}
-
-    .loading, .error-message {text-align:center; padding:20px; color:var(--subtle-text-color); font-weight:bold;}
-    .arrow-up{color:#4CAF50;} .arrow-down{color:#F44336;} .new-entry{color:#FFC107;}
-    .col-pos {width:80px;text-align:center;}
-    .col-evol {width:60px;text-align:center;font-size:1.2em;}
-    td.col-nombre { font-weight: 600; }
-    .player-highlight { background-image: linear-gradient(to right, rgba(200, 211, 0, 0.1), transparent 80%); border-left: 4px solid var(--accent-color); }
-    .save-button{
-      display:none; background-color:var(--accent-color); color:var(--background-color);
-      border:none; padding:8px 16px; font-size:14px; font-weight:700;
-      border-radius:20px; cursor:pointer; margin-left:auto;
+    .search-box:focus { border-color: rgba(198,211,0,0.8); box-shadow: 0 0 0 4px rgba(198,211,0,0.08); }
+    .admin-help-text { margin: 4px 0 0; color: var(--text-secondary); font-size: 0.92rem; }
+    .row-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      justify-content: flex-end;
     }
-    .save-button:disabled { background-color: #555; cursor: not-allowed; }
-    .sortable-ghost{ background:rgba(255,255,255,0.1); opacity: 0.8; }
+    .move-btn {
+      width: 34px;
+      height: 34px;
+      border: 1px solid rgba(255,255,255,0.18);
+      background: rgba(255,255,255,0.06);
+      color: #f8fafc;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: transform 0.2s ease, background 0.2s ease;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .move-btn:hover { transform: translateY(-1px); background: rgba(198,211,0,0.18); border-color: rgba(198,211,0,0.5); }
+    .drag-handle {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      margin-right: 8px;
+      border-radius: 12px;
+      background: rgba(255,255,255,0.08);
+      color: var(--accent-tennis);
+      cursor: grab;
+      user-select: none;
+    }
+    tbody tr[data-hidden="true"] { display: none; }
+    
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+    }
+    
+    .ranking-toggle-wrapper { text-align: center; margin: 30px 0; }
   </style>
 </head>
 
 <body>
   <div class="main-container">
-    <div class="header-section">
-      <img src="logo_uctenis_v03.png" alt="Logo UCTenis Club" class="uct-logo"/>
-      <h1>Administrador del Ranking</h1>
-    </div>
+    <header>
+      <a href="index.html">
+        <img src="logo_uctenis_v03.png" alt="Logo UCTenis Club" class="club-logo"/>
+      </a>
+      <h1>Administrador Ranking</h1>
+    </header>
 
     <div class="ranking-toggle-wrapper">
       <button class="btn-pill active" id="btnFem" data-target="femenino">Femenino</button>
       <button class="btn-pill" id="btnMas" data-target="masculino">Masculino</button>
     </div>
 
-    <section class="section" id="sectionFemenino">
+    <!-- RANKING FEMENINO (ADMIN) -->
+    <section class="info-section glass-card" id="sectionFemenino">
       <div class="section-header">
-        <h2>Ranking Femenino</h2>
+        <div>
+          <h2 class="section-title">Ranking Femenino</h2>
+          <p class="admin-help-text">Arrastra, busca y reordena puestos con un solo clic.</p>
+        </div>
         <button class="save-button" id="saveM" onclick="saveRanking('mujeres')">Guardar Cambios</button>
       </div>
-      <div class="loading" id="loadingM">Cargando...</div>
-      <table id="tableM">
-        <thead>
-          <tr><th class="col-pos">Pos.</th><th>Nombre</th><th class="col-evol">Evol.</th></tr>
-        </thead>
-        <tbody id="tbodyM"></tbody>
-      </table>
+      <div class="admin-search-row">
+        <input type="search" id="searchM" class="search-box" placeholder="Buscar jugadora por nombre o puesto…" aria-label="Buscar jugadora">
+      </div>
+      <div class="loading" id="loadingM" style="text-align:center; padding:20px; color:var(--text-secondary);">
+        Cargando datos maestros...
+      </div>
+      <div class="ranking-table-container">
+        <table id="tableM" style="display:none;">
+          <thead>
+            <tr><th class="col-pos">Pos.</th><th>Nombre</th><th class="col-evol">Reordenar</th></tr>
+          </thead>
+          <tbody id="tbodyM"></tbody>
+        </table>
+      </div>
     </section>
 
-    <section class="section" id="sectionMasculino">
+    <!-- RANKING MASCULINO (ADMIN) -->
+    <section class="info-section glass-card" id="sectionMasculino" style="display:none;">
       <div class="section-header">
-        <h2>Ranking Masculino</h2>
+        <div>
+          <h2 class="section-title">Ranking Masculino</h2>
+          <p class="admin-help-text">Arrastra, busca y reordena puestos con un solo clic.</p>
+        </div>
         <button class="save-button" id="saveH" onclick="saveRanking('hombres')">Guardar Cambios</button>
       </div>
-      <div class="loading" id="loadingH">Cargando...</div>
-      <table id="tableH">
-        <thead>
-          <tr><th class="col-pos">Pos.</th><th>Nombre</th><th class="col-evol">Evol.</th></tr>
-        </thead>
-        <tbody id="tbodyH"></tbody>
-      </table>
+      <div class="admin-search-row">
+        <input type="search" id="searchH" class="search-box" placeholder="Buscar jugador por nombre o puesto…" aria-label="Buscar jugador">
+      </div>
+      <div class="loading" id="loadingH" style="text-align:center; padding:20px; color:var(--text-secondary);">
+        Cargando datos maestros...
+      </div>
+      <div class="ranking-table-container">
+        <table id="tableH" style="display:none;">
+          <thead>
+            <tr><th class="col-pos">Pos.</th><th>Nombre</th><th class="col-evol">Reordenar</th></tr>
+          </thead>
+          <tbody id="tbodyH"></tbody>
+        </table>
+      </div>
     </section>
   </div>
 
   <script>
-    const API_URL = "https://script.google.com/macros/s/AKfycbxCpCp0gy4fEENaItRbt8qX3B0zt3EsbKifX_MWSu3gC2UqMDjf1uQku9bk9qYkNBLtuw/exec";
+    const API_URL = "https://script.google.com/macros/s/AKfycbwMDM2xSfPgSSHpgj4Kg7ffl7DxWAWdCVugo5UBJr0aDH0lNfUl0NxXlz6DCr6LDZ86/exec";
 
     function normName(v){
       return (v ?? "").toString().replace(/\s+/g,' ').trim();
@@ -200,10 +246,18 @@
           tr.classList.add('player-highlight');
         }
 
+        tr.dataset.playerName = p.nombre.toLowerCase();
+
         tr.innerHTML = `
-          <td class="col-pos">${posActual}</td>
+          <td class="col-pos"><span class="drag-handle" title="Arrastra para reordenar">☰</span>${posActual}</td>
           <td class="col-nombre">${p.nombre}</td>
-          <td class="col-evol">${evo}</td>
+          <td class="col-evol">
+            <div class="row-actions">
+              <button type="button" class="move-btn" title="Subir posición" onclick="movePlayerRow(this, -1)">▲</button>
+              <button type="button" class="move-btn" title="Bajar posición" onclick="movePlayerRow(this, 1)">▼</button>
+              <span class="row-status">${evo}</span>
+            </div>
+          </td>
         `;
       });
 
@@ -215,7 +269,44 @@
       const rows = document.getElementById(tbodyId).querySelectorAll('tr');
       rows.forEach((row, idx) => {
         const cell = row.querySelector('.col-pos');
-        if (cell) cell.textContent = String(idx + 1);
+        if (cell) {
+          const dragHandle = cell.querySelector('.drag-handle');
+          cell.textContent = String(idx + 1);
+          if (dragHandle) {
+            cell.prepend(dragHandle);
+          }
+        }
+      });
+    }
+
+    function showSaveButtonForTbody(tbodyId) {
+      const buttonId = tbodyId === 'tbodyM' ? 'saveM' : 'saveH';
+      const button = document.getElementById(buttonId);
+      if (button) button.style.display = 'inline-flex';
+    }
+
+    function movePlayerRow(button, direction) {
+      const row = button.closest('tr');
+      if (!row) return;
+      const tbody = row.parentElement;
+      const rows = Array.from(tbody.querySelectorAll('tr'));
+      const index = rows.indexOf(row);
+      const targetIndex = index + direction;
+      if (targetIndex < 0 || targetIndex >= rows.length) return;
+      const target = rows[targetIndex];
+      tbody.insertBefore(row, direction < 0 ? target : target.nextSibling);
+      renumerarTabla(tbody.id);
+      showSaveButtonForTbody(tbody.id);
+    }
+
+    function filterRankingRows(tbodyId, query) {
+      const search = query.trim().toLowerCase();
+      const rows = document.getElementById(tbodyId).querySelectorAll('tr');
+      rows.forEach(row => {
+        const name = row.dataset.playerName || '';
+        const pos = row.querySelector('.col-pos')?.textContent || '';
+        const visible = !search || name.includes(search) || pos.includes(search);
+        row.style.display = visible ? '' : 'none';
       });
     }
 
@@ -224,9 +315,10 @@
         new Sortable(document.getElementById(tbodyId), {
           animation: 150,
           ghostClass: 'sortable-ghost',
+          handle: '.drag-handle',
           onEnd: () => {
             renumerarTabla(tbodyId);
-            document.getElementById(saveButtonId).style.display = 'block';
+            document.getElementById(saveButtonId).style.display = 'inline-flex';
           }
         });
       };
@@ -333,6 +425,11 @@
       initToggle();
       await cargarDatos();
       initSortable();
+
+      const searchM = document.getElementById('searchM');
+      const searchH = document.getElementById('searchH');
+      if (searchM) searchM.addEventListener('input', event => filterRankingRows('tbodyM', event.target.value));
+      if (searchH) searchH.addEventListener('input', event => filterRankingRows('tbodyH', event.target.value));
     });
   </script>
 </body>

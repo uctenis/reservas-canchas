@@ -1,10 +1,14 @@
 /* UCTenis Logic */
 
-const CONFIG = {
+if (typeof window.CONFIG === 'undefined') {
+    window.CONFIG = {};
+}
+Object.assign(window.CONFIG, {
     LAT: -38.7359,
     LON: -72.5904,
-    API_URL: "https://script.google.com/macros/s/AKfycbzrf9Xm7UoP3d4NXxbSNZOFMLaDZk1h49N3EzlZS_xuxYDkzJyDvpmlpwQuQX8kfno/exec"
-};
+    API_URL: "https://script.google.com/macros/s/AKfycbwMDM2xSfPgSSHpgj4Kg7ffl7DxWAWdCVugo5UBJr0aDH0lNfUl0NxXlz6DCr6LDZ86/exec"
+});
+const CONFIG = window.CONFIG;
 
 const MEMBERS = ["Luis Otth", "Ismael Devia", "Paulo Garrido", "Roberto Bermudez", "Roberto Espinoza", "Pablo Lagos", "Francisco Encina", "Gustavo Curaqueo", "Cristian Henriquez", "Cristian Rebolledo", "Sebastián Garrido", "Rodrigo Castro", "Matías Cáceres", "Juan Maripillán", "David Figueroa", "David Silva", "David Fonseca", "Cristian Farias", "Jaime Castillo", "José Baeza", "José Melgarejo", "Miguel Escalona", "Rodrigo Zuñiga", "Francisco Muñoz", "Sebastian Aguilar", "Victor Navarrete", "Cristobal Correa", "Jano Medina", "Miguel Angulo", "Carolina Cárdenas", "Mauricio Matus", "Angélica Encina", "Maria José", "Klaus Hennicke", "Francisco Mendez", "Violeta Moreno", "Valeria Schatter"];
 
@@ -259,7 +263,7 @@ async function loadRanking() {
     lastUpdatedEl.textContent = 'Actualizado: ' + new Date().toLocaleDateString('es-CL', { year: 'numeric', month: 'long', day: 'numeric' });
 
     try {
-        const response = await fetch(`${CONFIG.API_URL}?v=${new Date().getTime()}`);
+        const response = await fetch(`${CONFIG.API_URL}?action=get_ranking&v=${new Date().getTime()}`);
         const data = await response.json();
 
         if (data.status === 'error') throw new Error(data.message);
@@ -342,7 +346,7 @@ function findTopMover() {
 // --- Modal Logic ---
 
 function showPlayerProfile(name) {
-    const p = allPlayersData.find(x => x.nombre === name);
+    const p = allPlayersData.find(x => x.nombre.trim() === name.trim());
     if (!p) return;
 
     const modal = document.getElementById('playerModal');
