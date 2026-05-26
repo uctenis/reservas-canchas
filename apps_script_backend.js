@@ -185,9 +185,10 @@ function notifyChallenge(data) {
   const retadoNombre = text(data.retadoNombre) || 'jugador/a';
   const retadorNombre = text(data.retadorNombre) || 'Un jugador';
   const fecha = text(data.fecha) || 'fecha por coordinar';
-  const fechaLabel = fecha;
+  const fechaLabel = text(data.fechaLabel) || fecha;
   const cancha = text(data.cancha) || 'cancha por definir';
   const slot = text(data.slot) || '';
+  const retadoTelefono = text(data.retadoTelefono);
 
   if (!retadoEmail) return { ok: false, msg: 'Correo del jugador retado no proporcionado.' };
 
@@ -197,7 +198,10 @@ function notifyChallenge(data) {
     retadoNombre: retadoNombre,
     retadoEmail: retadoEmail,
     fecha: fecha,
-    cancha: cancha
+    fechaLabel: fechaLabel,
+    slot: slot,
+    cancha: cancha,
+    courtId: text(data.courtId)
   });
 
   const rankingUrl = 'https://uctenis.github.io/reservas-canchas/ranking.html';
@@ -234,11 +238,13 @@ function notifyChallenge(data) {
     cc: retadorEmail || '',
     subject: '🎾 ¡Te desafían en UCTenis! ' + retadorNombre + ' te reta',
     htmlBody: htmlBody,
-    name: 'UCTenis'
+    name: 'UCTenis Club',
+    replyTo: (CONFIG.ADMINS.emails || [])[0] || ''
   });
 
   const waText = '🎾 ¡Hola ' + retadoNombre + '! ' + retadorNombre + ' te ha retado en UCTenis. Fecha: ' + fechaLabel + (slot ? ', ' + slot : '') + ' en ' + cancha + '. Acepta o rechaza en: ' + rankingUrl;
-  const whatsappUrl = 'https://wa.me/?text=' + encodeURIComponent(waText);
+  const cleanPhone = retadoTelefono.replace(/[^0-9]/g, '');
+  const whatsappUrl = cleanPhone ? 'https://wa.me/' + cleanPhone + '?text=' + encodeURIComponent(waText) : '';
 
   return {
     ok: true,
@@ -396,37 +402,54 @@ function adminFreeSpecialSlots(data) {
 function createChallengeCalendarInvite(data) {
   const fecha = text(data.fecha);
   if (!fecha || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
-    return { ok: false, msg: 'Fecha de desafío no válida.' };
+    return { ok: false, msg: 'Fecha de desafio no valida.' };
   }
 
-  const courtKey = courtKeyFromName(data.cancha);
-  const calendarId = courtKey ? CONFIG.CALENDARS[courtKey] : '';
-  const calendar = calendarId ? CalendarApp.getCalendarById(calendarId) : CalendarApp.getDefaultCalendar();
+  const calendar = CalendarApp.getDefaultCalendar();
   if (!calendar) return { ok: false, msg: 'Calendario no encontrado.' };
 
   try {
-    const date = new Date(fecha + 'T00:00:00-04:00');
+    const slot = text(data.slot);
     const guests = [text(data.retadorEmail), text(data.retadoEmail)].filter(Boolean).join(',');
-    const event = calendar.createAllDayEvent(
-      'Desafío ranking UCTenis: ' + text(data.retadorNombre) + ' vs ' + text(data.retadoNombre),
-      date,
-      {
-        description: [
-          'Desafío de ranking UCTenis.',
-          'Retador: ' + text(data.retadorNombre) + ' <' + text(data.retadorEmail) + '>',
-          'Retado: ' + text(data.retadoNombre) + ' <' + text(data.retadoEmail) + '>',
-          'Cancha propuesta: ' + text(data.cancha),
-          '',
-          'Coordinen la hora exacta y registren el resultado en la página de ranking.'
-        ].join('\n'),
+    const title = 'Desafio ranking UCTenis: ' + text(data.retadorNombre) + ' vs ' + text(data.retadoNombre);
+    const description = [
+      'Desafio de ranking UCTenis.',
+      'Retador: ' + text(data.retadorNombre) + ' <' + text(data.retadorEmail) + '>',
+      'Retado: ' + text(data.retadoNombre) + ' <' + text(data.retadoEmail) + '>',
+      'Fecha: ' + (text(data.fechaLabel) || fecha),
+      slot ? 'Hora: ' + slot : '',
+      'Cancha: ' + text(data.cancha),
+      '',
+      'La cancha ya queda reservada por el sistema. Acepten o rechacen el desafio en la pagina de ranking.'
+    ].filter(Boolean).join('\n');
+
+    let event;
+    if (/^\d{1,2}:\d{2}$/.test(slot)) {
+      const dateParts = fecha.split('-').map(Number);
+      const timeParts = slot.split(':').map(Number);
+      const start = new Date(dateParts[0], dateParts[1] - 1, dateParts[2], timeParts[0], timeParts[1], 0);
+      const end = new Date(start.getTime() + 90 * 60 * 1000);
+      event = calendar.createEvent(title, start, end, {
+        description: description,
+        location: text(data.cancha),
         guests: guests,
         sendInvites: true
-      }
-    );
+      });
+    } else {
+      const dateParts = fecha.split('-').map(Number);
+      const date = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
+      event = calendar.createAllDayEvent(title, date, {
+        description: description,
+        location: text(data.cancha),
+        guests: guests,
+        sendInvites: true
+      });
+    }
+
     if (CalendarApp.EventTransparency && CalendarApp.EventTransparency.TRANSPARENT) {
       event.setTransparency(CalendarApp.EventTransparency.TRANSPARENT);
     }
-    return { ok: true, eventId: event.getId(), calendarId: calendarId || 'default' };
+    return { ok: true, eventId: event.getId(), calendarId: 'default' };
   } catch (error) {
     return { ok: false, msg: error.message };
   }

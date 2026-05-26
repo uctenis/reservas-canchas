@@ -43,8 +43,8 @@ const FIREBASE_COLLECTIONS = {
   challenges: 'ranking_challenges'
 };
 
-const FIREBASE_ADMIN_EMAILS = ['uctenisclub@gmail.com', 'dsilva@uct.cl'];
-const PURE_ADMIN_EMAILS = ['uctenisclub@gmail.com'];
+const DB_FIREBASE_ADMIN_EMAILS = ['uctenisclub@gmail.com', 'dsilva@uct.cl'];
+const DB_PURE_ADMIN_EMAILS = ['uctenisclub@gmail.com'];
 
 function normalizeEmailForDb(email) {
   return String(email || '').trim().toLowerCase();
@@ -158,7 +158,7 @@ const DB = {
 
   isAllowedAccessEmail(email) {
     const normalized = normalizeEmailForDb(email);
-    return PURE_ADMIN_EMAILS.some(adm => normalizeEmailForDb(adm) === normalized);
+    return DB_PURE_ADMIN_EMAILS.some(adm => normalizeEmailForDb(adm) === normalized);
   },
 
   async validateMemberAPI(email) {
@@ -195,7 +195,7 @@ const DB = {
       const result = await firebaseAuth.signInWithPopup(provider);
       const user = result.user;
 
-      const isPureAdmin = PURE_ADMIN_EMAILS.some(adm => normalizeEmailForDb(adm) === normalizeEmailForDb(user.email));
+      const isPureAdmin = DB_PURE_ADMIN_EMAILS.some(adm => normalizeEmailForDb(adm) === normalizeEmailForDb(user.email));
       if (isPureAdmin) {
         const adminUser = {
           id: makeFirebaseDocId(user.email, 'admin'),
@@ -248,7 +248,7 @@ const DB = {
 
   async loginWithGoogleMock(email, nombre) {
     const normalized = normalizeEmailForDb(email);
-    const isPureAdmin = PURE_ADMIN_EMAILS.some(adm => normalizeEmailForDb(adm) === normalized);
+    const isPureAdmin = DB_PURE_ADMIN_EMAILS.some(adm => normalizeEmailForDb(adm) === normalized);
     if (isPureAdmin) {
       const adminUser = {
         id: makeFirebaseDocId(email, 'admin'),

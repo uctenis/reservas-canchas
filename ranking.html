@@ -436,7 +436,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-<script src="db.js?v=20260526_v4"></script>
+<script src="db.js?v=20260526_v5"></script>
 
 <script>
 const GENDERS = {
@@ -609,7 +609,7 @@ async function loadRankingData() {
     let players = await withTimeout(DB.getPlayersCloud(), CLOUD_TIMEOUT_MS, 'Firebase ranking');
     const needsSeeding = players.length < 5;
     if (needsSeeding) {
-      if (!isAdminSession()) throw new Error('Firebase aún no tiene jugadores sembrados.');
+      if (!isPlayerAdminSession()) throw new Error('Firebase aún no tiene jugadores sembrados.');
       setRankStatus('Sembrando Firebase...', 'info');
       await withTimeout(
         DB.savePlayersCloud(buildInitialFirebaseSeed(), { email: DB.getSession()?.email || 'seed-local-preview' }),
@@ -822,6 +822,7 @@ function normalizePlayer(row, index, gender) {
   const mano = cleanText(row?.manoHabil ?? row?.mano ?? row?.hand) || staticPlayer?.mano || '';
   const reves = cleanText(row?.reves ?? row?.backhand) || staticPlayer?.reves || '';
   const foto = resolvePhoto(rawPhoto, id, gender) || staticPlayer?.foto || '';
+  const telefono = cleanText(row?.telefono ?? row?.phone ?? row?.whatsapp ?? row?.celular);
 
   return {
     id,
@@ -841,6 +842,7 @@ function normalizePlayer(row, index, gender) {
     reves,
     foto,
     email,
+    telefono,
     notas: cleanText(row?.notes ?? row?.notas),
     activo: normalizeActiveValue(activeValue)
   };
@@ -864,7 +866,8 @@ function fillPlayerFromLocalProfile(player) {
     mano: player.mano || user.mano || '',
     reves: player.reves || user.reves || '',
     foto: player.foto || resolvePhoto(user.foto, user.id, player.gender),
-    email: player.email || user.email || ''
+    email: player.email || user.email || '',
+    telefono: player.telefono || user.telefono || ''
   };
 }
 
@@ -1030,7 +1033,7 @@ function renderUserBar() {
 function renderAdminControls() {
   const btn = document.getElementById('btnAdminPlayers');
   if (!btn) return;
-  btn.style.display = isAdminSession() ? 'inline-flex' : 'none';
+  btn.style.display = isPlayerAdminSession() ? 'inline-flex' : 'none';
 }
 
 function checkBtnDesafio() {
@@ -1768,7 +1771,7 @@ async function createChallengeRemoteOrLocal(payload) {
     try {
       const saved = await DB.saveChallengeCloud(challenge);
       upsertLocalChallenge(saved);
-      await notifyChallenge(saved, { nombre: payload.retadorNombre, email: payload.retadorEmail }, { nombre: payload.retadoNombre, email: payload.retadoEmail });
+      await notifyChallenge(saved, { nombre: payload.retadorNombre, email: payload.retadorEmail }, { nombre: payload.retadoNombre, email: payload.retadoEmail, telefono: payload.retadoTelefono });
       savedChallenge = saved;
     } catch (error) {
       console.warn('No se pudo crear el desafío en Firebase. Usando respaldo local.', error);
@@ -1782,12 +1785,13 @@ async function createChallengeRemoteOrLocal(payload) {
       retadorEmail: payload.retadorEmail,
       retadoNombre: payload.retadoNombre,
       retadoEmail: payload.retadoEmail,
+      retadoTelefono: payload.retadoTelefono || '',
       slot: payload.slot || '',
       courtId: payload.courtId || '',
       courtLabel: payload.courtLabel || ''
     });
     upsertLocalChallenge(local);
-    await notifyChallenge(local, { nombre: payload.retadorNombre, email: payload.retadorEmail }, { nombre: payload.retadoNombre, email: payload.retadoEmail });
+    await notifyChallenge(local, { nombre: payload.retadorNombre, email: payload.retadorEmail }, { nombre: payload.retadoNombre, email: payload.retadoEmail, telefono: payload.retadoTelefono });
     savedChallenge = local;
   }
 
@@ -1798,6 +1802,7 @@ async function createChallengeRemoteOrLocal(payload) {
 
 function triggerWhatsAppChallenge(challenge, telefono) {
   const cleanPhone = String(telefono || '').replace(/[^0-9]/g, '');
+  if (!cleanPhone) return null;
   const dateStr = challenge.fecha || '';
   const courtName = challenge.cancha || 'cancha por definir';
   
@@ -1812,11 +1817,9 @@ function triggerWhatsAppChallenge(challenge, telefono) {
   const slotStr = challenge.slot ? ` · Hora: ${challenge.slot}` : '';
   const text = `🎾 ¡Hola! Te he desafiado en UCTenis.\n\n📅 Fecha: ${dateFormatted}${slotStr}\n🏟️ Cancha: ${courtName}\n\nPor favor, ingresa a la página para aceptar o rechazar el desafío:\nhttps://uctenis.github.io/reservas-canchas-staging/ranking.html\n\n¡Nos vemos en la cancha! 🏆`;
   
-  const waUrl = cleanPhone 
-    ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`
-    : `https://wa.me/?text=${encodeURIComponent(text)}`;
-    
+  const waUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`;
   window.open(waUrl, '_blank');
+  return waUrl;
 }
 
 function upsertLocalChallenge(challenge) {
@@ -1852,7 +1855,9 @@ async function notifyChallenge(challenge, retador, retado) {
         retadorNombre: retador.nombre,
         retadorEmail: retador.email || '',
         retadoNombre: retado.nombre,
+        retadoEmail: retado.email || '',
         retadoId: challenge.retadoId,
+        retadoTelefono: retado.telefono || '',
         fecha: challenge.fecha,
         fechaLabel: fechaLabel,
         slot: challenge.slot || '',
@@ -2484,7 +2489,7 @@ async function submitOwnProfile(event) {
 }
 
 function openAdminModal() {
-  if (!isAdminSession()) return;
+  if (!isPlayerAdminSession()) return;
   resetAdminForm();
   renderAdminPlayerList();
   openModal('adminModal');
@@ -2492,6 +2497,7 @@ function openAdminModal() {
 
 async function manualSeedDatabase(event) {
   if (event) event.preventDefault();
+  if (!isPlayerAdminSession()) return;
   if (!confirm('¿Estás seguro de que deseas sembrar los jugadores oficiales en Firebase? Esto agregará a todos los jugadores del ranking estático inicial.')) {
     return;
   }
@@ -2636,7 +2642,7 @@ async function submitAdminPlayer(event) {
   const submitBtn = document.getElementById('btnAdminSave');
   const submitLabel = submitBtn.textContent;
 
-  if (!isAdminSession(session)) {
+  if (!isPlayerAdminSession(session)) {
     error.textContent = 'Acceso reservado al administrador.';
     return;
   }
@@ -2708,6 +2714,7 @@ async function submitAdminPlayer(event) {
           mano: item.mano,
           reves: item.reves,
           foto: item.foto,
+          telefono: item.telefono,
           pos: toNumber(item.posicion ?? item.pos, NaN)
         });
       });
@@ -2742,6 +2749,7 @@ async function submitAdminPlayer(event) {
           mano: item.mano,
           reves: item.reves,
           foto: item.foto,
+          telefono: item.telefono,
           pos: toNumber(item.posicion ?? item.pos, NaN)
         });
       });
@@ -2770,7 +2778,7 @@ async function deletePlayerFromAdmin(playerKey) {
   const session = DB.getSession();
   const player = getPlayerByKey(playerKey);
   const error = document.getElementById('adminErr');
-  if (!player || !isAdminSession(session)) return;
+  if (!player || !isPlayerAdminSession(session)) return;
   if (!confirm(`Marcar a ${player.nombre} como inactivo en la escalerilla?`)) return;
 
   try {
@@ -2876,7 +2884,8 @@ function syncSessionWithRankingPlayer() {
     categoria: normalizeCategory(player.categoria || session.categoria || 'Principiante'),
     mano: player.mano || session.mano || 'Derecha',
     reves: player.reves || session.reves || 'Dos manos',
-    foto: player.foto || session.foto || ''
+    foto: player.foto || session.foto || '',
+    telefono: player.telefono || session.telefono || ''
   };
 
   const syncedEmail = normalizeEmail(synced.email);
@@ -2956,6 +2965,12 @@ function isAdminSession(session = DB.getSession()) {
   const name = normalizeKey(session.nombre);
   return ADMIN_IDENTITIES.emails.some(item => normalizeEmail(item) === email) ||
     ADMIN_IDENTITIES.names.some(item => normalizeKey(item) === name);
+}
+
+function isPlayerAdminSession(session = DB.getSession()) {
+  if (!session) return false;
+  const email = normalizeEmail(session.email);
+  return PURE_ADMIN_EMAILS.some(item => normalizeEmail(item) === email);
 }
 
 function actorPayload(session = DB.getSession()) {
@@ -3331,6 +3346,7 @@ function mergeEditedPlayer(current, edit, gender) {
     mano: edit.mano || edit.manoHabil || current?.mano || '',
     reves: edit.reves || current?.reves || '',
     foto: edit.foto || current?.foto || '',
+    telefono: edit.telefono || current?.telefono || '',
     prev: current?.prev || current?.pos || '',
     pos: toNumber(edit.posicion ?? edit.pos, current?.pos || NaN),
     activo: edit.activo !== false && edit.participaRanking !== false,

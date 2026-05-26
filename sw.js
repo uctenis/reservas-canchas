@@ -1,5 +1,5 @@
-const CACHE_NAME = 'tenis-uct-cache-v4';
-const urlsToCache = ['/', 'index.html', 'normas.html', 'reservas.html', 'ranking.html', 'cec.jpg', 'cjp.jpg', 'logo_uctenis_v03.png'];
+const CACHE_NAME = 'tenis-uct-cache-v5';
+const urlsToCache = ['./', 'index.html', 'normas.html', 'reservas.html', 'ranking.html', 'cec.jpg', 'cjp.jpg', 'logo_uctenis_v03.png'];
 
 self.addEventListener('install', event => {
   self.skipWaiting();
