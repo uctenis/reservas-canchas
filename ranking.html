@@ -415,7 +415,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-<script src="db.js?v=20260526_v3"></script>
+<script src="db.js?v=20260526_v4"></script>
 
 <script>
 const GENDERS = {
@@ -583,7 +583,11 @@ async function loadRankingData() {
     if (!DB.isCloudConfigured()) throw new Error('Firestore no está disponible.');
 
     let players = await withTimeout(DB.getPlayersCloud(), CLOUD_TIMEOUT_MS, 'Firebase ranking');
-    if (!players.length) {
+    const onlyHasAdmin = players.length === 1 && players.every(p => {
+      const email = p.email || '';
+      return ADMIN_IDENTITIES.emails.some(adm => adm.toLowerCase() === email.toLowerCase());
+    });
+    if (!players.length || onlyHasAdmin) {
       if (!isAdminSession()) throw new Error('Firebase aún no tiene jugadores sembrados.');
       setRankStatus('Sembrando Firebase...', 'info');
       await withTimeout(
