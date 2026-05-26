@@ -136,8 +136,7 @@ const DB = {
   },
 
   isAllowedAccessEmail(email) {
-    const normalized = normalizeEmailForDb(email);
-    return normalized.endsWith('@uct.cl') || FIREBASE_ADMIN_EMAILS.includes(normalized);
+    return true; // Permitir cualquier correo, ya no restringido a @uct.cl
   },
 
   async validateMemberAPI(email) {
@@ -171,14 +170,13 @@ const DB = {
 
     try {
       const provider = new firebase.auth.GoogleAuthProvider();
-      // Sugerir el dominio institucional en el selector de Google
-      provider.setCustomParameters({ hd: 'uct.cl' });
+      // Ya no restringimos a uct.cl para permitir cuentas gmail ordinarias
       const result = await firebaseAuth.signInWithPopup(provider);
       const user = result.user;
 
       if (!this.isAllowedAccessEmail(user.email)) {
         await firebaseAuth.signOut();
-        return { ok: false, msg: 'Acceso restringido: debes usar una cuenta institucional @uct.cl o una cuenta administradora autorizada.' };
+        return { ok: false, msg: 'Acceso restringido a cuentas autorizadas.' };
       }
 
       const validation = await this.validateMemberAPI(user.email);
