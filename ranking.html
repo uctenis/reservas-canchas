@@ -634,8 +634,8 @@ async function refreshRankingPage() {
 
   // PASO 3: Sincronizar desafíos
   syncChallengesFromCloud().then(() => {
-    renderChallenges();
-    renderMyChallenges();
+    applyLocalChallengesToRanking();
+    renderAll();
   }).catch(err => console.warn('Error sincronizando desafíos:', err));
 }
 
@@ -659,9 +659,9 @@ function finalizeRankingLoad() {
   try {
     if (rankingState.source !== 'firebase') {
       applyLocalPlayerEdits(rankingState.lists, rankingState.inactive);
-      applyLocalChallengesToRanking();
     }
-  } catch (e) { console.warn('Error aplicando ediciones locales:', e); }
+    applyLocalChallengesToRanking();
+  } catch (e) { console.warn('Error aplicando ediciones locales/desafíos:', e); }
 
   try { syncLocalUsersFromPlayers(getAllPlayers()); }
   catch (e) { console.warn('Error sincronizando usuarios locales:', e); }
@@ -683,10 +683,18 @@ function applyLocalChallengesToRanking() {
         return timeA - timeB || String(a.id).localeCompare(String(b.id));
       })
       .forEach(challenge => {
+        const winnerIsRetador = challenge.ganadorId === challenge.retadorId;
         const winnerId = challenge.ganadorId;
-        const loserId = winnerId === challenge.retadorId ? challenge.retadoId : challenge.retadorId;
-        let winnerIndex = ranked.findIndex(player => playerMatchesChallengeRef(player, winnerId));
-        let loserIndex = ranked.findIndex(player => playerMatchesChallengeRef(player, loserId));
+        const winnerEmail = winnerIsRetador ? challenge.retadorEmail : challenge.retadoEmail;
+        const winnerNombre = winnerIsRetador ? challenge.retadorNombre : challenge.retadoNombre;
+
+        const loserId = winnerIsRetador ? challenge.retadoId : challenge.retadorId;
+        const loserEmail = winnerIsRetador ? challenge.retadoEmail : challenge.retadorEmail;
+        const loserNombre = winnerIsRetador ? challenge.retadorNombre : challenge.retadorNombre;
+
+        let winnerIndex = findChallengePlayerIndex(ranked, winnerId, winnerEmail, winnerNombre);
+        let loserIndex = findChallengePlayerIndex(ranked, loserId, loserEmail, loserNombre);
+
         if (winnerIndex < 0 || loserIndex < 0 || winnerIndex < loserIndex) return;
         const temp = ranked[winnerIndex];
         ranked[winnerIndex] = ranked[loserIndex];
@@ -2272,12 +2280,18 @@ async function applyChallengeResultToCloudRanking(challenge) {
   const list = [...(rankingState.lists[gender] || [])];
   if (!gender || !list.length) return;
 
-  // try exact id match first (more reliable), fallback to flexible matcher
-  let winnerIndex = list.findIndex(p => p.id === challenge.ganadorId || p.localId === challenge.ganadorId);
-  if (winnerIndex < 0) winnerIndex = list.findIndex(player => playerMatchesChallengeRef(player, challenge.ganadorId));
-  const loserId = challenge.ganadorId === challenge.retadorId ? challenge.retadoId : challenge.retadorId;
-  let loserIndex = list.findIndex(p => p.id === loserId || p.localId === loserId);
-  if (loserIndex < 0) loserIndex = list.findIndex(player => playerMatchesChallengeRef(player, loserId));
+  const winnerIsRetador = challenge.ganadorId === challenge.retadorId;
+  const winnerId = challenge.ganadorId;
+  const winnerEmail = winnerIsRetador ? challenge.retadorEmail : challenge.retadoEmail;
+  const winnerNombre = winnerIsRetador ? challenge.retadorNombre : challenge.retadoNombre;
+
+  const loserId = winnerIsRetador ? challenge.retadoId : challenge.retadorId;
+  const loserEmail = winnerIsRetador ? challenge.retadoEmail : challenge.retadorEmail;
+  const loserNombre = winnerIsRetador ? challenge.retadorNombre : challenge.retadorNombre;
+
+  const winnerIndex = findChallengePlayerIndex(list, winnerId, winnerEmail, winnerNombre);
+  const loserIndex = findChallengePlayerIndex(list, loserId, loserEmail, loserNombre);
+
   if (winnerIndex < 0 || loserIndex < 0 || winnerIndex < loserIndex) return;
 
   const temp = list[winnerIndex];
@@ -2297,6 +2311,28 @@ async function applyChallengeResultToCloudRanking(challenge) {
   await DB.savePlayersCloud(updated, { email: 'challenge-result' });
 }
 
+function findChallengePlayerIndex(list, playerId, playerEmail, playerNombre) {
+  // 1. Try to find by ID
+  let idx = list.findIndex(p => p.id === playerId || p.localId === playerId);
+  if (idx >= 0) return idx;
+
+  // 2. Try to find by email
+  if (playerEmail) {
+    const emailNorm = normalizeEmail(playerEmail);
+    idx = list.findIndex(p => normalizeEmail(p.email) === emailNorm);
+    if (idx >= 0) return idx;
+  }
+
+  // 3. Try to find by name
+  if (playerNombre) {
+    const nameNorm = normalizeKey(playerNombre);
+    idx = list.findIndex(p => normalizeKey(p.nombre) === nameNorm);
+    if (idx >= 0) return idx;
+  }
+
+  return -1;
+}
+
 function playerMatchesChallengeRef(player, ref) {
   const raw = normalizeKey(ref);
   return Boolean(player && ref && (
@@ -2308,8 +2344,10 @@ function playerMatchesChallengeRef(player, ref) {
 }
 
 function refreshLocalRankingIfNeeded() {
-  // If ranking is served from Firebase, do not overwrite cloud data.
-  if (rankingState.source === 'firebase') return;
+  if (rankingState.source === 'firebase') {
+    applyLocalChallengesToRanking();
+    return;
+  }
   // For static or local sources, recalculate local ranking and refresh lists.
   rankingState.lists = {
     M: normalizeLocalRanking('M').map(fillPlayerFromLocalProfile),
