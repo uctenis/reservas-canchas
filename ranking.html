@@ -161,6 +161,11 @@
           <input type="text" id="cpNombre" required>
         </div>
 
+        <div class="form-group">
+          <label for="cpTelefono">Teléfono (WhatsApp)</label>
+          <input type="tel" id="cpTelefono" placeholder="+56912345678" value="+56" required>
+        </div>
+
         <div class="form-row">
           <div class="form-group">
             <label for="cpGenero">Género</label>
@@ -345,9 +350,13 @@
               </select>
             </div>
             <div class="form-group">
-              <label for="adminNotas">Notas internas</label>
-              <input type="text" id="adminNotas" placeholder="Opcional">
+              <label for="adminTelefono">Teléfono (WhatsApp)</label>
+              <input type="tel" id="adminTelefono" placeholder="+56912345678" value="+56">
             </div>
+          </div>
+          <div class="form-group">
+            <label for="adminNotas">Notas internas</label>
+            <input type="text" id="adminNotas" placeholder="Opcional">
           </div>
           <div class="form-row">
             <div class="form-group">
@@ -1374,11 +1383,12 @@ async function handleCompleteProfile(event) {
     genero: document.getElementById('cpGenero').value,
     categoria: document.getElementById('cpCat').value,
     mano: document.getElementById('cpMano').value,
-    reves: document.getElementById('cpReves').value
+    reves: document.getElementById('cpReves').value,
+    telefono: document.getElementById('cpTelefono').value.trim()
   };
 
-  if (!data.nombre || !data.genero || !data.categoria) {
-    error.textContent = 'Completa nombre, género y categoría.';
+  if (!data.nombre || !data.genero || !data.categoria || !data.telefono) {
+    error.textContent = 'Completa nombre, teléfono, género y categoría.';
     restoreButton();
     return;
   }
@@ -1403,6 +1413,7 @@ async function handleCompleteProfile(event) {
         mano: data.mano,
         reves: data.reves,
         foto: data.foto,
+        telefono: data.telefono,
         activo: true,
         posicion: (rankingState.lists[data.genero] || []).length + 1
       }, actorPayload(result.user));
@@ -1417,6 +1428,7 @@ async function handleCompleteProfile(event) {
         mano: data.mano,
         reves: data.reves,
         foto: data.foto,
+        telefono: data.telefono,
         activo: true,
         posicion: (rankingState.lists[data.genero] || []).length + 1
       });
@@ -1599,6 +1611,7 @@ async function submitChallenge(event) {
       retadoId: retadoId,
       retadoNombre: retado.nombre,
       retadoEmail: retado.email || '',
+      retadoTelefono: retadoPlayer?.telefono || '',
       genero: retadorPlayer.gender,
       fecha: fecha,
       cancha: cancha
@@ -1621,27 +1634,57 @@ async function createChallengeRemoteOrLocal(payload) {
     creado: new Date().toISOString()
   };
 
+  let savedChallenge = null;
+
   if (DB.isCloudConfigured()) {
     try {
       const saved = await DB.saveChallengeCloud(challenge);
       upsertLocalChallenge(saved);
       await notifyChallenge(saved, { nombre: payload.retadorNombre, email: payload.retadorEmail }, { nombre: payload.retadoNombre, email: payload.retadoEmail });
-      return saved;
+      savedChallenge = saved;
     } catch (error) {
       console.warn('No se pudo crear el desafío en Firebase. Usando respaldo local.', error);
     }
   }
 
-  const local = DB.createChallenge(payload.retadorId, payload.retadoId, payload.genero, payload.fecha, payload.cancha);
-  Object.assign(local, {
-    retadorNombre: payload.retadorNombre,
-    retadorEmail: payload.retadorEmail,
-    retadoNombre: payload.retadoNombre,
-    retadoEmail: payload.retadoEmail
-  });
-  upsertLocalChallenge(local);
-  await notifyChallenge(local, { nombre: payload.retadorNombre, email: payload.retadorEmail }, { nombre: payload.retadoNombre, email: payload.retadoEmail });
-  return local;
+  if (!savedChallenge) {
+    const local = DB.createChallenge(payload.retadorId, payload.retadoId, payload.genero, payload.fecha, payload.cancha);
+    Object.assign(local, {
+      retadorNombre: payload.retadorNombre,
+      retadorEmail: payload.retadorEmail,
+      retadoNombre: payload.retadoNombre,
+      retadoEmail: payload.retadoEmail
+    });
+    upsertLocalChallenge(local);
+    await notifyChallenge(local, { nombre: payload.retadorNombre, email: payload.retadorEmail }, { nombre: payload.retadoNombre, email: payload.retadoEmail });
+    savedChallenge = local;
+  }
+
+  // Auto-open WhatsApp message chat window
+  triggerWhatsAppChallenge(savedChallenge, payload.retadoTelefono);
+  return savedChallenge;
+}
+
+function triggerWhatsAppChallenge(challenge, telefono) {
+  const cleanPhone = String(telefono || '').replace(/[^0-9]/g, '');
+  const dateStr = challenge.fecha || '';
+  const courtName = challenge.cancha || 'cancha por definir';
+  
+  let dateFormatted = dateStr;
+  try {
+    const parts = dateStr.split('-');
+    if (parts.length === 3) {
+      dateFormatted = `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
+  } catch (e) {}
+
+  const text = `🎾 ¡Hola! Te he desafiado en UCTenis.\n\n📅 Fecha: ${dateFormatted}\n🏟️ Cancha: ${courtName}\n\nPor favor, ingresa a la página para aceptar o rechazar el desafío:\nhttps://uctenis.github.io/reservas-canchas-staging/ranking.html\n\n¡Nos vemos en la cancha! 🏆`;
+  
+  const waUrl = cleanPhone 
+    ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`
+    : `https://wa.me/?text=${encodeURIComponent(text)}`;
+    
+  window.open(waUrl, '_blank');
 }
 
 function upsertLocalChallenge(challenge) {
@@ -2172,6 +2215,12 @@ function showPlayerProfile(playerKey) {
       <li><span class="label">Mano</span><span class="value">${escapeHTML(player.mano || '-')}</span></li>
       <li><span class="label">Revés</span><span class="value">${escapeHTML(player.reves || '-')}</span></li>
       <li><span class="label">Correo</span><span class="value">${escapeHTML(player.email || '-')}</span></li>
+      <li>
+        <span class="label">WhatsApp</span>
+        <span class="value">
+          ${player.telefono ? `<a href="https://wa.me/${player.telefono.replace(/[^0-9]/g, '')}" target="_blank" class="stats-link" style="color: var(--accent-green); text-decoration: underline;">${escapeHTML(player.telefono)}</a>` : '-'}
+        </span>
+      </li>
     </ul>
     ${historyHtml}
     ${editButton}`;
@@ -2217,9 +2266,15 @@ function openOwnProfileEditor() {
           <select id="ownReves">${selectOptions(['Dos manos', 'Una mano'], player.reves || 'Dos manos')}</select>
         </div>
       </div>
-      <div class="form-group">
-        <label for="ownFoto">Foto actual o URL</label>
-        <input type="text" id="ownFoto" value="${escapeAttr(player.foto || '')}" placeholder="fotos/m001.png o URL">
+      <div class="form-row">
+        <div class="form-group">
+          <label for="ownTelefono">Teléfono (WhatsApp)</label>
+          <input type="tel" id="ownTelefono" value="${escapeAttr(player.telefono || '+56')}" placeholder="+56912345678" required>
+        </div>
+        <div class="form-group">
+          <label for="ownFoto">Foto actual o URL</label>
+          <input type="text" id="ownFoto" value="${escapeAttr(player.foto || '')}" placeholder="fotos/m001.png o URL">
+        </div>
       </div>
       <div class="form-group">
         <label for="ownPhotoFile">Adjuntar nueva foto</label>
@@ -2257,6 +2312,7 @@ async function submitOwnProfile(event) {
     mano: document.getElementById('ownMano').value,
     reves: document.getElementById('ownReves').value,
     foto: document.getElementById('ownFoto').value.trim(),
+    telefono: document.getElementById('ownTelefono').value.trim(),
     activo: isPlayerActive(player),
     participaRanking: isPlayerActive(player)
   };
@@ -2359,6 +2415,7 @@ function resetAdminForm() {
   document.getElementById('adminPlayerId').value = '';
   document.getElementById('adminGenero').value = rankingState.currentGender;
   document.getElementById('adminEstado').value = 'activo';
+  document.getElementById('adminTelefono').value = '+56';
   document.getElementById('adminNotas').value = '';
   document.getElementById('adminCategoria').value = 'Principiante';
   document.getElementById('adminMano').value = 'Derecha';
@@ -2377,7 +2434,8 @@ function fillAdminForm(playerKey) {
   document.getElementById('adminGenero').value = player.gender;
   document.getElementById('adminPosicion').value = player.pos || '';
   document.getElementById('adminEstado').value = isPlayerActive(player) ? 'activo' : 'inactivo';
-  document.getElementById('adminNotas').value = player.notas || '';
+  document.getElementById('adminTelefono').value = player.telefono || '+56';
+  document.getElementById('adminNotas').value = player.notes || player.notas || '';
   document.getElementById('adminFechaNacimiento').value = dateForInput(player.fechaNacimiento);
   document.getElementById('adminCategoria').value = player.categoria || 'Principiante';
   document.getElementById('adminMano').value = player.mano || 'Derecha';
@@ -2463,6 +2521,7 @@ async function submitAdminPlayer(event) {
       mano: document.getElementById('adminMano').value,
       reves: document.getElementById('adminReves').value,
       foto: document.getElementById('adminFoto').value.trim(),
+      telefono: document.getElementById('adminTelefono').value.trim(),
       activo: document.getElementById('adminEstado').value !== 'inactivo',
       participaRanking: document.getElementById('adminEstado').value !== 'inactivo',
       notas: document.getElementById('adminNotas').value.trim(),
@@ -2778,7 +2837,8 @@ function profileToSessionUser(player, current = DB.getSession()) {
     categoria: normalizeCategory(player.categoria || current?.categoria || 'Principiante'),
     mano: player.mano || player.manoHabil || current?.mano || 'Derecha',
     reves: player.reves || current?.reves || 'Dos manos',
-    foto: player.foto || current?.foto || ''
+    foto: player.foto || current?.foto || '',
+    telefono: player.telefono || current?.telefono || ''
   };
 }
 

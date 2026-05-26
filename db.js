@@ -66,6 +66,18 @@ function makeFirebaseDocId(value, prefix = 'doc') {
   return base || `${prefix}-${Date.now()}`;
 }
 
+function formatPhoneNumber(num) {
+  let cleaned = String(num || '').replace(/[^0-9]/g, '');
+  if (!cleaned) return '';
+  if (cleaned.startsWith('56')) {
+    return '+' + cleaned;
+  }
+  if (cleaned.length === 9 && cleaned.startsWith('9')) {
+    return '+56' + cleaned;
+  }
+  return '+' + cleaned;
+}
+
 function playerToSessionUser(player, current = {}) {
   return {
     ...(current || {}),
@@ -77,6 +89,7 @@ function playerToSessionUser(player, current = {}) {
     mano: player.mano || player.manoHabil || current.mano || 'Derecha',
     reves: player.reves || current.reves || 'Dos manos',
     foto: player.foto || current.foto || '',
+    telefono: player.telefono || current.telefono || '',
     password: current.password || 'google-auth-no-pass'
   };
 }
@@ -123,6 +136,7 @@ const DB = {
       mano: data.mano || 'Derecha',
       reves: data.reves || 'Dos manos',
       foto: data.foto || '',
+      telefono: data.telefono || '',
       creado: new Date().toISOString()
     };
     users.push(user);
@@ -262,7 +276,8 @@ const DB = {
       categoria: normalizeCategoryForDb(data.categoria),
       mano: data.mano || 'Derecha',
       reves: data.reves || 'Dos manos',
-      foto: data.foto || ''
+      foto: data.foto || '',
+      telefono: data.telefono || ''
     });
     if (result.ok) {
       localStorage.setItem('uctenis_session', JSON.stringify(result.user));
@@ -330,6 +345,7 @@ const DB = {
       genero: player.genero || player.gender || '',
       activo: activeValue === undefined ? true : activeValue !== false,
       participaRanking: activeValue === undefined ? true : activeValue !== false,
+      telefono: formatPhoneNumber(player.telefono),
       emailLower,
       updatedAt: now,
       updatedBy: actor.email || actor.adminEmail || actor.actorEmail || ''
@@ -354,6 +370,7 @@ const DB = {
         genero: player.genero || player.gender || '',
         activo: activeValue === undefined ? true : activeValue !== false,
         participaRanking: activeValue === undefined ? true : activeValue !== false,
+        telefono: formatPhoneNumber(player.telefono),
         emailLower: normalizeEmailForDb(player.email),
         updatedAt: now,
         updatedBy: actor.email || actor.adminEmail || actor.actorEmail || ''
