@@ -138,14 +138,14 @@
       </div>
 
       <div id="mockLoginContainer" class="mock-login-panel">
-        <p><strong>Modo simulación</strong><br>Disponible cuando Firebase no está configurado o no cargó en esta sesión.</p>
+        <p id="mockLoginHint"><strong>Ingreso local</strong><br>Usa tu correo registrado para abrir sesion en esta version local.</p>
         <div class="form-group">
           <label for="mockEmail">Correo electrónico</label>
-          <input type="email" id="mockEmail" placeholder="socio@gmail.com" value="luis@uct.cl">
+          <input type="email" id="mockEmail" placeholder="socio@gmail.com" value="dsilva@uct.cl">
         </div>
         <div class="form-group">
           <label for="mockNombre">Nombre</label>
-          <input type="text" id="mockNombre" placeholder="Nombre completo" value="Luis Otth">
+          <input type="text" id="mockNombre" placeholder="Nombre completo" value="David Silva">
         </div>
         <button id="btnMockLogin" class="btn-primary" type="button">Simular ingreso</button>
       </div>
@@ -833,13 +833,37 @@ function closeFloatingAlert() {
 window.closeFloatingAlert = closeFloatingAlert;
 
 async function syncChallengesFromCloud() {
-  if (!DB.isCloudConfigured()) return;
+  let challenges = [];
+  let success = false;
 
-  try {
-    const challenges = await withTimeout(DB.getChallengesCloud(), CLOUD_TIMEOUT_MS, 'Firebase desafíos');
+  if (DB.isCloudConfigured()) {
+    try {
+      challenges = await withTimeout(DB.getChallengesCloud(), CLOUD_TIMEOUT_MS, 'Firebase desafíos');
+      success = true;
+    } catch (error) {
+      console.warn('No se pudieron sincronizar los desafíos desde Firebase. Intentando Sheets...', error);
+    }
+  }
+
+  if (!success && window.CONFIG?.API_URL) {
+    try {
+      const res = await withTimeout(
+        fetch(`${window.CONFIG.API_URL}?action=get_challenges`),
+        CLOUD_TIMEOUT_MS,
+        'Google Sheets desafíos'
+      );
+      const data = await res.json();
+      if (data && data.ok && Array.isArray(data.challenges)) {
+        challenges = data.challenges;
+        success = true;
+      }
+    } catch (sheetErr) {
+      console.warn('No se pudieron sincronizar los desafíos desde Google Sheets:', sheetErr);
+    }
+  }
+
+  if (success) {
     DB.saveChallenges(challenges);
-  } catch (error) {
-    console.warn('No se pudieron sincronizar los desafíos desde Firebase.', error);
   }
 }
 
@@ -1080,9 +1104,13 @@ function renderRanking() {
       ? `<button class="btn-mini-challenge" type="button" data-action="challenge-player" data-player-key="${escapeAttr(player.key)}">Retar</button>`
       : '';
 
+    const rankBadgeHtml = player.pos === 1
+      ? `<img src="fotos/leader_badge.png" alt="1" style="width: 32px; height: 32px; object-fit: contain; vertical-align: middle;">`
+      : `<span class="rank-number rank-${player.pos <= 3 ? player.pos : 'other'}">${player.pos}</span>`;
+
     return `
       <tr class="${player.pos <= 3 ? 'top-row' : ''}" data-player-key="${escapeAttr(player.key)}">
-        <td class="pos-cell"><span class="rank-number rank-${player.pos <= 3 ? player.pos : 'other'}">${player.pos}</span></td>
+        <td class="pos-cell">${rankBadgeHtml}</td>
         <td class="name-cell">
           <div class="player-cell">
             <img class="player-avatar" src="${escapeAttr(player.foto)}" data-fallback="${escapeAttr(GENDERS[gender].fallbackAvatar)}" onerror="useFallbackAvatar(this)" alt="${escapeAttr(player.nombre)}">
@@ -1116,12 +1144,6 @@ function renderSummary(list) {
 
   const gender = rankingState.currentGender;
   const leader = list[0];
-  const sourceLabels = {
-    firebase: 'Firebase',
-    static: 'Copia local oficial',
-    local: 'Datos locales'
-  };
-  const source = sourceLabels[rankingState.source] || 'Datos locales';
   const inactiveCount = (rankingState.inactive[gender] || []).length;
   
   const inactiveBoxHtml = isPlayerAdminSession() ? `
@@ -1131,19 +1153,18 @@ function renderSummary(list) {
     </div>` : '';
 
   summary.innerHTML = `
-    <div class="summary-item">
-      <span>Líder</span>
-      <strong>${leader.pos} ${escapeHTML(leader.nombre)}</strong>
+    <div class="summary-item leader-summary">
+      <img src="fotos/leader_badge.png" class="leader-rank-badge" aria-label="Líder número 1" style="background: transparent; border: none; box-shadow: none; padding: 0; object-fit: contain;">
+      <div class="leader-summary-copy">
+        <span>Líder</span>
+        <strong>${escapeHTML(leader.nombre)}</strong>
+      </div>
     </div>
     <div class="summary-item">
       <span>Jugadores</span>
       <strong>${list.length}</strong>
     </div>
-    ${inactiveBoxHtml}
-    <div class="summary-item">
-      <span>Fuente</span>
-      <strong>${source}</strong>
-    </div>`;
+    ${inactiveBoxHtml}`;
 }
 
 function renderInactivePlayers() {
@@ -1273,8 +1294,10 @@ window.addEventListener('resize', () => {
 
 function renderAdminControls() {
   const btn = document.getElementById('btnAdminPlayers');
-  if (!btn) return;
-  btn.style.display = isPlayerAdminSession() ? 'inline-flex' : 'none';
+  const status = document.getElementById('rankApiStatus');
+  const isAdmin = isPlayerAdminSession();
+  if (btn) btn.style.display = isAdmin ? 'inline-flex' : 'none';
+  if (status) status.style.display = isAdmin ? 'inline-flex' : 'none';
 }
 
 function checkBtnDesafio() {
@@ -1391,7 +1414,7 @@ function renderMyChallenges() {
 
   const users = DB.getUsers();
   const allChallenges = DB.getChallenges()
-    .filter(challenge => challenge.genero === rankingState.currentGender && isUserInChallenge(session, challenge));
+    .filter(challenge => isUserInChallenge(session, challenge));
 
   const activeChallenges = allChallenges
     .filter(challenge => ['pendiente', 'aceptado'].includes(challenge.status))
@@ -1690,12 +1713,27 @@ async function deleteChallenge(id) {
 
 function openAuthModal() {
   const configured = DB.isFirebaseConfigured();
-  document.getElementById('googleBtnContainer').style.display = configured ? 'block' : 'none';
-  document.getElementById('mockLoginContainer').style.display = configured ? 'none' : 'block';
+  const useLocalLogin = isLocalAuthHost() || !configured;
+  document.getElementById('googleBtnContainer').style.display = configured && !useLocalLogin ? 'block' : 'none';
+  document.getElementById('mockLoginContainer').style.display = useLocalLogin ? 'block' : 'none';
+  document.getElementById('mockLoginHint').innerHTML = useLocalLogin
+    ? '<strong>Ingreso local</strong><br>Usa tu correo registrado para abrir sesion en esta version local.'
+    : '<strong>Modo simulacion</strong><br>Disponible si Google Auth no responde en esta sesion.';
   document.getElementById('authMainView').style.display = 'block';
   document.getElementById('authCompleteProfileView').style.display = 'none';
   document.getElementById('authErr').textContent = '';
   openModal('authModal');
+}
+
+function isLocalAuthHost() {
+  return ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
+}
+
+function showRankingLocalLogin(message) {
+  document.getElementById('googleBtnContainer').style.display = 'none';
+  document.getElementById('mockLoginContainer').style.display = 'block';
+  document.getElementById('mockLoginHint').innerHTML = '<strong>Ingreso local</strong><br>Usa tu correo registrado para abrir sesion en esta version local.';
+  document.getElementById('authErr').textContent = message || '';
 }
 
 async function handleGoogleLogin() {
@@ -1710,7 +1748,11 @@ async function handleGoogleLogin() {
   btn.innerHTML = original;
 
   if (!result.ok) {
-    document.getElementById('authErr').textContent = result.msg;
+    if (isLocalAuthHost() || String(result.msg || '').includes('unauthorized-domain')) {
+      showRankingLocalLogin('Google Auth no esta habilitado para este dominio local. Usa el ingreso por correo.');
+    } else {
+      document.getElementById('authErr').textContent = result.msg;
+    }
     return;
   }
 
@@ -1736,7 +1778,24 @@ async function handleMockLogin() {
   btn.textContent = original;
 
   if (!result.ok) {
-    document.getElementById('authErr').textContent = result.msg;
+    if (!isLocalAuthHost()) {
+      document.getElementById('authErr').textContent = result.msg;
+      return;
+    }
+    const localUser = {
+      id: email.toLowerCase(),
+      nombre: nombre || email.split('@')[0],
+      email: email,
+      genero: 'M',
+      categoria: 'Principiante',
+      mano: 'Derecha',
+      reves: 'Dos manos',
+      foto: '',
+      telefono: ''
+    };
+    DB.upsertUserLocal(localUser);
+    localStorage.setItem('uctenis_session', JSON.stringify(localUser));
+    await handleLoginResponse({ ok: true, user: localUser, isNew: false });
     return;
   }
 
@@ -2157,17 +2216,43 @@ async function createChallengeRemoteOrLocal(payload) {
 
   let savedChallenge = null;
 
+  // 1. Intentar en Firebase si está configurado
   if (DB.isCloudConfigured()) {
     try {
       const saved = await DB.saveChallengeCloud(challenge);
       upsertLocalChallenge(saved);
-      await notifyChallenge(saved, { nombre: payload.retadorNombre, email: payload.retadorEmail }, { nombre: payload.retadoNombre, email: payload.retadoEmail, telefono: payload.retadoTelefono });
       savedChallenge = saved;
     } catch (error) {
-      console.warn('No se pudo crear el desafío en Firebase. Usando respaldo local.', error);
+      console.warn('No se pudo crear el desafío en Firebase.', error);
     }
   }
 
+  // 2. Intentar en Google Sheets via Apps Script (guarda el desafío y notifica en un solo paso)
+  if (window.CONFIG?.API_URL) {
+    try {
+      const res = await fetch(window.CONFIG.API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          action: 'create_challenge',
+          ...challenge
+        })
+      });
+      const data = await res.json().catch(() => null);
+      if (data && data.ok) {
+        console.log('Desafío creado exitosamente en Google Sheets.');
+        if (data.challenge) {
+          const merged = { ...challenge, ...data.challenge };
+          upsertLocalChallenge(merged);
+          savedChallenge = merged;
+        }
+      }
+    } catch (sheetErr) {
+      console.warn('No se pudo crear el desafío en Google Sheets:', sheetErr);
+    }
+  }
+
+  // 3. Respaldo local y notificar vía fallback directo si no se pudo guardar en Google Sheets
   if (!savedChallenge) {
     const local = DB.createChallenge(payload.retadorId, payload.retadoId, payload.genero, payload.fecha, payload.cancha);
     Object.assign(local, {
@@ -2181,8 +2266,10 @@ async function createChallengeRemoteOrLocal(payload) {
       courtLabel: payload.courtLabel || ''
     });
     upsertLocalChallenge(local);
-    await notifyChallenge(local, { nombre: payload.retadorNombre, email: payload.retadorEmail }, { nombre: payload.retadoNombre, email: payload.retadoEmail, telefono: payload.retadoTelefono });
     savedChallenge = local;
+    
+    // Si no se guardó en Google Sheets, enviamos la notificación HTML/Calendar por separado
+    await notifyChallenge(local, { nombre: payload.retadorNombre, email: payload.retadorEmail }, { nombre: payload.retadoNombre, email: payload.retadoEmail, telefono: payload.retadoTelefono });
   }
 
   // Return saved challenge without triggering immediate popups (handled in UI modal)
@@ -2353,19 +2440,48 @@ async function notifyChallenge(challenge, retador, retado) {
 }
 
 async function respondChallenge(id, accept) {
+  let saved = false;
+
   if (DB.isCloudConfigured()) {
     try {
       const challenge = await DB.updateChallengeCloud(id, {
         status: accept ? 'aceptado' : 'rechazado'
       });
       upsertLocalChallenge(challenge);
+      saved = true;
     } catch (error) {
-      console.warn('No se pudo responder el desafío en Firebase. Usando respaldo local.', error);
-      DB.respondChallenge(id, accept);
+      console.warn('No se pudo responder el desafío en Firebase.', error);
     }
-  } else {
+  }
+
+  if (window.CONFIG?.API_URL) {
+    try {
+      const res = await fetch(window.CONFIG.API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          action: 'respond_challenge',
+          id: id,
+          accept: accept
+        })
+      });
+      const data = await res.json().catch(() => null);
+      if (data && data.ok) {
+        console.log('Respuesta registrada en Google Sheets.');
+        if (data.challenge) {
+          upsertLocalChallenge(data.challenge);
+        }
+        saved = true;
+      }
+    } catch (sheetErr) {
+      console.warn('No se pudo registrar la respuesta en Google Sheets:', sheetErr);
+    }
+  }
+
+  if (!saved) {
     DB.respondChallenge(id, accept);
   }
+
   renderChallenges();
   renderMyChallenges();
 }
@@ -2648,6 +2764,8 @@ async function submitScore(event) {
   const ganadorId = scoreResult.winnerId || '';
 
   let savedInCloud = false;
+
+  // 1. Intentar registrar en Firebase
   if (DB.isCloudConfigured()) {
     try {
       const wasCompleted = challenge.status === 'completado';
@@ -2695,12 +2813,40 @@ async function submitScore(event) {
       }
       savedInCloud = true;
     } catch (cloudError) {
-      console.warn('No se pudo guardar el resultado en Firebase. Usando respaldo local.', cloudError);
-      DB.submitResult(rankingState.currentChallengeId, marcador, ganadorId);
+      console.warn('No se pudo guardar el resultado en Firebase.', cloudError);
     }
-  } else {
+  }
+
+  // 2. Intentar registrar en Google Sheets via Apps Script (también notifica e invalida reservas/ranking)
+  if (window.CONFIG?.API_URL) {
+    try {
+      const res = await fetch(window.CONFIG.API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          action: 'submit_challenge_result',
+          id: rankingState.currentChallengeId,
+          marcador,
+          ganadorId
+        })
+      });
+      const data = await res.json().catch(() => null);
+      if (data && data.ok) {
+        console.log('Resultado registrado exitosamente en Google Sheets.');
+        if (data.challenge) {
+          upsertLocalChallenge({ ...challenge, ...data.challenge });
+        }
+        savedInCloud = true;
+      }
+    } catch (sheetErr) {
+      console.warn('No se pudo registrar el resultado en Google Sheets:', sheetErr);
+    }
+  }
+
+  if (!savedInCloud) {
     DB.submitResult(rankingState.currentChallengeId, marcador, ganadorId);
   }
+
   closeModal('scoreModal');
   if (savedInCloud) await refreshRankingPage();
   else {
@@ -3713,8 +3859,10 @@ function findTopMover(list) {
 
 function setRankStatus(text, type) {
   const status = document.getElementById('rankApiStatus');
+  if (!status) return;
   status.textContent = text;
   status.className = `rank-status status-${type}`;
+  status.style.display = isPlayerAdminSession() ? 'inline-flex' : 'none';
 }
 
 function setChallengeMinDate() {

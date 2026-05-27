@@ -233,6 +233,7 @@ function notifyChallenge(data) {
     '</div>'
   ].join('\n');
 
+  /*
   MailApp.sendEmail({
     to: retadoEmail,
     cc: retadorEmail || '',
@@ -241,6 +242,7 @@ function notifyChallenge(data) {
     name: 'UCTenis Club',
     replyTo: (CONFIG.ADMINS.emails || [])[0] || ''
   });
+  */
 
   const waText = '🎾 ¡Hola ' + retadoNombre + '! ' + retadorNombre + ' te ha retado en UCTenis. Fecha: ' + fechaLabel + (slot ? ', ' + slot : '') + ' en ' + cancha + '. Acepta o rechaza en: ' + rankingUrl;
   const cleanPhone = retadoTelefono.replace(/[^0-9]/g, '');
