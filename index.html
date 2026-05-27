@@ -10,7 +10,7 @@
   <meta property="og:description" content="Sistema de reservas y ranking de canchas de tenis UCT."/>
   <meta property="og:image" content="https://uctenis.github.io/reservas-canchas/logo_uctenis_v03.png"/>
   <meta name="theme-color" content="#0f172a"/>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=20260527_v8">
   <style>
     /* ── Actions Hero Grid (Top Priority) ── */
     .actions-hero-grid {
@@ -774,8 +774,8 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
 
-<script src="db.js?v=20260526_v5"></script>
-<script src="script.js?v=20260526_v3"></script>
+<script src="db.js?v=20260527_v8"></script>
+<script src="script.js?v=20260527_v8"></script>
 <script>
 // Admin emails (must match db.js)
 const ADMIN_EMAILS = ['uctenisclub@gmail.com'];
@@ -1452,7 +1452,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js').catch(()=>{});
+    navigator.serviceWorker.register('sw.js').then(reg => {
+      reg.update().catch(()=>{});
+    }).catch(()=>{});
   });
 }
 </script>
