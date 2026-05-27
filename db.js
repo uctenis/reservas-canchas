@@ -549,10 +549,12 @@ const DB = {
 
   // ──────────────── DESAFÍOS ────────────────
   getChallenges() {
-    return JSON.parse(localStorage.getItem('uctenis_challenges') || '[]');
+    let list = JSON.parse(localStorage.getItem('uctenis_challenges') || '[]');
+    return list.filter(c => c.status !== 'eliminado' && c.id !== '1779815098805' && !(c.fecha === '2026-05-29' && (c.retadoId === 'm004' || String(c.retadoNombre).toLowerCase().includes('otth')) && c.status === 'rechazado'));
   },
   saveChallenges(list) {
-    localStorage.setItem('uctenis_challenges', JSON.stringify(list));
+    const filtered = list.filter(c => c.status !== 'eliminado' && c.id !== '1779815098805' && !(c.fecha === '2026-05-29' && (c.retadoId === 'm004' || String(c.retadoNombre).toLowerCase().includes('otth')) && c.status === 'rechazado'));
+    localStorage.setItem('uctenis_challenges', JSON.stringify(filtered));
   },
   createChallenge(retadorId, retadoId, genero, fecha, cancha) {
     const challenges = this.getChallenges();

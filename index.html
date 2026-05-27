@@ -10,7 +10,7 @@
   <meta property="og:description" content="Sistema de reservas y ranking de canchas de tenis UCT."/>
   <meta property="og:image" content="https://uctenis.github.io/reservas-canchas/logo_uctenis_v03.png"/>
   <meta name="theme-color" content="#0f172a"/>
-  <link rel="stylesheet" href="style.css?v=20260527_v8">
+  <link rel="stylesheet" href="style.css?v=20260527_v9">
   <style>
     /* ── Actions Hero Grid (Top Priority) ── */
     .actions-hero-grid {
@@ -774,8 +774,8 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
 
-<script src="db.js?v=20260527_v8"></script>
-<script src="script.js?v=20260527_v8"></script>
+<script src="db.js?v=20260527_v9"></script>
+<script src="script.js?v=20260527_v9"></script>
 <script>
 // Admin emails (must match db.js)
 const ADMIN_EMAILS = ['uctenisclub@gmail.com'];
@@ -1180,13 +1180,23 @@ async function loadLiveData() {
   // Active challenges (pendiente or aceptado)
   const active = challenges
     .filter(c => c.status === 'pendiente' || c.status === 'aceptado')
-    .sort((a, b) => (b.creado || '').localeCompare(a.creado || ''))
+    .sort((a, b) => {
+      const myA = isMyChallenge(a) ? 1 : 0;
+      const myB = isMyChallenge(b) ? 1 : 0;
+      if (myA !== myB) return myB - myA; // My challenges first
+      return (b.creado || '').localeCompare(a.creado || '');
+    })
     .slice(0, 4);
 
   // Latest results (completado)
   const results = challenges
     .filter(c => c.status === 'completado' && c.ganadorId)
-    .sort((a, b) => (b.actualizado || b.creado || '').localeCompare(a.actualizado || a.creado || ''))
+    .sort((a, b) => {
+      const myA = isMyChallenge(a) ? 1 : 0;
+      const myB = isMyChallenge(b) ? 1 : 0;
+      if (myA !== myB) return myB - myA; // My results first
+      return (b.actualizado || b.creado || '').localeCompare(a.actualizado || a.creado || '');
+    })
     .slice(0, 3);
 
   // Render active challenges

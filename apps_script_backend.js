@@ -515,7 +515,13 @@ function respondChallenge(data) {
   const found = findChallengeRow(text(data.id));
   if (!found) return { ok: false, msg: 'Desafío no encontrado.' };
 
-  const status = data.accept === true || data.accept === 'true' ? 'aceptado' : 'rechazado';
+  let status = 'rechazado';
+  if (data.status === 'eliminado' || data.accept === 'eliminado') {
+    status = 'eliminado';
+  } else if (data.accept === true || data.accept === 'true' || data.status === 'aceptado') {
+    status = 'aceptado';
+  }
+  
   found.sheet.getRange(found.rowNumber, 11).setValue(status);
   found.sheet.getRange(found.rowNumber, 15).setValue(new Date().toISOString());
 

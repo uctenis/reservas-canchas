@@ -9,8 +9,8 @@
   <meta property="og:description" content="Revisa el ranking masculino y femenino de UCTenis y gestiona tus desafíos.">
   <meta property="og:image" content="https://uctenis.github.io/reservas-canchas/logo_uctenis_v03.png">
   <link rel="icon" href="logo_uctenis_v03.png" type="image/png">
-  <link rel="stylesheet" href="style.css?v=20260527_v8">
-  <link rel="stylesheet" href="ranking.css?v=20260527_v8">
+  <link rel="stylesheet" href="style.css?v=20260527_v9">
+  <link rel="stylesheet" href="ranking.css?v=20260527_v9">
 </head>
 <body>
 <div class="main-container ranking-page">
@@ -450,7 +450,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-<script src="db.js?v=20260527_v8"></script>
+<script src="db.js?v=20260527_v9"></script>
 
 <script>
 const GENDERS = {
@@ -1380,6 +1380,9 @@ function renderMyProfile() {
 }
 
 function scrollToMyChallenges() {
+  if (window.innerWidth <= 1080) {
+    switchMobileTab('panel');
+  }
   const el = document.getElementById('myChallengesSection');
   if (el) {
     el.scrollIntoView({ behavior: 'smooth' });
@@ -1409,6 +1412,8 @@ function renderMyChallenges() {
   if (!session) {
     div.innerHTML = '';
     document.getElementById('myChallengeCount').textContent = '';
+    const btnPanel = document.getElementById('btnTabPanel');
+    if (btnPanel) btnPanel.innerHTML = `⚔️ Mi Panel`;
     return;
   }
 
@@ -1419,6 +1424,17 @@ function renderMyChallenges() {
   const activeChallenges = allChallenges
     .filter(challenge => ['pendiente', 'aceptado'].includes(challenge.status))
     .sort(sortChallenges);
+
+  // Tab badge for mobile
+  const pendingCount = activeChallenges.filter(c => c.status === 'pendiente' && isUserRetadoInChallenge(session, c)).length;
+  const btnPanel = document.getElementById('btnTabPanel');
+  if (btnPanel) {
+    if (pendingCount > 0) {
+      btnPanel.innerHTML = `⚔️ Mi Panel <span class="badge-pending" style="background:#ef4444; color:#fff; border-radius:50%; padding:2px 6px; font-size:0.75rem; margin-left:4px; font-weight:bold;">${pendingCount}</span>`;
+    } else {
+      btnPanel.innerHTML = `⚔️ Mi Panel`;
+    }
+  }
 
   const historyChallenges = allChallenges
     .filter(challenge => ['completado', 'rechazado'].includes(challenge.status))
@@ -1476,10 +1492,13 @@ function challengeCard(challenge, users, session, compact) {
   const expiredBadge = isExpired ? `<span class="badge-expired" style="background:rgba(251,191,36,0.12); border:1px solid rgba(251,191,36,0.3); color:#fbbf24; padding:2px 6px; border-radius:4px; font-size:0.72rem; font-weight:900; text-transform:uppercase;">⚠️ Sin resultado</span>` : '';
 
   let actions = '';
-  if (challenge.status === 'completado') {
+  if (challenge.status === 'completado' || challenge.status === 'rechazado') {
     if (involved || isAdmin) {
+      if (challenge.status === 'completado') {
+        actions += `
+          <button class="btn-score" type="button" data-action="score-challenge" data-challenge-id="${escapeAttr(challenge.id)}">Editar resultado</button>`;
+      }
       actions += `
-        <button class="btn-score" type="button" data-action="score-challenge" data-challenge-id="${escapeAttr(challenge.id)}">Editar resultado</button>
         <button class="btn-delete" type="button" data-action="delete-challenge" data-challenge-id="${escapeAttr(challenge.id)}">Eliminar</button>`;
     }
   } else {
@@ -1693,19 +1712,46 @@ async function saveChallengeComment(challengeId) {
 window.saveChallengeComment = saveChallengeComment;
 
 async function deleteChallenge(id) {
-  if (DB.isCloudConfigured()) {
+  const challenge = DB.getChallenges().find(c => c.id === id);
+  const isAlreadyHistoric = challenge && ['completado', 'rechazado'].includes(challenge.status);
+  
+  if (!confirm(isAlreadyHistoric ? '¿Deseas eliminar este desafío de tu historial por completo?' : '¿Eliminar este desafío? Se marcará como rechazado y quedará en el historial.')) return;
+  
+  const targetStatus = isAlreadyHistoric ? 'eliminado' : 'rechazado';
+  
+  if (DB.isCloudConfigured() || window.CONFIG?.API_URL) {
     try {
-      const challenge = await DB.updateChallengeCloud(id, {
-        status: 'rechazado',
-        deletedAt: new Date().toISOString()
-      });
-      upsertLocalChallenge(challenge);
+      if (window.CONFIG?.API_URL) {
+        await fetch(window.CONFIG.API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: JSON.stringify({
+            action: 'respond_challenge',
+            id: id,
+            status: targetStatus,
+            accept: targetStatus
+          })
+        }).catch(()=>{});
+      }
+      
+      if (DB.isCloudConfigured()) {
+        const updated = await DB.updateChallengeCloud(id, {
+          status: targetStatus,
+          deletedAt: new Date().toISOString()
+        });
+        upsertLocalChallenge(updated);
+      } else {
+        const list = DB.getChallenges().map(c => c.id === id ? { ...c, status: targetStatus, deletedAt: new Date().toISOString() } : c);
+        DB.saveChallenges(list);
+      }
     } catch (error) {
-      console.warn('No se pudo eliminar el desafío en Firebase. Usando respaldo local.', error);
-      DB.respondChallenge(id, false);
+      console.warn('Error al eliminar en la nube, usando respaldo local:', error);
+      const list = DB.getChallenges().map(c => c.id === id ? { ...c, status: targetStatus } : c);
+      DB.saveChallenges(list);
     }
   } else {
-    DB.respondChallenge(id, false);
+    const list = DB.getChallenges().map(c => c.id === id ? { ...c, status: targetStatus } : c);
+    DB.saveChallenges(list);
   }
   renderChallenges();
   renderMyChallenges();
