@@ -1104,9 +1104,13 @@ function renderRanking() {
       ? `<button class="btn-mini-challenge" type="button" data-action="challenge-player" data-player-key="${escapeAttr(player.key)}">Retar</button>`
       : '';
 
+    const rankBadgeHtml = player.pos === 1
+      ? `<img src="fotos/leader_badge.png" alt="1" style="width: 32px; height: 32px; object-fit: contain; vertical-align: middle;">`
+      : `<span class="rank-number rank-${player.pos <= 3 ? player.pos : 'other'}">${player.pos}</span>`;
+
     return `
       <tr class="${player.pos <= 3 ? 'top-row' : ''}" data-player-key="${escapeAttr(player.key)}">
-        <td class="pos-cell"><span class="rank-number rank-${player.pos <= 3 ? player.pos : 'other'}">${player.pos}</span></td>
+        <td class="pos-cell">${rankBadgeHtml}</td>
         <td class="name-cell">
           <div class="player-cell">
             <img class="player-avatar" src="${escapeAttr(player.foto)}" data-fallback="${escapeAttr(GENDERS[gender].fallbackAvatar)}" onerror="useFallbackAvatar(this)" alt="${escapeAttr(player.nombre)}">
@@ -1150,7 +1154,7 @@ function renderSummary(list) {
 
   summary.innerHTML = `
     <div class="summary-item leader-summary">
-      <span class="leader-rank-badge" aria-label="Lider numero 1">1</span>
+      <img src="fotos/leader_badge.png" class="leader-rank-badge" aria-label="Líder número 1" style="background: transparent; border: none; box-shadow: none; padding: 0; object-fit: contain;">
       <div class="leader-summary-copy">
         <span>Líder</span>
         <strong>${escapeHTML(leader.nombre)}</strong>
