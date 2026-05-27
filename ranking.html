@@ -138,14 +138,14 @@
       </div>
 
       <div id="mockLoginContainer" class="mock-login-panel">
-        <p id="mockLoginHint"><strong>Ingreso local</strong><br>Usa tu correo registrado para abrir sesion en esta version local.</p>
+        <p><strong>Modo simulación</strong><br>Disponible cuando Firebase no está configurado o no cargó en esta sesión.</p>
         <div class="form-group">
           <label for="mockEmail">Correo electrónico</label>
-          <input type="email" id="mockEmail" placeholder="socio@gmail.com" value="dsilva@uct.cl">
+          <input type="email" id="mockEmail" placeholder="socio@gmail.com" value="luis@uct.cl">
         </div>
         <div class="form-group">
           <label for="mockNombre">Nombre</label>
-          <input type="text" id="mockNombre" placeholder="Nombre completo" value="David Silva">
+          <input type="text" id="mockNombre" placeholder="Nombre completo" value="Luis Otth">
         </div>
         <button id="btnMockLogin" class="btn-primary" type="button">Simular ingreso</button>
       </div>
@@ -1116,6 +1116,12 @@ function renderSummary(list) {
 
   const gender = rankingState.currentGender;
   const leader = list[0];
+  const sourceLabels = {
+    firebase: 'Firebase',
+    static: 'Copia local oficial',
+    local: 'Datos locales'
+  };
+  const source = sourceLabels[rankingState.source] || 'Datos locales';
   const inactiveCount = (rankingState.inactive[gender] || []).length;
   
   const inactiveBoxHtml = isPlayerAdminSession() ? `
@@ -1125,18 +1131,19 @@ function renderSummary(list) {
     </div>` : '';
 
   summary.innerHTML = `
-    <div class="summary-item leader-summary">
-      <span class="leader-rank-badge" aria-label="Lider numero 1">1</span>
-      <div class="leader-summary-copy">
-        <span>Líder</span>
-        <strong>${escapeHTML(leader.nombre)}</strong>
-      </div>
+    <div class="summary-item">
+      <span>Líder</span>
+      <strong>${leader.pos} ${escapeHTML(leader.nombre)}</strong>
     </div>
     <div class="summary-item">
       <span>Jugadores</span>
       <strong>${list.length}</strong>
     </div>
-    ${inactiveBoxHtml}`;
+    ${inactiveBoxHtml}
+    <div class="summary-item">
+      <span>Fuente</span>
+      <strong>${source}</strong>
+    </div>`;
 }
 
 function renderInactivePlayers() {
@@ -1266,10 +1273,8 @@ window.addEventListener('resize', () => {
 
 function renderAdminControls() {
   const btn = document.getElementById('btnAdminPlayers');
-  const status = document.getElementById('rankApiStatus');
-  const isAdmin = isPlayerAdminSession();
-  if (btn) btn.style.display = isAdmin ? 'inline-flex' : 'none';
-  if (status) status.style.display = isAdmin ? 'inline-flex' : 'none';
+  if (!btn) return;
+  btn.style.display = isPlayerAdminSession() ? 'inline-flex' : 'none';
 }
 
 function checkBtnDesafio() {
@@ -1386,7 +1391,7 @@ function renderMyChallenges() {
 
   const users = DB.getUsers();
   const allChallenges = DB.getChallenges()
-    .filter(challenge => isUserInChallenge(session, challenge));
+    .filter(challenge => challenge.genero === rankingState.currentGender && isUserInChallenge(session, challenge));
 
   const activeChallenges = allChallenges
     .filter(challenge => ['pendiente', 'aceptado'].includes(challenge.status))
@@ -1685,27 +1690,12 @@ async function deleteChallenge(id) {
 
 function openAuthModal() {
   const configured = DB.isFirebaseConfigured();
-  const useLocalLogin = isLocalAuthHost() || !configured;
-  document.getElementById('googleBtnContainer').style.display = configured && !useLocalLogin ? 'block' : 'none';
-  document.getElementById('mockLoginContainer').style.display = useLocalLogin ? 'block' : 'none';
-  document.getElementById('mockLoginHint').innerHTML = useLocalLogin
-    ? '<strong>Ingreso local</strong><br>Usa tu correo registrado para abrir sesion en esta version local.'
-    : '<strong>Modo simulacion</strong><br>Disponible si Google Auth no responde en esta sesion.';
+  document.getElementById('googleBtnContainer').style.display = configured ? 'block' : 'none';
+  document.getElementById('mockLoginContainer').style.display = configured ? 'none' : 'block';
   document.getElementById('authMainView').style.display = 'block';
   document.getElementById('authCompleteProfileView').style.display = 'none';
   document.getElementById('authErr').textContent = '';
   openModal('authModal');
-}
-
-function isLocalAuthHost() {
-  return ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
-}
-
-function showRankingLocalLogin(message) {
-  document.getElementById('googleBtnContainer').style.display = 'none';
-  document.getElementById('mockLoginContainer').style.display = 'block';
-  document.getElementById('mockLoginHint').innerHTML = '<strong>Ingreso local</strong><br>Usa tu correo registrado para abrir sesion en esta version local.';
-  document.getElementById('authErr').textContent = message || '';
 }
 
 async function handleGoogleLogin() {
@@ -1720,11 +1710,7 @@ async function handleGoogleLogin() {
   btn.innerHTML = original;
 
   if (!result.ok) {
-    if (isLocalAuthHost() || String(result.msg || '').includes('unauthorized-domain')) {
-      showRankingLocalLogin('Google Auth no esta habilitado para este dominio local. Usa el ingreso por correo.');
-    } else {
-      document.getElementById('authErr').textContent = result.msg;
-    }
+    document.getElementById('authErr').textContent = result.msg;
     return;
   }
 
@@ -1750,24 +1736,7 @@ async function handleMockLogin() {
   btn.textContent = original;
 
   if (!result.ok) {
-    if (!isLocalAuthHost()) {
-      document.getElementById('authErr').textContent = result.msg;
-      return;
-    }
-    const localUser = {
-      id: email.toLowerCase(),
-      nombre: nombre || email.split('@')[0],
-      email: email,
-      genero: 'M',
-      categoria: 'Principiante',
-      mano: 'Derecha',
-      reves: 'Dos manos',
-      foto: '',
-      telefono: ''
-    };
-    DB.upsertUserLocal(localUser);
-    localStorage.setItem('uctenis_session', JSON.stringify(localUser));
-    await handleLoginResponse({ ok: true, user: localUser, isNew: false });
+    document.getElementById('authErr').textContent = result.msg;
     return;
   }
 
@@ -3744,10 +3713,8 @@ function findTopMover(list) {
 
 function setRankStatus(text, type) {
   const status = document.getElementById('rankApiStatus');
-  if (!status) return;
   status.textContent = text;
   status.className = `rank-status status-${type}`;
-  status.style.display = isPlayerAdminSession() ? 'inline-flex' : 'none';
 }
 
 function setChallengeMinDate() {

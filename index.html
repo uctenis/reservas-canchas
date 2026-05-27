@@ -275,36 +275,6 @@
       color: var(--text-secondary);
       font-size: 0.8rem;
     }
-    .live-dashboard-card.is-empty-compact {
-      padding: 12px 16px;
-    }
-    .live-dashboard-card.is-empty-compact .section-title {
-      margin-bottom: 6px !important;
-    }
-    .live-dashboard-card.is-empty-compact .live-badge {
-      display: none;
-    }
-    .live-dashboard-card.is-empty-compact .live-footer {
-      margin-top: 4px !important;
-    }
-    .compact-match-grid.is-empty {
-      display: block;
-    }
-    .compact-match-grid.is-empty .live-empty {
-      display: flex;
-      align-items: center;
-      justify-content: flex-start;
-      gap: 8px;
-      padding: 2px 0;
-      text-align: left;
-      line-height: 1.2;
-    }
-    .compact-match-grid.is-empty .live-empty svg {
-      width: 14px;
-      height: 14px;
-      margin-bottom: 0 !important;
-      flex-shrink: 0;
-    }
     .live-footer {
       margin-top: 10px;
       text-align: center;
@@ -490,117 +460,6 @@
         justify-content: center;
       }
     }
-
-    /* ── Auth Modal (Home Login) ── */
-    .auth-modal {
-      max-width: 380px !important;
-      padding: 30px 24px;
-    }
-    .auth-view h3 {
-      font-size: 1.5rem;
-      margin-bottom: 8px;
-    }
-    .auth-copy {
-      color: var(--text-secondary);
-      font-size: 0.88rem;
-      line-height: 1.4;
-      margin-bottom: 20px;
-      text-align: center;
-    }
-    .btn-google {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 10px;
-      width: 100%;
-      min-height: 44px;
-      border-radius: 8px;
-      border: 1px solid #e5e7eb;
-      background: #fff;
-      color: #1f2937;
-      font-weight: 800;
-      font-size: 0.94rem;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-    .btn-google:hover {
-      background: #f9fafb;
-      transform: translateY(-1px);
-    }
-    .btn-google:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-    }
-    .btn-login-home {
-      border: 0;
-      color: var(--text-primary);
-      cursor: pointer;
-    }
-    .home-greeting {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      margin-top: 12px;
-      padding: 8px 14px;
-      border: 1px solid rgba(198, 211, 0, 0.22);
-      border-radius: 999px;
-      background: rgba(198, 211, 0, 0.08);
-      color: var(--text-primary);
-      font-size: 0.92rem;
-      font-weight: 700;
-      box-shadow: 0 10px 24px rgba(198, 211, 0, 0.08);
-    }
-    .home-greeting strong {
-      color: var(--accent-tennis);
-      font-weight: 900;
-    }
-    .auth-success {
-      color: #86efac;
-      font-size: 0.82rem;
-      margin-top: 10px;
-      text-align: center;
-    }
-    .mock-login-panel {
-      margin-top: 20px;
-      padding: 16px;
-      border: 1px dashed rgba(251, 191, 36, 0.3);
-      border-radius: 12px;
-      background: rgba(251, 191, 36, 0.05);
-      text-align: left;
-    }
-    .mock-login-panel p {
-      margin: 0 0 12px;
-      color: #fbbf24;
-      font-size: 0.8rem;
-      line-height: 1.4;
-      text-align: center;
-    }
-    .form-group {
-      margin-bottom: 12px;
-    }
-    .form-group label {
-      display: block;
-      margin-bottom: 5px;
-      font-size: 0.78rem;
-      color: var(--text-secondary);
-      font-weight: 600;
-    }
-    .form-group input {
-      width: 100%;
-      padding: 8px 12px;
-      border-radius: 8px;
-      border: 1px solid rgba(255,255,255,0.1);
-      background: rgba(0,0,0,0.2);
-      color: #fff;
-      font-size: 0.88rem;
-    }
-    .auth-error {
-      color: #fca5a5;
-      font-size: 0.8rem;
-      margin-top: 10px;
-      text-align: center;
-    }
   </style>
 </head>
 <body>
@@ -612,7 +471,6 @@
     <img src="logo_uctenis_v03.png" alt="UCTenis" class="club-logo">
     <h1>Canchas de Tenis UCT</h1>
     <div class="date-today" id="dateToday"></div>
-    <div class="home-greeting" id="homeGreeting" style="display:none;"></div>
   </header>
 
   <main>
@@ -657,7 +515,7 @@
             </div>
           </div>
         </div>
-        <a href="ranking.html" class="hero-card-btn hero-card-btn-primary">
+        <a href="ranking.html" class="hero-card-btn hero-card-btn-secondary">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M5 13h11.59l-5.29 5.29 1.41 1.41L20 12l-7.29-7.29-1.41 1.41L16.59 11H5v2z"/></svg>
           Ver Ranking
         </a>
@@ -739,36 +597,6 @@
   </footer>
 </div>
 
-<div class="modal-overlay" id="homeAuthModal" aria-hidden="true">
-  <div class="modal-content auth-modal">
-    <button class="modal-close-btn" type="button" data-close-home-auth aria-label="Cerrar">x</button>
-    <div id="homeAuthMainView" class="auth-view">
-      <h3>Iniciar sesion</h3>
-      <p class="auth-copy">Entra a tu cuenta UCTenis para ver tu saludo, alertas y desafios pendientes desde el home.</p>
-      <div id="homeGoogleBtnContainer">
-        <button id="btnHomeGoogleLogin" class="btn-google" type="button">
-          <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path fill="#EA4335" d="M12 5.04c1.66 0 3.2.57 4.38 1.69l3.27-3.27C17.68 1.54 14.98 1 12 1 7.35 1 3.37 3.67 1.39 7.56l3.89 3.02C6.21 7.62 8.87 5.04 12 5.04z"/><path fill="#4285F4" d="M23.49 12.27c0-.81-.07-1.59-.2-2.34H12v4.44h6.44c-.28 1.48-1.12 2.73-2.38 3.58l3.69 2.87c2.16-1.99 3.74-4.92 3.74-8.55z"/><path fill="#FBBC05" d="M5.28 14.42c-.22-.66-.35-1.37-.35-2.1s.13-1.44.35-2.1L1.39 7.2C.5 8.98 0 10.94 0 13s.5 4.02 1.39 5.8l3.89-3.02z"/><path fill="#34A853" d="M12 23c3.24 0 5.97-1.07 7.96-2.91l-3.69-2.87c-1.12.75-2.54 1.21-4.27 1.21-3.13 0-5.79-2.58-6.73-5.54L1.39 15.9C3.37 19.8 7.35 23 12 23z"/></svg>
-          Ingresar con Google
-        </button>
-      </div>
-      <div id="homeMockLoginContainer" class="mock-login-panel">
-        <p id="homeMockLoginHint"><strong>Ingreso local</strong><br>Usa tu correo registrado para abrir sesion en esta version local.</p>
-        <div class="form-group">
-          <label for="homeMockEmail">Correo electronico</label>
-          <input type="email" id="homeMockEmail" placeholder="jugador@uct.cl" value="dsilva@uct.cl">
-        </div>
-        <div class="form-group">
-          <label for="homeMockNombre">Nombre</label>
-          <input type="text" id="homeMockNombre" placeholder="Nombre completo" value="David Silva">
-        </div>
-        <button id="btnHomeMockLogin" class="btn-primary" type="button">Iniciar sesion</button>
-      </div>
-      <p class="auth-error" id="homeAuthErr" aria-live="polite"></p>
-      <p class="auth-success" id="homeAuthOk" aria-live="polite"></p>
-    </div>
-  </div>
-</div>
-
 <!-- Firebase SDK Compat -->
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
@@ -840,161 +668,22 @@ window.renderNewsGrid = renderNewsGrid;
 
 
 // User bar
-function firstName(value) {
-  return (value || 'Jugador').trim().split(/\s+/)[0] || 'Jugador';
-}
-
-function renderHomeGreeting(session) {
-  const greeting = document.getElementById('homeGreeting');
-  if (!greeting) return;
-  if (!session) {
-    greeting.style.display = 'none';
-    greeting.innerHTML = '';
-    return;
-  }
-  const name = firstName(session.nombre);
-  greeting.style.display = 'inline-flex';
-  greeting.innerHTML = `Hola, <strong>${escapeHTML(name)}</strong>. Tu sesion UCTenis esta activa.`;
-}
-
 function renderIndexUserBar() {
   const s = DB.getSession();
   const bar = document.getElementById('userBarIndex');
-  const adminLink = document.getElementById('adminHorariosLink');
-  if (adminLink) adminLink.style.display = 'none';
-  renderHomeGreeting(s);
   if (s) {
     // Show admin link if admin
-    if (adminLink && ADMIN_EMAILS.includes((s.email || '').toLowerCase())) {
-      adminLink.style.display = 'inline-flex';
+    if (ADMIN_EMAILS.includes((s.email || '').toLowerCase())) {
+      document.getElementById('adminHorariosLink').style.display = 'inline-flex';
     }
     bar.innerHTML = `<div class="user-pill">
-      <div class="user-avatar-sm">${escapeHTML(firstName(s.nombre).charAt(0))}</div>
-      <span style="font-size:.88rem">${escapeHTML(firstName(s.nombre))}</span>
+      <div class="user-avatar-sm">${s.nombre.charAt(0)}</div>
+      <span style="font-size:.88rem">${s.nombre.split(' ')[0]}</span>
       <a href="ranking.html" style="font-size:.82rem;color:var(--accent-tennis);font-weight:600">Mis desafíos</a>
       <button class="btn-logout-sm" onclick="DB.logout();location.reload()">✕</button>
     </div>`;
   } else {
-    bar.innerHTML = `<button type="button" class="btn-pill btn-login-home" data-open-home-auth style="font-size:.85rem;padding:8px 16px"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="flex-shrink:0"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg> Iniciar sesion</button>`;
-  }
-}
-
-function openHomeAuthModal() {
-  const modal = document.getElementById('homeAuthModal');
-  if (!modal) return;
-  const configured = DB.isFirebaseConfigured();
-  const useLocalLogin = isLocalAuthHost() || !configured;
-  document.getElementById('homeGoogleBtnContainer').style.display = configured && !useLocalLogin ? 'block' : 'none';
-  document.getElementById('homeMockLoginContainer').style.display = useLocalLogin ? 'block' : 'none';
-  document.getElementById('homeMockLoginHint').innerHTML = useLocalLogin
-    ? '<strong>Ingreso local</strong><br>Usa tu correo registrado para abrir sesion en esta version local.'
-    : '<strong>Modo simulacion</strong><br>Disponible si Google Auth no responde en esta sesion.';
-  document.getElementById('homeAuthErr').textContent = '';
-  document.getElementById('homeAuthOk').textContent = '';
-  modal.classList.add('visible');
-  modal.setAttribute('aria-hidden', 'false');
-}
-
-function isLocalAuthHost() {
-  return ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
-}
-
-function showHomeLocalLogin(message) {
-  document.getElementById('homeGoogleBtnContainer').style.display = 'none';
-  document.getElementById('homeMockLoginContainer').style.display = 'block';
-  document.getElementById('homeMockLoginHint').innerHTML = '<strong>Ingreso local</strong><br>Usa tu correo registrado para abrir sesion en esta version local.';
-  document.getElementById('homeAuthErr').textContent = message || '';
-}
-
-function closeHomeAuthModal() {
-  const modal = document.getElementById('homeAuthModal');
-  if (!modal) return;
-  modal.classList.remove('visible');
-  modal.setAttribute('aria-hidden', 'true');
-}
-
-function setHomeAuthBusy(button, label) {
-  if (!button) return function() {};
-  const original = button.innerHTML;
-  button.disabled = true;
-  button.textContent = label;
-  return function restore() {
-    button.disabled = false;
-    button.innerHTML = original;
-  };
-}
-
-async function finishHomeLogin(result) {
-  const error = document.getElementById('homeAuthErr');
-  const ok = document.getElementById('homeAuthOk');
-  if (result.isNew) {
-    error.innerHTML = 'Tu correo esta validado, pero aun falta vincular una ficha de jugador. Abre el ranking para completar el perfil.';
-    ok.textContent = '';
-    return;
-  }
-  closeHomeAuthModal();
-  renderIndexUserBar();
-  ok.textContent = '';
-  setTimeout(() => loadLiveData(), 100);
-}
-
-async function handleHomeGoogleLogin() {
-  const restore = setHomeAuthBusy(document.getElementById('btnHomeGoogleLogin'), 'Iniciando sesion...');
-  document.getElementById('homeAuthErr').textContent = '';
-  document.getElementById('homeAuthOk').textContent = '';
-  try {
-    const result = await DB.loginWithGoogle();
-    if (!result.ok) {
-      if (isLocalAuthHost() || String(result.msg || '').includes('unauthorized-domain')) {
-        showHomeLocalLogin('Google Auth no esta habilitado para este dominio local. Usa el ingreso por correo.');
-      } else {
-        document.getElementById('homeAuthErr').textContent = result.msg;
-      }
-      return;
-    }
-    await finishHomeLogin(result);
-  } finally {
-    restore();
-  }
-}
-
-async function handleHomeMockLogin() {
-  const email = document.getElementById('homeMockEmail').value.trim();
-  const nombre = document.getElementById('homeMockNombre').value.trim();
-  const error = document.getElementById('homeAuthErr');
-  if (!email) {
-    error.textContent = 'Ingresa un correo registrado.';
-    return;
-  }
-  const restore = setHomeAuthBusy(document.getElementById('btnHomeMockLogin'), 'Sincronizando...');
-  error.textContent = '';
-  document.getElementById('homeAuthOk').textContent = '';
-  try {
-    const result = await DB.loginWithGoogleMock(email, nombre);
-    if (!result.ok) {
-      if (!isLocalAuthHost()) {
-        error.textContent = result.msg;
-        return;
-      }
-      const localUser = {
-        id: email.toLowerCase(),
-        nombre: nombre || email.split('@')[0],
-        email: email,
-        genero: 'M',
-        categoria: 'Principiante',
-        mano: 'Derecha',
-        reves: 'Dos manos',
-        foto: '',
-        telefono: ''
-      };
-      DB.upsertUserLocal(localUser);
-      localStorage.setItem('uctenis_session', JSON.stringify(localUser));
-      await finishHomeLogin({ ok: true, user: localUser, isNew: false });
-      return;
-    }
-    await finishHomeLogin(result);
-  } finally {
-    restore();
+    bar.innerHTML = `<a href="ranking.html" class="btn-pill" style="font-size:.85rem;padding:8px 16px"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="flex-shrink:0"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg> Ingresar / Ranking</a>`;
   }
 }
 
@@ -1172,9 +861,6 @@ async function loadLiveData() {
 
   // Render active challenges
   const activeEl = document.getElementById('activeChallengesList');
-  const activeCard = activeEl ? activeEl.closest('.live-dashboard-card') : null;
-  if (activeEl) activeEl.classList.toggle('is-empty', !active.length);
-  if (activeCard) activeCard.classList.toggle('is-empty-compact', !active.length);
   if (active.length) {
     activeEl.innerHTML = active.map(c => {
       const statusClass = c.status === 'aceptado' ? 'status-aceptado' : 'status-pendiente';
@@ -1214,7 +900,7 @@ async function loadLiveData() {
       </div>`;
     }).join('');
   } else {
-    activeEl.innerHTML = '<div class="live-empty"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="opacity:.45"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg><span>No hay desafíos activos</span></div>';
+    activeEl.innerHTML = '<div class="live-empty"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="opacity:.4;margin-bottom:8px"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg><br>No hay desafíos activos</div>';
   }
 
   // Render latest results
@@ -1418,15 +1104,6 @@ window.closeFloatingAlert = closeFloatingAlert;
 document.addEventListener('DOMContentLoaded', () => {
   DB.seed();
   renderIndexUserBar();
-  const btnHomeGoogle = document.getElementById('btnHomeGoogleLogin');
-  const btnHomeMock = document.getElementById('btnHomeMockLogin');
-  if (btnHomeGoogle) btnHomeGoogle.addEventListener('click', handleHomeGoogleLogin);
-  if (btnHomeMock) btnHomeMock.addEventListener('click', handleHomeMockLogin);
-  document.addEventListener('click', event => {
-    if (event.target.closest('[data-open-home-auth]')) openHomeAuthModal();
-    if (event.target.closest('[data-close-home-auth]')) closeHomeAuthModal();
-    if (event.target.id === 'homeAuthModal') closeHomeAuthModal();
-  });
   // Load live challenges after a short delay to allow Firebase to initialize
   setTimeout(() => loadLiveData(), 800);
 });
