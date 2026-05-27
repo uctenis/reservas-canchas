@@ -1118,6 +1118,12 @@ function renderSummary(list) {
   };
   const source = sourceLabels[rankingState.source] || 'Datos locales';
   const inactiveCount = (rankingState.inactive[gender] || []).length;
+  
+  const inactiveBoxHtml = isPlayerAdminSession() ? `
+    <div class="summary-item">
+      <span>Inactivos</span>
+      <strong>${inactiveCount}</strong>
+    </div>` : '';
 
   summary.innerHTML = `
     <div class="summary-item">
@@ -1128,10 +1134,7 @@ function renderSummary(list) {
       <span>Jugadores</span>
       <strong>${list.length}</strong>
     </div>
-    <div class="summary-item">
-      <span>Inactivos</span>
-      <strong>${inactiveCount}</strong>
-    </div>
+    ${inactiveBoxHtml}
     <div class="summary-item">
       <span>Fuente</span>
       <strong>${source}</strong>
@@ -1139,6 +1142,20 @@ function renderSummary(list) {
 }
 
 function renderInactivePlayers() {
+  const inactiveSec = document.getElementById('inactiveSection');
+  const isAdmin = isPlayerAdminSession();
+  
+  if (!isAdmin) {
+    if (inactiveSec) {
+      inactiveSec.style.setProperty('display', 'none', 'important');
+    }
+    return;
+  }
+  
+  if (inactiveSec) {
+    inactiveSec.style.removeProperty('display');
+  }
+
   const gender = rankingState.currentGender;
   const list = rankingState.inactive[gender] || [];
   const div = document.getElementById('inactivePlayersList');
