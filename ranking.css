@@ -342,7 +342,7 @@ body {
 
 .rank-summary {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   margin-bottom: 16px;
   overflow: hidden;
   border: 1px solid var(--panel-line);
@@ -374,6 +374,38 @@ body {
   color: var(--text-primary);
   font-size: 1rem;
   line-height: 1.25;
+}
+
+.summary-item.leader-summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.leader-rank-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  flex: 0 0 46px;
+  border-radius: 10px;
+  background: radial-gradient(circle at 30% 20%, #f7ff7a 0%, var(--court-green) 48%, #9db000 100%);
+  color: #08111f;
+  font-size: 1.35rem;
+  font-weight: 1000;
+  line-height: 1;
+  box-shadow: 0 12px 28px rgba(198, 211, 0, 0.32), inset 0 1px 0 rgba(255,255,255,0.45);
+}
+
+.leader-summary-copy {
+  min-width: 0;
+}
+
+.leader-summary-copy strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .ranking-table-container {
@@ -500,6 +532,12 @@ body {
   background: var(--court-green);
   color: #08111f;
   box-shadow: 0 8px 20px rgba(198, 211, 0, 0.24);
+}
+
+.rank-number.rank-1 {
+  background: radial-gradient(circle at 30% 20%, #f7ff7a 0%, var(--court-green) 50%, #9db000 100%);
+  border: 1px solid rgba(255,255,255,0.35);
+  box-shadow: 0 10px 24px rgba(198, 211, 0, 0.34), inset 0 1px 0 rgba(255,255,255,0.45);
 }
 
 .rank-2,
