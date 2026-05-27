@@ -825,35 +825,106 @@ tr:hover {
     box-shadow: 0 8px 32px rgba(239, 68, 68, 0.15);
 }
 
-/* Comment bubble reactions bar adjustments */
-.chat-bubble .reactions-bar {
+/* Facebook-like Card Reactions */
+.match-reactions-wrapper {
     display: flex;
-    gap: 6px;
-    margin-top: 8px;
-    padding-top: 6px;
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    gap: 12px;
 }
-.chat-bubble .reaction-btn {
-    padding: 3px 8px;
-    font-size: 0.75rem;
-    border-radius: 20px;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    color: var(--text-secondary);
-    cursor: pointer;
-    transition: all 0.2s ease;
+.active-reactions-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.reaction-badge {
     display: inline-flex;
     align-items: center;
     gap: 4px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s ease;
 }
-.chat-bubble .reaction-btn:hover {
+.reaction-badge:hover {
     background: rgba(255, 255, 255, 0.08);
-    border-color: rgba(255, 255, 255, 0.15);
     color: var(--text-primary);
-    transform: translateY(-1px);
+    transform: scale(1.05);
 }
-.chat-bubble .reaction-btn.active {
-    background: rgba(198, 211, 0, 0.15);
-    border-color: rgba(198, 211, 0, 0.4);
+.reaction-badge.active {
+    background: rgba(198, 211, 0, 0.12);
+    border-color: rgba(198, 211, 0, 0.35);
     color: var(--accent-tennis);
+}
+.reaction-trigger-container {
+    position: relative;
+    margin-left: auto;
+}
+.btn-react-trigger {
+    display: inline-flex;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: var(--text-secondary);
+    padding: 5px 12px;
+    border-radius: 14px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.btn-react-trigger:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-primary);
+}
+.reactions-popover {
+    position: absolute;
+    bottom: 100%;
+    right: 0;
+    background: rgba(15, 23, 42, 0.95);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 30px;
+    padding: 6px 10px;
+    display: flex;
+    gap: 8px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.5), 0 0 10px rgba(198, 211, 0, 0.1);
+    z-index: 100;
+    margin-bottom: 8px;
+    opacity: 0;
+    pointer-events: none;
+    transform: scale(0.8) translateY(10px);
+    transition: all 0.22s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    transform-origin: bottom right;
+}
+@media (hover: hover) {
+    .reaction-trigger-container:hover .reactions-popover {
+        opacity: 1;
+        pointer-events: auto;
+        transform: scale(1) translateY(0);
+    }
+}
+.reaction-trigger-container.show-popover .reactions-popover {
+    opacity: 1;
+    pointer-events: auto;
+    transform: scale(1) translateY(0);
+}
+.popover-emoji-btn {
+    background: none;
+    border: none;
+    font-size: 1.4rem;
+    cursor: pointer;
+    transition: transform 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    padding: 2px 4px;
+    display: inline-block;
+}
+.popover-emoji-btn:hover {
+    transform: scale(1.35) translateY(-2px);
 }

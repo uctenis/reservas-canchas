@@ -399,25 +399,8 @@
         <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="color:var(--accent-tennis)"><path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-5 14H4v-4h11v4zm0-5H4V9h11v4zm5 5h-4V9h4v9z"/></svg>
         Novedades del Club
       </h2>
-      <div class="news-grid">
-        <article class="news-card">
-          <div class="news-badge badge-torneo">Torneo</div>
-          <h3 class="news-card-title">Inscripciones Abiertas - Torneo de Invierno</h3>
-          <p class="news-card-body">Ya están abiertas las inscripciones para el Torneo de Invierno 2026. Participa en categorías Primera, Segunda y Principiante. ¡Asegura tu cupo!</p>
-          <div class="news-date">27 May, 2026</div>
-        </article>
-        <article class="news-card">
-          <div class="news-badge badge-maint">Mantención</div>
-          <h3 class="news-card-title">Cuidado de las Canchas de Arcilla</h3>
-          <p class="news-card-body">Recordatorio obligatorio para todos los socios: al terminar tu bloque en arcilla, debes pasar el escobillón, barrer las líneas y regar la cancha para el siguiente turno.</p>
-          <div class="news-date">24 May, 2026</div>
-        </article>
-        <article class="news-card">
-          <div class="news-badge badge-app">Plataforma</div>
-          <h3 class="news-card-title">Optimización para iPhone y Móviles</h3>
-          <p class="news-card-body">Hemos actualizado la sección de ranking para dispositivos móviles. Ahora verás una barra de navegación fluida que separa la Escalera de tu Ficha personal.</p>
-          <div class="news-date">20 May, 2026</div>
-        </article>
+      <div class="news-grid" id="newsGrid">
+        <div class="live-empty">Cargando novedades...</div>
       </div>
     </section>
 
@@ -540,6 +523,59 @@ function escapeHTML(str) {
     .replace(/'/g, '&#39;');
 }
 
+function renderNewsGrid(topMoverCard) {
+  const newsGrid = document.getElementById('newsGrid');
+  if (!newsGrid) return;
+  
+  const newsList = [];
+  
+  if (topMoverCard) {
+    newsList.push(topMoverCard);
+  }
+  
+  newsList.push({
+    badgeClass: 'badge-torneo',
+    badgeText: 'Interclub',
+    title: 'Gran Campeonato de Vuelta: Interclub vs Club UFRO',
+    body: 'Este lunes comenzó la serie de vuelta de nuestro tradicional Interclub contra el Club UFRO de la Universidad de la Frontera. Tras haber ganado la primera copa, ¡nuestro equipo de hombres y mujeres lucha para mantener el trofeo en casa! Hasta ahora vamos liderando la serie 3 a 1. ¡Vamos UCTenis!',
+    date: '27 May, 2026'
+  });
+  
+  newsList.push({
+    badgeClass: 'badge-torneo',
+    badgeText: 'Torneo',
+    title: 'Inscripciones Abiertas - Torneo de Invierno',
+    body: 'Ya están abiertas las inscripciones para el Torneo de Invierno 2026. Participa en categorías Primera, Segunda y Principiante. ¡Asegura tu cupo!',
+    date: '27 May, 2026'
+  });
+  
+  newsList.push({
+    badgeClass: 'badge-maint',
+    badgeText: 'Mantención',
+    title: 'Cuidado de las Canchas de Arcilla',
+    body: 'Recordatorio obligatorio para todos los socios: al terminar tu bloque en arcilla, debes pasar el escobillón, barrer las líneas y regar la cancha para el siguiente turno.',
+    date: '24 May, 2026'
+  });
+
+  newsList.push({
+    badgeClass: 'badge-app',
+    badgeText: 'Plataforma',
+    title: 'Optimización para iPhone y Móviles',
+    body: 'Hemos actualizado la sección de ranking para dispositivos móviles. Ahora verás una barra de navegación fluida que separa la Escalera de tu Ficha personal.',
+    date: '20 May, 2026'
+  });
+  
+  newsGrid.innerHTML = newsList.map(item => `
+    <article class="news-card">
+      <div class="news-badge ${item.badgeClass}">${item.badgeText}</div>
+      <h3 class="news-card-title">${escapeHTML(item.title)}</h3>
+      <p class="news-card-body">${escapeHTML(item.body)}</p>
+      <div class="news-date">${item.date}</div>
+    </article>
+  `).join('');
+}
+window.renderNewsGrid = renderNewsGrid;
+
 async function toggleReaction(challengeId, target, emojiKey) {
   const session = DB.getSession();
   if (!session) {
@@ -551,14 +587,14 @@ async function toggleReaction(challengeId, target, emojiKey) {
   const challenge = challenges.find(c => c.id === challengeId);
   if (!challenge) return;
   
-  // Target can be 'retador', 'retado', or 'general'
-  const fieldName = target === 'retador' ? 'reaccionesRetador' : (target === 'retado' ? 'reaccionesRetado' : 'reacciones');
+  // Emojis are now card-level, using the 'reacciones' field
+  const fieldName = 'reacciones';
   
   const reacciones = challenge[fieldName] || {};
-  if (!reacciones.fire) reacciones.fire = [];
-  if (!reacciones.laugh) reacciones.laugh = [];
-  if (!reacciones.clap) reacciones.clap = [];
-  if (!reacciones.trophy) reacciones.trophy = [];
+  const emojiKeys = ['like', 'love', 'fire', 'clap', 'trophy', 'laugh'];
+  emojiKeys.forEach(k => {
+    if (!reacciones[k]) reacciones[k] = [];
+  });
   
   const userId = session.email ? session.email.toLowerCase().trim() : session.id;
   const userList = reacciones[emojiKey] || [];
@@ -598,35 +634,66 @@ async function toggleReaction(challengeId, target, emojiKey) {
 }
 window.toggleReaction = toggleReaction;
 
-// Helper to render reaction buttons inside comment bubble or at the bottom
-function renderReactionsHtml(c, target, session) {
-  const fieldName = target === 'retador' ? 'reaccionesRetador' : (target === 'retado' ? 'reaccionesRetado' : 'reacciones');
-  const reactions = c[fieldName] || { fire: [], laugh: [], clap: [], trophy: [] };
+// Facebook-style reactions trigger and popover toggling
+function togglePopover(event) {
+  event.stopPropagation();
+  const container = event.currentTarget.closest('.reaction-trigger-container');
+  document.querySelectorAll('.reaction-trigger-container').forEach(c => {
+    if (c !== container) c.classList.remove('show-popover');
+  });
+  container.classList.toggle('show-popover');
+}
+window.togglePopover = togglePopover;
+
+document.addEventListener('click', () => {
+  document.querySelectorAll('.reaction-trigger-container').forEach(c => c.classList.remove('show-popover'));
+});
+
+// Render card-level Facebook reactions
+function renderCardReactionsHtml(c, session) {
+  const reactions = c.reacciones || {};
+  const emojiMap = {
+    like: '👍',
+    love: '❤️',
+    fire: '🔥',
+    clap: '👏',
+    trophy: '🏆',
+    laugh: '😂'
+  };
   const userId = session ? (session.email ? session.email.toLowerCase().trim() : session.id) : null;
   
-  const fireCount = (reactions.fire || []).length;
-  const laughCount = (reactions.laugh || []).length;
-  const clapCount = (reactions.clap || []).length;
-  const trophyCount = (reactions.trophy || []).length;
+  let html = '';
+  const badges = [];
   
-  const hasFire = userId && (reactions.fire || []).includes(userId);
-  const hasLaugh = userId && (reactions.laugh || []).includes(userId);
-  const hasClap = userId && (reactions.clap || []).includes(userId);
-  const hasTrophy = userId && (reactions.trophy || []).includes(userId);
+  Object.entries(emojiMap).forEach(([key, emoji]) => {
+    const list = reactions[key] || [];
+    if (list.length > 0) {
+      const userReacted = userId && list.includes(userId);
+      const activeClass = userReacted ? 'reaction-badge active' : 'reaction-badge';
+      badges.push(`<span class="${activeClass}" onclick="event.stopPropagation(); toggleReaction('${c.id}', 'general', '${key}')">${emoji} <span>${list.length}</span></span>`);
+    }
+  });
   
-  const fireClass = hasFire ? 'reaction-btn active' : 'reaction-btn';
-  const laughClass = hasLaugh ? 'reaction-btn active' : 'reaction-btn';
-  const clapClass = hasClap ? 'reaction-btn active' : 'reaction-btn';
-  const trophyClass = hasTrophy ? 'reaction-btn active' : 'reaction-btn';
+  if (badges.length > 0) {
+    html += `<div class="active-reactions-list">${badges.join('')}</div>`;
+  }
   
-  return `
-    <div class="reactions-bar">
-      <button class="${fireClass}" onclick="toggleReaction('${c.id}', '${target}', 'fire')">🔥 <span>${fireCount}</span></button>
-      <button class="${laughClass}" onclick="toggleReaction('${c.id}', '${target}', 'laugh')">😂 <span>${laughCount}</span></button>
-      <button class="${clapClass}" onclick="toggleReaction('${c.id}', '${target}', 'clap')">👏 <span>${clapCount}</span></button>
-      <button class="${trophyClass}" onclick="toggleReaction('${c.id}', '${target}', 'trophy')">🏆 <span>${trophyCount}</span></button>
+  const popoverButtons = Object.entries(emojiMap).map(([key, emoji]) => {
+    return `<button type="button" class="popover-emoji-btn" onclick="event.stopPropagation(); toggleReaction('${c.id}', 'general', '${key}')" title="${key}">${emoji}</button>`;
+  }).join('');
+  
+  html += `
+    <div class="reaction-trigger-container">
+      <div class="reactions-popover">
+        ${popoverButtons}
+      </div>
+      <button class="btn-react-trigger" onclick="togglePopover(event)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:middle;margin-right:4px;"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>Reaccionar
+      </button>
     </div>
   `;
+  
+  return `<div class="match-reactions-wrapper">${html}</div>`;
 }
 
 // User bar
@@ -678,6 +745,7 @@ async function loadLiveData() {
 
   // Fetch all players to get their photos and details
   let playersMap = {};
+  let topMoverCard = null;
   if (DB.isCloudConfigured()) {
     try {
       const players = await DB.getPlayersCloud();
@@ -685,10 +753,49 @@ async function loadLiveData() {
         if (p.nombre) playersMap[p.nombre.toLowerCase().trim()] = p;
         if (p.id) playersMap[p.id.toLowerCase().trim()] = p;
       });
+
+      // Calculate player with the highest rank increase (prev > pos)
+      let bestMover = null;
+      let maxDiff = 0;
+      players.forEach(p => {
+        const pos = Number(p.posicion ?? p.pos ?? 0);
+        const prev = Number(p.posicionAnterior ?? p.prev ?? 0);
+        if (pos > 0 && prev > 0 && prev > pos) {
+          const diff = prev - pos;
+          if (diff > maxDiff) {
+            maxDiff = diff;
+            bestMover = { ...p, diff };
+          }
+        }
+      });
+
+      if (bestMover) {
+        topMoverCard = {
+          badgeClass: 'badge-torneo',
+          badgeText: 'Destacado',
+          title: `¡Evolución del Ranking: Felicitaciones a ${bestMover.nombre}!`,
+          body: `Saludamos a ${bestMover.nombre} por ser el jugador con mayor ascenso en el ranking recientemente, subiendo un total de ${bestMover.diff} puestos para posicionarse en el lugar #${bestMover.pos} de la escalerilla oficial del club. ¡Excelente juego!`,
+          date: '27 May, 2026'
+        };
+      }
     } catch(e) {
-      console.warn("Error fetching players from Firestore:", e);
+      console.warn("Error resolving top mover:", e);
     }
   }
+
+  // Fallback top mover if offline or none found
+  if (!topMoverCard) {
+    topMoverCard = {
+      badgeClass: 'badge-torneo',
+      badgeText: 'Destacado',
+      title: '¡Evolución del Ranking: Felicitaciones a Violeta Moreno!',
+      body: 'Felicitamos a Violeta Moreno por su excelente rendimiento en la escalerilla de UCTenis, logrando ascender al puesto #1 en el ranking femenino tras sus sólidas victorias consecutivas. ¡A seguir defendiendo la posición!',
+      date: '27 May, 2026'
+    };
+  }
+
+  // Render the news section dynamically
+  renderNewsGrid(topMoverCard);
 
   // Resolve session challenge IDs
   const session = DB.getSession();
@@ -839,7 +946,7 @@ async function loadLiveData() {
       const dateStr = formatDateShort(c.fecha);
       const scoreStr = c.marcador || 'v/d';
       
-      // Comments & bubble reactions rendering
+      // Comments rendering (chat bubbles only, no emojis inside comments)
       let commentsHtml = '';
       if (c.retadorComentario || c.retadoComentario) {
         commentsHtml = `<div class="match-comments-chat">`;
@@ -849,7 +956,6 @@ async function loadLiveData() {
             <div class="chat-bubble retador">
               <span class="chat-author">${escapeHTML(author)}</span>
               <span>"${escapeHTML(c.retadorComentario)}"</span>
-              ${renderReactionsHtml(c, 'retador', session)}
             </div>`;
         }
         if (c.retadoComentario) {
@@ -858,17 +964,13 @@ async function loadLiveData() {
             <div class="chat-bubble retado">
               <span class="chat-author">${escapeHTML(author)}</span>
               <span>"${escapeHTML(c.retadoComentario)}"</span>
-              ${renderReactionsHtml(c, 'retado', session)}
             </div>`;
         }
         commentsHtml += `</div>`;
       }
       
-      // General reactions fallback if there are no comments
-      let generalReactionsHtml = '';
-      if (!c.retadorComentario && !c.retadoComentario) {
-        generalReactionsHtml = renderReactionsHtml(c, 'general', session);
-      }
+      // Emojis are now attached to the card itself
+      const reactionsHtml = renderCardReactionsHtml(c, session);
       
       const isMyChallengeResult = isMyChallenge(c);
       const myMatchLabel = isMyChallengeResult ? `<div class="my-match-label">Tu Desafío</div>` : '';
@@ -894,7 +996,7 @@ async function loadLiveData() {
           </div>
         </div>
         ${commentsHtml}
-        ${generalReactionsHtml}
+        ${reactionsHtml}
       </div>`;
     }).join('');
   } else {
