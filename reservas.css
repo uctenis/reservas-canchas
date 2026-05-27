@@ -593,3 +593,62 @@
   .slot-time { font-size: 0.88rem !important; }
   .slot-card { padding: 5px 4px !important; }
 }
+
+/* Weather Widget in Reservations */
+.weather-compact-box .forecast-container {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding: 8px 4px 14px;
+  scrollbar-width: none;
+}
+.weather-compact-box .forecast-container::-webkit-scrollbar {
+  display: none;
+}
+.weather-compact-box .forecast-day {
+  flex: 0 0 106px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 14px;
+  padding: 12px 8px;
+  text-align: center;
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+.weather-compact-box .forecast-day:hover {
+  transform: translateY(-2px);
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+.weather-compact-box .weather-icon-emoji {
+  font-size: 1.8rem;
+  margin: 6px 0;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+}
+.weather-compact-box .forecast-day span {
+  display: block;
+  font-size: 0.76rem;
+  color: var(--text-secondary);
+  margin-top: 3px;
+}
+.weather-compact-box .forecast-day span:first-child {
+  color: var(--text-primary);
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+@media (max-width: 600px) {
+  .weather-compact-box .forecast-day {
+    flex: 0 0 92px;
+    padding: 8px 6px;
+  }
+  .weather-compact-box .weather-icon-emoji {
+    font-size: 1.5rem;
+    margin: 4px 0;
+  }
+  .weather-compact-box .forecast-day span {
+    font-size: 0.72rem;
+  }
+  .weather-compact-box .forecast-day span:first-child {
+    font-size: 0.78rem;
+  }
+}

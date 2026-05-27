@@ -30,6 +30,12 @@
     <button class="gender-tab active" type="button" data-gender="M" id="tabM">Masculino</button>
     <button class="gender-tab" type="button" data-gender="F" id="tabF">Femenino</button>
   </nav>
+
+  <div class="mobile-dashboard-tabs" id="mobileDashboardTabs" style="display:none;">
+    <button class="mobile-dash-tab active" onclick="switchMobileTab('ranking')" id="btnTabRanking">🏆 Escalera</button>
+    <button class="mobile-dash-tab" onclick="switchMobileTab('panel')" id="btnTabPanel">⚔️ Mi Panel</button>
+  </div>
+
   <div class="page-grid">
     <main class="main-col">
       <section class="glass-card ranking-section" id="rankingSection">
@@ -447,8 +453,8 @@ const GENDERS = {
   F: { label: 'Femenino', apiKeys: ['female', 'mujeres', 'femenino', 'women'], fallbackAvatar: 'fotos/default_avatar_m.png' }
 };
 const ADMIN_IDENTITIES = {
-  emails: ['uctenisclub@gmail.com', 'dsilva@uct.cl'],
-  names: ['UCTenis Club', 'David Silva']
+  emails: ['uctenisclub@gmail.com'],
+  names: ['UCTenis Club']
 };
 const PURE_ADMIN_EMAILS = ['uctenisclub@gmail.com'];
 const CLOUD_TIMEOUT_MS = 4500;
@@ -712,6 +718,42 @@ function applyLocalChallengesToRanking() {
   });
 }
 
+function isUserRetadorInChallenge(session, challenge) {
+  if (!session || !challenge) return false;
+  const player = getSessionPlayer(session);
+  const sessionIds = [...new Set([session.id, player?.id, player?.localId].filter(Boolean))];
+  
+  if (sessionIds.includes(challenge.retadorId)) return true;
+  
+  if (session.email && challenge.retadorEmail && normalizeEmail(session.email) === normalizeEmail(challenge.retadorEmail)) return true;
+  if (player?.email && challenge.retadorEmail && normalizeEmail(player.email) === normalizeEmail(challenge.retadorEmail)) return true;
+  
+  if (session.nombre && challenge.retadorNombre && normalizeKey(session.nombre) === normalizeKey(challenge.retadorNombre)) return true;
+  if (player?.nombre && challenge.retadorNombre && normalizeKey(player.nombre) === normalizeKey(challenge.retadorNombre)) return true;
+  
+  return false;
+}
+
+function isUserRetadoInChallenge(session, challenge) {
+  if (!session || !challenge) return false;
+  const player = getSessionPlayer(session);
+  const sessionIds = [...new Set([session.id, player?.id, player?.localId].filter(Boolean))];
+  
+  if (sessionIds.includes(challenge.retadoId)) return true;
+  
+  if (session.email && challenge.retadoEmail && normalizeEmail(session.email) === normalizeEmail(challenge.retadoEmail)) return true;
+  if (player?.email && challenge.retadoEmail && normalizeEmail(player.email) === normalizeEmail(challenge.retadoEmail)) return true;
+  
+  if (session.nombre && challenge.retadoNombre && normalizeKey(session.nombre) === normalizeKey(challenge.retadoNombre)) return true;
+  if (player?.nombre && challenge.retadoNombre && normalizeKey(player.nombre) === normalizeKey(challenge.retadoNombre)) return true;
+  
+  return false;
+}
+
+function isUserInChallenge(session, challenge) {
+  return isUserRetadorInChallenge(session, challenge) || isUserRetadoInChallenge(session, challenge);
+}
+
 function checkPendingChallengesAlert() {
   const session = DB.getSession();
   if (!session) return;
@@ -721,10 +763,8 @@ function checkPendingChallengesAlert() {
   const challenges = DB.getChallenges();
   if (!challenges || !challenges.length) return;
 
-  const sessionIds = getSessionChallengeIds(session);
-
   const pending = challenges.filter(c =>
-    c.status === 'pendiente' && sessionIds.includes(c.retadoId)
+    c.status === 'pendiente' && isUserRetadoInChallenge(session, c)
   );
 
   if (pending.length > 0) {
@@ -1122,6 +1162,8 @@ function renderInactivePlayers() {
 function renderUserBar() {
   const session = DB.getSession();
   const bar = document.getElementById('userBar');
+  const mobileTabs = document.getElementById('mobileDashboardTabs');
+  if (!bar) return;
 
   if (session) {
     bar.innerHTML = `
@@ -1133,12 +1175,69 @@ function renderUserBar() {
       </div>`;
     document.getElementById('myChallengesSection').style.display = 'block';
     document.getElementById('myProfileSection').style.display = 'block';
+    if (mobileTabs) {
+      mobileTabs.style.display = '';
+      mobileTabs.classList.add('visible-session');
+    }
   } else {
     bar.innerHTML = '<button class="btn-pill btn-login-top" type="button" data-open-auth>Iniciar sesión</button>';
     document.getElementById('myChallengesSection').style.display = 'none';
     document.getElementById('myProfileSection').style.display = 'none';
+    if (mobileTabs) {
+      mobileTabs.style.display = 'none';
+      mobileTabs.classList.remove('visible-session');
+    }
+    // Reset columns display
+    const mainCol = document.querySelector('.main-col');
+    const sidebarCol = document.querySelector('.sidebar-col');
+    const inactiveSec = document.getElementById('inactiveSection');
+    if (mainCol) mainCol.style.display = '';
+    if (sidebarCol) sidebarCol.style.display = '';
+    if (inactiveSec) inactiveSec.style.display = '';
   }
 }
+
+function switchMobileTab(tab) {
+  const isRanking = tab === 'ranking';
+  const btnRank = document.getElementById('btnTabRanking');
+  const btnPanel = document.getElementById('btnTabPanel');
+  
+  if (btnRank) btnRank.classList.toggle('active', isRanking);
+  if (btnPanel) btnPanel.classList.toggle('active', !isRanking);
+  
+  const mainCol = document.querySelector('.main-col');
+  const sidebarCol = document.querySelector('.sidebar-col');
+  const inactiveSec = document.getElementById('inactiveSection');
+  
+  if (window.innerWidth <= 1080) {
+    if (mainCol) mainCol.style.display = isRanking ? 'block' : 'none';
+    if (sidebarCol) sidebarCol.style.display = !isRanking ? 'block' : 'none';
+    if (inactiveSec) inactiveSec.style.display = isRanking ? 'block' : 'none';
+  } else {
+    if (mainCol) mainCol.style.display = '';
+    if (sidebarCol) sidebarCol.style.display = '';
+    if (inactiveSec) inactiveSec.style.display = '';
+  }
+}
+window.switchMobileTab = switchMobileTab;
+
+window.addEventListener('resize', () => {
+  const mainCol = document.querySelector('.main-col');
+  const sidebarCol = document.querySelector('.sidebar-col');
+  const inactiveSec = document.getElementById('inactiveSection');
+  
+  if (window.innerWidth > 1080) {
+    if (mainCol) mainCol.style.display = '';
+    if (sidebarCol) sidebarCol.style.display = '';
+    if (inactiveSec) inactiveSec.style.display = '';
+  } else {
+    const btnRank = document.getElementById('btnTabRanking');
+    if (btnRank) {
+      const isRanking = btnRank.classList.contains('active');
+      switchMobileTab(isRanking ? 'ranking' : 'panel');
+    }
+  }
+});
 
 function renderAdminControls() {
   const btn = document.getElementById('btnAdminPlayers');
@@ -1174,16 +1273,15 @@ function renderMyProfile() {
   const allowed = getChallengeablePlayers(player);
   const fallback = GENDERS[player.gender].fallbackAvatar;
   const active = isPlayerActive(player);
-  const sessionIds = getSessionChallengeIds(session);
   const pendingChallenges = DB.getChallenges().filter(c =>
-    c.status === 'pendiente' && sessionIds.includes(c.retadoId)
+    c.status === 'pendiente' && isUserRetadoInChallenge(session, c)
   );
 
   const todayIso = new Date().toISOString().split('T')[0];
   const expiredChallenges = DB.getChallenges().filter(c =>
     ['pendiente', 'aceptado'].includes(c.status) &&
     c.fecha < todayIso &&
-    (sessionIds.includes(c.retadorId) || sessionIds.includes(c.retadoId))
+    isUserInChallenge(session, c)
   );
 
   let alertsHtml = '';
@@ -1260,21 +1358,48 @@ function renderMyChallenges() {
   }
 
   const users = DB.getUsers();
-  const sessionIds = getSessionChallengeIds(session);
-  const list = DB.getChallenges()
-    .filter(challenge => sessionIds.includes(challenge.retadorId) || sessionIds.includes(challenge.retadoId))
-    .filter(challenge => challenge.genero === rankingState.currentGender)
-    .filter(challenge => challenge.status !== 'rechazado')
+  const allChallenges = DB.getChallenges()
+    .filter(challenge => challenge.genero === rankingState.currentGender && isUserInChallenge(session, challenge));
+
+  const activeChallenges = allChallenges
+    .filter(challenge => ['pendiente', 'aceptado'].includes(challenge.status))
     .sort(sortChallenges);
 
-  document.getElementById('myChallengeCount').textContent = list.length ? `${list.length} total` : '';
+  const historyChallenges = allChallenges
+    .filter(challenge => ['completado', 'rechazado'].includes(challenge.status))
+    .sort((a, b) => (b.fecha || '').localeCompare(a.fecha || '') || (b.creado || '').localeCompare(a.creado || ''));
 
-  if (!list.length) {
+  const totalCount = allChallenges.length;
+  document.getElementById('myChallengeCount').textContent = totalCount ? `${totalCount} total` : '';
+
+  if (!totalCount) {
     div.innerHTML = '<p class="empty-state">No tienes desafíos en este ranking.</p>';
     return;
   }
 
-  div.innerHTML = list.map(challenge => challengeCard(challenge, users, session, true)).join('');
+  let html = '';
+
+  // Render Activos Group
+  html += `<div class="my-challenges-group">`;
+  html += `<h4 class="my-challenges-subheading">Activos (${activeChallenges.length})</h4>`;
+  if (activeChallenges.length > 0) {
+    html += activeChallenges.map(challenge => challengeCard(challenge, users, session, true)).join('');
+  } else {
+    html += '<p class="empty-state" style="padding: 10px 0;">No tienes desafíos activos.</p>';
+  }
+  html += `</div>`;
+
+  // Render Historial Group
+  html += `<div class="my-challenges-group">`;
+  html += `<h4 class="my-challenges-subheading">Historial (${historyChallenges.length})</h4>`;
+  if (historyChallenges.length > 0) {
+    html += historyChallenges.map(challenge => challengeCard(challenge, users, session, true)).join('');
+  } else {
+    html += '<p class="empty-state" style="padding: 10px 0;">No tienes partidos en tu historial.</p>';
+  }
+  html += `</div>`;
+
+  div.innerHTML = html;
 }
 
 function challengeCard(challenge, users, session, compact) {
@@ -1284,10 +1409,9 @@ function challengeCard(challenge, users, session, compact) {
   const retadorName = challenge.retadorNombre || retador?.nombre || 'Jugador';
   const retadoName = challenge.retadoNombre || retado?.nombre || 'Jugador';
   const ganadorName = challenge.ganadorId ? (challenge.ganadorNombre || ganador?.nombre || 'Jugador') : null;
-  const sessionIds = session ? getSessionChallengeIds(session) : [];
-  const involved = session && (sessionIds.includes(challenge.retadorId) || sessionIds.includes(challenge.retadoId));
+  const involved = session && isUserInChallenge(session, challenge);
   const isAdmin = isAdminSession(session);
-  const canRespond = session && sessionIds.includes(challenge.retadoId) && challenge.status === 'pendiente';
+  const canRespond = session && isUserRetadoInChallenge(session, challenge) && challenge.status === 'pendiente';
   const canScore = involved && (challenge.status === 'aceptado' || isAdmin);
   const canManage = (involved && ['pendiente', 'aceptado'].includes(challenge.status)) || isAdmin;
   const status = statusLabel(challenge.status);
@@ -1319,9 +1443,16 @@ function challengeCard(challenge, users, session, compact) {
     }
   }
 
-  const title = compact && session
-    ? `${sessionIds.includes(challenge.retadorId) ? 'Reto enviado a' : 'Desafío de'} ${escapeHTML(sessionIds.includes(challenge.retadorId) ? retadoName : retadorName)}`
-    : `${escapeHTML(retadorName)} <span class="vs-badge">VS</span> ${escapeHTML(retadoName)}`;
+  let title = '';
+  if (compact && session) {
+    const isRetador = isUserRetadorInChallenge(session, challenge);
+    title = isRetador
+      ? `Reto enviado a <strong>${escapeHTML(retadoName)}</strong>`
+      : `Desafío recibido de <strong>${escapeHTML(retadorName)}</strong>`;
+  } else {
+    const verb = challenge.status === 'completado' ? 'VS' : 'retó a';
+    title = `${escapeHTML(retadorName)} <span class="vs-badge">${verb}</span> ${escapeHTML(retadoName)}`;
+  }
 
   // compact view: include simple history counts
   let compactStats = '';
@@ -1341,7 +1472,7 @@ function challengeCard(challenge, users, session, compact) {
   if (challenge.status === 'completado') {
     const showAddComment = session && involved;
     const myComment = session && involved 
-      ? (sessionIds.includes(challenge.retadorId) ? (challenge.retadorComentario || '') : (challenge.retadoComentario || '')) 
+      ? (isUserRetadorInChallenge(session, challenge) ? (challenge.retadorComentario || '') : (challenge.retadoComentario || '')) 
       : '';
     
     let existingComments = '';
@@ -1465,9 +1596,8 @@ async function saveChallengeComment(challengeId) {
   const challenge = DB.getChallenges().find(c => c.id === challengeId);
   if (!challenge) return;
 
-  const sessionIds = getSessionChallengeIds(session);
-  const isRetador = sessionIds.includes(challenge.retadorId);
-  const isRetado = sessionIds.includes(challenge.retadoId);
+  const isRetador = isUserRetadorInChallenge(session, challenge);
+  const isRetado = isUserRetadoInChallenge(session, challenge);
 
   if (!isRetador && !isRetado) {
     alert("No tienes permiso para comentar en este desafío.");
@@ -1814,11 +1944,10 @@ async function submitChallenge(event) {
     return;
   }
 
-  const sessionIds = getSessionChallengeIds(session);
   const existing = DB.getChallenges().find(challenge =>
     ['pendiente', 'aceptado'].includes(challenge.status) &&
-    ((sessionIds.includes(challenge.retadorId) && challenge.retadoId === retadoId) ||
-     (challenge.retadorId === retadoId && sessionIds.includes(challenge.retadoId)))
+    ((isUserRetadorInChallenge(session, challenge) && challenge.retadoId === retadoId) ||
+     (isUserRetadoInChallenge(session, challenge) && challenge.retadorId === retadoId))
   );
 
   if (existing && !editId) {
