@@ -833,13 +833,37 @@ function closeFloatingAlert() {
 window.closeFloatingAlert = closeFloatingAlert;
 
 async function syncChallengesFromCloud() {
-  if (!DB.isCloudConfigured()) return;
+  let challenges = [];
+  let success = false;
 
-  try {
-    const challenges = await withTimeout(DB.getChallengesCloud(), CLOUD_TIMEOUT_MS, 'Firebase desafíos');
+  if (DB.isCloudConfigured()) {
+    try {
+      challenges = await withTimeout(DB.getChallengesCloud(), CLOUD_TIMEOUT_MS, 'Firebase desafíos');
+      success = true;
+    } catch (error) {
+      console.warn('No se pudieron sincronizar los desafíos desde Firebase. Intentando Sheets...', error);
+    }
+  }
+
+  if (!success && window.CONFIG?.API_URL) {
+    try {
+      const res = await withTimeout(
+        fetch(`${window.CONFIG.API_URL}?action=get_challenges`),
+        CLOUD_TIMEOUT_MS,
+        'Google Sheets desafíos'
+      );
+      const data = await res.json();
+      if (data && data.ok && Array.isArray(data.challenges)) {
+        challenges = data.challenges;
+        success = true;
+      }
+    } catch (sheetErr) {
+      console.warn('No se pudieron sincronizar los desafíos desde Google Sheets:', sheetErr);
+    }
+  }
+
+  if (success) {
     DB.saveChallenges(challenges);
-  } catch (error) {
-    console.warn('No se pudieron sincronizar los desafíos desde Firebase.', error);
   }
 }
 
@@ -2188,17 +2212,43 @@ async function createChallengeRemoteOrLocal(payload) {
 
   let savedChallenge = null;
 
+  // 1. Intentar en Firebase si está configurado
   if (DB.isCloudConfigured()) {
     try {
       const saved = await DB.saveChallengeCloud(challenge);
       upsertLocalChallenge(saved);
-      await notifyChallenge(saved, { nombre: payload.retadorNombre, email: payload.retadorEmail }, { nombre: payload.retadoNombre, email: payload.retadoEmail, telefono: payload.retadoTelefono });
       savedChallenge = saved;
     } catch (error) {
-      console.warn('No se pudo crear el desafío en Firebase. Usando respaldo local.', error);
+      console.warn('No se pudo crear el desafío en Firebase.', error);
     }
   }
 
+  // 2. Intentar en Google Sheets via Apps Script (guarda el desafío y notifica en un solo paso)
+  if (window.CONFIG?.API_URL) {
+    try {
+      const res = await fetch(window.CONFIG.API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          action: 'create_challenge',
+          ...challenge
+        })
+      });
+      const data = await res.json().catch(() => null);
+      if (data && data.ok) {
+        console.log('Desafío creado exitosamente en Google Sheets.');
+        if (data.challenge) {
+          const merged = { ...challenge, ...data.challenge };
+          upsertLocalChallenge(merged);
+          savedChallenge = merged;
+        }
+      }
+    } catch (sheetErr) {
+      console.warn('No se pudo crear el desafío en Google Sheets:', sheetErr);
+    }
+  }
+
+  // 3. Respaldo local y notificar vía fallback directo si no se pudo guardar en Google Sheets
   if (!savedChallenge) {
     const local = DB.createChallenge(payload.retadorId, payload.retadoId, payload.genero, payload.fecha, payload.cancha);
     Object.assign(local, {
@@ -2212,8 +2262,10 @@ async function createChallengeRemoteOrLocal(payload) {
       courtLabel: payload.courtLabel || ''
     });
     upsertLocalChallenge(local);
-    await notifyChallenge(local, { nombre: payload.retadorNombre, email: payload.retadorEmail }, { nombre: payload.retadoNombre, email: payload.retadoEmail, telefono: payload.retadoTelefono });
     savedChallenge = local;
+    
+    // Si no se guardó en Google Sheets, enviamos la notificación HTML/Calendar por separado
+    await notifyChallenge(local, { nombre: payload.retadorNombre, email: payload.retadorEmail }, { nombre: payload.retadoNombre, email: payload.retadoEmail, telefono: payload.retadoTelefono });
   }
 
   // Return saved challenge without triggering immediate popups (handled in UI modal)
@@ -2384,19 +2436,48 @@ async function notifyChallenge(challenge, retador, retado) {
 }
 
 async function respondChallenge(id, accept) {
+  let saved = false;
+
   if (DB.isCloudConfigured()) {
     try {
       const challenge = await DB.updateChallengeCloud(id, {
         status: accept ? 'aceptado' : 'rechazado'
       });
       upsertLocalChallenge(challenge);
+      saved = true;
     } catch (error) {
-      console.warn('No se pudo responder el desafío en Firebase. Usando respaldo local.', error);
-      DB.respondChallenge(id, accept);
+      console.warn('No se pudo responder el desafío en Firebase.', error);
     }
-  } else {
+  }
+
+  if (window.CONFIG?.API_URL) {
+    try {
+      const res = await fetch(window.CONFIG.API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          action: 'respond_challenge',
+          id: id,
+          accept: accept
+        })
+      });
+      const data = await res.json().catch(() => null);
+      if (data && data.ok) {
+        console.log('Respuesta registrada en Google Sheets.');
+        if (data.challenge) {
+          upsertLocalChallenge(data.challenge);
+        }
+        saved = true;
+      }
+    } catch (sheetErr) {
+      console.warn('No se pudo registrar la respuesta en Google Sheets:', sheetErr);
+    }
+  }
+
+  if (!saved) {
     DB.respondChallenge(id, accept);
   }
+
   renderChallenges();
   renderMyChallenges();
 }
@@ -2679,6 +2760,8 @@ async function submitScore(event) {
   const ganadorId = scoreResult.winnerId || '';
 
   let savedInCloud = false;
+
+  // 1. Intentar registrar en Firebase
   if (DB.isCloudConfigured()) {
     try {
       const wasCompleted = challenge.status === 'completado';
@@ -2726,12 +2809,40 @@ async function submitScore(event) {
       }
       savedInCloud = true;
     } catch (cloudError) {
-      console.warn('No se pudo guardar el resultado en Firebase. Usando respaldo local.', cloudError);
-      DB.submitResult(rankingState.currentChallengeId, marcador, ganadorId);
+      console.warn('No se pudo guardar el resultado en Firebase.', cloudError);
     }
-  } else {
+  }
+
+  // 2. Intentar registrar en Google Sheets via Apps Script (también notifica e invalida reservas/ranking)
+  if (window.CONFIG?.API_URL) {
+    try {
+      const res = await fetch(window.CONFIG.API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          action: 'submit_challenge_result',
+          id: rankingState.currentChallengeId,
+          marcador,
+          ganadorId
+        })
+      });
+      const data = await res.json().catch(() => null);
+      if (data && data.ok) {
+        console.log('Resultado registrado exitosamente en Google Sheets.');
+        if (data.challenge) {
+          upsertLocalChallenge({ ...challenge, ...data.challenge });
+        }
+        savedInCloud = true;
+      }
+    } catch (sheetErr) {
+      console.warn('No se pudo registrar el resultado en Google Sheets:', sheetErr);
+    }
+  }
+
+  if (!savedInCloud) {
     DB.submitResult(rankingState.currentChallengeId, marcador, ganadorId);
   }
+
   closeModal('scoreModal');
   if (savedInCloud) await refreshRankingPage();
   else {

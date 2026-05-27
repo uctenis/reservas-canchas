@@ -1008,16 +1008,35 @@ function formatDateShort(iso) {
 
 async function loadLiveData() {
   let challenges = [];
+  let success = false;
   
   // Try Firebase first
   if (DB.isCloudConfigured()) {
     try {
       challenges = await DB.getChallengesCloud();
       DB.saveChallenges(challenges); // sync to local
+      success = true;
     } catch(e) {
-      challenges = DB.getChallenges();
+      console.warn("Firebase offline para desafíos, intentando Google Sheets...", e);
     }
-  } else {
+  }
+
+  // Fallback to Google Sheets if Firebase fails
+  if (!success && window.CONFIG?.API_URL) {
+    try {
+      const res = await fetch(`${window.CONFIG.API_URL}?action=get_challenges`);
+      const data = await res.json();
+      if (data && data.ok && Array.isArray(data.challenges)) {
+        challenges = data.challenges;
+        DB.saveChallenges(challenges); // sync to local
+        success = true;
+      }
+    } catch(e) {
+      console.warn("Error al cargar desafíos desde Google Sheets:", e);
+    }
+  }
+
+  if (!success) {
     challenges = DB.getChallenges();
   }
 
