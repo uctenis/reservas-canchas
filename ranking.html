@@ -429,9 +429,14 @@
         </form>
       </div>
       <div class="admin-list-column">
-        <div class="list-heading">
-          <p class="modal-kicker">Jugadores</p>
-          <p class="admin-help-text">Lista deslizable. Edita cualquier ficha y confirma los cambios.</p>
+        <div class="list-heading" style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px;">
+          <div>
+            <p class="modal-kicker">Jugadores</p>
+            <p class="admin-help-text">Lista deslizable. Edita cualquier ficha y confirma los cambios.</p>
+          </div>
+          <button type="button" class="btn-primary" id="btnExportPlayers" style="padding: 8px 14px; font-size: 0.76rem; background: #10b981; border: none; border-radius: 8px; font-weight: 800; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 4px 12px rgba(16,185,129,0.22);" onclick="exportPlayersToExcel(event)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="flex-shrink:0;"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg> Exportar
+          </button>
         </div>
         <div class="admin-search-row">
           <input type="search" id="adminPlayerSearch" placeholder="Buscar jugador por nombre o correo" aria-label="Buscar jugadores">
@@ -1156,24 +1161,34 @@ function renderInactivePlayers() {
     inactiveSec.style.removeProperty('display');
   }
 
-  const gender = rankingState.currentGender;
-  const list = rankingState.inactive[gender] || [];
+  let list = [];
+  let titleSuffix = '';
+  
+  const listM = rankingState.inactive['M'] || [];
+  const listF = rankingState.inactive['F'] || [];
+  list = [...listM, ...listF];
+  titleSuffix = '(Todos)';
+
   const div = document.getElementById('inactivePlayersList');
-  document.getElementById('inactiveTitle').textContent = `Jugadores inactivos ${GENDERS[gender].label}`;
+  document.getElementById('inactiveTitle').textContent = `Jugadores inactivos ${titleSuffix}`;
   document.getElementById('inactiveCount').textContent = list.length ? `${list.length} jugador${list.length === 1 ? '' : 'es'}` : '';
 
   if (!list.length) {
     div.innerHTML = '<p class="empty-state">No hay jugadores inactivos registrados en este ranking.</p>';
     return;
   }
-  div.innerHTML = list.map(player => `
-    <article class="inactive-player-row" data-player-key="${escapeAttr(player.key)}">
-      <img class="player-avatar" src="${escapeAttr(player.foto)}" data-fallback="${escapeAttr(GENDERS[gender].fallbackAvatar)}" onerror="useFallbackAvatar(this)" alt="${escapeAttr(player.nombre)}">
-      <div class="inactive-player-info">
-        <strong>${escapeHTML(player.nombre)}</strong>
-      </div>
-      <button class="btn-mini-profile" type="button" data-action="show-profile" data-player-key="${escapeAttr(player.key)}">Ver</button>
-    </article>`).join('');
+  div.innerHTML = list.map(player => {
+    const genderFallback = player.gender === 'F' ? GENDERS.F.fallbackAvatar : GENDERS.M.fallbackAvatar;
+    const genderTag = `<span style="font-size:0.7rem; background:rgba(255,255,255,0.06); padding:2px 6px; border-radius:4px; margin-left:8px; color:var(--text-secondary);">${player.gender === 'F' ? 'Fem' : 'Masc'}</span>`;
+    return `
+      <article class="inactive-player-row" data-player-key="${escapeAttr(player.key)}">
+        <img class="player-avatar" src="${escapeAttr(player.foto)}" data-fallback="${escapeAttr(genderFallback)}" onerror="useFallbackAvatar(this)" alt="${escapeAttr(player.nombre)}">
+        <div class="inactive-player-info">
+          <strong>${escapeHTML(player.nombre)} ${genderTag}</strong>
+        </div>
+        <button class="btn-mini-profile" type="button" data-action="show-profile" data-player-key="${escapeAttr(player.key)}">Ver</button>
+      </article>`;
+  }).join('');
 }
 
 function renderUserBar() {
@@ -2986,6 +3001,86 @@ function openAdminModal() {
   renderAdminPlayerList();
   openModal('adminModal');
 }
+
+function exportPlayersToExcel(event) {
+  if (event) event.preventDefault();
+  if (!isPlayerAdminSession()) {
+    alert("No tienes permisos de administrador para exportar.");
+    return;
+  }
+  
+  // Combine all players from the state lists
+  const allM = rankingState.lists.M || [];
+  const allF = rankingState.lists.F || [];
+  const inactiveM = rankingState.inactive.M || [];
+  const inactiveF = rankingState.inactive.F || [];
+  
+  const allPlayers = [...allM, ...allF, ...inactiveM, ...inactiveF];
+  
+  if (allPlayers.length === 0) {
+    alert("No hay datos de jugadores para exportar.");
+    return;
+  }
+  
+  // Define columns/headers
+  const headers = [
+    "Nombre",
+    "Correo",
+    "Teléfono",
+    "Género",
+    "Estado",
+    "Posición",
+    "Categoría",
+    "Mano",
+    "Revés",
+    "Fecha de Nacimiento",
+    "Notas"
+  ];
+  
+  // Convert rows to CSV format
+  const rows = allPlayers.map(p => {
+    const isActive = !['false', '0', 'no', 'inactivo', 'inactiva', 'inactive', 'baja', 'retirado', 'retirada'].includes(String(p.activo ?? p.participaRanking ?? true).toLowerCase());
+    return [
+      p.nombre || "",
+      p.email || "",
+      p.telefono || p.phone || "",
+      p.gender === "F" ? "Femenino" : "Masculino",
+      isActive ? "Activo" : "Inactivo",
+      isActive ? (p.pos || p.posicion || "") : "Inactivo",
+      p.categoria || p.category || "",
+      p.mano || "",
+      p.reves || "",
+      p.fechaNacimiento || p.birthDate || "",
+      p.notas || ""
+    ];
+  });
+  
+  // Escape fields and join with semicolon (standard in Excel for Spanish regions)
+  const csvContent = [
+    headers.join(";"),
+    ...rows.map(row => row.map(val => {
+      let str = String(val).replace(/"/g, '""');
+      if (str.includes(";") || str.includes("\n") || str.includes("\r") || str.includes('"')) {
+        str = `"${str}"`;
+      }
+      return str;
+    }).join(";"))
+  ].join("\r\n");
+  
+  // Create Blob with UTF-8 BOM to ensure Excel opens accents and ñ correctly
+  const blob = new Blob(["\ufeff" + csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  
+  // Trigger download
+  const link = document.createElement("a");
+  link.setAttribute("href", url);
+  link.setAttribute("download", `jugadores_uctenis_${new Date().toISOString().slice(0,10)}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+window.exportPlayersToExcel = exportPlayersToExcel;
 
 async function manualSeedDatabase(event) {
   if (event) event.preventDefault();
