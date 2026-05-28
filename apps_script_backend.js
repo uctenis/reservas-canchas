@@ -983,7 +983,14 @@ function getAvailableSlots(dateStr) {
     let busyTimes = events
       .filter(e => {
         const title = (e.getTitle() || '').toLowerCase();
-        return title.includes('reserva uctenis') || title.includes('desafío ranking') || title.includes('desafio ranking');
+        let isBusy = title.includes('reserva uctenis') || title.includes('desafío ranking') || title.includes('desafio ranking');
+        
+        // Si no hay una fecha especial "all_day" configurada para esta cancha hoy,
+        // bloquear también las clases recurrentes de UCTenis.
+        if (!specialCourts[courtKey]) {
+          isBusy = isBusy || title.includes('clases uctenis') || title.includes('clase uctenis');
+        }
+        return isBusy;
       })
       .map(e => ({
         start: e.getStartTime().getTime(),
