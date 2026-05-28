@@ -250,19 +250,20 @@ const DB = {
       const localUsers = this.getUsers();
       let localUser = localUsers.find(u => u.email.toLowerCase() === user.email.toLowerCase());
 
-      if (localUser) {
+      const cloudPlayer = validation.player || await this.findPlayerByEmailCloud(user.email);
+      if (cloudPlayer) {
+        localUser = playerToSessionUser(cloudPlayer, {
+          ...(localUser || {}),
+          email: user.email,
+          nombre: user.displayName || cloudPlayer.nombre || (localUser && localUser.nombre) || '',
+          foto: user.photoURL || cloudPlayer.foto || (localUser && localUser.foto) || ''
+        });
+        this.upsertUserLocal(localUser);
         localStorage.setItem('uctenis_session', JSON.stringify(localUser));
         return { ok: true, user: localUser, isNew: false };
       }
 
-      const cloudPlayer = validation.player || await this.findPlayerByEmailCloud(user.email);
-      if (cloudPlayer) {
-        localUser = playerToSessionUser(cloudPlayer, {
-          email: user.email,
-          nombre: user.displayName || cloudPlayer.nombre || '',
-          foto: user.photoURL || cloudPlayer.foto || ''
-        });
-        this.upsertUserLocal(localUser);
+      if (localUser) {
         localStorage.setItem('uctenis_session', JSON.stringify(localUser));
         return { ok: true, user: localUser, isNew: false };
       }
@@ -308,15 +309,19 @@ const DB = {
     const localUsers = this.getUsers();
     let localUser = localUsers.find(u => u.email.toLowerCase() === email.toLowerCase());
 
-    if (localUser) {
+    const cloudPlayer = validation.player || await this.findPlayerByEmailCloud(email);
+    if (cloudPlayer) {
+      localUser = playerToSessionUser(cloudPlayer, {
+        ...(localUser || {}),
+        email,
+        nombre: nombre || cloudPlayer.nombre || (localUser && localUser.nombre) || ''
+      });
+      this.upsertUserLocal(localUser);
       localStorage.setItem('uctenis_session', JSON.stringify(localUser));
       return { ok: true, user: localUser, isNew: false };
     }
 
-    const cloudPlayer = validation.player || await this.findPlayerByEmailCloud(email);
-    if (cloudPlayer) {
-      localUser = playerToSessionUser(cloudPlayer, { email, nombre: nombre || cloudPlayer.nombre || '' });
-      this.upsertUserLocal(localUser);
+    if (localUser) {
       localStorage.setItem('uctenis_session', JSON.stringify(localUser));
       return { ok: true, user: localUser, isNew: false };
     }
