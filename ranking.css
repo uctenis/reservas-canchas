@@ -1294,8 +1294,47 @@ body {
 }
 
 .admin-modal {
-  width: min(94vw, 1100px);
-  max-width: 1100px !important;
+  width: min(94vw, 720px) !important;
+  max-width: 720px !important;
+}
+
+.admin-subview {
+  transition: opacity 0.2s ease;
+}
+
+.admin-subview.hidden {
+  display: none !important;
+}
+
+/* drag & drop helper classes */
+tr[draggable="true"] {
+  user-select: none;
+}
+tr.dragging {
+  opacity: 0.4;
+  background: rgba(255, 255, 255, 0.08) !important;
+  outline: 1.5px dashed var(--court-green) !important;
+  outline-offset: -1.5px;
+}
+tr.drag-over-top {
+  border-top: 2px solid var(--court-green) !important;
+}
+tr.drag-over-bottom {
+  border-bottom: 2px solid var(--court-green) !important;
+}
+
+@keyframes pulse-confirm {
+  0% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.5);
+    transform: scale(1);
+  }
+  100% {
+    box-shadow: 0 0 0 10px rgba(16, 185, 129, 0);
+    transform: scale(1.03);
+  }
+}
+.pulse-confirm {
+  animation: pulse-confirm 1.6s infinite alternate;
 }
 
 .admin-modal-grid {

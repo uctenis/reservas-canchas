@@ -162,6 +162,9 @@ function handleRequest(data) {
       case "admin_delete_player":
         response = adminDeletePlayer(data);
         break;
+      case "admin_reorder_ranking":
+        response = adminReorderRanking(data);
+        break;
       case "update_own_profile":
         response = updateOwnProfile(data);
         break;
@@ -458,11 +461,11 @@ function createChallengeCalendarInvite(data) {
 }
 
 function courtKeyFromName(value) {
-  const raw = norm(value).replace(/[^a-z0-9]/g, '');
-  if (raw === 'cec1') return 'cec1';
-  if (raw === 'cec2') return 'cec2';
-  if (raw === 'cjp1') return 'cjp1';
-  if (raw === 'cjp2') return 'cjp2';
+  const raw = norm(value).replace(/\s+/g, '');
+  if (raw.indexOf('cec1') >= 0 || (raw.indexOf('cec') >= 0 && raw.indexOf('1') >= 0)) return 'cec1';
+  if (raw.indexOf('cec2') >= 0 || (raw.indexOf('cec') >= 0 && raw.indexOf('2') >= 0)) return 'cec2';
+  if (raw.indexOf('cjp1') >= 0 || (raw.indexOf('cjp') >= 0 && raw.indexOf('1') >= 0)) return 'cjp1';
+  if (raw.indexOf('cjp2') >= 0 || (raw.indexOf('cjp') >= 0 && raw.indexOf('2') >= 0)) return 'cjp2';
   return '';
 }
 
@@ -470,11 +473,71 @@ function getChallenges() {
   const sheet = getChallengesSheet();
   const values = sheet.getDataRange().getValues();
   const challenges = [];
+  let updatedAny = false;
 
   for (let i = 1; i < values.length; i++) {
     const row = values[i];
     if (!text(row[0])) continue;
-    challenges.push(challengeFromRow(row));
+    let challenge = challengeFromRow(row);
+    const rowStatus = text(row[10]);
+
+    if (challenge.status === 'completado' && rowStatus !== 'completado') {
+      const completedAt = challenge.actualizado || new Date().toISOString();
+      challenge.actualizado = completedAt;
+      sheet.getRange(i + 1, 11).setValue('completado');
+      sheet.getRange(i + 1, 15).setValue(completedAt);
+      updatedAny = true;
+    }
+
+    // Sync with Google Calendar if it's pending and has an eventId
+    if (challenge.status === 'pendiente' && challenge.eventId) {
+      try {
+        const calendar = CalendarApp.getDefaultCalendar();
+        const event = calendar.getEventById(challenge.eventId);
+        if (event) {
+          const guests = event.getGuestList();
+          const retadoEmailNorm = challenge.retadoEmail.toLowerCase().trim();
+          let retadoGuest = guests.find(g => g.getEmail().toLowerCase().trim() === retadoEmailNorm);
+
+          if (retadoGuest) {
+            const status = retadoGuest.getGuestStatus();
+            if (status === CalendarApp.GuestStatus.YES) {
+              challenge.status = 'aceptado';
+              challenge.actualizado = new Date().toISOString();
+              sheet.getRange(i + 1, 11).setValue('aceptado');
+              sheet.getRange(i + 1, 15).setValue(challenge.actualizado);
+              updatedAny = true;
+            } else if (status === CalendarApp.GuestStatus.NO) {
+              challenge.status = 'rechazado';
+              challenge.actualizado = new Date().toISOString();
+              sheet.getRange(i + 1, 11).setValue('rechazado');
+              sheet.getRange(i + 1, 15).setValue(challenge.actualizado);
+              updatedAny = true;
+
+              // Deletar reserva de cancha también
+              try {
+                if (challenge.bookingId && challenge.courtId) {
+                  const calId = CONFIG.CALENDARS[challenge.courtId];
+                  if (calId) {
+                    const courtCal = CalendarApp.getCalendarById(calId);
+                    if (courtCal) {
+                      const bookingEvent = courtCal.getEventById(challenge.bookingId);
+                      if (bookingEvent) bookingEvent.deleteEvent();
+                    }
+                  }
+                }
+              } catch (e) {
+                console.warn('Error deleting booking event on calendar reject: ' + e.message);
+              }
+            }
+          }
+        }
+      } catch (calErr) {
+        console.warn('Error checking calendar event status: ' + calErr.message);
+      }
+    }
+
+    challenges.push(challenge);
   }
 
   return { ok: true, challenges: challenges };
@@ -495,19 +558,36 @@ function createChallenge(data) {
     genero: text(data.genero),
     fecha: text(data.fecha),
     cancha: text(data.cancha),
-    status: 'pendiente',
-    marcador: '',
-    ganadorId: '',
+    status: text(data.status) || 'pendiente',
+    marcador: text(data.marcador) || '',
+    ganadorId: text(data.ganadorId) || '',
     creado: now,
-    actualizado: now
+    actualizado: now,
+    slot: text(data.slot),
+    courtId: text(data.courtId),
+    eventId: '',
+    bookingId: text(data.bookingId),
+    tipo: text(data.tipo) || 'ranking'
   };
+  normalizeChallengeCompletion(challenge);
 
-  sheet.appendRow(challengeToRow(challenge));
   try {
-    if (challenge.retadoEmail) notifyChallenge(challenge);
+    if (challenge.status !== 'completado' && challenge.tipo !== 'amistoso' && challenge.retadoEmail) {
+      const res = notifyChallenge(challenge);
+      if (res.ok && res.calendar && res.calendar.ok) {
+        challenge.eventId = res.calendar.eventId;
+      }
+    }
   } catch (mailError) {
     challenge.notificationError = mailError.message;
   }
+
+  sheet.appendRow(challengeToRow(challenge));
+
+  if (challenge.status === 'completado') {
+    applyChallengeResultToRanking(challenge);
+  }
+
   return { ok: true, challenge: publicChallenge(challenge) };
 }
 
@@ -522,10 +602,52 @@ function respondChallenge(data) {
     status = 'aceptado';
   }
   
-  found.sheet.getRange(found.rowNumber, 11).setValue(status);
-  found.sheet.getRange(found.rowNumber, 15).setValue(new Date().toISOString());
+  // Read challenge data from row before doing any updates or deletions
+  const challenge = challengeFromRow(found.sheet.getRange(found.rowNumber, 1, 1, 20).getValues()[0]);
 
-  return { ok: true, challenge: publicChallenge(challengeFromRow(found.sheet.getRange(found.rowNumber, 1, 1, 15).getValues()[0])) };
+  // If status is rechazado or eliminado, free the calendar reservations!
+  if (status === 'rechazado' || status === 'eliminado') {
+    try {
+      if (challenge.bookingId && challenge.courtId) {
+        const calId = CONFIG.CALENDARS[challenge.courtId];
+        if (calId) {
+          const courtCal = CalendarApp.getCalendarById(calId);
+          if (courtCal) {
+            const bookingEvent = courtCal.getEventById(challenge.bookingId);
+            if (bookingEvent) bookingEvent.deleteEvent();
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Error deleting court reservation: ' + e.message);
+    }
+
+    try {
+      if (challenge.eventId) {
+        const defaultCal = CalendarApp.getDefaultCalendar();
+        if (defaultCal) {
+          const inviteEvent = defaultCal.getEventById(challenge.eventId);
+          if (inviteEvent) inviteEvent.deleteEvent();
+        }
+      }
+    } catch (e) {
+      console.warn('Error deleting challenge invite: ' + e.message);
+    }
+  }
+
+  if (status === 'eliminado') {
+    // Delete row physically
+    found.sheet.deleteRow(found.rowNumber);
+    challenge.status = 'eliminado';
+  } else {
+    // Regular update
+    found.sheet.getRange(found.rowNumber, 11).setValue(status);
+    found.sheet.getRange(found.rowNumber, 15).setValue(new Date().toISOString());
+    challenge.status = status;
+    challenge.actualizado = new Date().toISOString();
+  }
+
+  return { ok: true, challenge: publicChallenge(challenge) };
 }
 
 function submitChallengeResult(data) {
@@ -536,15 +658,18 @@ function submitChallengeResult(data) {
     const found = findChallengeRow(text(data.id));
     if (!found) return { ok: false, msg: 'Desafío no encontrado.' };
 
-    const previous = challengeFromRow(found.sheet.getRange(found.rowNumber, 1, 1, 15).getValues()[0]);
+    const previous = challengeFromRow(found.sheet.getRange(found.rowNumber, 1, 1, 20).getValues()[0]);
     const wasCompleted = previous.status === 'completado';
 
     found.sheet.getRange(found.rowNumber, 11).setValue('completado');
     found.sheet.getRange(found.rowNumber, 12).setValue(text(data.marcador));
     found.sheet.getRange(found.rowNumber, 13).setValue(text(data.ganadorId));
     found.sheet.getRange(found.rowNumber, 15).setValue(new Date().toISOString());
+    if (data.tipo) {
+      found.sheet.getRange(found.rowNumber, 20).setValue(text(data.tipo));
+    }
 
-    const updated = challengeFromRow(found.sheet.getRange(found.rowNumber, 1, 1, 15).getValues()[0]);
+    const updated = challengeFromRow(found.sheet.getRange(found.rowNumber, 1, 1, 20).getValues()[0]);
     const rankingUpdate = wasCompleted
       ? { ok: true, skipped: true, msg: 'El resultado ya estaba registrado; no se vuelve a mover el ranking.' }
       : applyChallengeResultToRanking(updated);
@@ -564,7 +689,7 @@ function getChallengesSheet() {
   let sheet = ss.getSheetByName(' LIBRO DESAFIOS') || ss.getSheetByName('LIBRO DESAFIOS');
   if (!sheet) sheet = ss.insertSheet(' LIBRO DESAFIOS');
 
-  const headers = ['id', 'retadorId', 'retadorNombre', 'retadorEmail', 'retadoId', 'retadoNombre', 'retadoEmail', 'genero', 'fecha', 'cancha', 'status', 'marcador', 'ganadorId', 'creado', 'actualizado'];
+  const headers = ['id', 'retadorId', 'retadorNombre', 'retadorEmail', 'retadoId', 'retadoNombre', 'retadoEmail', 'genero', 'fecha', 'cancha', 'status', 'marcador', 'ganadorId', 'creado', 'actualizado', 'slot', 'courtId', 'eventId', 'bookingId', 'tipo'];
   const first = sheet.getRange(1, 1, 1, headers.length).getValues()[0];
   if (!text(first[0])) sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
   return sheet;
@@ -581,7 +706,7 @@ function findChallengeRow(id) {
 }
 
 function challengeFromRow(row) {
-  return {
+  const challenge = {
     id: text(row[0]),
     retadorId: text(row[1]),
     retadorNombre: text(row[2]),
@@ -596,8 +721,29 @@ function challengeFromRow(row) {
     marcador: text(row[11]) || null,
     ganadorId: text(row[12]) || null,
     creado: text(row[13]),
-    actualizado: text(row[14])
+    actualizado: text(row[14]),
+    slot: text(row[15]) || '',
+    courtId: text(row[16]) || '',
+    eventId: text(row[17]) || '',
+    bookingId: text(row[18]) || '',
+    tipo: text(row[19]) || 'ranking'
   };
+  return normalizeChallengeCompletion(challenge);
+}
+
+function hasRecordedChallengeResult(challenge) {
+  return Boolean(
+    challenge &&
+    text(challenge.marcador) &&
+    text(challenge.ganadorId)
+  );
+}
+
+function normalizeChallengeCompletion(challenge) {
+  if (hasRecordedChallengeResult(challenge) && challenge.status !== 'eliminado') {
+    challenge.status = 'completado';
+  }
+  return challenge;
 }
 
 function challengeToRow(challenge) {
@@ -616,7 +762,12 @@ function challengeToRow(challenge) {
     challenge.marcador,
     challenge.ganadorId,
     challenge.creado,
-    challenge.actualizado
+    challenge.actualizado,
+    challenge.slot || '',
+    challenge.courtId || '',
+    challenge.eventId || '',
+    challenge.bookingId || '',
+    challenge.tipo || 'ranking'
   ];
 }
 
@@ -624,7 +775,9 @@ function publicChallenge(challenge) {
   return {
     id: challenge.id,
     retadorId: challenge.retadorId,
+    retadorNombre: challenge.retadorNombre,
     retadoId: challenge.retadoId,
+    retadoNombre: challenge.retadoNombre,
     genero: challenge.genero,
     fecha: challenge.fecha,
     cancha: challenge.cancha,
@@ -632,7 +785,12 @@ function publicChallenge(challenge) {
     marcador: challenge.marcador || null,
     ganadorId: challenge.ganadorId || null,
     creado: challenge.creado,
-    actualizado: challenge.actualizado
+    actualizado: challenge.actualizado,
+    slot: challenge.slot || '',
+    courtId: challenge.courtId || '',
+    eventId: challenge.eventId || '',
+    bookingId: challenge.bookingId || '',
+    tipo: challenge.tipo || 'ranking'
   };
 }
 
@@ -642,12 +800,63 @@ function publicChallenge(challenge) {
 
 function validateMember(email) {
   if (!email) return { ok: false, msg: "Correo no proporcionado." };
-  
+  const needle = email.toLowerCase().trim();
+
+  // 1. Intentar validar contra Firebase Firestore via REST API
+  try {
+    const firestoreUrl = "https://firestore.googleapis.com/v1/projects/uctenis-club/databases/(default)/documents:runQuery";
+    const queryPayload = {
+      structuredQuery: {
+        from: [{ collectionId: "ranking_players" }],
+        where: {
+          fieldFilter: {
+            field: { fieldPath: "emailLower" },
+            op: "EQUAL",
+            value: { stringValue: needle }
+          }
+        },
+        limit: 1
+      }
+    };
+    const response = UrlFetchApp.fetch(firestoreUrl, {
+      method: "post",
+      contentType: "application/json",
+      payload: JSON.stringify(queryPayload),
+      muteHttpExceptions: true
+    });
+    
+    if (response.getResponseCode() === 200) {
+      const results = JSON.parse(response.getContentText());
+      if (results && results.length > 0 && results[0].document) {
+        const doc = results[0].document;
+        const fields = doc.fields || {};
+        
+        const nombre = fields.nombre && fields.nombre.stringValue ? fields.nombre.stringValue : '';
+        const emailVal = fields.email && fields.email.stringValue ? fields.email.stringValue : email;
+        const idVal = fields.id && fields.id.stringValue ? fields.id.stringValue : doc.name.split('/').pop();
+        const activo = fields.activo && fields.activo.booleanValue !== undefined ? fields.activo.booleanValue : true;
+        
+        if (activo) {
+          return {
+            ok: true,
+            msg: "Miembro validado.",
+            player: { id: idVal, nombre: nombre, email: emailVal },
+            isAdmin: isAdminRequest({ actorEmail: needle, actorName: nombre })
+          };
+        }
+      }
+    } else {
+      console.warn("Respuesta no exitosa de Firestore: " + response.getResponseCode() + " - " + response.getContentText());
+    }
+  } catch (fbError) {
+    console.warn("Error al consultar Firebase Firestore en validateMember:", fbError);
+  }
+
+  // 2. Fallback a Google Sheets si no se encontró en Firestore o falló la consulta
   try {
     const ss = SpreadsheetApp.openById(CONFIG.SHEET_MIEMBROS_ID);
     const sheet = ss.getSheetByName('usuariosautorizados');
     const jugadoresSheet = ss.getSheetByName('jugadores');
-    const needle = email.toLowerCase().trim();
     
     if (sheet) {
       const data = sheet.getDataRange().getValues();
@@ -927,6 +1136,64 @@ function adminDeletePlayer(data) {
   }
 }
 
+function adminReorderRanking(data) {
+  if (!isAdminRequest(data)) return { ok: false, msg: 'Acceso reservado al administrador.' };
+
+  const genero = normalizeGender(data.genero);
+  if (!genero) return { ok: false, msg: 'Género no válido.' };
+
+  const orderedIds = data.orderedIds;
+  if (!Array.isArray(orderedIds) || !orderedIds.length) {
+    return { ok: false, msg: 'Falta la lista ordenada de jugadores.' };
+  }
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+
+  try {
+    const ss = getSpreadsheet();
+    // 1. Read existing ranking entries
+    const entries = readRankingEntries(ss, genero);
+    
+    // 2. Build previous map
+    const previousMap = buildPreviousPositionMap(entries);
+    
+    // 3. Sort entries based on orderedIds position
+    const entryMap = {};
+    entries.forEach(entry => {
+      const key = entry.id || entry.nombre;
+      if (key) entryMap[key] = entry;
+    });
+    
+    const reorderedEntries = [];
+    orderedIds.forEach(id => {
+      if (entryMap[id]) {
+        reorderedEntries.push(entryMap[id]);
+        delete entryMap[id];
+      }
+    });
+    
+    // Append remaining
+    Object.values(entryMap).forEach(remaining => {
+      reorderedEntries.push(remaining);
+    });
+
+    // 4. Renumber positions
+    const finalEntries = reorderedEntries.map((entry, index) => ({
+      ...entry,
+      posicion: index + 1
+    }));
+
+    // 5. Write to Sheets
+    writeRankingEntries(ss, genero, finalEntries, previousMap);
+    syncPlayerRankingColumns(ss, genero, finalEntries, previousMap);
+
+    return { ok: true, ranking: getRanking() };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 function updateOwnProfile(data) {
   const actorEmail = text(data.actorEmail || data.email);
   const validation = actorEmail ? validateMember(actorEmail) : { ok: false };
@@ -965,6 +1232,10 @@ function updateOwnProfile(data) {
 }
 
 function applyChallengeResultToRanking(challenge) {
+  if (text(challenge.tipo) === 'amistoso') {
+    return { ok: true, moved: false, msg: 'Partido amistoso: no se altera el ranking.' };
+  }
+
   const genero = normalizeGender(challenge.genero);
   const ganadorId = text(challenge.ganadorId);
   if (!genero) return { ok: false, msg: 'Genero de desafio no valido.' };
@@ -1480,7 +1751,9 @@ function getChallengeStatsByPlayer() {
 
     retador.pj += 1;
     retado.pj += 1;
-    ganador.pts += 3;
+    if (challenge.tipo !== 'amistoso') {
+      ganador.pts += 3;
+    }
     ganador.pg += 1;
 
     if (challenge.ganadorId === challenge.retadorId) retado.pp += 1;

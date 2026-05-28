@@ -321,6 +321,35 @@
       border: 1.5px solid var(--accent-tennis) !important;
       box-shadow: 0 0 10px rgba(198, 211, 0, 0.12);
     }
+    .match-card.is-friendly {
+      border: 1px solid rgba(99, 102, 241, 0.15) !important;
+      background: rgba(15, 23, 42, 0.4);
+    }
+    .match-card.is-challenge-official {
+      border: 1px solid rgba(245, 158, 11, 0.3) !important;
+      background: linear-gradient(135deg, rgba(30, 41, 59, 0.6) 0%, rgba(15, 23, 42, 0.8) 100%);
+      box-shadow: 0 4px 15px rgba(245, 158, 11, 0.05);
+    }
+    .match-type-badge {
+      font-size: 0.62rem;
+      font-weight: 700;
+      padding: 1px 6px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+    }
+    .match-type-badge.is-friendly {
+      background: rgba(99, 102, 241, 0.12);
+      color: #a5b4fc;
+      border: 1px solid rgba(99, 102, 241, 0.25);
+    }
+    .match-type-badge.is-official {
+      background: rgba(245, 158, 11, 0.12);
+      color: #fcd34d;
+      border: 1px solid rgba(245, 158, 11, 0.25);
+    }
     .my-match-label {
       position: absolute;
       top: -8px;
@@ -1006,37 +1035,93 @@ function formatDateShort(iso) {
   return `${parseInt(d)} ${months[parseInt(m)-1]}`;
 }
 
+function homeHasRecordedResult(challenge) {
+  return Boolean(
+    String(challenge?.marcador || '').trim() &&
+    String(challenge?.ganadorId || '').trim()
+  );
+}
+
+function homeNormalizeChallenge(challenge) {
+  const normalized = { ...(challenge || {}) };
+  if (homeHasRecordedResult(normalized) && normalized.status !== 'eliminado') {
+    normalized.status = 'completado';
+  }
+  return normalized;
+}
+
+function homeChallengeTime(challenge) {
+  const raw = challenge?.actualizado || challenge?.updatedAt || challenge?.creado || challenge?.fecha || '';
+  const time = raw ? new Date(raw).getTime() : NaN;
+  return Number.isFinite(time) ? time : 0;
+}
+
+function homeMergeChallengeRecords(current, incoming) {
+  const base = homeNormalizeChallenge(current || {});
+  const next = homeNormalizeChallenge(incoming || {});
+  const newer = homeChallengeTime(next) >= homeChallengeTime(base) ? next : base;
+  const older = newer === next ? base : next;
+  const merged = { ...older };
+
+  Object.entries(newer).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') {
+      merged[key] = value;
+    } else if (!(key in merged)) {
+      merged[key] = value;
+    }
+  });
+
+  if (homeHasRecordedResult(base) || homeHasRecordedResult(next)) {
+    const completed = homeHasRecordedResult(next) ? next : base;
+    merged.status = 'completado';
+    merged.marcador = completed.marcador || merged.marcador;
+    merged.ganadorId = completed.ganadorId || merged.ganadorId;
+    merged.actualizado = completed.actualizado || merged.actualizado || new Date().toISOString();
+  }
+
+  return homeNormalizeChallenge(merged);
+}
+
+function homeMergeChallengeSources(sources) {
+  const byId = new Map();
+  sources.flat().filter(Boolean).forEach(challenge => {
+    const normalized = homeNormalizeChallenge(challenge);
+    const key = normalized.id || `${normalized.retadorId || normalized.retadorNombre}-${normalized.retadoId || normalized.retadoNombre}-${normalized.fecha || normalized.creado}`;
+    byId.set(key, homeMergeChallengeRecords(byId.get(key), normalized));
+  });
+  return Array.from(byId.values());
+}
+
 async function loadLiveData() {
   let challenges = [];
-  let success = false;
+  const sources = [];
   
   // Try Firebase first
   if (DB.isCloudConfigured()) {
     try {
-      challenges = await DB.getChallengesCloud();
-      DB.saveChallenges(challenges); // sync to local
-      success = true;
+      sources.push(await DB.getChallengesCloud());
     } catch(e) {
       console.warn("Firebase offline para desafíos, intentando Google Sheets...", e);
     }
   }
 
-  // Fallback to Google Sheets if Firebase fails
-  if (!success && window.CONFIG?.API_URL) {
+  // Also read Google Sheets so a completed result there can close stale Firebase copies.
+  if (window.CONFIG?.API_URL) {
     try {
       const res = await fetch(`${window.CONFIG.API_URL}?action=get_challenges`);
       const data = await res.json();
       if (data && data.ok && Array.isArray(data.challenges)) {
-        challenges = data.challenges;
-        DB.saveChallenges(challenges); // sync to local
-        success = true;
+        sources.push(data.challenges);
       }
     } catch(e) {
       console.warn("Error al cargar desafíos desde Google Sheets:", e);
     }
   }
 
-  if (!success) {
+  if (sources.length) {
+    challenges = homeMergeChallengeSources(sources);
+    DB.saveChallenges(challenges); // sync to local
+  } else {
     challenges = DB.getChallenges();
   }
 
@@ -1219,12 +1304,15 @@ async function loadLiveData() {
       
       const isMyChallengeActive = isMyChallenge(c);
       const myMatchLabel = isMyChallengeActive ? `<div class="my-match-label">Tu Desafío</div>` : '';
-      const cardClass = isMyChallengeActive ? 'match-card is-my-match' : 'match-card';
+      const isFriendly = c.tipo === 'amistoso';
+      const typeClass = isFriendly ? 'is-friendly' : 'is-challenge-official';
+      const cardClass = `match-card ${typeClass} ${isMyChallengeActive ? 'is-my-match' : ''}`;
       
       return `<div class="${cardClass}">
         ${myMatchLabel}
         <div class="match-header">
           <span class="match-court">${courtStr}</span>
+          <span class="match-type-badge ${isFriendly ? 'is-friendly' : 'is-official'}">${isFriendly ? '🤝 Amistoso' : '⚔️ Desafío'}</span>
           <span class="match-date">${dateStr}</span>
         </div>
         <div class="match-players-row">
@@ -1285,12 +1373,15 @@ async function loadLiveData() {
       
       const isMyChallengeResult = isMyChallenge(c);
       const myMatchLabel = isMyChallengeResult ? `<div class="my-match-label">Tu Desafío</div>` : '';
-      const cardClass = isMyChallengeResult ? 'match-card is-my-match' : 'match-card';
+      const isFriendly = c.tipo === 'amistoso';
+      const typeClass = isFriendly ? 'is-friendly' : 'is-challenge-official';
+      const cardClass = `match-card ${typeClass} ${isMyChallengeResult ? 'is-my-match' : ''}`;
       
       return `<div class="${cardClass}">
         ${myMatchLabel}
         <div class="match-header">
           <span class="match-court">${courtStr}</span>
+          <span class="match-type-badge ${isFriendly ? 'is-friendly' : 'is-official'}">${isFriendly ? '🤝 Amistoso' : '⚔️ Desafío'}</span>
           <span class="match-date">${dateStr}</span>
         </div>
         <div class="match-players-row">

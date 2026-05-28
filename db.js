@@ -58,6 +58,21 @@ function cleanFirestoreData(data) {
   return out;
 }
 
+function hasRecordedChallengeResult(challenge) {
+  return Boolean(
+    String(challenge?.marcador || '').trim() &&
+    String(challenge?.ganadorId || '').trim()
+  );
+}
+
+function normalizeChallengeRecord(challenge) {
+  const normalized = { ...(challenge || {}) };
+  if (hasRecordedChallengeResult(normalized) && normalized.status !== 'eliminado') {
+    normalized.status = 'completado';
+  }
+  return normalized;
+}
+
 function makeFirebaseDocId(value, prefix = 'doc') {
   const base = String(value || '')
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -461,12 +476,18 @@ const DB = {
     return this.savePlayerCloud(patch, actor);
   },
 
+  async deletePlayerCloud(id) {
+    if (!this.isCloudConfigured()) throw new Error('Firestore no está disponible.');
+    if (!id) throw new Error('Se requiere el ID del jugador para eliminarlo.');
+    await firebaseDb.collection(FIREBASE_COLLECTIONS.players).doc(id).delete();
+  },
+
   // ──────────────── FIREBASE: DESAFÍOS ────────────────
   async getChallengesCloud() {
     if (!this.isCloudConfigured()) throw new Error('Firestore no está disponible.');
     const snapshot = await firebaseDb.collection(FIREBASE_COLLECTIONS.challenges).get();
     return snapshot.docs
-      .map(doc => ({ id: doc.id, ...doc.data() }))
+      .map(doc => normalizeChallengeRecord({ id: doc.id, ...doc.data() }))
       .sort((a, b) => (a.fecha || '').localeCompare(b.fecha || '') || (b.creado || '').localeCompare(a.creado || ''));
   },
 
@@ -474,13 +495,13 @@ const DB = {
     if (!this.isCloudConfigured()) throw new Error('Firestore no está disponible.');
     const id = challenge.id || makeFirebaseDocId(`challenge-${Date.now()}`, 'challenge');
     const now = new Date().toISOString();
-    const data = cleanFirestoreData({
+    const data = cleanFirestoreData(normalizeChallengeRecord({
       ...challenge,
       id,
       status: challenge.status || 'pendiente',
       creado: challenge.creado || now,
       actualizado: now
-    });
+    }));
     await firebaseDb.collection(FIREBASE_COLLECTIONS.challenges).doc(id).set(data, { merge: true });
     return data;
   },
@@ -488,6 +509,12 @@ const DB = {
   async updateChallengeCloud(id, patch) {
     const current = this.getChallenges().find(challenge => challenge.id === id) || {};
     return this.saveChallengeCloud({ ...current, ...patch, id });
+  },
+
+  async deleteChallengeCloud(id) {
+    if (!this.isCloudConfigured()) throw new Error('Firestore no está disponible.');
+    if (!id) throw new Error('Se requiere el ID del desafío para eliminarlo.');
+    await firebaseDb.collection(FIREBASE_COLLECTIONS.challenges).doc(id).delete();
   },
 
   // ──────────────── RANKING ────────────────
@@ -501,7 +528,7 @@ const DB = {
   },
   recalcRanking(genero) {
     const users = this.getUsers().filter(u => u.genero === genero);
-    const challenges = this.getChallenges().filter(c => c.status === 'completado' && c.genero === genero);
+    const challenges = this.getChallenges().filter(c => c.status === 'completado' && c.genero === genero && c.tipo !== 'amistoso');
 
     // Build ladder baseline from users. If a user has an explicit position (pos or posicion), respect it.
     const ranking = users.map((user, index) => {
@@ -550,10 +577,14 @@ const DB = {
   // ──────────────── DESAFÍOS ────────────────
   getChallenges() {
     let list = JSON.parse(localStorage.getItem('uctenis_challenges') || '[]');
-    return list.filter(c => c.status !== 'eliminado' && c.id !== '1779815098805' && !(c.fecha === '2026-05-29' && (c.retadoId === 'm004' || String(c.retadoNombre).toLowerCase().includes('otth')) && c.status === 'rechazado'));
+    return list
+      .map(normalizeChallengeRecord)
+      .filter(c => c.status !== 'eliminado' && c.id !== '1779815098805' && !(c.fecha === '2026-05-29' && (c.retadoId === 'm004' || String(c.retadoNombre).toLowerCase().includes('otth')) && c.status === 'rechazado'));
   },
   saveChallenges(list) {
-    const filtered = list.filter(c => c.status !== 'eliminado' && c.id !== '1779815098805' && !(c.fecha === '2026-05-29' && (c.retadoId === 'm004' || String(c.retadoNombre).toLowerCase().includes('otth')) && c.status === 'rechazado'));
+    const filtered = list
+      .map(normalizeChallengeRecord)
+      .filter(c => c.status !== 'eliminado' && c.id !== '1779815098805' && !(c.fecha === '2026-05-29' && (c.retadoId === 'm004' || String(c.retadoNombre).toLowerCase().includes('otth')) && c.status === 'rechazado'));
     localStorage.setItem('uctenis_challenges', JSON.stringify(filtered));
   },
   createChallenge(retadorId, retadoId, genero, fecha, cancha) {
@@ -565,6 +596,7 @@ const DB = {
       status: 'pendiente', // pendiente | aceptado | rechazado | completado
       marcador: null,
       ganadorId: null,
+      tipo: 'ranking',
       creado: new Date().toISOString()
     };
     challenges.push(nuevo);
@@ -578,9 +610,9 @@ const DB = {
     });
     this.saveChallenges(list);
   },
-  submitResult(id, marcador, ganadorId) {
+  submitResult(id, marcador, ganadorId, tipo) {
     const list = this.getChallenges().map(c => {
-      if (c.id === id) return { ...c, status: 'completado', marcador, ganadorId };
+      if (c.id === id) return { ...c, status: 'completado', marcador, ganadorId, tipo: tipo || c.tipo || 'ranking' };
       return c;
     });
     this.saveChallenges(list);

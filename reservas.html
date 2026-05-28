@@ -223,6 +223,20 @@
         </label>
       </div>
 
+      <!-- Opción Amistoso (solo visible si es Reserva Normal) -->
+      <div id="friendlySection" style="margin-top: 15px; padding: 15px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 16px;">
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; font-size: 0.95rem; color: var(--text-primary);">
+          <input type="checkbox" id="chkFriendlyMatch" onchange="onFriendlyMatchChange()" style="width: 16px; height: 16px; accent-color: var(--accent-tennis);">
+          ¿Es un Partido Amistoso?
+        </label>
+        <div id="friendlyOpponentGroup" style="display: none; margin-top: 12px;">
+          <label for="friendlyOpponent" style="display: block; font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 6px;">Selecciona tu oponente (opcional)</label>
+          <select id="friendlyOpponent" style="width: 100%; padding: 8px 12px; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: #fff; outline: none; font-size: 0.9rem;">
+            <option value="">-- Sin oponente / Práctica libre --</option>
+          </select>
+        </div>
+      </div>
+
       <!-- Selector jugador retado (solo visible si es desafío) -->
       <div id="challengeeSection" style="display:none; margin-top:20px;">
         <div class="challengee-header">
@@ -270,7 +284,7 @@
 <script>
 // ── STATE ──
 // isChallenge: boolean, retadoId: string|null, retadoNombre: string|null
-let sel = { court: null, date: null, slot: null, isChallenge: false, retadoId: null, retadoNombre: null, retadoEmail: null, retadoTelefono: null };
+let sel = { court: null, date: null, slot: null, isChallenge: false, isFriendly: false, retadoId: null, retadoNombre: null, retadoEmail: null, retadoTelefono: null };
 let currentStep = 1;
 
 // ── HELPERS ──
@@ -527,14 +541,19 @@ document.getElementById('btnConfirmSlot').addEventListener('click', () => {
 function openChallengeModal() {
   // reset state
   sel.isChallenge = false;
+  sel.isFriendly = false;
   sel.retadoId = null;
   sel.retadoNombre = null;
   sel.retadoEmail = null;
   sel.retadoTelefono = null;
   document.querySelector('input[name="challengeType"][value="normal"]').checked = true;
+  document.getElementById('chkFriendlyMatch').checked = false;
+  document.getElementById('friendlyOpponentGroup').style.display = 'none';
+  document.getElementById('friendlySection').style.display = 'block';
   document.getElementById('challengeeSection').style.display = 'none';
   document.getElementById('challengeeError').style.display = 'none';
   document.getElementById('challengeeList').innerHTML = '';
+  loadFriendlyOpponents();
   document.getElementById('challengeModal').classList.add('visible');
 }
 
@@ -542,17 +561,90 @@ function closeChallengeModal() {
   document.getElementById('challengeModal').classList.remove('visible');
 }
 
+function onFriendlyMatchChange() {
+  const isFriendly = document.getElementById('chkFriendlyMatch').checked;
+  document.getElementById('friendlyOpponentGroup').style.display = isFriendly ? 'block' : 'none';
+  if (!isFriendly) {
+    document.getElementById('friendlyOpponent').value = '';
+  }
+}
+
+async function loadFriendlyOpponents() {
+  const session = DB.getSession();
+  if (!session) return;
+  const select = document.getElementById('friendlyOpponent');
+  select.innerHTML = '<option value="">-- Sin oponente / Práctica libre --</option>';
+  
+  try {
+    let allPlayers = [];
+    if (DB.isCloudConfigured()) {
+      try {
+        const cloudPlayers = await DB.getPlayersCloud();
+        allPlayers = cloudPlayers.map(p => ({
+          ...p,
+          gender: p.genero || p.gender
+        }));
+      } catch (cloudErr) {
+        console.warn('No se pudo cargar jugadores desde Firebase en reservas.html. Usando copia local.', cloudErr);
+      }
+    }
+
+    if (!allPlayers.length) {
+      allPlayers = DB.getUsers().map((u, i) => ({ ...u, gender: u.genero }));
+    }
+
+    const meEmail = session.email?.toLowerCase();
+    const meNombre = session.nombre?.toLowerCase();
+    
+    const sortedPlayers = allPlayers
+      .filter(p => {
+        const isMe = (p.email && p.email.toLowerCase() === meEmail) || (p.nombre && p.nombre.toLowerCase() === meNombre) || p.id === session.id;
+        return !isMe;
+      })
+      .sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '', 'es'));
+
+    const escapeAttr = str => String(str || '').replace(/"/g, '&quot;');
+    const escapeHTML = str => String(str || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+
+    sortedPlayers.forEach(p => {
+      const activeText = (p.activo ?? p.participaRanking) === false ? ' (Inactivo)' : '';
+      const opt = document.createElement('option');
+      opt.value = p.id;
+      opt.textContent = p.nombre + activeText;
+      opt.dataset.nombre = p.nombre;
+      opt.dataset.email = p.email || '';
+      opt.dataset.telefono = p.telefono || '';
+      select.appendChild(opt);
+    });
+  } catch(e) {
+    console.error('Error cargando oponentes amistosos:', e);
+  }
+}
+
 function onChallengeTypeChange() {
-  const isChallenge = document.querySelector('input[name="challengeType"]:checked').value === 'challenge';
+  const type = document.querySelector('input[name="challengeType"]:checked').value;
+  const isChallenge = type === 'challenge';
+  
   document.getElementById('challengeeSection').style.display = isChallenge ? 'block' : 'none';
+  document.getElementById('friendlySection').style.display = isChallenge ? 'none' : 'block';
   document.getElementById('challengeeError').style.display = 'none';
+  
   sel.retadoId = null;
   sel.retadoNombre = null;
   sel.retadoEmail = null;
   sel.retadoTelefono = null;
 
   if (isChallenge) {
+    document.getElementById('chkFriendlyMatch').checked = false;
+    document.getElementById('friendlyOpponentGroup').style.display = 'none';
     loadChallengeablePlayers();
+  } else {
+    loadFriendlyOpponents();
   }
 }
 
@@ -686,11 +778,37 @@ function proceedFromChallengeModal() {
   const type = document.querySelector('input[name="challengeType"]:checked').value;
   sel.isChallenge = type === 'challenge';
 
-  if (sel.isChallenge && !sel.retadoId && !sel.retadoNombre) {
-    const err = document.getElementById('challengeeError');
-    err.textContent = '⚠️ Selecciona un jugador para retar.';
-    err.style.display = 'block';
-    return;
+  if (sel.isChallenge) {
+    if (!sel.retadoId && !sel.retadoNombre) {
+      const err = document.getElementById('challengeeError');
+      err.textContent = '⚠️ Selecciona un jugador para retar.';
+      err.style.display = 'block';
+      return;
+    }
+    sel.isFriendly = false;
+  } else {
+    const isFriendly = document.getElementById('chkFriendlyMatch').checked;
+    sel.isFriendly = isFriendly;
+    if (isFriendly) {
+      const select = document.getElementById('friendlyOpponent');
+      const selectedOpt = select.options[select.selectedIndex];
+      if (select.value) {
+        sel.retadoId = select.value;
+        sel.retadoNombre = selectedOpt.dataset.nombre;
+        sel.retadoEmail = selectedOpt.dataset.email;
+        sel.retadoTelefono = selectedOpt.dataset.telefono;
+      } else {
+        sel.retadoId = null;
+        sel.retadoNombre = null;
+        sel.retadoEmail = null;
+        sel.retadoTelefono = null;
+      }
+    } else {
+      sel.retadoId = null;
+      sel.retadoNombre = null;
+      sel.retadoEmail = null;
+      sel.retadoTelefono = null;
+    }
   }
 
   closeChallengeModal();
@@ -714,6 +832,17 @@ function buildConfirmCard() {
     document.getElementById('confirmDetails').innerHTML = `
       <div class="cd-row cd-challenge-badge"><span>⚔️ Tipo</span><strong class="badge-challenge">Desafío de Ranking</strong></div>
       <div class="cd-row"><span>🎯 Retado</span><strong>${sel.retadoNombre}</strong></div>
+      <div class="cd-row"><span>🎾 Cancha</span><strong>${sel.court.label}</strong></div>
+      <div class="cd-row"><span>🏗️ Superficie</span><strong>${sel.court.surface}</strong></div>
+      <div class="cd-row"><span>📅 Fecha</span><strong>${fechaLabel}</strong></div>
+      <div class="cd-row"><span>⏰ Horario</span><strong>${sel.slot} – ${endStr}</strong></div>
+      <div class="cd-row"><span>⏱ Duración</span><strong>1 hora 30 min</strong></div>`;
+  } else if (sel.isFriendly && sel.retadoNombre) {
+    document.getElementById('confirmIcon').textContent = '🤝';
+    document.getElementById('confirmTitle').textContent = 'Confirma tu Partido Amistoso';
+    document.getElementById('confirmDetails').innerHTML = `
+      <div class="cd-row cd-challenge-badge"><span>🤝 Tipo</span><strong class="badge-friendly" style="background:rgba(99,102,241,0.15); border:1px solid rgba(99,102,241,0.3); color:#a5b4fc; padding:2px 6px; border-radius:4px; font-size:0.72rem; font-weight:900; text-transform:uppercase;">Partido Amistoso</strong></div>
+      <div class="cd-row"><span>👥 Contra</span><strong>${sel.retadoNombre}</strong></div>
       <div class="cd-row"><span>🎾 Cancha</span><strong>${sel.court.label}</strong></div>
       <div class="cd-row"><span>🏗️ Superficie</span><strong>${sel.court.surface}</strong></div>
       <div class="cd-row"><span>📅 Fecha</span><strong>${fechaLabel}</strong></div>
@@ -756,6 +885,50 @@ async function finalConfirmNormal(s, btn) {
     return;
   }
   
+  // Si es partido amistoso con oponente seleccionado, crear el registro del encuentro
+  if (sel.isFriendly && sel.retadoId) {
+    const challenge = DB.createChallenge(s.id, sel.retadoId, s.genero || 'M', sel.date, sel.court.label);
+    Object.assign(challenge, {
+      retadorNombre: s.nombre,
+      retadorEmail: s.email || '',
+      retadoNombre: sel.retadoNombre,
+      retadoEmail: sel.retadoEmail || '',
+      retadoTelefono: sel.retadoTelefono || '',
+      slot: sel.slot,
+      courtId: sel.court.id,
+      courtLabel: sel.court.label,
+      status: 'aceptado', // Ya está confirmado al reservar
+      tipo: 'amistoso',
+      bookingId: r.booking?.id || ''
+    });
+    DB.saveChallenges(DB.getChallenges().map(item => item.id === challenge.id ? { ...item, ...challenge } : item));
+
+    // Guardar Firebase si está disponible
+    if (DB.isCloudConfigured()) {
+      try {
+        await DB.saveChallengeCloud(challenge);
+      } catch (cloudErr) {
+        console.warn('No se pudo guardar el amistoso en Firebase:', cloudErr);
+      }
+    }
+
+    // Guardar Google Sheets via API si está disponible
+    if (window.CONFIG?.API_URL) {
+      try {
+        await fetch(window.CONFIG.API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({
+            action: 'create_challenge',
+            ...challenge
+          })
+        });
+      } catch (sheetErr) {
+        console.warn('No se pudo registrar el amistoso en Google Sheets:', sheetErr);
+      }
+    }
+  }
+
   const wd = dayOfWeekFromISO(sel.date);
   const [y, m, d] = sel.date.split('-');
   document.getElementById('successIcon').textContent = '🎉';
@@ -766,7 +939,7 @@ async function finalConfirmNormal(s, btn) {
   document.getElementById('successModal').classList.add('visible');
   renderMyBookings();
   await refreshSlotAvailability();
-  sel = { court: null, date: null, slot: null, isChallenge: false, retadoId: null, retadoNombre: null, retadoEmail: null, retadoTelefono: null };
+  sel = { court: null, date: null, slot: null, isChallenge: false, isFriendly: false, retadoId: null, retadoNombre: null, retadoEmail: null, retadoTelefono: null };
   btn.disabled = false;
   btn.innerHTML = '✅ Confirmar reserva';
   setTimeout(() => goStep(1), 200);
