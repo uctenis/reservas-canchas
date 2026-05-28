@@ -200,21 +200,7 @@ const DB = {
     const cloudPlayer = await this.findPlayerByEmailCloud(email);
     if (cloudPlayer) return { ok: true, source: 'firebase', player: cloudPlayer };
 
-    // 4. Consultar a la API de Google Sheets a través de Apps Script
-    if (window.CONFIG && window.CONFIG.API_URL) {
-      try {
-        const params = new URLSearchParams({ action: 'validate_member', email: email.toLowerCase().trim() });
-        const res = await fetch(`${window.CONFIG.API_URL}?${params.toString()}`);
-        const data = await res.json();
-        if (data.ok) {
-          return { ok: true, source: 'sheets', player: data.player };
-        }
-      } catch (err) {
-        console.warn('Error validando miembro contra la API de Sheets:', err);
-      }
-    }
-
-    return { ok: false, msg: 'Acceso restringido a jugadores UCTenis registrados en Firebase o Google Sheets.' };
+    return { ok: false, msg: 'Acceso restringido a jugadores UCTenis registrados en Firebase.' };
   },
 
   async registerUserAPI(data) {
@@ -395,9 +381,32 @@ const DB = {
     if (!normalized || !this.isCloudConfigured()) return null;
 
     try {
-      const snapshot = await firebaseDb
+      // 1. Intentar buscar por emailLower (todo en minúsculas)
+      let snapshot = await firebaseDb
         .collection(FIREBASE_COLLECTIONS.players)
         .where('emailLower', '==', normalized)
+        .limit(1)
+        .get();
+      if (!snapshot.empty) {
+        const doc = snapshot.docs[0];
+        return { id: doc.id, ...doc.data() };
+      }
+
+      // 2. Intentar buscar por email (coincidencia exacta del valor original)
+      snapshot = await firebaseDb
+        .collection(FIREBASE_COLLECTIONS.players)
+        .where('email', '==', email)
+        .limit(1)
+        .get();
+      if (!snapshot.empty) {
+        const doc = snapshot.docs[0];
+        return { id: doc.id, ...doc.data() };
+      }
+
+      // 3. Intentar buscar por email (coincidencia con el normalizado en minúsculas)
+      snapshot = await firebaseDb
+        .collection(FIREBASE_COLLECTIONS.players)
+        .where('email', '==', normalized)
         .limit(1)
         .get();
       if (!snapshot.empty) {
@@ -579,12 +588,12 @@ const DB = {
     let list = JSON.parse(localStorage.getItem('uctenis_challenges') || '[]');
     return list
       .map(normalizeChallengeRecord)
-      .filter(c => c.status !== 'eliminado' && c.id !== '1779815098805' && !(c.fecha === '2026-05-29' && (c.retadoId === 'm004' || String(c.retadoNombre).toLowerCase().includes('otth')) && c.status === 'rechazado'));
+      .filter(c => c.status !== 'eliminado' && c.id !== '1779815098805' && c.id !== 'ID' && c.creado && c.creado.trim() !== '' && !(c.fecha === '2026-05-29' && (c.retadoId === 'm004' || String(c.retadoNombre).toLowerCase().includes('otth')) && c.status === 'rechazado'));
   },
   saveChallenges(list) {
     const filtered = list
       .map(normalizeChallengeRecord)
-      .filter(c => c.status !== 'eliminado' && c.id !== '1779815098805' && !(c.fecha === '2026-05-29' && (c.retadoId === 'm004' || String(c.retadoNombre).toLowerCase().includes('otth')) && c.status === 'rechazado'));
+      .filter(c => c.status !== 'eliminado' && c.id !== '1779815098805' && c.id !== 'ID' && c.creado && c.creado.trim() !== '' && !(c.fecha === '2026-05-29' && (c.retadoId === 'm004' || String(c.retadoNombre).toLowerCase().includes('otth')) && c.status === 'rechazado'));
     localStorage.setItem('uctenis_challenges', JSON.stringify(filtered));
   },
   createChallenge(retadorId, retadoId, genero, fecha, cancha) {

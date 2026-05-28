@@ -1121,6 +1121,7 @@ async function loadLiveData() {
   if (sources.length) {
     challenges = homeMergeChallengeSources(sources);
     DB.saveChallenges(challenges); // sync to local
+    challenges = DB.getChallenges(); // reload to get filtered list
   } else {
     challenges = DB.getChallenges();
   }

@@ -805,6 +805,8 @@ function validateMember(email) {
   if (!email) return { ok: false, msg: "Correo no proporcionado." };
   const needle = email.toLowerCase().trim();
 
+  const isAdmin = isAdminRequest({ actorEmail: needle });
+
   const firebasePlayer = findFirebasePlayerByEmail(needle);
   if (firebasePlayer) {
     return {
@@ -812,46 +814,20 @@ function validateMember(email) {
       msg: "Miembro validado.",
       source: "firebase",
       player: firebasePlayer,
-      isAdmin: isAdminRequest({ actorEmail: needle, actorName: firebasePlayer.nombre })
+      isAdmin: isAdmin || isAdminRequest({ actorEmail: needle, actorName: firebasePlayer.nombre })
     };
   }
 
-  // 2. Fallback a Google Sheets si no se encontró en Firestore o falló la consulta
-  try {
-    const ss = SpreadsheetApp.openById(CONFIG.SHEET_MIEMBROS_ID);
-    const sheet = ss.getSheetByName('usuariosautorizados');
-    const jugadoresSheet = ss.getSheetByName('jugadores');
-    
-    if (sheet) {
-      const data = sheet.getDataRange().getValues();
-      // usuariosautorizados: columna F = correo.
-      for (let i = 1; i < data.length; i++) {
-        if (text(data[i][5]).toLowerCase() === needle) {
-          return { ok: true, msg: "Miembro validado.", isAdmin: isAdminRequest({ actorEmail: needle }) };
-        }
-      }
-    }
-
-    if (jugadoresSheet) {
-      const players = jugadoresSheet.getDataRange().getValues();
-      // jugadores: columna K = correo opcional.
-      for (let i = 1; i < players.length; i++) {
-        if (text(players[i][10]).toLowerCase() === needle) {
-          const player = playerFromRow(players[i], i + 1);
-          return {
-            ok: true,
-            msg: "Miembro validado.",
-            player: publicPlayer(player),
-            isAdmin: isAdminRequest({ actorEmail: needle, actorName: player.nombre })
-          };
-        }
-      }
-    }
-    
-    return { ok: false, msg: "El correo no se encuentra en la lista oficial de miembros autorizados." };
-  } catch (error) {
-    return { ok: false, msg: "Error interno al acceder a la lista de Drive." };
+  if (isAdmin) {
+    return {
+      ok: true,
+      msg: "Administrador validado.",
+      source: "admin",
+      isAdmin: true
+    };
   }
+
+  return { ok: false, msg: "El correo no se encuentra registrado en Firebase." };
 }
 
 function findFirebasePlayerByEmail(email) {
