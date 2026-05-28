@@ -1243,6 +1243,27 @@ async function handleCompleteProfile(e) {
     document.getElementById('cpErr').textContent = r.msg;
     return;
   }
+  if (DB.isCloudConfigured()) {
+    try {
+      const saved = await DB.savePlayerCloud({
+        ...r.user,
+        nombre: data.nombre,
+        email: data.email,
+        genero: data.genero,
+        categoria: data.categoria,
+        mano: data.mano,
+        reves: data.reves,
+        foto: data.foto || '',
+        activo: true,
+        participaRanking: true
+      }, { email: data.email });
+      const syncedUser = { ...r.user, ...saved, genero: saved.genero || data.genero };
+      DB.upsertUserLocal(syncedUser);
+      localStorage.setItem('uctenis_session', JSON.stringify(syncedUser));
+    } catch (cloudErr) {
+      console.warn('No se pudo guardar el perfil inicial en Firebase:', cloudErr);
+    }
+  }
   closeAuth();
   renderUserBar();
   renderMyBookings();

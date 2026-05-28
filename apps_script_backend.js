@@ -19,6 +19,9 @@ const CONFIG = {
   // Debes tener una columna con los correos de los miembros permitidos
   SHEET_MIEMBROS_ID: "1daJNs_3BA8Enagm61KwBDZee3SFUer-zirRFW2ID_nE", 
 
+  FIREBASE_PROJECT_ID: "uctenis-club",
+  FIREBASE_API_KEY: "AIzaSyDxNdwD8hHQmN2efhRwflL7RkpC-RFs3ow",
+
   // Perfil administrador dentro de la pagina.
   // Si quieres endurecerlo mas, agrega un ADMIN_PIN y envialo desde el front.
   ADMINS: {
@@ -802,54 +805,15 @@ function validateMember(email) {
   if (!email) return { ok: false, msg: "Correo no proporcionado." };
   const needle = email.toLowerCase().trim();
 
-  // 1. Intentar validar contra Firebase Firestore via REST API
-  try {
-    const firestoreUrl = "https://firestore.googleapis.com/v1/projects/uctenis-club/databases/(default)/documents:runQuery";
-    const queryPayload = {
-      structuredQuery: {
-        from: [{ collectionId: "ranking_players" }],
-        where: {
-          fieldFilter: {
-            field: { fieldPath: "emailLower" },
-            op: "EQUAL",
-            value: { stringValue: needle }
-          }
-        },
-        limit: 1
-      }
+  const firebasePlayer = findFirebasePlayerByEmail(needle);
+  if (firebasePlayer) {
+    return {
+      ok: true,
+      msg: "Miembro validado.",
+      source: "firebase",
+      player: firebasePlayer,
+      isAdmin: isAdminRequest({ actorEmail: needle, actorName: firebasePlayer.nombre })
     };
-    const response = UrlFetchApp.fetch(firestoreUrl, {
-      method: "post",
-      contentType: "application/json",
-      payload: JSON.stringify(queryPayload),
-      muteHttpExceptions: true
-    });
-    
-    if (response.getResponseCode() === 200) {
-      const results = JSON.parse(response.getContentText());
-      if (results && results.length > 0 && results[0].document) {
-        const doc = results[0].document;
-        const fields = doc.fields || {};
-        
-        const nombre = fields.nombre && fields.nombre.stringValue ? fields.nombre.stringValue : '';
-        const emailVal = fields.email && fields.email.stringValue ? fields.email.stringValue : email;
-        const idVal = fields.id && fields.id.stringValue ? fields.id.stringValue : doc.name.split('/').pop();
-        const activo = fields.activo && fields.activo.booleanValue !== undefined ? fields.activo.booleanValue : true;
-        
-        if (activo) {
-          return {
-            ok: true,
-            msg: "Miembro validado.",
-            player: { id: idVal, nombre: nombre, email: emailVal },
-            isAdmin: isAdminRequest({ actorEmail: needle, actorName: nombre })
-          };
-        }
-      }
-    } else {
-      console.warn("Respuesta no exitosa de Firestore: " + response.getResponseCode() + " - " + response.getContentText());
-    }
-  } catch (fbError) {
-    console.warn("Error al consultar Firebase Firestore en validateMember:", fbError);
   }
 
   // 2. Fallback a Google Sheets si no se encontró en Firestore o falló la consulta
@@ -888,6 +852,101 @@ function validateMember(email) {
   } catch (error) {
     return { ok: false, msg: "Error interno al acceder a la lista de Drive." };
   }
+}
+
+function findFirebasePlayerByEmail(email) {
+  const needle = text(email).toLowerCase();
+  if (!needle || !CONFIG.FIREBASE_PROJECT_ID || !CONFIG.FIREBASE_API_KEY) return null;
+
+  const fieldsToTry = ['emailLower', 'email'];
+  for (let i = 0; i < fieldsToTry.length; i++) {
+    const player = queryFirebasePlayerByEmailField(fieldsToTry[i], needle);
+    if (player) return player;
+  }
+  return null;
+}
+
+function queryFirebasePlayerByEmailField(fieldPath, email) {
+  try {
+    const firestoreUrl = 'https://firestore.googleapis.com/v1/projects/'
+      + encodeURIComponent(CONFIG.FIREBASE_PROJECT_ID)
+      + '/databases/(default)/documents:runQuery?key='
+      + encodeURIComponent(CONFIG.FIREBASE_API_KEY);
+    const queryPayload = {
+      structuredQuery: {
+        from: [{ collectionId: 'ranking_players' }],
+        where: {
+          fieldFilter: {
+            field: { fieldPath: fieldPath },
+            op: 'EQUAL',
+            value: { stringValue: fieldPath === 'emailLower' ? email : email }
+          }
+        },
+        limit: 1
+      }
+    };
+    const response = UrlFetchApp.fetch(firestoreUrl, {
+      method: 'post',
+      contentType: 'application/json',
+      payload: JSON.stringify(queryPayload),
+      muteHttpExceptions: true
+    });
+
+    if (response.getResponseCode() !== 200) {
+      console.warn('Respuesta no exitosa de Firestore: ' + response.getResponseCode() + ' - ' + response.getContentText());
+      return null;
+    }
+
+    const results = JSON.parse(response.getContentText());
+    for (let i = 0; i < results.length; i++) {
+      if (!results[i].document) continue;
+      const player = firebasePlayerFromDocument(results[i].document);
+      if (player && player.email && text(player.email).toLowerCase() === email && isFirebasePlayerActive(player)) {
+        return player;
+      }
+    }
+  } catch (fbError) {
+    console.warn('Error al consultar Firebase Firestore en validateMember:', fbError);
+  }
+  return null;
+}
+
+function firebasePlayerFromDocument(doc) {
+  const fields = doc.fields || {};
+  const id = text(firestoreField(fields, 'id')) || doc.name.split('/').pop();
+  return {
+    id: id,
+    nombre: text(firestoreField(fields, 'nombre')),
+    email: text(firestoreField(fields, 'email')),
+    genero: text(firestoreField(fields, 'genero') || firestoreField(fields, 'gender')),
+    categoria: text(firestoreField(fields, 'categoria')),
+    mano: text(firestoreField(fields, 'mano') || firestoreField(fields, 'manoHabil')),
+    reves: text(firestoreField(fields, 'reves')),
+    foto: text(firestoreField(fields, 'foto')),
+    telefono: text(firestoreField(fields, 'telefono')),
+    activo: firestoreBool(fields, 'activo', true),
+    participaRanking: firestoreBool(fields, 'participaRanking', true)
+  };
+}
+
+function firestoreField(fields, name) {
+  const value = fields && fields[name];
+  if (!value) return '';
+  if (Object.prototype.hasOwnProperty.call(value, 'stringValue')) return value.stringValue;
+  if (Object.prototype.hasOwnProperty.call(value, 'integerValue')) return Number(value.integerValue);
+  if (Object.prototype.hasOwnProperty.call(value, 'doubleValue')) return Number(value.doubleValue);
+  if (Object.prototype.hasOwnProperty.call(value, 'booleanValue')) return value.booleanValue;
+  return '';
+}
+
+function firestoreBool(fields, name, fallback) {
+  const value = fields && fields[name];
+  if (!value || !Object.prototype.hasOwnProperty.call(value, 'booleanValue')) return fallback;
+  return value.booleanValue;
+}
+
+function isFirebasePlayerActive(player) {
+  return player.activo !== false && player.participaRanking !== false;
 }
 
 // =======================================================
@@ -1211,7 +1270,33 @@ function updateOwnProfile(data) {
       email: actorEmail
     });
 
-    if (!player) return { ok: false, msg: 'No encontré tu ficha en la hoja jugadores.' };
+    if (!player) {
+      const base = validation.player || {};
+      const created = normalizePlayerPayload({
+        ...base,
+        ...data,
+        id: text(data.actorId || data.id || base.id),
+        nombre: text(data.nombre || data.actorName || data.actorNombre || base.nombre),
+        email: actorEmail,
+        genero: text(data.genero || data.gender || base.genero || base.gender)
+      }, null);
+
+      if (!created.nombre) return { ok: false, msg: 'Ingresa tu nombre para crear tu ficha.' };
+      if (!created.genero) return { ok: false, msg: 'Selecciona ranking masculino o femenino.' };
+      if (!created.id) created.id = generatePlayerId(index, created.genero);
+      if (data.photoDataUrl) created.foto = savePlayerPhoto(data, created);
+
+      const duplicate = index.players.find(item =>
+        item.id !== created.id &&
+        ((created.email && item.email && item.email.toLowerCase() === created.email.toLowerCase()) ||
+         norm(item.nombre) === norm(created.nombre))
+      );
+      if (duplicate) return { ok: false, msg: 'Ya existe un jugador con ese nombre o correo.' };
+
+      index.sheet.getRange(index.sheet.getLastRow() + 1, 1, 1, PLAYER_HEADERS.length).setValues([playerToRow(created)]);
+      ensurePlayerInRanking(ss, created, numberOrBlank(data.posicion || created.ranking));
+      return { ok: true, player: publicPlayer(created), ranking: getRanking() };
+    }
 
     const updated = {
       ...player,
