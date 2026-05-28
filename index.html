@@ -1044,7 +1044,7 @@ function formatDateShort(iso) {
 
 function homeHasRecordedResult(challenge) {
   return Boolean(
-    String(challenge?.marcador || '').trim() &&
+    String(challenge?.marcador || '').trim() ||
     String(challenge?.ganadorId || '').trim()
   );
 }
@@ -1176,11 +1176,11 @@ async function loadLiveData() {
   const session = DB.getSession();
   const sessionIds = [];
   if (session) {
-    sessionIds.push(session.id);
+    if (session.id) sessionIds.push(session.id);
     const emailLower = (session.email || '').toLowerCase().trim();
     const nameLower = (session.nombre || '').toLowerCase().trim();
-    if (playersMap[emailLower]) sessionIds.push(playersMap[emailLower].id);
-    if (playersMap[nameLower]) sessionIds.push(playersMap[nameLower].id);
+    if (playersMap[emailLower] && playersMap[emailLower].id) sessionIds.push(playersMap[emailLower].id);
+    if (playersMap[nameLower] && playersMap[nameLower].id) sessionIds.push(playersMap[nameLower].id);
   }
 
   const isMyChallenge = (c) => {

@@ -737,8 +737,7 @@ function challengeFromRow(row) {
 function hasRecordedChallengeResult(challenge) {
   return Boolean(
     challenge &&
-    text(challenge.marcador) &&
-    text(challenge.ganadorId)
+    (text(challenge.marcador) || text(challenge.ganadorId))
   );
 }
 

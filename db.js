@@ -60,7 +60,7 @@ function cleanFirestoreData(data) {
 
 function hasRecordedChallengeResult(challenge) {
   return Boolean(
-    String(challenge?.marcador || '').trim() &&
+    String(challenge?.marcador || '').trim() ||
     String(challenge?.ganadorId || '').trim()
   );
 }
