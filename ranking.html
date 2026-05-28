@@ -1217,6 +1217,11 @@ function renderRanking() {
   const list = rankingState.lists[gender] || [];
   const tbody = document.getElementById('rankBody');
 
+  const thPlayerHeader = document.querySelector('#rankTable th:nth-child(2)');
+  if (thPlayerHeader) {
+    thPlayerHeader.textContent = gender === 'F' ? 'Jugadora' : 'Jugador';
+  }
+
   document.getElementById('rankTitle').textContent = `Ranking ${GENDERS[gender].label}`;
   document.getElementById('rankSubtitle').textContent = rankingState.loadedAt
     ? `Actualizado: ${formatDateTime(rankingState.loadedAt)}`
@@ -1284,9 +1289,12 @@ function renderSummary(list) {
   const leader = list[0];
   const inactiveCount = (rankingState.inactive[gender] || []).length;
   
+  const labelInactive = gender === 'F' ? 'Inactivas' : 'Inactivos';
+  const labelPlayers = gender === 'F' ? 'Jugadoras' : 'Jugadores';
+  
   const inactiveBoxHtml = isPlayerAdminSession() ? `
     <div class="summary-item">
-      <span>Inactivos</span>
+      <span>${labelInactive}</span>
       <strong>${inactiveCount}</strong>
     </div>` : '';
 
@@ -1299,7 +1307,7 @@ function renderSummary(list) {
       </div>
     </div>
     <div class="summary-item">
-      <span>Jugadores</span>
+      <span>${labelPlayers}</span>
       <strong>${list.length}</strong>
     </div>
     ${inactiveBoxHtml}`;
@@ -1320,22 +1328,27 @@ function renderInactivePlayers() {
     inactiveSec.style.removeProperty('display');
   }
 
-  let list = [];
-  let titleSuffix = '';
-  
-  const listM = rankingState.inactive['M'] || [];
-  const listF = rankingState.inactive['F'] || [];
-  list = [...listM, ...listF];
-  titleSuffix = '(Todos)';
+  const gender = rankingState.currentGender;
+  const list = rankingState.inactive[gender] || [];
 
   const div = document.getElementById('inactivePlayersList');
-  document.getElementById('inactiveTitle').textContent = `Jugadores inactivos ${titleSuffix}`;
-  document.getElementById('inactiveCount').textContent = list.length ? `${list.length} jugador${list.length === 1 ? '' : 'es'}` : '';
-
-  if (!list.length) {
-    div.innerHTML = '<p class="empty-state">No hay jugadores inactivos registrados en este ranking.</p>';
-    return;
+  
+  if (gender === 'F') {
+    document.getElementById('inactiveTitle').textContent = `Jugadoras inactivas`;
+    document.getElementById('inactiveCount').textContent = list.length ? `${list.length} jugadora${list.length === 1 ? '' : 'as'}` : '';
+    if (!list.length) {
+      div.innerHTML = '<p class="empty-state">No hay jugadoras inactivas registradas en este ranking.</p>';
+      return;
+    }
+  } else {
+    document.getElementById('inactiveTitle').textContent = `Jugadores inactivos`;
+    document.getElementById('inactiveCount').textContent = list.length ? `${list.length} jugador${list.length === 1 ? '' : 'es'}` : '';
+    if (!list.length) {
+      div.innerHTML = '<p class="empty-state">No hay jugadores inactivos registrados en este ranking.</p>';
+      return;
+    }
   }
+
   div.innerHTML = list.map(player => {
     const genderFallback = player.gender === 'F' ? GENDERS.F.fallbackAvatar : GENDERS.M.fallbackAvatar;
     const genderTag = `<span style="font-size:0.7rem; background:rgba(255,255,255,0.06); padding:2px 6px; border-radius:4px; margin-left:8px; color:var(--text-secondary);">${player.gender === 'F' ? 'Fem' : 'Masc'}</span>`;
