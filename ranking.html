@@ -366,12 +366,15 @@
           <p class="modal-kicker">Administrador</p>
           <h3 style="margin: 0; font-size: 1.28rem;">Administración de Jugadores</h3>
         </div>
-        <div style="display: flex; gap: 8px;">
+        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
           <button type="button" class="btn-primary" id="btnAdminCreatePlayer" style="padding: 8px 14px; font-size: 0.78rem; font-weight: 800; border-radius: 8px; cursor: pointer; width: auto; min-height: auto;">
             ➕ Agregar Jugador
           </button>
           <button type="button" class="btn-primary" id="btnExportPlayers" style="padding: 8px 14px; font-size: 0.76rem; background: #10b981; border: none; border-radius: 8px; font-weight: 800; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 4px 12px rgba(16,185,129,0.22); width: auto; min-height: auto;" onclick="exportPlayersToExcel(event)">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="flex-shrink:0;"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg> Exportar
+          </button>
+          <button type="button" class="btn-primary" id="btnResetSystem" style="padding: 8px 14px; font-size: 0.76rem; background: #ef4444; border: none; border-radius: 8px; font-weight: 800; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 4px 12px rgba(239,68,68,0.22); width: auto; min-height: auto;" onclick="resetSystemData(event)">
+            🔄 Reiniciar Temporada
           </button>
         </div>
       </div>
@@ -3671,6 +3674,86 @@ async function manualSeedDatabase(event) {
     btn.innerHTML = originalText;
   }
 }
+
+async function resetSystemData(event) {
+  if (event) event.preventDefault();
+  if (!isPlayerAdminSession()) {
+    alert("No tienes permisos de administrador para realizar esta acción.");
+    return;
+  }
+
+  const confirmMsg = "⚠️ ¡ATENCIÓN! ⚠️\n\n¿Estás seguro de que deseas reiniciar la temporada?\nEsto realizará las siguientes acciones:\n\n1. ELIMINARÁ todos los desafíos de la base de datos de Firebase.\n2. RESTABLECERÁ a cero (0) las estadísticas de todos los jugadores (PJ, PG, PP, Puntos) en Firebase.\n3. Inicializará la posición anterior al valor de su posición actual.\n\nEsta operación es destructiva y NO se puede deshacer. ¿Deseas continuar?";
+  if (!confirm(confirmMsg)) return;
+
+  const phrase = prompt("Para confirmar el reinicio del sistema, escribe la palabra REINICIAR en mayúsculas:");
+  if (phrase !== "REINICIAR") {
+    alert("Confirmación incorrecta. Acción cancelada.");
+    return;
+  }
+
+  const btn = document.getElementById('btnResetSystem');
+  const originalText = btn ? btn.innerHTML : '';
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '🔄 Reiniciando...';
+  }
+
+  try {
+    if (!DB.isCloudConfigured() || typeof firebase === 'undefined') {
+      throw new Error("Firestore no está inicializado o configurado.");
+    }
+
+    const db = firebase.firestore();
+
+    // 1. Eliminar desafíos de Firebase
+    console.log("Eliminando desafíos...");
+    const challengeSnapshot = await db.collection('ranking_challenges').get();
+    if (!challengeSnapshot.empty) {
+      const challengeBatch = db.batch();
+      challengeSnapshot.docs.forEach(doc => {
+        challengeBatch.delete(doc.ref);
+      });
+      await challengeBatch.commit();
+      console.log("Desafíos eliminados con éxito.");
+    }
+
+    // 2. Restablecer estadísticas de jugadores en Firebase
+    console.log("Restableciendo jugadores...");
+    const playerSnapshot = await db.collection('ranking_players').get();
+    if (!playerSnapshot.empty) {
+      const playerBatch = db.batch();
+      playerSnapshot.docs.forEach(doc => {
+        const data = doc.data();
+        const posVal = data.posicion ?? data.pos ?? null;
+        const patch = {
+          pj: 0,
+          pg: 0,
+          pp: 0,
+          pts: 0,
+          posicionAnterior: posVal !== null ? Number(posVal) : '',
+          prev: posVal !== null ? Number(posVal) : ''
+        };
+        playerBatch.update(doc.ref, patch);
+      });
+      await playerBatch.commit();
+      console.log("Jugadores restablecidos con éxito.");
+    }
+
+    // 3. Limpiar caché local
+    localStorage.removeItem('uctenis_challenges');
+
+    alert("El sistema ha sido reiniciado con éxito. Todos los contadores de desafíos y amistosos se han restablecido a cero.");
+    location.reload();
+  } catch (error) {
+    console.error("Error al reiniciar el sistema:", error);
+    alert("Error al reiniciar el sistema: " + error.message);
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = originalText;
+    }
+  }
+}
+window.resetSystemData = resetSystemData;
 
 function renderAdminPlayerList() {
   const div = document.getElementById('adminPlayerList');
