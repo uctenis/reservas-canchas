@@ -1186,16 +1186,25 @@ async function loadLiveData() {
   const isMyChallenge = (c) => {
     if (!session) return false;
     const emailLower = (session.email || '').toLowerCase().trim();
-    const nameLower = (session.nombre || '').toLowerCase().trim();
-    
-    const retadorEmail = (c.retadorEmail || '').toLowerCase().trim();
-    const retadoEmail = (c.retadoEmail || '').toLowerCase().trim();
-    const retadorName = (c.retadorNombre || '').toLowerCase().trim();
-    const retadoName = (c.retadoNombre || '').toLowerCase().trim();
-    
-    return sessionIds.includes(c.retadorId) || sessionIds.includes(c.retadoId) ||
-           retadorEmail === emailLower || retadoEmail === emailLower ||
-           retadorName === nameLower || retadoName === nameLower;
+
+    // 1. ID match (más confiable)
+    if (c.retadorId && sessionIds.includes(c.retadorId)) return true;
+    if (c.retadoId && sessionIds.includes(c.retadoId)) return true;
+
+    // 2. Email match (solo si ambos tienen email)
+    if (emailLower) {
+      if (c.retadorEmail && c.retadorEmail.toLowerCase().trim() === emailLower) return true;
+      if (c.retadoEmail && c.retadoEmail.toLowerCase().trim() === emailLower) return true;
+    }
+
+    // 3. Nombre solo si el desafío NO tiene ID ni email (registros muy viejos)
+    if (!c.retadorId && !c.retadorEmail && !c.retadoId && !c.retadoEmail) {
+      const nameLower = (session.nombre || '').toLowerCase().trim();
+      if (nameLower && c.retadorNombre && c.retadorNombre.toLowerCase().trim() === nameLower) return true;
+      if (nameLower && c.retadoNombre && c.retadoNombre.toLowerCase().trim() === nameLower) return true;
+    }
+
+    return false;
   };
 
   // Resolve player photo based on Firestore or static fallbacks

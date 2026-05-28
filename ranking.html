@@ -805,15 +805,22 @@ function isUserRetadorInChallenge(session, challenge) {
   if (!session || !challenge) return false;
   const player = getSessionPlayer(session);
   const sessionIds = [...new Set([session.id, player?.id, player?.localId].filter(Boolean))];
-  
-  if (sessionIds.includes(challenge.retadorId)) return true;
-  
-  if (session.email && challenge.retadorEmail && normalizeEmail(session.email) === normalizeEmail(challenge.retadorEmail)) return true;
-  if (player?.email && challenge.retadorEmail && normalizeEmail(player.email) === normalizeEmail(challenge.retadorEmail)) return true;
-  
-  if (session.nombre && challenge.retadorNombre && normalizeKey(session.nombre) === normalizeKey(challenge.retadorNombre)) return true;
-  if (player?.nombre && challenge.retadorNombre && normalizeKey(player.nombre) === normalizeKey(challenge.retadorNombre)) return true;
-  
+
+  // 1. ID match (más confiable)
+  if (challenge.retadorId && sessionIds.some(id => id && id === challenge.retadorId)) return true;
+
+  // 2. Email match (solo si ambos tienen email)
+  const myEmail = normalizeEmail(session.email || player?.email || '');
+  const chalEmail = normalizeEmail(challenge.retadorEmail || '');
+  if (myEmail && chalEmail && myEmail === chalEmail) return true;
+
+  // 3. Nombre solo si NO hay ID ni email en el desafío (desafíos muy viejos)
+  if (!challenge.retadorId && !challenge.retadorEmail) {
+    const myName = normalizeKey(session.nombre || player?.nombre || '');
+    const chalName = normalizeKey(challenge.retadorNombre || '');
+    if (myName && chalName && myName === chalName) return true;
+  }
+
   return false;
 }
 
@@ -821,15 +828,22 @@ function isUserRetadoInChallenge(session, challenge) {
   if (!session || !challenge) return false;
   const player = getSessionPlayer(session);
   const sessionIds = [...new Set([session.id, player?.id, player?.localId].filter(Boolean))];
-  
-  if (sessionIds.includes(challenge.retadoId)) return true;
-  
-  if (session.email && challenge.retadoEmail && normalizeEmail(session.email) === normalizeEmail(challenge.retadoEmail)) return true;
-  if (player?.email && challenge.retadoEmail && normalizeEmail(player.email) === normalizeEmail(challenge.retadoEmail)) return true;
-  
-  if (session.nombre && challenge.retadoNombre && normalizeKey(session.nombre) === normalizeKey(challenge.retadoNombre)) return true;
-  if (player?.nombre && challenge.retadoNombre && normalizeKey(player.nombre) === normalizeKey(challenge.retadoNombre)) return true;
-  
+
+  // 1. ID match (más confiable)
+  if (challenge.retadoId && sessionIds.some(id => id && id === challenge.retadoId)) return true;
+
+  // 2. Email match (solo si ambos tienen email)
+  const myEmail = normalizeEmail(session.email || player?.email || '');
+  const chalEmail = normalizeEmail(challenge.retadoEmail || '');
+  if (myEmail && chalEmail && myEmail === chalEmail) return true;
+
+  // 3. Nombre solo si NO hay ID ni email en el desafío (desafíos muy viejos)
+  if (!challenge.retadoId && !challenge.retadoEmail) {
+    const myName = normalizeKey(session.nombre || player?.nombre || '');
+    const chalName = normalizeKey(challenge.retadoNombre || '');
+    if (myName && chalName && myName === chalName) return true;
+  }
+
   return false;
 }
 
@@ -968,35 +982,15 @@ function rankingMergeChallengeSources(sources) {
 }
 
 async function syncChallengesFromCloud() {
-  const sources = [];
+  // Firebase es la única fuente de verdad — Google Sheets eliminado
+  if (!DB.isCloudConfigured()) return;
 
-  if (DB.isCloudConfigured()) {
-    try {
-      sources.push(await withTimeout(DB.getChallengesCloud(), CLOUD_TIMEOUT_MS, 'Firebase desafíos'));
-    } catch (error) {
-      console.warn('No se pudieron sincronizar los desafíos desde Firebase. Intentando Sheets...', error);
-    }
-  }
-
-  if (window.CONFIG?.API_URL) {
-    try {
-      const res = await withTimeout(
-        fetch(`${window.CONFIG.API_URL}?action=get_challenges`),
-        CLOUD_TIMEOUT_MS,
-        'Google Sheets desafíos'
-      );
-      const data = await res.json();
-      if (data && data.ok && Array.isArray(data.challenges)) {
-        sources.push(data.challenges);
-      }
-    } catch (sheetErr) {
-      console.warn('No se pudieron sincronizar los desafíos desde Google Sheets:', sheetErr);
-    }
-  }
-
-  if (sources.length) {
-    const challenges = rankingMergeChallengeSources(sources);
-    DB.saveChallenges(challenges);
+  try {
+    const cloudChallenges = await withTimeout(DB.getChallengesCloud(), CLOUD_TIMEOUT_MS, 'Firebase desafíos');
+    // Reemplazar localStorage con lo que viene de Firebase (fuente autoritativa)
+    DB.saveChallenges(cloudChallenges);
+  } catch (error) {
+    console.warn('No se pudieron sincronizar los desafíos desde Firebase, usando caché local.', error);
   }
 }
 

@@ -584,16 +584,29 @@ const DB = {
   },
 
   // ──────────────── DESAFÍOS ────────────────
+  // Un desafío válido debe tener: id, status, creado, y al menos retadorId + retadoId
+  // (o en registros muy viejos, al menos los nombres de ambos jugadores)
+  isValidChallenge(c) {
+    if (!c || !c.id || c.id === 'ID') return false;
+    if (c.status === 'eliminado') return false;
+    if (!c.creado || String(c.creado).trim() === '') return false;
+    // Debe tener IDs (registros modernos) o al menos nombres de ambos jugadores (registros viejos)
+    const hasIds = c.retadorId && c.retadoId;
+    const hasNames = c.retadorNombre && c.retadoNombre &&
+                     c.retadorNombre !== 'RETADOR' && c.retadoNombre !== 'RETADO' &&
+                     c.retadorNombre !== 'ID' && c.retadoNombre !== 'ID';
+    return Boolean(hasIds || hasNames);
+  },
   getChallenges() {
-    let list = JSON.parse(localStorage.getItem('uctenis_challenges') || '[]');
+    const list = JSON.parse(localStorage.getItem('uctenis_challenges') || '[]');
     return list
       .map(normalizeChallengeRecord)
-      .filter(c => c.status !== 'eliminado' && c.id !== '1779815098805' && c.id !== 'ID' && c.creado && c.creado.trim() !== '' && !(c.fecha === '2026-05-29' && (c.retadoId === 'm004' || String(c.retadoNombre).toLowerCase().includes('otth')) && c.status === 'rechazado'));
+      .filter(c => this.isValidChallenge(c));
   },
   saveChallenges(list) {
     const filtered = list
       .map(normalizeChallengeRecord)
-      .filter(c => c.status !== 'eliminado' && c.id !== '1779815098805' && c.id !== 'ID' && c.creado && c.creado.trim() !== '' && !(c.fecha === '2026-05-29' && (c.retadoId === 'm004' || String(c.retadoNombre).toLowerCase().includes('otth')) && c.status === 'rechazado'));
+      .filter(c => this.isValidChallenge(c));
     localStorage.setItem('uctenis_challenges', JSON.stringify(filtered));
   },
   createChallenge(retadorId, retadoId, genero, fecha, cancha) {
