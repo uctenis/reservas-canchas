@@ -2272,14 +2272,20 @@ async function submitChallenge(event) {
       return;
     }
 
-    // 1. Reservar la cancha en Google Calendar
-    const r = await DB.createBookingAPI(session.id, courtId, fecha, slot);
-    if (!r.ok) {
-      error.textContent = 'Error al reservar la cancha: ' + r.msg;
-      return;
+    // 1. Intentar reservar la cancha en Google Calendar (opcional - puede fallar para jugadores nuevos)
+    let bookingEventId = null;
+    try {
+      const r = await DB.createBookingAPI(session.id, courtId, fecha, slot);
+      if (r.ok) {
+        bookingEventId = r.booking?.id || null;
+      } else {
+        console.warn('No se pudo agendar en Google Calendar (el desafío se crea igual en Firebase):', r.msg);
+      }
+    } catch (calErr) {
+      console.warn('Error conectando a Google Calendar, continuando sin agendar:', calErr);
     }
 
-    // 2. Crear y enviar desafío
+    // 2. Crear y enviar desafío (siempre, independiente del calendario)
     const saved = await createChallengeRemoteOrLocal({
       retadorId: session.id,
       retadorNombre: session.nombre,
@@ -2293,7 +2299,8 @@ async function submitChallenge(event) {
       cancha: courtLabel,
       slot: slot,
       courtId: courtId,
-      courtLabel: courtLabel
+      courtLabel: courtLabel,
+      ...(bookingEventId ? { eventId: bookingEventId } : {})
     });
 
     showChallengeSuccess(saved, retado, retadoPlayer);

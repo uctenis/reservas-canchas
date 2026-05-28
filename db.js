@@ -690,7 +690,14 @@ const DB = {
 
   // Nota: Para usar la versión real que agenda en Google Calendar, se llama a esta función
   async createBookingAPI(userId, courtId, fecha, slot) {
-    const user = this.getUsers().find(u => u.id === userId);
+    // Buscar usuario en localStorage; si no existe, intentar desde sesión activa
+    let user = this.getUsers().find(u => u.id === userId);
+    if (!user) {
+      const session = this.getSession();
+      if (session && (session.id === userId || !userId)) {
+        user = session;
+      }
+    }
     if (!user) return { ok: false, msg: 'Usuario no encontrado' };
 
     try {
@@ -712,7 +719,7 @@ const DB = {
 
       // Si fue exitoso en Google, lo guardamos localmente también
       const bookings = this.getBookings();
-      const b = { id: data.eventId || Date.now().toString(), userId, courtId, fecha, slot, status: 'confirmada', creado: new Date().toISOString() };
+      const b = { id: data.eventId || Date.now().toString(), userId: user.id || userId, courtId, fecha, slot, status: 'confirmada', creado: new Date().toISOString() };
       bookings.push(b);
       this.saveBookings(bookings);
       return { ok: true, booking: b };
