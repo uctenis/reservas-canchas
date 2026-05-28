@@ -1029,10 +1029,17 @@ async function handleHomeMockLogin() {
 
 // ── Live Challenges & Results from Firebase/localStorage ──
 function formatDateShort(iso) {
-  if (!iso) return '';
-  const [y, m, d] = iso.split('-');
+  if (!iso || typeof iso !== 'string') return '';
+  // Accept YYYY-MM-DD or YYYY-MM-DDTHH:mm... format
+  const datePart = iso.split('T')[0];
+  const parts = datePart.split('-');
+  if (parts.length < 3) return '';
+  const y = parseInt(parts[0], 10);
+  const m = parseInt(parts[1], 10);
+  const d = parseInt(parts[2], 10);
+  if (!Number.isFinite(d) || !Number.isFinite(m) || m < 1 || m > 12 || d < 1 || d > 31) return '';
   const months = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-  return `${parseInt(d)} ${months[parseInt(m)-1]}`;
+  return `${d} ${months[m-1]}`;
 }
 
 function homeHasRecordedResult(challenge) {
@@ -1105,18 +1112,7 @@ async function loadLiveData() {
     }
   }
 
-  // Also read Google Sheets so a completed result there can close stale Firebase copies.
-  if (window.CONFIG?.API_URL) {
-    try {
-      const res = await fetch(`${window.CONFIG.API_URL}?action=get_challenges`);
-      const data = await res.json();
-      if (data && data.ok && Array.isArray(data.challenges)) {
-        sources.push(data.challenges);
-      }
-    } catch(e) {
-      console.warn("Error al cargar desafíos desde Google Sheets:", e);
-    }
-  }
+  // Note: Google Sheets source removed — Firebase is the single source of truth.
 
   if (sources.length) {
     challenges = homeMergeChallengeSources(sources);
@@ -1157,12 +1153,13 @@ async function loadLiveData() {
       });
 
       if (bestMover) {
+        const currentPos = Number(bestMover.posicion ?? bestMover.pos ?? 0);
         topMoverCard = {
           badgeClass: 'badge-torneo',
           badgeText: 'Destacado',
           title: `¡Evolución del Ranking: Felicitaciones a ${bestMover.nombre}!`,
-          body: `Saludamos a ${bestMover.nombre} por ser el jugador con mayor ascenso en el ranking recientemente, subiendo un total de ${bestMover.diff} puestos para posicionarse en el lugar #${bestMover.pos} de la escalerilla oficial del club. ¡Excelente juego!`,
-          date: '27 May, 2026'
+          body: `Saludamos a ${bestMover.nombre} por ser el jugador con mayor ascenso en el ranking recientemente, subiendo un total de ${bestMover.diff} puestos para posicionarse en el lugar #${currentPos || '?'} de la escalerilla oficial del club. ¡Excelente juego!`,
+          date: new Date().toLocaleDateString('es-CL', { day: 'numeric', month: 'short', year: 'numeric' })
         };
       }
     } catch(e) {
@@ -1170,16 +1167,7 @@ async function loadLiveData() {
     }
   }
 
-  // Fallback top mover if offline or none found
-  if (!topMoverCard) {
-    topMoverCard = {
-      badgeClass: 'badge-torneo',
-      badgeText: 'Destacado',
-      title: '¡Evolución del Ranking: Felicitaciones a Violeta Moreno!',
-      body: 'Felicitamos a Violeta Moreno por su excelente rendimiento en la escalerilla de UCTenis, logrando ascender al puesto #1 en el ranking femenino tras sus sólidas victorias consecutivas. ¡A seguir defendiendo la posición!',
-      date: '27 May, 2026'
-    };
-  }
+  // No fallback card — only show real data from Firebase
 
   // Render the news section dynamically
   renderNewsGrid(topMoverCard);
@@ -1300,8 +1288,9 @@ async function loadLiveData() {
       const photoRetador = getPlayerPhoto(retadorName);
       const photoRetado = getPlayerPhoto(retadoName);
       
-      const courtStr = c.courtLabel || c.cancha || 'Cancha';
-      const dateStr = formatDateShort(c.fecha);
+      const courtStr = (c.courtLabel || c.cancha || '').trim() || 'Cancha';
+      const dateStr = formatDateShort(c.fecha) || '';
+      if (!c.retadorId && !c.retadorNombre && !c.retadoId && !c.retadoNombre) return ''; // skip corrupt records
       
       const isMyChallengeActive = isMyChallenge(c);
       const myMatchLabel = isMyChallengeActive ? `<div class="my-match-label">Tu Desafío</div>` : '';
@@ -1345,9 +1334,10 @@ async function loadLiveData() {
       const photoWinner = getPlayerPhoto(winnerName);
       const photoLoser = getPlayerPhoto(loserName);
       
-      const courtStr = c.courtLabel || c.cancha || 'Cancha';
-      const dateStr = formatDateShort(c.fecha);
+      const courtStr = (c.courtLabel || c.cancha || '').trim() || 'Cancha';
+      const dateStr = formatDateShort(c.fecha) || '';
       const scoreStr = c.marcador || 'v/d';
+      if (!c.retadorId && !c.retadorNombre && !c.retadoId && !c.retadoNombre) return ''; // skip corrupt records
       
       // Comments rendering (chat bubbles only, no emojis inside comments)
       let commentsHtml = '';
