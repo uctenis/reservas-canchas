@@ -359,8 +359,16 @@
   <div class="modal-content admin-modal">
     <button class="modal-close-btn" type="button" data-close-modal="adminModal" aria-label="Cerrar">×</button>
     
-    <!-- Vista Listado de Jugadores -->
-    <div id="adminListView" class="admin-subview">
+    <!-- Pestañas de Navegación del Administrador -->
+    <div class="admin-tab-bar" style="display: flex; gap: 8px; margin: 15px 20px 20px 20px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 10px;">
+      <button type="button" class="btn-pill active" id="tabPlayers" style="padding: 8px 16px; font-size: 0.85rem; border-radius: 8px; cursor: pointer;" onclick="switchAdminSubSection('players')">👥 Jugadores</button>
+      <button type="button" class="btn-pill" id="tabNews" style="padding: 8px 16px; font-size: 0.85rem; border-radius: 8px; cursor: pointer;" onclick="switchAdminSubSection('news')">📢 Novedades</button>
+    </div>
+
+    <!-- Sección de Jugadores -->
+    <div id="adminPlayersSection">
+      <!-- Vista Listado de Jugadores -->
+      <div id="adminListView" class="admin-subview">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 12px; gap: 12px; flex-wrap: wrap;">
         <div>
           <p class="modal-kicker">Administrador</p>
@@ -492,6 +500,75 @@
           </button>
         </div>
       </form>
+    </div>
+    </div> <!-- Cierre de #adminPlayersSection -->
+
+    <!-- Sección de Novedades -->
+    <div id="adminNewsSection" class="hidden" style="padding: 0 20px 20px 20px;">
+      <!-- Vista Listado de Noticias -->
+      <div id="adminNewsListView">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 12px; gap: 12px; flex-wrap: wrap;">
+          <div>
+            <p class="modal-kicker">Administrador</p>
+            <h3 style="margin: 0; font-size: 1.28rem;">Administración de Novedades</h3>
+          </div>
+          <button type="button" class="btn-primary" id="btnAdminCreateNews" style="padding: 8px 14px; font-size: 0.78rem; font-weight: 800; border-radius: 8px; cursor: pointer; width: auto; min-height: auto;" onclick="openAdminNewsForm(null)">
+            ➕ Agregar Novedad
+          </button>
+        </div>
+        <div class="admin-search-row" style="margin-bottom: 12px;">
+          <input type="search" id="adminNewsSearch" placeholder="Buscar novedades..." aria-label="Buscar novedades" oninput="renderAdminNewsList()" style="width:100%; padding:10px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:#fff; outline:none;">
+        </div>
+        <div class="admin-news-list" id="adminNewsList" style="max-height: 480px; overflow-y: auto; padding-right: 4px;">
+          <!-- Se llena por JS -->
+        </div>
+      </div>
+
+      <!-- Vista Formulario de Novedades -->
+      <div id="adminNewsFormView" class="hidden">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 12px;">
+          <div>
+            <p class="modal-kicker">Administrador</p>
+            <h3 id="adminNewsFormTitle" style="margin: 0; font-size: 1.28rem;">Agregar nueva novedad</h3>
+          </div>
+          <button type="button" class="btn-secondary" style="padding: 8px 14px; font-size: 0.78rem; font-weight: 800; border-radius: 8px; cursor: pointer; min-height: auto; width: auto;" onclick="closeAdminNewsForm()">
+            🔙 Volver
+          </button>
+        </div>
+        <form id="fAdminNews" onsubmit="submitAdminNews(event)">
+          <input type="hidden" id="adminNewsId">
+          <input type="hidden" id="adminNewsCreado">
+          <div class="form-group" style="margin-bottom: 15px;">
+            <label for="adminNewsTitle" style="display:block; margin-bottom:6px; font-size:0.85rem; color:rgba(255,255,255,0.7);">Título de la Novedad</label>
+            <input type="text" id="adminNewsTitle" required placeholder="Ej: Gran torneo este fin de semana" style="width:100%; padding:10px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:#fff; outline:none;">
+          </div>
+          <div class="form-row" style="display:flex; gap:15px; margin-bottom: 15px;">
+            <div class="form-group" style="flex:1;">
+              <label for="adminNewsCategory" style="display:block; margin-bottom:6px; font-size:0.85rem; color:rgba(255,255,255,0.7);">Categoría</label>
+              <select id="adminNewsCategory" required style="width:100%; padding:10px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:#fff; outline:none;">
+                <option value="torneo">🏆 Torneo</option>
+                <option value="maint">🔧 Mantención</option>
+                <option value="app">📱 Plataforma</option>
+                <option value="aviso">📢 Aviso</option>
+              </select>
+            </div>
+            <div class="form-group" style="flex:1;">
+              <label for="adminNewsDate" style="display:block; margin-bottom:6px; font-size:0.85rem; color:rgba(255,255,255,0.7);">Fecha de Publicación</label>
+              <input type="date" id="adminNewsDate" required style="width:100%; padding:10px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:#fff; outline:none;">
+            </div>
+          </div>
+          <div class="form-group" style="margin-bottom: 15px;">
+            <label for="adminNewsBody" style="display:block; margin-bottom:6px; font-size:0.85rem; color:rgba(255,255,255,0.7);">Contenido de la Novedad</label>
+            <textarea id="adminNewsBody" required rows="5" placeholder="Escribe los detalles de la novedad aquí..." style="width: 100%; padding: 12px; background: rgba(0, 0, 0, 0.2); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; color: #fff; font-family: inherit; font-size: 0.9rem; resize: vertical; box-sizing: border-box; outline: none;"></textarea>
+          </div>
+          <p class="auth-error" id="adminNewsErr" aria-live="polite" style="color:#ef4444; font-size:0.85rem; margin-bottom:10px;"></p>
+          <p class="admin-success-message" id="adminNewsSuccess" aria-live="polite" style="color:#10b981; font-size:0.85rem; margin-bottom:10px;"></p>
+          <div class="admin-form-actions" style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <button type="submit" class="btn-primary" id="btnAdminNewsSave" style="flex: 1 1 0; min-height: 44px;">Guardar novedad</button>
+            <button type="button" class="btn-danger" id="btnAdminDeleteNews" style="background-color: #ef4444; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; display: none; padding: 10px 14px; font-size: 0.94rem; min-height: 44px; align-items: center; justify-content: center; gap: 6px;" onclick="deleteNewsFromAdminClick(event)">🗑️ Eliminar Novedad</button>
+          </div>
+        </form>
+      </div>
     </div>
   </div>
 </div> 
@@ -3566,6 +3643,7 @@ async function submitOwnProfile(event) {
 
 function openAdminModal() {
   if (!isPlayerAdminSession()) return;
+  if (typeof switchAdminSubSection === 'function') switchAdminSubSection('players');
   resetAdminForm();
   renderAdminPlayerList();
   document.getElementById('adminListView').classList.remove('hidden');
@@ -4968,6 +5046,216 @@ function escapeHTML(value) {
 
 function escapeAttr(value) {
   return escapeHTML(value);
+}
+
+// ──────────────── NOVEDADES ADMIN LOGIC ────────────────
+window.switchAdminSubSection = function(section) {
+  const isPlayers = section === 'players';
+  document.getElementById('tabPlayers').classList.toggle('active', isPlayers);
+  document.getElementById('tabNews').classList.toggle('active', !isPlayers);
+  
+  document.getElementById('adminPlayersSection').style.display = isPlayers ? 'block' : 'none';
+  document.getElementById('adminNewsSection').classList.toggle('hidden', isPlayers);
+  
+  if (!isPlayers) {
+    renderAdminNewsList();
+  }
+}
+
+window.renderAdminNewsList = async function() {
+  const listDiv = document.getElementById('adminNewsList');
+  if (!listDiv) return;
+  listDiv.innerHTML = '<p class="empty-state">Cargando novedades...</p>';
+  
+  let newsItems = [];
+  try {
+    if (DB.isCloudConfigured()) {
+      newsItems = await DB.getNewsCloud();
+      DB.saveNews(newsItems);
+    } else {
+      newsItems = DB.getNews();
+    }
+  } catch(e) {
+    console.warn('Error cargando novedades de la nube, usando caché local:', e);
+    newsItems = DB.getNews();
+  }
+  
+  const searchQuery = (document.getElementById('adminNewsSearch')?.value || '').trim().toLowerCase();
+  const filtered = newsItems.filter(item => 
+    !searchQuery || 
+    (item.title || '').toLowerCase().includes(searchQuery) || 
+    (item.body || '').toLowerCase().includes(searchQuery)
+  );
+  
+  if (filtered.length === 0) {
+    listDiv.innerHTML = '<p class="empty-state">No se encontraron novedades.</p>';
+    return;
+  }
+  
+  const categories = {
+    torneo: '🏆 Torneo',
+    maint: '🔧 Mantención',
+    app: '📱 Plataforma',
+    aviso: '📢 Aviso'
+  };
+  
+  listDiv.innerHTML = filtered.map(item => `
+    <article class="inactive-player-row" style="padding: 12px; margin-bottom: 8px; background: rgba(255,255,255,0.03); border-radius: 8px; display: flex; justify-content: space-between; align-items: center; border: 1px solid rgba(255,255,255,0.05);">
+      <div style="flex: 1; text-align: left; padding-right: 12px;">
+        <span style="font-size: 0.72rem; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.08); color: var(--text-secondary);">${categories[item.category] || item.category || 'Novedad'}</span>
+        <strong style="display: block; font-size: 0.95rem; margin-top: 4px; color: #fff;">${escapeHTML(item.title)}</strong>
+        <span style="font-size: 0.75rem; color: var(--text-secondary);">${formatShortDate(item.date)}</span>
+      </div>
+      <button class="btn-mini-profile" type="button" onclick="openAdminNewsForm('${item.id}')" style="width: auto; min-width: 60px;">Editar</button>
+    </article>
+  `).join('');
+}
+
+window.openAdminNewsForm = async function(id) {
+  const titleEl = document.getElementById('adminNewsFormTitle');
+  const idEl = document.getElementById('adminNewsId');
+  const creadoEl = document.getElementById('adminNewsCreado');
+  const titleInput = document.getElementById('adminNewsTitle');
+  const categorySelect = document.getElementById('adminNewsCategory');
+  const dateInput = document.getElementById('adminNewsDate');
+  const bodyInput = document.getElementById('adminNewsBody');
+  const deleteBtn = document.getElementById('btnAdminDeleteNews');
+  const errEl = document.getElementById('adminNewsErr');
+  const successEl = document.getElementById('adminNewsSuccess');
+  
+  errEl.textContent = '';
+  successEl.textContent = '';
+  
+  if (id) {
+    titleEl.textContent = 'Editar novedad';
+    deleteBtn.style.display = 'inline-flex';
+    
+    const news = DB.getNews().find(n => n.id === id);
+    if (news) {
+      idEl.value = news.id || '';
+      creadoEl.value = news.creado || '';
+      titleInput.value = news.title || '';
+      categorySelect.value = news.category || 'aviso';
+      dateInput.value = news.date || '';
+      bodyInput.value = news.body || '';
+    }
+  } else {
+    titleEl.textContent = 'Agregar nueva novedad';
+    deleteBtn.style.display = 'none';
+    
+    idEl.value = '';
+    creadoEl.value = '';
+    titleInput.value = '';
+    categorySelect.value = 'aviso';
+    dateInput.value = todayISO();
+    bodyInput.value = '';
+  }
+  
+  document.getElementById('adminNewsListView').classList.add('hidden');
+  document.getElementById('adminNewsFormView').classList.remove('hidden');
+}
+
+window.closeAdminNewsForm = function() {
+  document.getElementById('adminNewsFormView').classList.add('hidden');
+  document.getElementById('adminNewsListView').classList.remove('hidden');
+  renderAdminNewsList();
+}
+
+window.submitAdminNews = async function(event) {
+  if (event) event.preventDefault();
+  const id = document.getElementById('adminNewsId').value.trim();
+  const creado = document.getElementById('adminNewsCreado').value.trim();
+  const title = document.getElementById('adminNewsTitle').value.trim();
+  const category = document.getElementById('adminNewsCategory').value;
+  const date = document.getElementById('adminNewsDate').value;
+  const body = document.getElementById('adminNewsBody').value.trim();
+  
+  const errEl = document.getElementById('adminNewsErr');
+  const successEl = document.getElementById('adminNewsSuccess');
+  const saveBtn = document.getElementById('btnAdminNewsSave');
+  
+  errEl.textContent = '';
+  successEl.textContent = '';
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Guardando...';
+  
+  const newsItem = {
+    id: id || null,
+    creado: creado || null,
+    title,
+    category,
+    date,
+    body
+  };
+  
+  try {
+    if (DB.isCloudConfigured()) {
+      const session = DB.getSession();
+      const saved = await DB.saveNewsCloud(newsItem, adminPayload(session));
+      const currentList = DB.getNews().filter(n => n.id !== saved.id);
+      currentList.unshift(saved);
+      DB.saveNews(currentList);
+    } else {
+      const localId = newsItem.id || `local-news-${Date.now()}`;
+      const saved = {
+        ...newsItem,
+        id: localId,
+        creado: newsItem.creado || new Date().toISOString(),
+        actualizado: new Date().toISOString()
+      };
+      const currentList = DB.getNews().filter(n => n.id !== localId);
+      currentList.unshift(saved);
+      DB.saveNews(currentList);
+    }
+    successEl.textContent = 'Novedad guardada exitosamente.';
+    setTimeout(() => {
+      closeAdminNewsForm();
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Guardar novedad';
+    }, 1000);
+  } catch (err) {
+    console.error('Error al guardar novedad:', err);
+    errEl.textContent = 'Error al guardar: ' + err.message;
+    saveBtn.disabled = false;
+    saveBtn.textContent = 'Guardar novedad';
+  }
+}
+
+window.deleteNewsFromAdminClick = async function(event) {
+  if (event) event.preventDefault();
+  const id = document.getElementById('adminNewsId').value.trim();
+  if (!id) return;
+  
+  if (!confirm('¿Estás seguro de que deseas eliminar esta novedad de forma permanente?')) return;
+  
+  const errEl = document.getElementById('adminNewsErr');
+  const successEl = document.getElementById('adminNewsSuccess');
+  const saveBtn = document.getElementById('btnAdminNewsSave');
+  const deleteBtn = document.getElementById('btnAdminDeleteNews');
+  
+  errEl.textContent = '';
+  successEl.textContent = '';
+  deleteBtn.disabled = true;
+  deleteBtn.textContent = 'Eliminando...';
+  
+  try {
+    if (DB.isCloudConfigured()) {
+      await DB.deleteNewsCloud(id);
+    }
+    const currentList = DB.getNews().filter(n => n.id !== id);
+    DB.saveNews(currentList);
+    successEl.textContent = 'Novedad eliminada exitosamente.';
+    setTimeout(() => {
+      closeAdminNewsForm();
+      deleteBtn.disabled = false;
+      deleteBtn.textContent = '🗑️ Eliminar Novedad';
+    }, 1000);
+  } catch (err) {
+    console.error('Error al eliminar novedad:', err);
+    errEl.textContent = 'Error al eliminar: ' + err.message;
+    deleteBtn.disabled = false;
+    deleteBtn.textContent = '🗑️ Eliminar Novedad';
+  }
 }
 </script>
 </body>

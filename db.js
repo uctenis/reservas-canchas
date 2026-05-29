@@ -40,7 +40,8 @@ if (typeof firebase !== 'undefined') {
 
 const FIREBASE_COLLECTIONS = {
   players: 'ranking_players',
-  challenges: 'ranking_challenges'
+  challenges: 'ranking_challenges',
+  news: 'ranking_news'
 };
 
 const DB_FIREBASE_ADMIN_EMAILS = ['uctenisclub@gmail.com', 'dsilva@uct.cl'];
@@ -529,6 +530,40 @@ const DB = {
     if (!this.isCloudConfigured()) throw new Error('Firestore no está disponible.');
     if (!id) throw new Error('Se requiere el ID del desafío para eliminarlo.');
     await firebaseDb.collection(FIREBASE_COLLECTIONS.challenges).doc(id).delete();
+  },
+
+  // ──────────────── FIREBASE: NOVEDADES ────────────────
+  getNews() {
+    return JSON.parse(localStorage.getItem('uctenis_news') || '[]');
+  },
+  saveNews(list) {
+    localStorage.setItem('uctenis_news', JSON.stringify(list || []));
+  },
+  async getNewsCloud() {
+    if (!this.isCloudConfigured()) throw new Error('Firestore no está disponible.');
+    const snapshot = await firebaseDb.collection(FIREBASE_COLLECTIONS.news).get();
+    return snapshot.docs
+      .map(doc => ({ id: doc.id, ...doc.data() }))
+      .sort((a, b) => (b.date || b.creado || '').localeCompare(a.date || a.creado || ''));
+  },
+  async saveNewsCloud(newsItem, actor = {}) {
+    if (!this.isCloudConfigured()) throw new Error('Firestore no está disponible.');
+    const id = newsItem.id || makeFirebaseDocId(newsItem.title || `news-${Date.now()}`, 'news');
+    const now = new Date().toISOString();
+    const data = cleanFirestoreData({
+      ...newsItem,
+      id,
+      creado: newsItem.creado || now,
+      actualizado: now,
+      updatedBy: actor.email || actor.adminEmail || actor.actorEmail || ''
+    });
+    await firebaseDb.collection(FIREBASE_COLLECTIONS.news).doc(id).set(data, { merge: true });
+    return data;
+  },
+  async deleteNewsCloud(id) {
+    if (!this.isCloudConfigured()) throw new Error('Firestore no está disponible.');
+    if (!id) throw new Error('Se requiere el ID de la novedad para eliminarla.');
+    await firebaseDb.collection(FIREBASE_COLLECTIONS.news).doc(id).delete();
   },
 
   // ──────────────── RANKING ────────────────
