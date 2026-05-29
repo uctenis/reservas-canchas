@@ -98,19 +98,33 @@ const CONFIG = {
 // =======================================================
 
 function doGet(e) {
+  // Evitar error al ejecutar directamente desde el editor de Apps Script
+  if (!e || !e.parameter) {
+    return ContentService.createTextOutput(JSON.stringify({ 
+      ok: false, 
+      msg: "Ejecutado desde el editor de Apps Script o sin parámetros. Para probar en producción usa la URL de la aplicación web." 
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
   return handleRequest(e.parameter);
 }
 
 function doPost(e) {
+  // Evitar error al ejecutar directamente desde el editor de Apps Script
+  if (!e) {
+    return ContentService.createTextOutput(JSON.stringify({ 
+      ok: false, 
+      msg: "Petición POST vacía o ejecutada desde el editor de Apps Script." 
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
   let data = {};
   try {
     if (e.postData && e.postData.contents) {
       data = JSON.parse(e.postData.contents);
     } else {
-      data = e.parameter;
+      data = e.parameter || {};
     }
   } catch(err) {
-    data = e.parameter;
+    data = e.parameter || {};
   }
   return handleRequest(data);
 }
