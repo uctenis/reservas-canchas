@@ -43,8 +43,8 @@ const FIREBASE_COLLECTIONS = {
   challenges: 'ranking_challenges'
 };
 
-const DB_FIREBASE_ADMIN_EMAILS = ['uctenisclub@gmail.com'];
-const DB_PURE_ADMIN_EMAILS = ['uctenisclub@gmail.com'];
+const DB_FIREBASE_ADMIN_EMAILS = ['uctenisclub@gmail.com', 'dsilva@uct.cl'];
+const DB_PURE_ADMIN_EMAILS     = ['uctenisclub@gmail.com', 'dsilva@uct.cl'];
 
 function normalizeEmailForDb(email) {
   return String(email || '').trim().toLowerCase();

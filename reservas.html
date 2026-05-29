@@ -50,6 +50,7 @@
     <div class="legend-row">
       <span class="leg leg-free">Disponible</span>
       <span class="leg leg-busy">Ocupado</span>
+      <span class="leg leg-clases">Clases UCTenis</span>
       <span class="leg leg-mine">Mi reserva</span>
       <span class="leg leg-sel">Seleccionado</span>
     </div>
@@ -434,10 +435,15 @@ function renderSlotsByCourt(apiData) {
       const courtError = courtData && !Array.isArray(courtData) ? (courtData.error || 'Error de sincronización') : null;
       const playableSlots = (apiData.playable && Array.isArray(apiData.playable[court.id])) ? apiData.playable[court.id] : DB.SLOTS;
       
+      // Mapa de etiquetas de motivo para slots ocupados (ej: "Clases UCTenis")
+      const courtBusyLabels = (apiData.busyLabels && apiData.busyLabels[court.id]) ? apiData.busyLabels[court.id] : {};
+
       let slotsHtml = playableSlots.map(slot => {
         const isMine = myBooked && myBooked.slot === slot;
         const isFreeInGoogle = availableBlocks.includes(slot);
         const isBusy = !isFreeInGoogle && !isMine;
+        const busyLabel = isBusy ? (courtBusyLabels[slot] || '') : '';
+        const isClases = busyLabel === 'Clases UCTenis';
         
         const now = new Date();
         const [sh, sm] = slot.split(':').map(Number);
@@ -454,14 +460,22 @@ function renderSlotsByCourt(apiData) {
 
         if (isTooClose) cls += ' slot-past';
         else if (isMine) cls += ' slot-mine';
+        else if (isClases) cls += ' slot-busy slot-clases';
         else if (isBusy) cls += ' slot-busy';
         else cls += ' slot-free';
 
         const clickable = !isTooClose && !isBusy && !!session && !courtError;
+        const statusText = courtError ? courtError
+          : isMine ? 'Tu reserva'
+          : isClases ? '🎾 Clases UCTenis'
+          : isBusy ? 'Ocupado'
+          : isPast ? 'Pasado'
+          : isTooClose ? 'Límite 4h'
+          : 'Disponible';
         return `<div class="${cls}" ${clickable ? `onclick="selectSlot('${court.id}', '${slot}', this)"` : ''}>
           <div class="slot-time">${slot}</div>
           <div class="slot-end">hasta ${endStr}</div>
-          <div class="slot-status">${courtError ? courtError : isMine ? 'Tu reserva' : isBusy ? 'Ocupado' : isPast ? 'Pasado' : isTooClose ? 'Límite 4h' : 'Disponible'}</div>
+          <div class="slot-status">${statusText}</div>
         </div>`;
       }).join('');
 
@@ -674,7 +688,7 @@ async function loadChallengeablePlayers() {
     }
 
     // Filter out pure admins
-    const pureAdminEmails = ['uctenisclub@gmail.com'];
+    const pureAdminEmails = ['uctenisclub@gmail.com', 'dsilva@uct.cl'];
     allPlayers = allPlayers.filter(p => !pureAdminEmails.some(adm => adm.toLowerCase() === (p.email || '').toLowerCase().trim()));
 
     // Encontrar al jugador actual (por email o nombre) en la lista de todos los jugadores
