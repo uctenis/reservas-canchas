@@ -1394,6 +1394,7 @@ function normalizePlayer(row, index, gender) {
   const reves = cleanText(row?.reves ?? row?.backhand) || staticPlayer?.reves || '';
   const foto = resolvePhoto(rawPhoto, id, gender) || staticPlayer?.foto || '';
   const telefono = cleanText(row?.telefono ?? row?.phone ?? row?.whatsapp ?? row?.celular);
+  const rut = cleanText(row?.rut || staticPlayer?.rut || '');
 
   return {
     id,
@@ -1414,6 +1415,7 @@ function normalizePlayer(row, index, gender) {
     foto,
     email,
     telefono,
+    rut,
     notas: cleanText(row?.notes ?? row?.notas),
     activo: normalizeActiveValue(activeValue)
   };
@@ -1438,7 +1440,8 @@ function fillPlayerFromLocalProfile(player) {
     reves: player.reves || user.reves || '',
     foto: player.foto || resolvePhoto(user.foto, user.id, player.gender),
     email: player.email || user.email || '',
-    telefono: player.telefono || user.telefono || ''
+    telefono: player.telefono || user.telefono || '',
+    rut: player.rut || user.rut || ''
   };
 }
 
@@ -4277,6 +4280,7 @@ async function submitAdminPlayer(event) {
           reves: item.reves,
           foto: item.foto,
           telefono: item.telefono,
+          rut: item.rut,
           pos: toNumber(item.posicion ?? item.pos, NaN)
         });
       });
@@ -4312,6 +4316,7 @@ async function submitAdminPlayer(event) {
           reves: item.reves,
           foto: item.foto,
           telefono: item.telefono,
+          rut: item.rut,
           pos: toNumber(item.posicion ?? item.pos, NaN)
         });
       });
@@ -4823,7 +4828,8 @@ function profileToSessionUser(player, current = DB.getSession()) {
     mano: player.mano || player.manoHabil || current?.mano || 'Derecha',
     reves: player.reves || current?.reves || 'Dos manos',
     foto: player.foto || current?.foto || '',
-    telefono: player.telefono || current?.telefono || ''
+    telefono: player.telefono || current?.telefono || '',
+    rut: player.rut || current?.rut || ''
   };
 }
 
@@ -5172,6 +5178,7 @@ function mergeEditedPlayer(current, edit, gender) {
     reves: edit.reves || current?.reves || '',
     foto: edit.foto || current?.foto || '',
     telefono: edit.telefono || current?.telefono || '',
+    rut: edit.rut || current?.rut || '',
     prev: current?.prev || current?.pos || '',
     pos: toNumber(edit.posicion ?? edit.pos, current?.pos || NaN),
     activo: edit.activo !== false && edit.participaRanking !== false,

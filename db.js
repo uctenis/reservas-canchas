@@ -161,6 +161,7 @@ const DB = {
       reves: data.reves || 'Dos manos',
       foto: data.foto || '',
       telefono: data.telefono || '',
+      rut: data.rut || '',
       creado: new Date().toISOString()
     };
     users.push(user);
@@ -347,7 +348,8 @@ const DB = {
       mano: data.mano || 'Derecha',
       reves: data.reves || 'Dos manos',
       foto: data.foto || '',
-      telefono: data.telefono || ''
+      telefono: data.telefono || '',
+      rut: data.rut || ''
     });
     if (result.ok) {
       localStorage.setItem('uctenis_session', JSON.stringify(result.user));
