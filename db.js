@@ -113,7 +113,6 @@ function playerToSessionUser(player, current = {}) {
     reves: player.reves || current.reves || 'Dos manos',
     foto: player.foto || current.foto || '',
     telefono: player.telefono || current.telefono || '',
-    rut: player.rut || current.rut || '',
     password: current.password || 'google-auth-no-pass'
   };
 }
