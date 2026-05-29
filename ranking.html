@@ -2496,8 +2496,9 @@ function triggerWhatsAppChallenge(challenge, telefono) {
     }
   } catch (e) {}
 
+  const currentUrl = window.location.origin + window.location.pathname;
   const slotStr = challenge.slot ? ` · Hora: ${challenge.slot}` : '';
-  const text = `🎾 ¡Hola! Te he desafiado en UCTenis.\n\n📅 Fecha: ${dateFormatted}${slotStr}\n🏟️ Cancha: ${courtName}\n\nPor favor, ingresa a la página para aceptar o rechazar el desafío:\nhttps://uctenis.github.io/reservas-canchas-staging/ranking.html\n\n¡Nos vemos en la cancha! 🏆`;
+  const text = `🎾 ¡Hola! Te he desafiado en UCTenis.\n\n📅 Fecha: ${dateFormatted}${slotStr}\n🏟️ Cancha: ${courtName}\n\nPor favor, ingresa a la página para aceptar o rechazar el desafío:\n${currentUrl}\n\n¡Nos vemos en la cancha! 🏆`;
   
   const waUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`;
   return waUrl;
@@ -2524,8 +2525,9 @@ window.triggerManualWhatsApp = function() {
     }
   } catch (e) {}
 
+  const currentUrl = window.location.origin + window.location.pathname;
   const slotStr = challenge.slot ? ` · Hora: ${challenge.slot}` : '';
-  const text = `🎾 ¡Hola! Te he desafiado en UCTenis.\n\n📅 Fecha: ${dateFormatted}${slotStr}\n🏟️ Cancha: ${courtName}\n\nPor favor, ingresa a la página para aceptar o rechazar el desafío:\nhttps://uctenis.github.io/reservas-canchas-staging/ranking.html\n\n¡Nos vemos en la cancha! 🏆`;
+  const text = `🎾 ¡Hola! Te he desafiado en UCTenis.\n\n📅 Fecha: ${dateFormatted}${slotStr}\n🏟️ Cancha: ${courtName}\n\nPor favor, ingresa a la página para aceptar o rechazar el desafío:\n${currentUrl}\n\n¡Nos vemos en la cancha! 🏆`;
   
   const waUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`;
   window.open(waUrl, '_blank');
