@@ -803,8 +803,8 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
 
-<script src="db.js?v=20260528_v10"></script>
-<script src="script.js?v=20260528_v10"></script>
+<script src="db.js?v=20260529_v1"></script>
+<script src="script.js?v=20260529_v1"></script>
 <script>
 // Admin emails (must match db.js)
 const ADMIN_EMAILS = ['uctenisclub@gmail.com', 'dsilva@uct.cl'];
@@ -1219,12 +1219,17 @@ async function loadLiveData() {
       const winnerName = latestMatch.ganadorId === latestMatch.retadorId ? (latestMatch.retadorNombre || 'Jugador') : (latestMatch.retadoNombre || 'Jugador');
       const loserName = latestMatch.ganadorId === latestMatch.retadorId ? (latestMatch.retadoNombre || 'Jugador') : (latestMatch.retadorNombre || 'Jugador');
       const genderText = latestMatch.genero === 'F' ? 'femenino' : 'masculino';
+      const isFriendly = latestMatch.tipo === 'amistoso';
       
       latestMatchCard = {
-        badgeClass: 'badge-torneo',
-        badgeText: 'Resultado',
-        title: `¡Gran partido: ${winnerName} vence a ${loserName}!`,
-        body: `En el duelo oficial del ranking ${genderText} jugado en ${latestMatch.cancha || 'UCTenis'} el ${formatDateShort(latestMatch.fecha)}, ${winnerName} superó a ${loserName} por un marcador de ${latestMatch.marcador}. ¡Felicitaciones a ambos!`,
+        badgeClass: isFriendly ? 'badge-app' : 'badge-torneo',
+        badgeText: isFriendly ? 'Amistoso' : 'Desafío',
+        title: isFriendly 
+          ? `¡Partido Amistoso: ${winnerName} vence a ${loserName}!` 
+          : `¡Gran Desafío: ${winnerName} vence a ${loserName}!`,
+        body: isFriendly
+          ? `En el encuentro amistoso jugado en ${latestMatch.cancha || 'UCTenis'} el ${formatDateShort(latestMatch.fecha)}, ${winnerName} superó a ${loserName} por un marcador de ${latestMatch.marcador}. ¡Buen juego!`
+          : `En el duelo oficial del ranking ${genderText} jugado en ${latestMatch.cancha || 'UCTenis'} el ${formatDateShort(latestMatch.fecha)}, ${winnerName} superó a ${loserName} por un marcador de ${latestMatch.marcador}, escalando posiciones en la escalerilla. ¡Felicitaciones a ambos!`,
         date: formatDateShort(latestMatch.actualizado || latestMatch.creado || latestMatch.fecha)
       };
     }
@@ -1237,12 +1242,17 @@ async function loadLiveData() {
       const nextMatch = upcoming[0];
       const genderText = nextMatch.genero === 'F' ? 'femenino' : 'masculino';
       const slotStr = nextMatch.slot ? ` (Hora: ${nextMatch.slot})` : '';
+      const isFriendly = nextMatch.tipo === 'amistoso';
       
       nextMatchCard = {
-        badgeClass: 'badge-torneo',
-        badgeText: 'Próximo Partido',
-        title: `¡Se viene: ${nextMatch.retadorNombre || 'Jugador'} vs ${nextMatch.retadoNombre || 'Jugador'}!`,
-        body: `El encuentro oficial por el ranking ${genderText} está agendado para el ${formatDateShort(nextMatch.fecha)} en ${nextMatch.cancha || 'UCTenis'}${slotStr}. ¡Mucho éxito a ambos jugadores en este gran duelo!`,
+        badgeClass: isFriendly ? 'badge-app' : 'badge-torneo',
+        badgeText: isFriendly ? 'Próximo Amistoso' : 'Próximo Desafío',
+        title: isFriendly 
+          ? `¡Amistoso agendado: ${nextMatch.retadorNombre || 'Jugador'} vs ${nextMatch.retadoNombre || 'Jugador'}!` 
+          : `¡Desafío en camino: ${nextMatch.retadorNombre || 'Jugador'} vs ${nextMatch.retadoNombre || 'Jugador'}!`,
+        body: isFriendly
+          ? `Un encuentro amistoso está agendado para el ${formatDateShort(nextMatch.fecha)} en ${nextMatch.cancha || 'UCTenis'}${slotStr}. ¡Éxito a ambos en este partido de práctica!`
+          : `El encuentro oficial por el ranking ${genderText} está agendado para el ${formatDateShort(nextMatch.fecha)} en ${nextMatch.cancha || 'UCTenis'}${slotStr}. ¡Mucho éxito a ambos en este importante duelo que define cambios de posiciones en la escalerilla!`,
         date: formatDateShort(nextMatch.creado || nextMatch.fecha)
       };
     }
