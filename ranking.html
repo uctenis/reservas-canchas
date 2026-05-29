@@ -169,6 +169,17 @@
           <input type="text" id="cpNombre" required>
         </div>
 
+        <div class="form-row" style="display: flex; gap: 15px;">
+          <div class="form-group" style="flex: 2;">
+            <label for="cpRut">RUT (solo números)</label>
+            <input type="text" id="cpRut" placeholder="12345678" maxlength="8" required>
+          </div>
+          <div class="form-group" style="flex: 1;">
+            <label for="cpRutDv" style="text-align: center;">DV</label>
+            <input type="text" id="cpRutDv" readonly placeholder="-" style="text-align: center; font-weight: bold; background: rgba(255,255,255,0.05);">
+          </div>
+        </div>
+
         <div class="form-group">
           <label for="cpTelefono">Teléfono (WhatsApp)</label>
           <input type="tel" id="cpTelefono" placeholder="+56912345678" value="+569" required>
@@ -360,9 +371,10 @@
     <button class="modal-close-btn" type="button" data-close-modal="adminModal" aria-label="Cerrar">×</button>
     
     <!-- Pestañas de Navegación del Administrador -->
-    <div class="admin-tab-bar" style="display: flex; gap: 8px; margin: 15px 20px 20px 20px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 10px;">
+    <div class="admin-tab-bar" style="display: flex; gap: 8px; margin: 15px 20px 20px 20px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 10px; flex-wrap: wrap;">
       <button type="button" class="btn-pill active" id="tabPlayers" style="padding: 8px 16px; font-size: 0.85rem; border-radius: 8px; cursor: pointer;" onclick="switchAdminSubSection('players')">👥 Jugadores</button>
       <button type="button" class="btn-pill" id="tabNews" style="padding: 8px 16px; font-size: 0.85rem; border-radius: 8px; cursor: pointer;" onclick="switchAdminSubSection('news')">📢 Novedades</button>
+      <button type="button" class="btn-pill" id="tabSchedules" style="padding: 8px 16px; font-size: 0.85rem; border-radius: 8px; cursor: pointer;" onclick="switchAdminSubSection('schedules')">🗓️ Horarios</button>
     </div>
 
     <!-- Sección de Jugadores -->
@@ -404,7 +416,22 @@
         </button>
       </div>
       <form id="fAdminPlayer">
-        <input type="hidden" id="adminPlayerId">
+        <div class="form-row" style="display: flex; gap: 15px;">
+          <div class="form-group" style="flex: 1;">
+            <label for="adminPlayerId">ID Jugador (Código)</label>
+            <input type="text" id="adminPlayerId" placeholder="Ej: m020 (se autogenera si se deja vacío)">
+          </div>
+          <div class="form-group" style="flex: 1; display: flex; gap: 10px;">
+            <div style="flex: 2;">
+              <label for="adminRut">RUT (solo números)</label>
+              <input type="text" id="adminRut" placeholder="12345678" maxlength="8">
+            </div>
+            <div style="flex: 1;">
+              <label for="adminRutDv" style="text-align: center;">DV</label>
+              <input type="text" id="adminRutDv" readonly placeholder="-" style="text-align: center; font-weight: bold; background: rgba(255,255,255,0.05);">
+            </div>
+          </div>
+        </div>
         <div class="form-row">
           <div class="form-group">
             <label for="adminNombre">Nombre completo</label>
@@ -569,6 +596,86 @@
           </div>
         </form>
       </div>
+      
+      <!-- Sección de Horarios/Fechas Especiales -->
+      <div id="adminSchedulesSection" class="hidden" style="padding: 0 20px 20px 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 12px; gap: 12px; flex-wrap: wrap;">
+          <div>
+            <p class="modal-kicker">Administrador</p>
+            <h3 style="margin: 0; font-size: 1.28rem;">Administración de Horarios</h3>
+          </div>
+        </div>
+        
+        <!-- Crear Fecha Especial -->
+        <div class="admin-section" style="margin-bottom: 20px;">
+          <p style="color:var(--text-secondary);font-size:0.85rem;margin-bottom:18px">
+            Una "fecha especial" permite habilitar todos los horarios en canchas específicas para un día puntual (ej. torneo, feriado donde se habilita todo el día), o cerrarlas.
+          </p>
+
+          <div id="adminScheduleAlert" class="alert-box" style="display:none; padding: 12px; border-radius: 8px; font-size: 0.85rem; margin-bottom: 15px;"></div>
+
+          <div class="form-row" style="display:flex; gap: 15px; margin-bottom: 15px;">
+            <div class="form-group" style="flex:1;">
+              <label for="adminSpecialDate" style="display:block; margin-bottom:6px; font-size:0.85rem; color:rgba(255,255,255,0.7);">📅 Fecha especial</label>
+              <input type="date" id="adminSpecialDate" style="width:100%; padding:10px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:#fff; outline:none;">
+            </div>
+            <div class="form-group" style="flex:1;">
+              <label for="adminSpecialDesc" style="display:block; margin-bottom:6px; font-size:0.85rem; color:rgba(255,255,255,0.7);">📝 Descripción (opcional)</label>
+              <input type="text" id="adminSpecialDesc" placeholder="Ej: Torneo anual" style="width:100%; padding:10px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:#fff; outline:none;">
+            </div>
+          </div>
+
+          <p style="font-size:0.82rem;color:rgba(255,255,255,0.7);margin-bottom:10px;font-weight:600;">🎾 Canchas que aplica</p>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 18px;">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.85rem;">
+              <input type="checkbox" id="admin_court_cec1" value="cec1" checked> CEC 1 (Arcilla)
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.85rem;">
+              <input type="checkbox" id="admin_court_cec2" value="cec2" checked> CEC 2 (Arcilla)
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.85rem;">
+              <input type="checkbox" id="admin_court_cjp1" value="cjp1" checked> CJP 1 (Asfalto)
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.85rem;">
+              <input type="checkbox" id="admin_court_cjp2" value="cjp2" checked> CJP 2 (Asfalto)
+            </label>
+          </div>
+
+          <p style="font-size:0.82rem;color:rgba(255,255,255,0.7);margin-bottom:10px;font-weight:600;">⏰ Acción</p>
+          <div style="display: flex; gap: 10px; margin-bottom: 18px;">
+            <label style="flex:1; cursor: pointer;">
+              <input type="radio" name="adminSpecialType" value="all_day" checked style="display:none;" id="typeAllDay">
+              <div id="cardAllDay" class="type-card active" style="display:flex; flex-direction:column; align-items:center; padding:10px; border:1px solid var(--accent-tennis); border-radius:10px; background:rgba(198,211,0,0.08); text-align:center; transition: all 0.2s;" onclick="selectAdminSpecialType('all_day')">
+                <span style="font-size:1.4rem;">🌅</span>
+                <strong style="font-size:0.85rem; display:block; margin:4px 0 2px;">Todos los horarios</strong>
+                <span style="color:var(--text-secondary);font-size:0.7rem;">Habilita 09:00–21:00</span>
+              </div>
+            </label>
+            <label style="flex:1; cursor: pointer;">
+              <input type="radio" name="adminSpecialType" value="closed" style="display:none;" id="typeClosed">
+              <div id="cardClosed" class="type-card" style="display:flex; flex-direction:column; align-items:center; padding:10px; border:1px solid rgba(255,255,255,0.1); border-radius:10px; background:rgba(255,255,255,0.03); text-align:center; transition: all 0.2s;" onclick="selectAdminSpecialType('closed')">
+                <span style="font-size:1.4rem;">🚫</span>
+                <strong style="font-size:0.85rem; display:block; margin:4px 0 2px;">Cerrar canchas</strong>
+                <span style="color:var(--text-secondary);font-size:0.7rem;">Sin disponibilidad ese día</span>
+              </div>
+            </label>
+          </div>
+
+          <div style="display:flex;justify-content:flex-end;">
+            <button class="btn-primary" id="btnAdminSaveSchedule" type="button" onclick="saveAdminSpecialDate(event)" style="padding: 10px 20px; font-size:0.85rem;">
+              💾 Guardar Fecha Especial
+            </button>
+          </div>
+        </div>
+
+        <!-- Lista de Fechas Especiales -->
+        <div class="admin-section">
+          <h4 style="margin:0 0 10px; font-size:1rem;">📋 Fechas Especiales Guardadas</h4>
+          <div id="adminSpecialDatesList" style="max-height: 250px; overflow-y: auto; padding-right: 4px;">
+            <p style="color:var(--text-secondary);font-size:0.85rem;text-align:center;padding:15px">Cargando...</p>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </div> 
@@ -579,6 +686,43 @@
 <script src="db.js?v=20260529_v1"></script>
 
 <script>
+// Helper functions for RUT
+function calculateRutDV(rutBody) {
+  const clean = String(rutBody).replace(/[^0-9]/g, '');
+  if (!clean) return '';
+  let sum = 0;
+  let mul = 2;
+  for (let i = clean.length - 1; i >= 0; i--) {
+    sum += parseInt(clean.charAt(i), 10) * mul;
+    mul = mul === 7 ? 2 : mul + 1;
+  }
+  const res = 11 - (sum % 11);
+  if (res === 11) return '0';
+  if (res === 10) return 'K';
+  return String(res);
+}
+
+function formatRut(rutBody, dv) {
+  if (!rutBody) return '';
+  let body = String(rutBody).replace(/[^0-9]/g, '');
+  let result = '';
+  while (body.length > 3) {
+    result = '.' + body.slice(-3) + result;
+    body = body.slice(0, -3);
+  }
+  result = body + result;
+  return dv ? result + '-' + dv.toUpperCase() : result;
+}
+
+function parseRut(rutString) {
+  if (!rutString) return { body: '', dv: '' };
+  const clean = String(rutString).replace(/[^0-9kK]/g, '');
+  if (clean.length < 2) return { body: clean, dv: '' };
+  const body = clean.slice(0, -1);
+  const dv = clean.slice(-1).toUpperCase();
+  return { body, dv };
+}
+
 const GENDERS = {
   M: { label: 'Masculino', apiKeys: ['male', 'hombres', 'masculino', 'men'], fallbackAvatar: 'fotos/default_avatar_h.png' },
   F: { label: 'Femenino', apiKeys: ['female', 'mujeres', 'femenino', 'women'], fallbackAvatar: 'fotos/default_avatar_m.png' }
@@ -647,7 +791,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Auto-open admin panels if specified in URL query
   const params = new URLSearchParams(location.search);
   const openParam = params.get('openAdmin');
-  if (openParam === 'news' || openParam === 'players') {
+  if (openParam === 'news' || openParam === 'players' || openParam === 'schedules') {
     setTimeout(() => {
       if (isPlayerAdminSession()) {
         openAdminModal();
@@ -688,6 +832,35 @@ function setupEvents() {
   document.getElementById('btnGoogleLogin').addEventListener('click', handleGoogleLogin);
   document.getElementById('btnMockLogin').addEventListener('click', handleMockLogin);
   document.getElementById('fCompleteProfile').addEventListener('submit', handleCompleteProfile);
+
+  const cpRut = document.getElementById('cpRut');
+  const cpRutDv = document.getElementById('cpRutDv');
+  if (cpRut && cpRutDv) {
+    cpRut.addEventListener('input', function() {
+      this.value = this.value.replace(/[^0-9]/g, '').slice(0, 8);
+      cpRutDv.value = calculateRutDV(this.value);
+    });
+  }
+
+  const adminRut = document.getElementById('adminRut');
+  const adminRutDv = document.getElementById('adminRutDv');
+  if (adminRut && adminRutDv) {
+    adminRut.addEventListener('input', function() {
+      this.value = this.value.replace(/[^0-9]/g, '').slice(0, 8);
+      adminRutDv.value = calculateRutDV(this.value);
+    });
+  }
+
+  // Initial date setting for adminSpecialDate
+  const specialDateInput = document.getElementById('adminSpecialDate');
+  if (specialDateInput) {
+    const today = new Date();
+    const y = today.getFullYear();
+    const m = String(today.getMonth() + 1).padStart(2, '0');
+    const d = String(today.getDate()).padStart(2, '0');
+    specialDateInput.value = `${y}-${m}-${d}`;
+  }
+
   document.getElementById('fChallenge').addEventListener('submit', submitChallenge);
   document.getElementById('chal_fecha').addEventListener('change', updateChallengeAvailableSlots);
   document.getElementById('chal_cancha').addEventListener('change', updateChallengeAvailableSlots);
@@ -2116,6 +2289,10 @@ async function handleCompleteProfile(event) {
   const restoreButton = setButtonBusy(document.getElementById('btnCompleteProfile'), 'Guardando...');
   error.textContent = '';
 
+  const rutBody = document.getElementById('cpRut').value.trim();
+  const rutDv = document.getElementById('cpRutDv').value.trim();
+  const rut = formatRut(rutBody, rutDv);
+
   const data = {
     email: document.getElementById('cpEmail').value,
     foto: document.getElementById('cpFoto').value,
@@ -2124,7 +2301,8 @@ async function handleCompleteProfile(event) {
     categoria: document.getElementById('cpCat').value,
     mano: document.getElementById('cpMano').value,
     reves: document.getElementById('cpReves').value,
-    telefono: document.getElementById('cpTelefono').value.trim()
+    telefono: document.getElementById('cpTelefono').value.trim(),
+    rut: rut
   };
 
   if (!data.nombre || !data.genero || !data.categoria || !data.telefono) {
@@ -2157,6 +2335,7 @@ async function handleCompleteProfile(event) {
       reves: data.reves,
       foto: data.foto,
       telefono: data.telefono,
+      rut: data.rut,
       activo: true,
       participaRanking: true,
       posicion: position
@@ -3522,6 +3701,8 @@ function showPlayerProfile(playerKey) {
     </div>
     <ul class="modal-stats">
       <li><span class="label">Posición actual</span><span class="value">${active ? player.pos : 'Inactivo'}</span></li>
+      <li><span class="label">ID Jugador</span><span class="value">${escapeHTML(player.id || '-')}</span></li>
+      <li><span class="label">RUT</span><span class="value">${escapeHTML(player.rut || '-')}</span></li>
       <li><span class="label">Posición anterior</span><span class="value">${player.prev || '-'}</span></li>
       <li><span class="label">Categoría</span><span class="value">${escapeHTML(normalizeCategory(player.categoria) || '-')}</span></li>
       <li><span class="label">Edad</span><span class="value">${escapeHTML(player.edad || '-')}</span></li>
@@ -3579,6 +3760,16 @@ function openOwnProfileEditor() {
           <select id="ownReves">${selectOptions(['Dos manos', 'Una mano'], player.reves || 'Dos manos')}</select>
         </div>
       </div>
+      <div class="form-row" style="display: flex; gap: 15px;">
+        <div class="form-group" style="flex: 2;">
+          <label for="ownRut">RUT (solo números)</label>
+          <input type="text" id="ownRut" value="${escapeAttr(parseRut(player.rut).body)}" placeholder="12345678" maxlength="8" required>
+        </div>
+        <div class="form-group" style="flex: 1;">
+          <label for="ownRutDv" style="text-align: center;">DV</label>
+          <input type="text" id="ownRutDv" value="${escapeAttr(parseRut(player.rut).dv)}" readonly placeholder="-" style="text-align: center; font-weight: bold; background: rgba(255,255,255,0.05);">
+        </div>
+      </div>
       <div class="form-row">
         <div class="form-group">
           <label for="ownTelefono">Teléfono (WhatsApp)</label>
@@ -3597,6 +3788,18 @@ function openOwnProfileEditor() {
       <p class="auth-error" id="ownProfileErr" aria-live="polite"></p>
       <button type="submit" class="btn-primary" id="ownProfileSubmit">Guardar ficha</button>
     </form>`;
+
+  // Attach runtime input listener for dynamic own profile DV calculation
+  setTimeout(() => {
+    const ownRut = document.getElementById('ownRut');
+    const ownRutDv = document.getElementById('ownRutDv');
+    if (ownRut && ownRutDv) {
+      ownRut.addEventListener('input', function() {
+        this.value = this.value.replace(/[^0-9]/g, '').slice(0, 8);
+        ownRutDv.value = calculateRutDV(this.value);
+      });
+    }
+  }, 50);
 }
 
 async function submitOwnProfile(event) {
@@ -3617,6 +3820,10 @@ async function submitOwnProfile(event) {
     return;
   }
 
+  const ownRutBody = document.getElementById('ownRut').value.trim();
+  const ownRutDv = document.getElementById('ownRutDv').value.trim();
+  const ownRutFormatted = formatRut(ownRutBody, ownRutDv);
+
   const payload = {
     ...player,
     nombre: cleanText(document.getElementById('ownNombre').value),
@@ -3626,6 +3833,7 @@ async function submitOwnProfile(event) {
     reves: document.getElementById('ownReves').value,
     foto: document.getElementById('ownFoto').value.trim(),
     telefono: document.getElementById('ownTelefono').value.trim(),
+    rut: ownRutFormatted,
     activo: isPlayerActive(player),
     participaRanking: isPlayerActive(player)
   };
@@ -3895,6 +4103,8 @@ function renderAdminPlayerList() {
 function resetAdminForm() {
   document.getElementById('fAdminPlayer').reset();
   document.getElementById('adminPlayerId').value = '';
+  document.getElementById('adminRut').value = '';
+  document.getElementById('adminRutDv').value = '';
   document.getElementById('adminGenero').value = rankingState.currentGender;
   document.getElementById('adminEstado').value = 'activo';
   document.getElementById('adminTelefono').value = '+569';
@@ -3917,6 +4127,9 @@ function fillAdminForm(playerKey) {
   document.getElementById('adminPosicion').value = player.pos || '';
   document.getElementById('adminEstado').value = isPlayerActive(player) ? 'activo' : 'inactivo';
   document.getElementById('adminTelefono').value = player.telefono || '+569';
+  const parsedRut = parseRut(player.rut);
+  document.getElementById('adminRut').value = parsedRut.body;
+  document.getElementById('adminRutDv').value = parsedRut.dv;
   document.getElementById('adminNotas').value = player.notes || player.notas || '';
   document.getElementById('adminFechaNacimiento').value = dateForInput(player.fechaNacimiento);
   document.getElementById('adminCategoria').value = player.categoria || 'Principiante';
@@ -3975,10 +4188,18 @@ async function submitAdminPlayer(event) {
     return;
   }
 
-  const playerId = document.getElementById('adminPlayerId').value;
   const nombre = document.getElementById('adminNombre').value.trim();
   const email = document.getElementById('adminEmail').value.trim();
   const genero = document.getElementById('adminGenero').value;
+
+  let playerId = document.getElementById('adminPlayerId').value.trim();
+  if (!playerId) {
+    playerId = `rank_${genero}_${slugify(email || nombre || Date.now())}`;
+  }
+
+  const adminRutBody = document.getElementById('adminRut').value.trim();
+  const adminRutDv = document.getElementById('adminRutDv').value.trim();
+  const adminRutFormatted = formatRut(adminRutBody, adminRutDv);
 
   if (!nombre) {
     error.textContent = 'Ingresa el nombre del jugador.';
@@ -4004,6 +4225,7 @@ async function submitAdminPlayer(event) {
       reves: document.getElementById('adminReves').value,
       foto: document.getElementById('adminFoto').value.trim(),
       telefono: document.getElementById('adminTelefono').value.trim(),
+      rut: adminRutFormatted,
       activo: document.getElementById('adminEstado').value !== 'inactivo',
       participaRanking: document.getElementById('adminEstado').value !== 'inactivo',
       notas: document.getElementById('adminNotas').value.trim(),
@@ -5062,15 +5284,32 @@ function escapeAttr(value) {
 
 // ──────────────── NOVEDADES ADMIN LOGIC ────────────────
 window.switchAdminSubSection = function(section) {
-  const isPlayers = section === 'players';
-  document.getElementById('tabPlayers').classList.toggle('active', isPlayers);
-  document.getElementById('tabNews').classList.toggle('active', !isPlayers);
+  const tabPlayers = document.getElementById('tabPlayers');
+  const tabNews = document.getElementById('tabNews');
+  const tabSchedules = document.getElementById('tabSchedules');
   
-  document.getElementById('adminPlayersSection').style.display = isPlayers ? 'block' : 'none';
-  document.getElementById('adminNewsSection').classList.toggle('hidden', isPlayers);
+  const secPlayers = document.getElementById('adminPlayersSection');
+  const secNews = document.getElementById('adminNewsSection');
+  const secSchedules = document.getElementById('adminSchedulesSection');
   
-  if (!isPlayers) {
+  tabPlayers.classList.toggle('active', section === 'players');
+  tabNews.classList.toggle('active', section === 'news');
+  if (tabSchedules) tabSchedules.classList.toggle('active', section === 'schedules');
+  
+  if (secPlayers) secPlayers.style.display = section === 'players' ? 'block' : 'none';
+  if (secNews) {
+    secNews.style.display = section === 'news' ? 'block' : 'none';
+    secNews.classList.toggle('hidden', section !== 'news');
+  }
+  if (secSchedules) {
+    secSchedules.style.display = section === 'schedules' ? 'block' : 'none';
+    secSchedules.classList.toggle('hidden', section !== 'schedules');
+  }
+  
+  if (section === 'news') {
     renderAdminNewsList();
+  } else if (section === 'schedules') {
+    renderAdminSpecialDatesList();
   }
 }
 
@@ -5254,20 +5493,151 @@ window.deleteNewsFromAdminClick = async function(event) {
     if (DB.isCloudConfigured()) {
       await DB.deleteNewsCloud(id);
     }
-    const currentList = DB.getNews().filter(n => n.id !== id);
-    DB.saveNews(currentList);
-    successEl.textContent = 'Novedad eliminada exitosamente.';
-    setTimeout(() => {
-      closeAdminNewsForm();
-      deleteBtn.disabled = false;
-      deleteBtn.textContent = '🗑️ Eliminar Novedad';
-    }, 1000);
-  } catch (err) {
-    console.error('Error al eliminar novedad:', err);
-    errEl.textContent = 'Error al eliminar: ' + err.message;
-    deleteBtn.disabled = false;
-    deleteBtn.textContent = '🗑️ Eliminar Novedad';
   }
+}
+
+// ──────────────── GESTIÓN DE HORARIOS ADMIN LOGIC ────────────────
+const SPECIAL_DATES_KEY = 'uctenis_special_dates';
+
+function getSpecialDates() {
+  return JSON.parse(localStorage.getItem(SPECIAL_DATES_KEY) || '[]');
+}
+
+function saveSpecialDates(list) {
+  localStorage.setItem(SPECIAL_DATES_KEY, JSON.stringify(list));
+}
+
+function showAdminScheduleAlert(msg, type = 'success') {
+  const box = document.getElementById('adminScheduleAlert');
+  if (!box) return;
+  box.style.display = 'block';
+  box.style.backgroundColor = type === 'error' ? 'rgba(239,68,68,0.15)' : (type === 'warn' ? 'rgba(217,119,6,0.15)' : 'rgba(16,185,129,0.15)');
+  box.style.border = `1px solid ${type === 'error' ? '#ef4444' : (type === 'warn' ? '#d97706' : '#10b981')}`;
+  box.style.color = type === 'error' ? '#fca5a5' : (type === 'warn' ? '#fcd34d' : '#86efac');
+  box.textContent = msg;
+  setTimeout(() => { box.style.display = 'none'; }, 4000);
+}
+
+window.selectAdminSpecialType = function(type) {
+  document.getElementById('typeAllDay').checked = (type === 'all_day');
+  document.getElementById('typeClosed').checked = (type === 'closed');
+  
+  document.getElementById('cardAllDay').style.borderColor = (type === 'all_day') ? 'var(--accent-tennis)' : 'rgba(255,255,255,0.1)';
+  document.getElementById('cardAllDay').style.backgroundColor = (type === 'all_day') ? 'rgba(198,211,0,0.08)' : 'rgba(255,255,255,0.03)';
+  document.getElementById('cardAllDay').classList.toggle('active', type === 'all_day');
+  
+  document.getElementById('cardClosed').style.borderColor = (type === 'closed') ? 'var(--accent-tennis)' : 'rgba(255,255,255,0.1)';
+  document.getElementById('cardClosed').style.backgroundColor = (type === 'closed') ? 'rgba(198,211,0,0.08)' : 'rgba(255,255,255,0.03)';
+  document.getElementById('cardClosed').classList.toggle('active', type === 'closed');
+}
+
+window.saveAdminSpecialDate = async function(event) {
+  if (event) event.preventDefault();
+  
+  const fecha = document.getElementById('adminSpecialDate').value;
+  if (!fecha) { showAdminScheduleAlert('Selecciona una fecha.', 'error'); return; }
+
+  const selectedCourts = [];
+  ['cec1', 'cec2', 'cjp1', 'cjp2'].forEach(id => {
+    const cb = document.getElementById(`admin_court_${id}`);
+    if (cb && cb.checked) selectedCourts.push(id);
+  });
+  
+  if (!selectedCourts.length) { showAdminScheduleAlert('Selecciona al menos una cancha.', 'error'); return; }
+
+  const type = document.getElementById('typeAllDay').checked ? 'all_day' : 'closed';
+  const desc = document.getElementById('adminSpecialDesc').value.trim();
+  const session = DB.getSession();
+
+  const btn = document.getElementById('btnAdminSaveSchedule');
+  btn.disabled = true;
+  btn.textContent = 'Guardando...';
+
+  // 1. Save locally
+  const list = getSpecialDates().filter(item => !(item.fecha === fecha && selectedCourts.includes(item.courtId)));
+  selectedCourts.forEach(courtId => {
+    list.push({ fecha, courtId, type, desc, savedAt: new Date().toISOString() });
+  });
+  saveSpecialDates(list);
+
+  // 2. Sincronizar con backend Google Sheets
+  try {
+    if (window.CONFIG && window.CONFIG.API_URL) {
+      const res = await fetch(window.CONFIG.API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          action: 'admin_free_special_slots',
+          fecha,
+          courts: selectedCourts,
+          type,
+          desc,
+          adminEmail: session.email
+        })
+      });
+      const data = await res.json().catch(() => null);
+      if (!data || !data.ok) throw new Error(data?.msg || 'Error en backend');
+    }
+  } catch(e) {
+    console.warn('Backend save failed, using local only:', e);
+    showAdminScheduleAlert('✅ Guardado localmente (el servidor no pudo sincronizar, pero funcionará en este dispositivo).', 'warn');
+    btn.disabled = false;
+    btn.textContent = '💾 Guardar Fecha Especial';
+    renderAdminSpecialDatesList();
+    return;
+  }
+
+  showAdminScheduleAlert(`✅ Fecha especial guardada para ${selectedCourts.length} cancha(s) el ${fecha}.`);
+  btn.disabled = false;
+  btn.textContent = '💾 Guardar Fecha Especial';
+  document.getElementById('adminSpecialDesc').value = '';
+  renderAdminSpecialDatesList();
+}
+
+window.deleteAdminSpecialDate = function(fecha, courtId) {
+  if (!confirm(`¿Eliminar fecha especial para ${courtId} el ${fecha}?`)) return;
+  const list = getSpecialDates().filter(item => !(item.fecha === fecha && item.courtId === courtId));
+  saveSpecialDates(list);
+  renderAdminSpecialDatesList();
+  showAdminScheduleAlert(`Fecha especial eliminada.`);
+}
+
+window.renderAdminSpecialDatesList = function() {
+  const list = getSpecialDates().sort((a, b) => a.fecha.localeCompare(b.fecha));
+  const container = document.getElementById('adminSpecialDatesList');
+  if (!container) return;
+  
+  if (!list.length) {
+    container.innerHTML = '<p style="color:var(--text-secondary);font-size:0.85rem;text-align:center;padding:15px">No hay fechas especiales configuradas.</p>';
+    return;
+  }
+  
+  const COURTS_MAP = {
+    cec1: 'CEC 1 (Arcilla)',
+    cec2: 'CEC 2 (Arcilla)',
+    cjp1: 'CJP 1 (Asfalto)',
+    cjp2: 'CJP 2 (Asfalto)'
+  };
+  
+  const months = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  const typeLabels = { all_day: '🌅 Todos los horarios', closed: '🚫 Cerrado' };
+  
+  container.innerHTML = list.map(item => {
+    const parts = item.fecha.split('-');
+    if (parts.length < 3) return '';
+    const y = parts[0];
+    const m = parseInt(parts[1], 10);
+    const d = parseInt(parts[2], 10);
+    const courtLabel = COURTS_MAP[item.courtId] || item.courtId;
+    return `
+      <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; margin-bottom: 6px; font-size: 0.82rem;">
+        <div>
+          <strong style="display: block; color: var(--text-primary);">${d} ${months[m-1]} ${y} · ${courtLabel}</strong>
+          <span style="color: var(--text-secondary); font-size: 0.75rem;">${typeLabels[item.type] || item.type}${item.desc ? ' · ' + item.desc : ''}</span>
+        </div>
+        <button class="btn-del" type="button" onclick="deleteAdminSpecialDate('${item.fecha}', '${item.courtId}')" style="padding: 4px 8px; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.2); border-radius: 6px; color: #fca5a5; cursor: pointer; transition: all 0.2s;">🗑️ Eliminar</button>
+      </div>`;
+  }).join('');
 }
 </script>
 </body>
