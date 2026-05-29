@@ -47,7 +47,7 @@
       <div class="rank-actions">
         <span class="rank-status" id="rankApiStatus" aria-live="polite">Conectando...</span>
         <button class="btn-primary pulse-confirm" id="btnConfirmRankingOrder" type="button" style="display:none; background:#10b981; border:none; border-radius:8px; font-weight:800; padding:8px 16px; font-size:0.85rem; width:auto; min-height:auto; cursor:pointer; color:#0f172a; align-items:center; justify-content:center; gap:6px;">💾 Guardar Orden</button>
-        <button class="btn-admin-panel" id="btnAdminPlayers" type="button" data-action="open-admin" style="display:none">Administrar jugadores</button>
+        <button class="btn-admin-panel" id="btnAdminPlayers" type="button" data-action="open-admin" style="display:none">Panel Administrador</button>
         <button class="btn-challenge-new" id="btnNuevoDesafio" type="button" style="display:none">Nuevo desafío</button>
         <button class="btn-challenge-new" id="btnNuevoAmistoso" type="button" style="display:none; background:#64748b; color:#fff; border-color:#64748b;">Registrar Amistoso</button>
       </div>
@@ -643,6 +643,18 @@ document.addEventListener('DOMContentLoaded', () => {
   setChallengeMinDate();
   renderUserBar();
   refreshRankingPage();
+
+  // Auto-open admin panels if specified in URL query
+  const params = new URLSearchParams(location.search);
+  const openParam = params.get('openAdmin');
+  if (openParam === 'news' || openParam === 'players') {
+    setTimeout(() => {
+      if (isPlayerAdminSession()) {
+        openAdminModal();
+        switchAdminSubSection(openParam);
+      }
+    }, 800);
+  }
 });
 
 function setupEvents() {
