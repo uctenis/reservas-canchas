@@ -688,7 +688,7 @@ async function loadChallengeablePlayers() {
     }
 
     // Filter out pure admins
-    const pureAdminEmails = ['uctenisclub@gmail.com', 'dsilva@uct.cl'];
+    const pureAdminEmails = ['uctenisclub@gmail.com'];
     allPlayers = allPlayers.filter(p => !pureAdminEmails.some(adm => adm.toLowerCase() === (p.email || '').toLowerCase().trim()));
 
     // Encontrar al jugador actual (por email o nombre) en la lista de todos los jugadores
