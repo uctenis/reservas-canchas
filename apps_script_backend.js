@@ -928,30 +928,46 @@ function isFirebasePlayerActive(player) {
 // 📅 FUNCIONES DE CALENDARIO (Disponibilidad y Creación)
 // =======================================================
 
-// Helper: convierte una hora "HH:MM" y una fecha "YYYY-MM-DD" a un objeto Date
-// con el offset correcto de Chile (-04:00 en verano, -03:00 en invierno).
-// Se construye el ISO string directamente para evitar que setHours() aplique
-// la zona horaria UTC del servidor de Apps Script en lugar de la local de Chile.
-function makeChileTime(dateStr, hhmm, offsetStr) {
-  // offsetStr: "-04:00" o "-03:00"
-  var off = offsetStr || "-04:00";
-  return new Date(dateStr + "T" + hhmm + ":00" + off);
+/**
+ * SOLUCIÓN DEFINITIVA DE ZONA HORARIA
+ * 
+ * Usa Utilities.formatDate(date, 'America/Santiago', 'Z') para detectar
+ * el offset UTC real de Chile en cualquier fecha, manejando automáticamente
+ * el cambio de horario de verano/invierno.
+ *
+ * Dado un dateStr "YYYY-MM-DD" y un slot "HH:MM",
+ * retorna el timestamp UTC correcto que corresponde a esa hora en Santiago.
+ * Funciona sin importar la zona horaria configurada en el proyecto de Apps Script.
+ */
+function getChileOffsetStr(dateStr) {
+  // Usamos mediodia UTC del dia para calcular el offset de Santiago ese dia
+  // (evita ambiguedad en cambios de horario que ocurren a medianoche)
+  var noonUTC = new Date(dateStr + 'T12:00:00Z');
+  // Utilities.formatDate con 'Z' retorna e.g. "-0400" o "-0300"
+  var raw = Utilities.formatDate(noonUTC, 'America/Santiago', 'Z');
+  // Convertir "-0400" → "-04:00"
+  return raw.slice(0, 3) + ':' + raw.slice(3);
+}
+
+function makeLocalDate(dateStr, slot) {
+  var offsetStr = getChileOffsetStr(dateStr);
+  return new Date(dateStr + 'T' + slot + ':00' + offsetStr);
 }
 
 function getAvailableSlots(dateStr) {
   // dateStr en formato YYYY-MM-DD
-  // Usamos offset fijo -04:00 (hora de Chile en horario estándar).
-  // Si Chile cambia a -03:00 (horario de verano), ajusta CHILE_OFFSET.
-  var CHILE_OFFSET = "-04:00";
+  var offsetStr = getChileOffsetStr(dateStr); // e.g. "-04:00" o "-03:00"
+  // Nota: CHILE_OFFSET se mantiene por compatibilidad con código legacy
+  var CHILE_OFFSET = offsetStr;
 
-  var startOfDay = makeChileTime(dateStr, "00:00", CHILE_OFFSET);
-  var endOfDay   = makeChileTime(dateStr, "23:59", CHILE_OFFSET);
+  // startOfDay y endOfDay exactos en hora de Santiago (con offset real del dia)
+  var startOfDay = new Date(dateStr + 'T00:00:00' + offsetStr);
+  var endOfDay   = new Date(dateStr + 'T23:59:59' + offsetStr);
 
-  // Calcular día de la semana a partir de la fecha (sin depender de la TZ del servidor)
-  var parts = dateStr.split('-').map(Number);
-  var tempDate = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
-  // Chile está entre UTC-3 y UTC-4; para el día de semana basta con usar la fecha local
-  var dayOfWeek = new Date(dateStr + "T12:00:00" + CHILE_OFFSET).getDay();
+  // Dia de la semana segun Santiago (0=Dom, 1=Lun, ..., 6=Sab)
+  // 'u' en SimpleDateFormat: 1=Lun ... 7=Dom → aplicamos % 7 para 0=Dom
+  var noonUTC = new Date(dateStr + 'T12:00:00Z');
+  var dayOfWeek = parseInt(Utilities.formatDate(noonUTC, 'America/Santiago', 'u'), 10) % 7;
 
   let result = { ok: true, date: dateStr, courts: {}, playable: {}, busyLabels: {} };
 
@@ -1042,20 +1058,20 @@ function getAvailableSlots(dateStr) {
     
     let availableSlots = [];
     candidateSlots.forEach(slot => {
-      // ✅ FIX: construir la hora con ISO string y offset Chile para evitar
-      //    que setHours() use UTC del servidor en vez de la hora local de Chile.
-      let slotStart = makeChileTime(dateStr, slot, CHILE_OFFSET);
+      // ✅ SOLUCION DEFINITIVA: makeLocalDate usa Utilities.formatDate para obtener
+      // el offset real de Santiago ese dia, sin depender de la TZ del servidor.
+      // Esto detecta CUALQUIER evento del calendario (manual o automatico).
+      let slotStart = makeLocalDate(dateStr, slot);
       let slotEnd   = new Date(slotStart.getTime() + 90 * 60000); // +1.5 horas
-      
-      // Comprobar si el bloque se superpone con algún evento y guardar etiqueta si aplica
+
+      // Comprobar si el bloque se superpone con algun evento (cualquier evento bloquea)
       let busyMatch = busyTimes.find(b => {
         return (slotStart.getTime() < b.end && slotEnd.getTime() > b.start);
       });
-      
+
       if (!busyMatch) {
         availableSlots.push(slot);
       } else if (busyMatch.label) {
-        // Guardar etiqueta descriptiva del motivo del bloqueo
         result.busyLabels[courtKey][slot] = busyMatch.label;
       }
     });
@@ -1078,11 +1094,9 @@ function createBooking(data) {
   if (!calId) return { ok: false, msg: "Cancha no válida." };
   let calendar = CalendarApp.getCalendarById(calId);
   
-  // 3. Calcular tiempos
-  // ✅ FIX: construir con ISO string y offset Chile para que el timestamp sea correcto.
-  //    setHours() usaría UTC del servidor de Apps Script, no la hora de Chile.
-  let startTime = makeChileTime(data.date, data.slot, "-04:00");
-  let endTime = new Date(startTime.getTime() + 90 * 60000); // 1.5 hrs
+  // 3. Calcular tiempos con zona horaria real de Santiago (detectada dinamicamente)
+  let startTime = makeLocalDate(data.date, data.slot);
+  let endTime   = new Date(startTime.getTime() + 90 * 60000); // 1.5 hrs
   
   // 4. Doble validación: verificar que nadie haya tomado el bloque en los últimos segundos
   let conflicts = calendar.getEvents(startTime, endTime);
