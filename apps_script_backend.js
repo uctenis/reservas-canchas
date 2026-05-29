@@ -1167,7 +1167,7 @@ function cancelBooking(data) {
 // 👤 JUGADORES, ADMINISTRACION Y RANKING AUTOMATICO
 // =======================================================
 
-const PLAYER_HEADERS = ['ID', 'Nombre', 'Genero', 'Fecha nac', 'Categoria', 'Mano Habil', 'Reves', 'Foto', 'Ranking', 'Pos. Anterior', 'Correo', 'Rut'];
+const PLAYER_HEADERS = ['ID', 'Nombre', 'Genero', 'Fecha nac', 'Categoria', 'Mano Habil', 'Reves', 'Foto', 'Ranking', 'Pos. Anterior', 'Correo'];
 const RANKING_HEADERS = ['Posicion', 'Nombre', 'Pos. Anterior', '', '', 'ID'];
 
 function adminSavePlayer(data) {
@@ -1507,8 +1507,7 @@ function playerFromRow(row, rowNumber) {
     foto: text(row[7]),
     ranking: numberOrBlank(row[8]),
     posicionAnterior: numberOrBlank(row[9]),
-    email: text(row[10]),
-    rut: text(row[11])
+    email: text(row[10])
   };
 }
 
@@ -1527,8 +1526,7 @@ function normalizePlayerPayload(data, existing) {
     foto: payloadField(data, ['foto', 'photo', 'avatar'], base.foto),
     ranking: numberOrBlank(payloadField(data, ['ranking', 'posicion'], base.ranking)),
     posicionAnterior: numberOrBlank(payloadField(data, ['posicionAnterior', 'prev'], base.posicionAnterior)),
-    email: payloadField(data, ['email', 'correo'], base.email),
-    rut: payloadField(data, ['rut'], base.rut)
+    email: payloadField(data, ['email', 'correo'], base.email)
   };
 }
 
@@ -1553,8 +1551,7 @@ function playerToRow(player) {
     player.foto,
     player.ranking || '',
     player.posicionAnterior || '',
-    player.email,
-    player.rut || ''
+    player.email
   ];
 }
 
@@ -1572,8 +1569,7 @@ function publicPlayer(player) {
     foto: photoFor(player.id, player.foto),
     ranking: player.ranking,
     posicionAnterior: player.posicionAnterior,
-    email: player.email,
-    rut: player.rut || ''
+    email: player.email
   };
 }
 
