@@ -928,16 +928,32 @@ function isFirebasePlayerActive(player) {
 // 📅 FUNCIONES DE CALENDARIO (Disponibilidad y Creación)
 // =======================================================
 
+// Helper: convierte una hora "HH:MM" y una fecha "YYYY-MM-DD" a un objeto Date
+// con el offset correcto de Chile (-04:00 en verano, -03:00 en invierno).
+// Se construye el ISO string directamente para evitar que setHours() aplique
+// la zona horaria UTC del servidor de Apps Script en lugar de la local de Chile.
+function makeChileTime(dateStr, hhmm, offsetStr) {
+  // offsetStr: "-04:00" o "-03:00"
+  var off = offsetStr || "-04:00";
+  return new Date(dateStr + "T" + hhmm + ":00" + off);
+}
+
 function getAvailableSlots(dateStr) {
   // dateStr en formato YYYY-MM-DD
-  const date = new Date(dateStr + "T00:00:00-04:00"); // Zona horaria Chile
-  const startOfDay = new Date(date.getTime());
-  startOfDay.setHours(0, 0, 0, 0);
-  const endOfDay = new Date(date.getTime());
-  endOfDay.setHours(23, 59, 59, 999);
-  
-  const dayOfWeek = date.getDay(); // 0 = Domingo, 1 = Lunes, etc.
-  let result = { ok: true, date: dateStr, courts: {}, playable: {} };
+  // Usamos offset fijo -04:00 (hora de Chile en horario estándar).
+  // Si Chile cambia a -03:00 (horario de verano), ajusta CHILE_OFFSET.
+  var CHILE_OFFSET = "-04:00";
+
+  var startOfDay = makeChileTime(dateStr, "00:00", CHILE_OFFSET);
+  var endOfDay   = makeChileTime(dateStr, "23:59", CHILE_OFFSET);
+
+  // Calcular día de la semana a partir de la fecha (sin depender de la TZ del servidor)
+  var parts = dateStr.split('-').map(Number);
+  var tempDate = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
+  // Chile está entre UTC-3 y UTC-4; para el día de semana basta con usar la fecha local
+  var dayOfWeek = new Date(dateStr + "T12:00:00" + CHILE_OFFSET).getDay();
+
+  let result = { ok: true, date: dateStr, courts: {}, playable: {}, busyLabels: {} };
 
   // Leer horarios_especiales para detectar canchas con slots libres todo el día
   const specialCourts = {};
@@ -979,23 +995,30 @@ function getAvailableSlots(dateStr) {
       continue;
     }
     
-    // Filtrar para considerar ocupados SOLO los bloques de reservas de UCTenis o desafíos de ranking
-    let busyTimes = events
-      .filter(e => {
-        const title = (e.getTitle() || '').toLowerCase();
-        let isBusy = title.includes('reserva uctenis') || title.includes('desafío ranking') || title.includes('desafio ranking');
-        
-        // Si no hay una fecha especial "all_day" configurada para esta cancha hoy,
-        // bloquear también las clases recurrentes de UCTenis.
+    // TODOS los eventos en el calendario de una cancha bloquean ese horario.
+    // Los calendarios de canchas son dedicados exclusivamente a reservas, por lo que
+    // cualquier evento —creado manualmente o por el sistema— debe marcar el slot como ocupado.
+    // El título solo se usa para asignar una etiqueta descriptiva al usuario (ej: "Clases UCTenis").
+    let busyTimes = [];
+    events.forEach(e => {
+      const rawTitle = e.getTitle() || '';
+      const title = rawTitle.toLowerCase();
+      let busyLabel = '';
+
+      // Detectar etiqueta descriptiva según el título del evento
+      if (title.includes('clases uctenis') || title.includes('clase uctenis')) {
+        // Solo mostrar como "Clases UCTenis" si no hay override all_day que lo libere
         if (!specialCourts[courtKey]) {
-          isBusy = isBusy || title.includes('clases uctenis') || title.includes('clase uctenis');
+          busyLabel = 'Clases UCTenis';
         }
-        return isBusy;
-      })
-      .map(e => ({
+      }
+
+      busyTimes.push({
         start: e.getStartTime().getTime(),
-        end: e.getEndTime().getTime()
-      }));
+        end: e.getEndTime().getTime(),
+        label: busyLabel
+      });
+    });
     
     // Obtener los slots candidatos para esta cancha y este día específico de la semana
     // Si esta cancha tiene un override de horario especial (all_day), usar TODOS los slots de CONFIG.SLOTS
@@ -1015,22 +1038,25 @@ function getAvailableSlots(dateStr) {
     
     // Guardamos la lista de todas las franjas "jugables" definidas para este día
     result.playable[courtKey] = candidateSlots;
+    result.busyLabels[courtKey] = {};
     
     let availableSlots = [];
     candidateSlots.forEach(slot => {
-      let [h, m] = slot.split(':').map(Number);
-      let slotStart = new Date(dateStr + "T00:00:00-04:00");
-      slotStart.setHours(h, m, 0, 0);
+      // ✅ FIX: construir la hora con ISO string y offset Chile para evitar
+      //    que setHours() use UTC del servidor en vez de la hora local de Chile.
+      let slotStart = makeChileTime(dateStr, slot, CHILE_OFFSET);
+      let slotEnd   = new Date(slotStart.getTime() + 90 * 60000); // +1.5 horas
       
-      let slotEnd = new Date(slotStart.getTime() + 90 * 60000); // +1.5 horas
-      
-      // Comprobar si el bloque se superpone con algún evento
-      let isBusy = busyTimes.some(b => {
+      // Comprobar si el bloque se superpone con algún evento y guardar etiqueta si aplica
+      let busyMatch = busyTimes.find(b => {
         return (slotStart.getTime() < b.end && slotEnd.getTime() > b.start);
       });
       
-      if (!isBusy) {
+      if (!busyMatch) {
         availableSlots.push(slot);
+      } else if (busyMatch.label) {
+        // Guardar etiqueta descriptiva del motivo del bloqueo
+        result.busyLabels[courtKey][slot] = busyMatch.label;
       }
     });
     
@@ -1053,9 +1079,9 @@ function createBooking(data) {
   let calendar = CalendarApp.getCalendarById(calId);
   
   // 3. Calcular tiempos
-  let [h, m] = data.slot.split(':').map(Number);
-  let startTime = new Date(data.date + "T00:00:00-04:00");
-  startTime.setHours(h, m, 0, 0);
+  // ✅ FIX: construir con ISO string y offset Chile para que el timestamp sea correcto.
+  //    setHours() usaría UTC del servidor de Apps Script, no la hora de Chile.
+  let startTime = makeChileTime(data.date, data.slot, "-04:00");
   let endTime = new Date(startTime.getTime() + 90 * 60000); // 1.5 hrs
   
   // 4. Doble validación: verificar que nadie haya tomado el bloque en los últimos segundos
