@@ -2,7 +2,7 @@
 
 if (typeof window.CONFIG === 'undefined') {
   window.CONFIG = {
-    API_URL: "https://script.google.com/macros/s/AKfycbwMDM2xSfPgSSHpgj4Kg7ffl7DxWAWdCVugo5UBJr0aDH0lNfUl0NxXlz6DCr6LDZ86/exec"
+    API_URL: "https://script.google.com/macros/s/AKfycby5DSHQ4sagpZmXsmnHuuMEVt3z_utLsm5K2FU5Qw7weiAxamdhon1g9Z8EyqNlAYLi/exec"
   };
 }
 
@@ -43,8 +43,8 @@ const FIREBASE_COLLECTIONS = {
   challenges: 'ranking_challenges'
 };
 
-const DB_FIREBASE_ADMIN_EMAILS = ['uctenisclub@gmail.com'];
-const DB_PURE_ADMIN_EMAILS = ['uctenisclub@gmail.com'];
+const DB_FIREBASE_ADMIN_EMAILS = ['uctenisclub@gmail.com', 'dsilva@uct.cl'];
+const DB_PURE_ADMIN_EMAILS     = ['uctenisclub@gmail.com', 'dsilva@uct.cl'];
 
 function normalizeEmailForDb(email) {
   return String(email || '').trim().toLowerCase();
@@ -56,6 +56,21 @@ function cleanFirestoreData(data) {
     if (value !== undefined) out[key] = value;
   });
   return out;
+}
+
+function hasRecordedChallengeResult(challenge) {
+  return Boolean(
+    String(challenge?.marcador || '').trim() ||
+    String(challenge?.ganadorId || '').trim()
+  );
+}
+
+function normalizeChallengeRecord(challenge) {
+  const normalized = { ...(challenge || {}) };
+  if (hasRecordedChallengeResult(normalized) && normalized.status !== 'eliminado') {
+    normalized.status = 'completado';
+  }
+  return normalized;
 }
 
 function makeFirebaseDocId(value, prefix = 'doc') {
@@ -185,21 +200,7 @@ const DB = {
     const cloudPlayer = await this.findPlayerByEmailCloud(email);
     if (cloudPlayer) return { ok: true, source: 'firebase', player: cloudPlayer };
 
-    // 4. Consultar a la API de Google Sheets a través de Apps Script
-    if (window.CONFIG && window.CONFIG.API_URL) {
-      try {
-        const params = new URLSearchParams({ action: 'validate_member', email: email.toLowerCase().trim() });
-        const res = await fetch(`${window.CONFIG.API_URL}?${params.toString()}`);
-        const data = await res.json();
-        if (data.ok) {
-          return { ok: true, source: 'sheets', player: data.player };
-        }
-      } catch (err) {
-        console.warn('Error validando miembro contra la API de Sheets:', err);
-      }
-    }
-
-    return { ok: false, msg: 'Acceso restringido a jugadores UCTenis registrados en Firebase o Google Sheets.' };
+    return { ok: false, msg: 'Acceso restringido a jugadores UCTenis registrados en Firebase.' };
   },
 
   async registerUserAPI(data) {
@@ -249,19 +250,20 @@ const DB = {
       const localUsers = this.getUsers();
       let localUser = localUsers.find(u => u.email.toLowerCase() === user.email.toLowerCase());
 
-      if (localUser) {
+      const cloudPlayer = validation.player || await this.findPlayerByEmailCloud(user.email);
+      if (cloudPlayer) {
+        localUser = playerToSessionUser(cloudPlayer, {
+          ...(localUser || {}),
+          email: user.email,
+          nombre: user.displayName || cloudPlayer.nombre || (localUser && localUser.nombre) || '',
+          foto: user.photoURL || cloudPlayer.foto || (localUser && localUser.foto) || ''
+        });
+        this.upsertUserLocal(localUser);
         localStorage.setItem('uctenis_session', JSON.stringify(localUser));
         return { ok: true, user: localUser, isNew: false };
       }
 
-      const cloudPlayer = validation.player || await this.findPlayerByEmailCloud(user.email);
-      if (cloudPlayer) {
-        localUser = playerToSessionUser(cloudPlayer, {
-          email: user.email,
-          nombre: user.displayName || cloudPlayer.nombre || '',
-          foto: user.photoURL || cloudPlayer.foto || ''
-        });
-        this.upsertUserLocal(localUser);
+      if (localUser) {
         localStorage.setItem('uctenis_session', JSON.stringify(localUser));
         return { ok: true, user: localUser, isNew: false };
       }
@@ -307,15 +309,19 @@ const DB = {
     const localUsers = this.getUsers();
     let localUser = localUsers.find(u => u.email.toLowerCase() === email.toLowerCase());
 
-    if (localUser) {
+    const cloudPlayer = validation.player || await this.findPlayerByEmailCloud(email);
+    if (cloudPlayer) {
+      localUser = playerToSessionUser(cloudPlayer, {
+        ...(localUser || {}),
+        email,
+        nombre: nombre || cloudPlayer.nombre || (localUser && localUser.nombre) || ''
+      });
+      this.upsertUserLocal(localUser);
       localStorage.setItem('uctenis_session', JSON.stringify(localUser));
       return { ok: true, user: localUser, isNew: false };
     }
 
-    const cloudPlayer = validation.player || await this.findPlayerByEmailCloud(email);
-    if (cloudPlayer) {
-      localUser = playerToSessionUser(cloudPlayer, { email, nombre: nombre || cloudPlayer.nombre || '' });
-      this.upsertUserLocal(localUser);
+    if (localUser) {
       localStorage.setItem('uctenis_session', JSON.stringify(localUser));
       return { ok: true, user: localUser, isNew: false };
     }
@@ -380,9 +386,32 @@ const DB = {
     if (!normalized || !this.isCloudConfigured()) return null;
 
     try {
-      const snapshot = await firebaseDb
+      // 1. Intentar buscar por emailLower (todo en minúsculas)
+      let snapshot = await firebaseDb
         .collection(FIREBASE_COLLECTIONS.players)
         .where('emailLower', '==', normalized)
+        .limit(1)
+        .get();
+      if (!snapshot.empty) {
+        const doc = snapshot.docs[0];
+        return { id: doc.id, ...doc.data() };
+      }
+
+      // 2. Intentar buscar por email (coincidencia exacta del valor original)
+      snapshot = await firebaseDb
+        .collection(FIREBASE_COLLECTIONS.players)
+        .where('email', '==', email)
+        .limit(1)
+        .get();
+      if (!snapshot.empty) {
+        const doc = snapshot.docs[0];
+        return { id: doc.id, ...doc.data() };
+      }
+
+      // 3. Intentar buscar por email (coincidencia con el normalizado en minúsculas)
+      snapshot = await firebaseDb
+        .collection(FIREBASE_COLLECTIONS.players)
+        .where('email', '==', normalized)
         .limit(1)
         .get();
       if (!snapshot.empty) {
@@ -461,12 +490,18 @@ const DB = {
     return this.savePlayerCloud(patch, actor);
   },
 
+  async deletePlayerCloud(id) {
+    if (!this.isCloudConfigured()) throw new Error('Firestore no está disponible.');
+    if (!id) throw new Error('Se requiere el ID del jugador para eliminarlo.');
+    await firebaseDb.collection(FIREBASE_COLLECTIONS.players).doc(id).delete();
+  },
+
   // ──────────────── FIREBASE: DESAFÍOS ────────────────
   async getChallengesCloud() {
     if (!this.isCloudConfigured()) throw new Error('Firestore no está disponible.');
     const snapshot = await firebaseDb.collection(FIREBASE_COLLECTIONS.challenges).get();
     return snapshot.docs
-      .map(doc => ({ id: doc.id, ...doc.data() }))
+      .map(doc => normalizeChallengeRecord({ id: doc.id, ...doc.data() }))
       .sort((a, b) => (a.fecha || '').localeCompare(b.fecha || '') || (b.creado || '').localeCompare(a.creado || ''));
   },
 
@@ -474,13 +509,13 @@ const DB = {
     if (!this.isCloudConfigured()) throw new Error('Firestore no está disponible.');
     const id = challenge.id || makeFirebaseDocId(`challenge-${Date.now()}`, 'challenge');
     const now = new Date().toISOString();
-    const data = cleanFirestoreData({
+    const data = cleanFirestoreData(normalizeChallengeRecord({
       ...challenge,
       id,
       status: challenge.status || 'pendiente',
       creado: challenge.creado || now,
       actualizado: now
-    });
+    }));
     await firebaseDb.collection(FIREBASE_COLLECTIONS.challenges).doc(id).set(data, { merge: true });
     return data;
   },
@@ -488,6 +523,12 @@ const DB = {
   async updateChallengeCloud(id, patch) {
     const current = this.getChallenges().find(challenge => challenge.id === id) || {};
     return this.saveChallengeCloud({ ...current, ...patch, id });
+  },
+
+  async deleteChallengeCloud(id) {
+    if (!this.isCloudConfigured()) throw new Error('Firestore no está disponible.');
+    if (!id) throw new Error('Se requiere el ID del desafío para eliminarlo.');
+    await firebaseDb.collection(FIREBASE_COLLECTIONS.challenges).doc(id).delete();
   },
 
   // ──────────────── RANKING ────────────────
@@ -501,7 +542,7 @@ const DB = {
   },
   recalcRanking(genero) {
     const users = this.getUsers().filter(u => u.genero === genero);
-    const challenges = this.getChallenges().filter(c => c.status === 'completado' && c.genero === genero);
+    const challenges = this.getChallenges().filter(c => c.status === 'completado' && c.genero === genero && c.tipo !== 'amistoso');
 
     // Build ladder baseline from users. If a user has an explicit position (pos or posicion), respect it.
     const ranking = users.map((user, index) => {
@@ -548,11 +589,30 @@ const DB = {
   },
 
   // ──────────────── DESAFÍOS ────────────────
+  // Un desafío válido debe tener: id, status, creado, y al menos retadorId + retadoId
+  // (o en registros muy viejos, al menos los nombres de ambos jugadores)
+  isValidChallenge(c) {
+    if (!c || !c.id || c.id === 'ID') return false;
+    if (c.status === 'eliminado') return false;
+    if (!c.creado || String(c.creado).trim() === '') return false;
+    // Debe tener IDs (registros modernos) o al menos nombres de ambos jugadores (registros viejos)
+    const hasIds = c.retadorId && c.retadoId;
+    const hasNames = c.retadorNombre && c.retadoNombre &&
+                     c.retadorNombre !== 'RETADOR' && c.retadoNombre !== 'RETADO' &&
+                     c.retadorNombre !== 'ID' && c.retadoNombre !== 'ID';
+    return Boolean(hasIds || hasNames);
+  },
   getChallenges() {
-    return JSON.parse(localStorage.getItem('uctenis_challenges') || '[]');
+    const list = JSON.parse(localStorage.getItem('uctenis_challenges') || '[]');
+    return list
+      .map(normalizeChallengeRecord)
+      .filter(c => this.isValidChallenge(c));
   },
   saveChallenges(list) {
-    localStorage.setItem('uctenis_challenges', JSON.stringify(list));
+    const filtered = list
+      .map(normalizeChallengeRecord)
+      .filter(c => this.isValidChallenge(c));
+    localStorage.setItem('uctenis_challenges', JSON.stringify(filtered));
   },
   createChallenge(retadorId, retadoId, genero, fecha, cancha) {
     const challenges = this.getChallenges();
@@ -563,6 +623,7 @@ const DB = {
       status: 'pendiente', // pendiente | aceptado | rechazado | completado
       marcador: null,
       ganadorId: null,
+      tipo: 'ranking',
       creado: new Date().toISOString()
     };
     challenges.push(nuevo);
@@ -576,9 +637,9 @@ const DB = {
     });
     this.saveChallenges(list);
   },
-  submitResult(id, marcador, ganadorId) {
+  submitResult(id, marcador, ganadorId, tipo) {
     const list = this.getChallenges().map(c => {
-      if (c.id === id) return { ...c, status: 'completado', marcador, ganadorId };
+      if (c.id === id) return { ...c, status: 'completado', marcador, ganadorId, tipo: tipo || c.tipo || 'ranking' };
       return c;
     });
     this.saveChallenges(list);
@@ -647,7 +708,14 @@ const DB = {
 
   // Nota: Para usar la versión real que agenda en Google Calendar, se llama a esta función
   async createBookingAPI(userId, courtId, fecha, slot) {
-    const user = this.getUsers().find(u => u.id === userId);
+    // Buscar usuario en localStorage; si no existe, intentar desde sesión activa
+    let user = this.getUsers().find(u => u.id === userId);
+    if (!user) {
+      const session = this.getSession();
+      if (session && (session.id === userId || !userId)) {
+        user = session;
+      }
+    }
     if (!user) return { ok: false, msg: 'Usuario no encontrado' };
 
     try {
@@ -669,7 +737,7 @@ const DB = {
 
       // Si fue exitoso en Google, lo guardamos localmente también
       const bookings = this.getBookings();
-      const b = { id: data.eventId || Date.now().toString(), userId, courtId, fecha, slot, status: 'confirmada', creado: new Date().toISOString() };
+      const b = { id: data.eventId || Date.now().toString(), userId: user.id || userId, courtId, fecha, slot, status: 'confirmada', creado: new Date().toISOString() };
       bookings.push(b);
       this.saveBookings(bookings);
       return { ok: true, booking: b };

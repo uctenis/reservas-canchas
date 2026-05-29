@@ -9,8 +9,8 @@
   <meta property="og:description" content="Revisa el ranking masculino y femenino de UCTenis y gestiona tus desafíos.">
   <meta property="og:image" content="https://uctenis.github.io/reservas-canchas/logo_uctenis_v03.png">
   <link rel="icon" href="logo_uctenis_v03.png" type="image/png">
-  <link rel="stylesheet" href="style.css">
-  <link rel="stylesheet" href="ranking.css?v=11">
+  <link rel="stylesheet" href="style.css?v=20260528_v10">
+  <link rel="stylesheet" href="ranking.css?v=20260528_v10">
 </head>
 <body>
 <div class="main-container ranking-page">
@@ -46,8 +46,10 @@
       </div>
       <div class="rank-actions">
         <span class="rank-status" id="rankApiStatus" aria-live="polite">Conectando...</span>
+        <button class="btn-primary pulse-confirm" id="btnConfirmRankingOrder" type="button" style="display:none; background:#10b981; border:none; border-radius:8px; font-weight:800; padding:8px 16px; font-size:0.85rem; width:auto; min-height:auto; cursor:pointer; color:#0f172a; align-items:center; justify-content:center; gap:6px;">💾 Guardar Orden</button>
         <button class="btn-admin-panel" id="btnAdminPlayers" type="button" data-action="open-admin" style="display:none">Administrar jugadores</button>
         <button class="btn-challenge-new" id="btnNuevoDesafio" type="button" style="display:none">Nuevo desafío</button>
+        <button class="btn-challenge-new" id="btnNuevoAmistoso" type="button" style="display:none; background:#64748b; color:#fff; border-color:#64748b;">Registrar Amistoso</button>
       </div>
     </div>
 
@@ -271,6 +273,28 @@
     <p class="modal-kicker">Resultado</p>
     <h3>Ingresar resultado</h3>
     <form id="fScore">
+      <div id="scoreFriendlyFields" style="display:none; margin-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 15px;">
+        <div class="form-group" style="margin-bottom: 15px;">
+          <label for="scoreOpponent" style="display:block; font-weight:500; margin-bottom:5px; font-size:0.85rem; color:rgba(255,255,255,0.7);">Oponente</label>
+          <select id="scoreOpponent" style="width:100%; padding:8px 12px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); border-radius:6px; color:#fff; outline:none; font-size:0.9rem;"></select>
+        </div>
+        <div class="form-row" style="display:flex; gap:15px; margin-bottom:15px;">
+          <div class="form-group" style="flex:1;">
+            <label for="scoreDate" style="display:block; font-weight:500; margin-bottom:5px; font-size:0.85rem; color:rgba(255,255,255,0.7);">Fecha del partido</label>
+            <input type="date" id="scoreDate" style="width:100%; padding:8px 12px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); border-radius:6px; color:#fff; outline:none; font-size:0.9rem;">
+          </div>
+          <div class="form-group" style="flex:1;">
+            <label for="scoreCourt" style="display:block; font-weight:500; margin-bottom:5px; font-size:0.85rem; color:rgba(255,255,255,0.7);">Cancha</label>
+            <select id="scoreCourt" style="width:100%; padding:8px 12px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); border-radius:6px; color:#fff; outline:none; font-size:0.9rem;">
+              <option value="cec1">CEC 1 (Arcilla)</option>
+              <option value="cec2">CEC 2 (Arcilla)</option>
+              <option value="cjp1">CJP 1 (Asfalto)</option>
+              <option value="cjp2">CJP 2 (Asfalto)</option>
+              <option value="otro">Otra Cancha</option>
+            </select>
+          </div>
+        </div>
+      </div>
       <p id="scorePlayers" class="score-players"></p>
       <div class="score-board">
         <div class="score-board-header">
@@ -309,6 +333,13 @@
           <input type="number" id="scoreTB3B" class="score-cell score-input" min="0" max="30" step="1" placeholder="5">
         </div>
       </div>
+      <div class="form-group" id="scoreTypeContainer" style="margin-top: 15px; margin-bottom: 15px;">
+        <label for="scoreType" style="display:block; font-weight:500; margin-bottom:5px; font-size:0.85rem; color:rgba(255,255,255,0.7);">Tipo de Partido</label>
+        <select id="scoreType" style="width:100%; padding:8px 12px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); border-radius:6px; color:#fff; outline:none; font-size:0.9rem;">
+          <option value="ranking">Oficial (Ranking)</option>
+          <option value="amistoso">Amistoso</option>
+        </select>
+      </div>
       <div class="score-summary">
         <div class="score-summary-info">Ingresa el resultado de cada set. Si el set termina 7-6, completa el tie-break en el cuadro correspondiente.</div>
         <div id="scoreWinnerText" class="score-winner-text">Ganador: <strong>Sin resultado</strong></div>
@@ -327,122 +358,140 @@
 <div class="modal-overlay" id="adminModal" aria-hidden="true">
   <div class="modal-content admin-modal">
     <button class="modal-close-btn" type="button" data-close-modal="adminModal" aria-label="Cerrar">×</button>
-    <div class="admin-modal-grid">
-      <div class="admin-form-column">
-        <p class="modal-kicker">Administrador</p>
-        <h3>Editar jugador</h3>
-        <form id="fAdminPlayer">
-          <input type="hidden" id="adminPlayerId">
-          <div class="form-row">
-            <div class="form-group">
-              <label for="adminNombre">Nombre completo</label>
-              <input type="text" id="adminNombre" required>
-            </div>
-            <div class="form-group">
-              <label for="adminEmail">Correo</label>
-              <input type="email" id="adminEmail" placeholder="jugador@uct.cl">
-            </div>
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label for="adminGenero">Ranking</label>
-              <select id="adminGenero" required>
-                <option value="M">Masculino</option>
-                <option value="F">Femenino</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label for="adminPosicion">Posición</label>
-              <input type="number" id="adminPosicion" min="1" placeholder="Al final">
-            </div>
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label for="adminEstado">Estado</label>
-              <select id="adminEstado">
-                <option value="activo">Participa en escalerilla</option>
-                <option value="inactivo">Inactivo del ranking</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label for="adminTelefono">Teléfono (WhatsApp)</label>
-              <input type="tel" id="adminTelefono" placeholder="+56912345678" value="+569">
-            </div>
-          </div>
-          <div class="form-group">
-            <label for="adminNotas">Notas internas</label>
-            <input type="text" id="adminNotas" placeholder="Opcional">
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label for="adminFechaNacimiento">Fecha nacimiento</label>
-              <input type="date" id="adminFechaNacimiento">
-            </div>
-            <div class="form-group">
-              <label for="adminCategoria">Categoría</label>
-              <select id="adminCategoria">
-                <option value="Primera">Primera</option>
-                <option value="Segunda">Segunda</option>
-                <option value="Tercera">Tercera</option>
-                <option value="Cuarta">Cuarta</option>
-                <option value="Principiante">Principiante</option>
-              </select>
-            </div>
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label for="adminMano">Mano hábil</label>
-              <select id="adminMano">
-                <option value="Derecha">Derecha</option>
-                <option value="Izquierda">Izquierda</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label for="adminReves">Revés</label>
-              <select id="adminReves">
-                <option value="Dos manos">Dos manos</option>
-                <option value="Una mano">Una mano</option>
-              </select>
-            </div>
-          </div>
-          <div class="form-group">
-            <label for="adminFoto">Foto actual o URL</label>
-            <input type="text" id="adminFoto" placeholder="fotos/m001.png o URL">
-          </div>
-          <div class="form-group">
-            <label for="adminPhotoFile">Adjuntar nueva foto</label>
-            <input type="file" id="adminPhotoFile" accept="image/png,image/jpeg,image/webp">
-            <small class="field-hint">JPG, PNG o WEBP. Se optimiza antes de guardar.</small>
-          </div>
-          <p class="auth-error" id="adminErr" aria-live="polite"></p>
-          <p class="admin-success-message" id="adminSuccess" aria-live="polite"></p>
-          <div class="admin-form-actions">
-            <button type="submit" class="btn-primary" id="btnAdminSave">Guardar jugador</button>
-            <button type="button" class="btn-secondary" id="btnAdminClear" data-action="admin-clear-form">Limpiar</button>
-          </div>
-          <div class="admin-maintenance" style="margin-top: 24px; padding-top: 16px; border-top: 1px solid rgba(255, 255, 255, 0.1);">
-            <p class="modal-kicker">Mantenimiento</p>
-            <button type="button" class="btn-warning" id="btnAdminSeed" style="width: 100%; padding: 10px; background-color: #d97706; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;" onclick="manualSeedDatabase(event)">
-              🌱 Sembrar Jugadores Oficiales
-            </button>
-          </div>
-        </form>
-      </div>
-      <div class="admin-list-column">
-        <div class="list-heading" style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px;">
-          <div>
-            <p class="modal-kicker">Jugadores</p>
-            <p class="admin-help-text">Lista deslizable. Edita cualquier ficha y confirma los cambios.</p>
-          </div>
-          <button type="button" class="btn-primary" id="btnExportPlayers" style="padding: 8px 14px; font-size: 0.76rem; background: #10b981; border: none; border-radius: 8px; font-weight: 800; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 4px 12px rgba(16,185,129,0.22);" onclick="exportPlayersToExcel(event)">
+    
+    <!-- Vista Listado de Jugadores -->
+    <div id="adminListView" class="admin-subview">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 12px; gap: 12px; flex-wrap: wrap;">
+        <div>
+          <p class="modal-kicker">Administrador</p>
+          <h3 style="margin: 0; font-size: 1.28rem;">Administración de Jugadores</h3>
+        </div>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+          <button type="button" class="btn-primary" id="btnAdminCreatePlayer" style="padding: 8px 14px; font-size: 0.78rem; font-weight: 800; border-radius: 8px; cursor: pointer; width: auto; min-height: auto;">
+            ➕ Agregar Jugador
+          </button>
+          <button type="button" class="btn-primary" id="btnExportPlayers" style="padding: 8px 14px; font-size: 0.76rem; background: #10b981; border: none; border-radius: 8px; font-weight: 800; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 4px 12px rgba(16,185,129,0.22); width: auto; min-height: auto;" onclick="exportPlayersToExcel(event)">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="flex-shrink:0;"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg> Exportar
           </button>
+          <button type="button" class="btn-primary" id="btnResetSystem" style="padding: 8px 14px; font-size: 0.76rem; background: #ef4444; border: none; border-radius: 8px; font-weight: 800; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 4px 12px rgba(239,68,68,0.22); width: auto; min-height: auto;" onclick="resetSystemData(event)">
+            🔄 Reiniciar Temporada
+          </button>
         </div>
-        <div class="admin-search-row">
-          <input type="search" id="adminPlayerSearch" placeholder="Buscar jugador por nombre o correo" aria-label="Buscar jugadores">
-        </div>
-        <div class="admin-player-list" id="adminPlayerList"></div>
       </div>
+      <div class="admin-search-row" style="margin-bottom: 12px;">
+        <input type="search" id="adminPlayerSearch" placeholder="Buscar jugador por nombre o correo" aria-label="Buscar jugadores">
+      </div>
+      <div class="admin-player-list" id="adminPlayerList" style="max-height: 480px; overflow-y: auto; padding-right: 4px;"></div>
+    </div>
+
+    <!-- Vista Formulario de Jugador -->
+    <div id="adminFormView" class="admin-subview hidden">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 12px;">
+        <div>
+          <p class="modal-kicker">Administrador</p>
+          <h3 id="adminFormTitle" style="margin: 0; font-size: 1.28rem;">Editar jugador</h3>
+        </div>
+        <button type="button" class="btn-secondary" id="btnAdminBackToList" style="padding: 8px 14px; font-size: 0.78rem; font-weight: 800; border-radius: 8px; cursor: pointer; min-height: auto; width: auto;">
+          🔙 Volver a la lista
+        </button>
+      </div>
+      <form id="fAdminPlayer">
+        <input type="hidden" id="adminPlayerId">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="adminNombre">Nombre completo</label>
+            <input type="text" id="adminNombre" required>
+          </div>
+          <div class="form-group">
+            <label for="adminEmail">Correo</label>
+            <input type="email" id="adminEmail" placeholder="jugador@uct.cl">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="adminGenero">Ranking</label>
+            <select id="adminGenero" required>
+              <option value="M">Masculino</option>
+              <option value="F">Femenino</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="adminPosicion">Posición</label>
+            <input type="number" id="adminPosicion" min="1" placeholder="Al final">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="adminEstado">Estado</label>
+            <select id="adminEstado">
+              <option value="activo">Participa en escalerilla</option>
+              <option value="inactivo">Inactivo del ranking</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="adminTelefono">Teléfono (WhatsApp)</label>
+            <input type="tel" id="adminTelefono" placeholder="+56912345678" value="+569">
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="adminNotas">Notas internas</label>
+          <input type="text" id="adminNotas" placeholder="Opcional">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="adminFechaNacimiento">Fecha nacimiento</label>
+            <input type="date" id="adminFechaNacimiento">
+          </div>
+          <div class="form-group">
+            <label for="adminCategoria">Categoría</label>
+            <select id="adminCategoria">
+              <option value="Primera">Primera</option>
+              <option value="Segunda">Segunda</option>
+              <option value="Tercera">Tercera</option>
+              <option value="Cuarta">Cuarta</option>
+              <option value="Principiante">Principiante</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="adminMano">Mano hábil</label>
+            <select id="adminMano">
+              <option value="Derecha">Derecha</option>
+              <option value="Izquierda">Izquierda</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="adminReves">Revés</label>
+            <select id="adminReves">
+              <option value="Dos manos">Dos manos</option>
+              <option value="Una mano">Una mano</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="adminFoto">Foto actual o URL</label>
+          <input type="text" id="adminFoto" placeholder="fotos/m001.png o URL">
+        </div>
+        <div class="form-group">
+          <label for="adminPhotoFile">Adjuntar nueva foto</label>
+          <input type="file" id="adminPhotoFile" accept="image/png,image/jpeg,image/webp">
+          <small class="field-hint">JPG, PNG o WEBP. Se optimiza antes de guardar.</small>
+        </div>
+        <p class="auth-error" id="adminErr" aria-live="polite"></p>
+        <p class="admin-success-message" id="adminSuccess" aria-live="polite"></p>
+        <div class="admin-form-actions" style="display: flex; gap: 8px; flex-wrap: wrap;">
+          <button type="submit" class="btn-primary" id="btnAdminSave" style="flex: 1 1 0; min-height: 44px;">Guardar jugador</button>
+          <button type="button" class="btn-secondary" id="btnAdminClear" data-action="admin-clear-form" style="flex: 1 1 0; min-height: 44px;">Limpiar</button>
+          <button type="button" class="btn-danger" id="btnAdminDeletePlayerPhysical" style="background-color: #ef4444; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; display: none; padding: 10px 14px; font-size: 0.94rem; min-height: 44px; align-items: center; justify-content: center; gap: 6px;">🗑️ Eliminar Jugador</button>
+        </div>
+        <div class="admin-maintenance" style="margin-top: 24px; padding-top: 16px; border-top: 1px solid rgba(255, 255, 255, 0.1);">
+          <p class="modal-kicker">Mantenimiento</p>
+          <button type="button" class="btn-warning" id="btnAdminSeed" style="width: 100%; padding: 10px; background-color: #d97706; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;" onclick="manualSeedDatabase(event)">
+            🌱 Sembrar Jugadores Oficiales
+          </button>
+        </div>
+      </form>
     </div>
   </div>
 </div> 
@@ -450,7 +499,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-<script src="db.js?v=20260526_v5"></script>
+<script src="db.js?v=20260528_v10"></script>
 
 <script>
 const GENDERS = {
@@ -458,10 +507,10 @@ const GENDERS = {
   F: { label: 'Femenino', apiKeys: ['female', 'mujeres', 'femenino', 'women'], fallbackAvatar: 'fotos/default_avatar_m.png' }
 };
 const ADMIN_IDENTITIES = {
-  emails: ['uctenisclub@gmail.com'],
-  names: ['UCTenis Club']
+  emails: ['uctenisclub@gmail.com', 'dsilva@uct.cl'],
+  names: ['UCTenis Club', 'David Silva']
 };
-const PURE_ADMIN_EMAILS = ['uctenisclub@gmail.com'];
+const PURE_ADMIN_EMAILS = ['uctenisclub@gmail.com', 'dsilva@uct.cl'];
 const CLOUD_TIMEOUT_MS = 4500;
 
 const OFFICIAL_STATIC_RANKING = {
@@ -546,6 +595,7 @@ function setupEvents() {
   });
 
   document.getElementById('btnNuevoDesafio').addEventListener('click', () => openChallengeModal(null));
+  document.getElementById('btnNuevoAmistoso').addEventListener('click', () => openScoreModal(null));
   document.getElementById('btnGoogleLogin').addEventListener('click', handleGoogleLogin);
   document.getElementById('btnMockLogin').addEventListener('click', handleMockLogin);
   document.getElementById('fCompleteProfile').addEventListener('submit', handleCompleteProfile);
@@ -553,6 +603,7 @@ function setupEvents() {
   document.getElementById('chal_fecha').addEventListener('change', updateChallengeAvailableSlots);
   document.getElementById('chal_cancha').addEventListener('change', updateChallengeAvailableSlots);
   document.getElementById('fScore').addEventListener('submit', submitScore);
+  document.getElementById('scoreOpponent').addEventListener('change', updateScoreMatchState);
   document.querySelectorAll('.score-input').forEach(input => {
     input.addEventListener('input', normalizeScoreEntry);
     input.addEventListener('input', updateScoreMatchState);
@@ -561,6 +612,30 @@ function setupEvents() {
   document.getElementById('fAdminPlayer').addEventListener('submit', submitAdminPlayer);
   const adminSearch = document.getElementById('adminPlayerSearch');
   if (adminSearch) adminSearch.addEventListener('input', renderAdminPlayerList);
+
+  document.getElementById('btnAdminCreatePlayer').addEventListener('click', () => {
+    resetAdminForm();
+    document.getElementById('adminFormTitle').textContent = 'Agregar nuevo jugador';
+    document.getElementById('btnAdminDeletePlayerPhysical').style.display = 'none';
+    document.getElementById('adminListView').classList.add('hidden');
+    document.getElementById('adminFormView').classList.remove('hidden');
+  });
+
+  document.getElementById('btnAdminBackToList').addEventListener('click', () => {
+    document.getElementById('adminFormView').classList.add('hidden');
+    document.getElementById('adminListView').classList.remove('hidden');
+    renderAdminPlayerList();
+  });
+
+  document.getElementById('btnAdminDeletePlayerPhysical').addEventListener('click', () => {
+    const id = document.getElementById('adminPlayerId').value;
+    if (id) deletePlayerPhysicalFromAdmin(id);
+  });
+
+  const btnConfirmOrder = document.getElementById('btnConfirmRankingOrder');
+  if (btnConfirmOrder) {
+    btnConfirmOrder.addEventListener('click', confirmRankingOrder);
+  }
 
   document.addEventListener('submit', event => {
     if (event.target.id === 'fOwnProfile') submitOwnProfile(event);
@@ -586,7 +661,13 @@ function setupEvents() {
     if (clearAdmin) resetAdminForm();
 
     const editAdminPlayer = event.target.closest('[data-action="admin-edit-player"]');
-    if (editAdminPlayer) fillAdminForm(editAdminPlayer.dataset.playerKey);
+    if (editAdminPlayer) {
+      fillAdminForm(editAdminPlayer.dataset.playerKey);
+      document.getElementById('adminFormTitle').textContent = 'Editar jugador';
+      document.getElementById('btnAdminDeletePlayerPhysical').style.display = 'inline-flex';
+      document.getElementById('adminListView').classList.add('hidden');
+      document.getElementById('adminFormView').classList.remove('hidden');
+    }
 
     const deleteAdminPlayer = event.target.closest('[data-action="admin-delete-player"]');
     if (deleteAdminPlayer) deletePlayerFromAdmin(deleteAdminPlayer.dataset.playerKey);
@@ -727,15 +808,22 @@ function isUserRetadorInChallenge(session, challenge) {
   if (!session || !challenge) return false;
   const player = getSessionPlayer(session);
   const sessionIds = [...new Set([session.id, player?.id, player?.localId].filter(Boolean))];
-  
-  if (sessionIds.includes(challenge.retadorId)) return true;
-  
-  if (session.email && challenge.retadorEmail && normalizeEmail(session.email) === normalizeEmail(challenge.retadorEmail)) return true;
-  if (player?.email && challenge.retadorEmail && normalizeEmail(player.email) === normalizeEmail(challenge.retadorEmail)) return true;
-  
-  if (session.nombre && challenge.retadorNombre && normalizeKey(session.nombre) === normalizeKey(challenge.retadorNombre)) return true;
-  if (player?.nombre && challenge.retadorNombre && normalizeKey(player.nombre) === normalizeKey(challenge.retadorNombre)) return true;
-  
+
+  // 1. ID match (más confiable)
+  if (challenge.retadorId && sessionIds.some(id => id && id === challenge.retadorId)) return true;
+
+  // 2. Email match (solo si ambos tienen email)
+  const myEmail = normalizeEmail(session.email || player?.email || '');
+  const chalEmail = normalizeEmail(challenge.retadorEmail || '');
+  if (myEmail && chalEmail && myEmail === chalEmail) return true;
+
+  // 3. Nombre solo si NO hay ID ni email en el desafío (desafíos muy viejos)
+  if (!challenge.retadorId && !challenge.retadorEmail) {
+    const myName = normalizeKey(session.nombre || player?.nombre || '');
+    const chalName = normalizeKey(challenge.retadorNombre || '');
+    if (myName && chalName && myName === chalName) return true;
+  }
+
   return false;
 }
 
@@ -743,15 +831,22 @@ function isUserRetadoInChallenge(session, challenge) {
   if (!session || !challenge) return false;
   const player = getSessionPlayer(session);
   const sessionIds = [...new Set([session.id, player?.id, player?.localId].filter(Boolean))];
-  
-  if (sessionIds.includes(challenge.retadoId)) return true;
-  
-  if (session.email && challenge.retadoEmail && normalizeEmail(session.email) === normalizeEmail(challenge.retadoEmail)) return true;
-  if (player?.email && challenge.retadoEmail && normalizeEmail(player.email) === normalizeEmail(challenge.retadoEmail)) return true;
-  
-  if (session.nombre && challenge.retadoNombre && normalizeKey(session.nombre) === normalizeKey(challenge.retadoNombre)) return true;
-  if (player?.nombre && challenge.retadoNombre && normalizeKey(player.nombre) === normalizeKey(challenge.retadoNombre)) return true;
-  
+
+  // 1. ID match (más confiable)
+  if (challenge.retadoId && sessionIds.some(id => id && id === challenge.retadoId)) return true;
+
+  // 2. Email match (solo si ambos tienen email)
+  const myEmail = normalizeEmail(session.email || player?.email || '');
+  const chalEmail = normalizeEmail(challenge.retadoEmail || '');
+  if (myEmail && chalEmail && myEmail === chalEmail) return true;
+
+  // 3. Nombre solo si NO hay ID ni email en el desafío (desafíos muy viejos)
+  if (!challenge.retadoId && !challenge.retadoEmail) {
+    const myName = normalizeKey(session.nombre || player?.nombre || '');
+    const chalName = normalizeKey(challenge.retadoNombre || '');
+    if (myName && chalName && myName === chalName) return true;
+  }
+
   return false;
 }
 
@@ -832,38 +927,73 @@ function closeFloatingAlert() {
 }
 window.closeFloatingAlert = closeFloatingAlert;
 
+function rankingHasRecordedResult(challenge) {
+  return Boolean(
+    String(challenge?.marcador || '').trim() ||
+    String(challenge?.ganadorId || '').trim()
+  );
+}
+
+function rankingNormalizeChallenge(challenge) {
+  const normalized = { ...(challenge || {}) };
+  if (rankingHasRecordedResult(normalized) && normalized.status !== 'eliminado') {
+    normalized.status = 'completado';
+  }
+  return normalized;
+}
+
+function rankingChallengeTime(challenge) {
+  const raw = challenge?.actualizado || challenge?.updatedAt || challenge?.creado || challenge?.fecha || '';
+  const time = raw ? new Date(raw).getTime() : NaN;
+  return Number.isFinite(time) ? time : 0;
+}
+
+function rankingMergeChallengeRecords(current, incoming) {
+  const base = rankingNormalizeChallenge(current || {});
+  const next = rankingNormalizeChallenge(incoming || {});
+  const newer = rankingChallengeTime(next) >= rankingChallengeTime(base) ? next : base;
+  const older = newer === next ? base : next;
+  const merged = { ...older };
+
+  Object.entries(newer).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') {
+      merged[key] = value;
+    } else if (!(key in merged)) {
+      merged[key] = value;
+    }
+  });
+
+  if (rankingHasRecordedResult(base) || rankingHasRecordedResult(next)) {
+    const completed = rankingHasRecordedResult(next) ? next : base;
+    merged.status = 'completado';
+    merged.marcador = completed.marcador || merged.marcador;
+    merged.ganadorId = completed.ganadorId || merged.ganadorId;
+    merged.actualizado = completed.actualizado || merged.actualizado || new Date().toISOString();
+  }
+
+  return rankingNormalizeChallenge(merged);
+}
+
+function rankingMergeChallengeSources(sources) {
+  const byId = new Map();
+  sources.flat().filter(Boolean).forEach(challenge => {
+    const normalized = rankingNormalizeChallenge(challenge);
+    const key = normalized.id || `${normalized.retadorId || normalized.retadorNombre}-${normalized.retadoId || normalized.retadoNombre}-${normalized.fecha || normalized.creado}`;
+    byId.set(key, rankingMergeChallengeRecords(byId.get(key), normalized));
+  });
+  return Array.from(byId.values()).sort(sortChallenges);
+}
+
 async function syncChallengesFromCloud() {
-  let challenges = [];
-  let success = false;
+  // Firebase es la única fuente de verdad — Google Sheets eliminado
+  if (!DB.isCloudConfigured()) return;
 
-  if (DB.isCloudConfigured()) {
-    try {
-      challenges = await withTimeout(DB.getChallengesCloud(), CLOUD_TIMEOUT_MS, 'Firebase desafíos');
-      success = true;
-    } catch (error) {
-      console.warn('No se pudieron sincronizar los desafíos desde Firebase. Intentando Sheets...', error);
-    }
-  }
-
-  if (!success && window.CONFIG?.API_URL) {
-    try {
-      const res = await withTimeout(
-        fetch(`${window.CONFIG.API_URL}?action=get_challenges`),
-        CLOUD_TIMEOUT_MS,
-        'Google Sheets desafíos'
-      );
-      const data = await res.json();
-      if (data && data.ok && Array.isArray(data.challenges)) {
-        challenges = data.challenges;
-        success = true;
-      }
-    } catch (sheetErr) {
-      console.warn('No se pudieron sincronizar los desafíos desde Google Sheets:', sheetErr);
-    }
-  }
-
-  if (success) {
-    DB.saveChallenges(challenges);
+  try {
+    const cloudChallenges = await withTimeout(DB.getChallengesCloud(), CLOUD_TIMEOUT_MS, 'Firebase desafíos');
+    // Reemplazar localStorage con lo que viene de Firebase (fuente autoritativa)
+    DB.saveChallenges(cloudChallenges);
+  } catch (error) {
+    console.warn('No se pudieron sincronizar los desafíos desde Firebase, usando caché local.', error);
   }
 }
 
@@ -1087,6 +1217,11 @@ function renderRanking() {
   const list = rankingState.lists[gender] || [];
   const tbody = document.getElementById('rankBody');
 
+  const thPlayerHeader = document.querySelector('#rankTable th:nth-child(2)');
+  if (thPlayerHeader) {
+    thPlayerHeader.textContent = gender === 'F' ? 'Jugadora' : 'Jugador';
+  }
+
   document.getElementById('rankTitle').textContent = `Ranking ${GENDERS[gender].label}`;
   document.getElementById('rankSubtitle').textContent = rankingState.loadedAt
     ? `Actualizado: ${formatDateTime(rankingState.loadedAt)}`
@@ -1099,6 +1234,8 @@ function renderRanking() {
     return;
   }
 
+  const isAdmin = isPlayerAdminSession();
+
   tbody.innerHTML = list.map(player => {
     const challengeButton = canChallengePlayer(player)
       ? `<button class="btn-mini-challenge" type="button" data-action="challenge-player" data-player-key="${escapeAttr(player.key)}">Retar</button>`
@@ -1108,8 +1245,10 @@ function renderRanking() {
       ? `<img src="fotos/leader_badge.png" alt="1" style="width: 32px; height: 32px; object-fit: contain; vertical-align: middle;">`
       : `<span class="rank-number rank-${player.pos <= 3 ? player.pos : 'other'}">${player.pos}</span>`;
 
+    const draggableAttr = isAdmin ? 'draggable="true" style="cursor: grab;"' : '';
+
     return `
-      <tr class="${player.pos <= 3 ? 'top-row' : ''}" data-player-key="${escapeAttr(player.key)}">
+      <tr class="${player.pos <= 3 ? 'top-row' : ''}" data-player-key="${escapeAttr(player.key)}" ${draggableAttr}>
         <td class="pos-cell">${rankBadgeHtml}</td>
         <td class="name-cell">
           <div class="player-cell">
@@ -1133,6 +1272,10 @@ function renderRanking() {
         </td>
       </tr>`;
   }).join('');
+
+  if (isAdmin) {
+    setupDraggableRanking();
+  }
 }
 
 function renderSummary(list) {
@@ -1146,9 +1289,12 @@ function renderSummary(list) {
   const leader = list[0];
   const inactiveCount = (rankingState.inactive[gender] || []).length;
   
+  const labelInactive = gender === 'F' ? 'Inactivas' : 'Inactivos';
+  const labelPlayers = gender === 'F' ? 'Jugadoras' : 'Jugadores';
+  
   const inactiveBoxHtml = isPlayerAdminSession() ? `
     <div class="summary-item">
-      <span>Inactivos</span>
+      <span>${labelInactive}</span>
       <strong>${inactiveCount}</strong>
     </div>` : '';
 
@@ -1161,7 +1307,7 @@ function renderSummary(list) {
       </div>
     </div>
     <div class="summary-item">
-      <span>Jugadores</span>
+      <span>${labelPlayers}</span>
       <strong>${list.length}</strong>
     </div>
     ${inactiveBoxHtml}`;
@@ -1182,22 +1328,27 @@ function renderInactivePlayers() {
     inactiveSec.style.removeProperty('display');
   }
 
-  let list = [];
-  let titleSuffix = '';
-  
-  const listM = rankingState.inactive['M'] || [];
-  const listF = rankingState.inactive['F'] || [];
-  list = [...listM, ...listF];
-  titleSuffix = '(Todos)';
+  const gender = rankingState.currentGender;
+  const list = rankingState.inactive[gender] || [];
 
   const div = document.getElementById('inactivePlayersList');
-  document.getElementById('inactiveTitle').textContent = `Jugadores inactivos ${titleSuffix}`;
-  document.getElementById('inactiveCount').textContent = list.length ? `${list.length} jugador${list.length === 1 ? '' : 'es'}` : '';
-
-  if (!list.length) {
-    div.innerHTML = '<p class="empty-state">No hay jugadores inactivos registrados en este ranking.</p>';
-    return;
+  
+  if (gender === 'F') {
+    document.getElementById('inactiveTitle').textContent = `Jugadoras inactivas`;
+    document.getElementById('inactiveCount').textContent = list.length ? `${list.length} jugadora${list.length === 1 ? '' : 'as'}` : '';
+    if (!list.length) {
+      div.innerHTML = '<p class="empty-state">No hay jugadoras inactivas registradas en este ranking.</p>';
+      return;
+    }
+  } else {
+    document.getElementById('inactiveTitle').textContent = `Jugadores inactivos`;
+    document.getElementById('inactiveCount').textContent = list.length ? `${list.length} jugador${list.length === 1 ? '' : 'es'}` : '';
+    if (!list.length) {
+      div.innerHTML = '<p class="empty-state">No hay jugadores inactivos registrados en este ranking.</p>';
+      return;
+    }
   }
+
   div.innerHTML = list.map(player => {
     const genderFallback = player.gender === 'F' ? GENDERS.F.fallbackAvatar : GENDERS.M.fallbackAvatar;
     const genderTag = `<span style="font-size:0.7rem; background:rgba(255,255,255,0.06); padding:2px 6px; border-radius:4px; margin-left:8px; color:var(--text-secondary);">${player.gender === 'F' ? 'Fem' : 'Masc'}</span>`;
@@ -1304,6 +1455,7 @@ function checkBtnDesafio() {
   const sessionPlayer = getSessionPlayer();
   const hasRivals = Boolean(sessionPlayer && (rankingState.lists[sessionPlayer.gender] || []).some(canChallengePlayer));
   document.getElementById('btnNuevoDesafio').style.display = hasRivals ? 'inline-flex' : 'none';
+  document.getElementById('btnNuevoAmistoso').style.display = sessionPlayer ? 'inline-flex' : 'none';
 }
 
 function renderMyProfile() {
@@ -1380,6 +1532,9 @@ function renderMyProfile() {
 }
 
 function scrollToMyChallenges() {
+  if (window.innerWidth <= 1080) {
+    switchMobileTab('panel');
+  }
   const el = document.getElementById('myChallengesSection');
   if (el) {
     el.scrollIntoView({ behavior: 'smooth' });
@@ -1409,6 +1564,8 @@ function renderMyChallenges() {
   if (!session) {
     div.innerHTML = '';
     document.getElementById('myChallengeCount').textContent = '';
+    const btnPanel = document.getElementById('btnTabPanel');
+    if (btnPanel) btnPanel.innerHTML = `⚔️ Mi Panel`;
     return;
   }
 
@@ -1419,6 +1576,17 @@ function renderMyChallenges() {
   const activeChallenges = allChallenges
     .filter(challenge => ['pendiente', 'aceptado'].includes(challenge.status))
     .sort(sortChallenges);
+
+  // Tab badge for mobile
+  const pendingCount = activeChallenges.filter(c => c.status === 'pendiente' && isUserRetadoInChallenge(session, c)).length;
+  const btnPanel = document.getElementById('btnTabPanel');
+  if (btnPanel) {
+    if (pendingCount > 0) {
+      btnPanel.innerHTML = `⚔️ Mi Panel <span class="badge-pending" style="background:#ef4444; color:#fff; border-radius:50%; padding:2px 6px; font-size:0.75rem; margin-left:4px; font-weight:bold;">${pendingCount}</span>`;
+    } else {
+      btnPanel.innerHTML = `⚔️ Mi Panel`;
+    }
+  }
 
   const historyChallenges = allChallenges
     .filter(challenge => ['completado', 'rechazado'].includes(challenge.status))
@@ -1474,12 +1642,16 @@ function challengeCard(challenge, users, session, compact) {
   const todayIso = new Date().toISOString().split('T')[0];
   const isExpired = challenge.fecha < todayIso && ['pendiente', 'aceptado'].includes(challenge.status);
   const expiredBadge = isExpired ? `<span class="badge-expired" style="background:rgba(251,191,36,0.12); border:1px solid rgba(251,191,36,0.3); color:#fbbf24; padding:2px 6px; border-radius:4px; font-size:0.72rem; font-weight:900; text-transform:uppercase;">⚠️ Sin resultado</span>` : '';
+  const friendlyBadge = challenge.tipo === 'amistoso' ? `<span class="badge-friendly" style="background:rgba(99,102,241,0.15); border:1px solid rgba(99,102,241,0.3); color:#a5b4fc; padding:2px 6px; border-radius:4px; font-size:0.72rem; font-weight:900; text-transform:uppercase; margin-left:6px;">Amistoso</span>` : '';
 
   let actions = '';
-  if (challenge.status === 'completado') {
+  if (challenge.status === 'completado' || challenge.status === 'rechazado') {
     if (involved || isAdmin) {
+      if (challenge.status === 'completado') {
+        actions += `
+          <button class="btn-score" type="button" data-action="score-challenge" data-challenge-id="${escapeAttr(challenge.id)}">Editar resultado</button>`;
+      }
       actions += `
-        <button class="btn-score" type="button" data-action="score-challenge" data-challenge-id="${escapeAttr(challenge.id)}">Editar resultado</button>
         <button class="btn-delete" type="button" data-action="delete-challenge" data-challenge-id="${escapeAttr(challenge.id)}">Eliminar</button>`;
     }
   } else {
@@ -1563,6 +1735,7 @@ function challengeCard(challenge, users, session, compact) {
         <span>${escapeHTML(formatShortDate(challenge.fecha))}</span>
         <span>${escapeHTML(challenge.cancha || 'Cancha por definir')}${challenge.slot ? ` · ${escapeHTML(challenge.slot)}` : ''}</span>
         <span class="chal-status">${escapeHTML(status)}</span>
+        ${friendlyBadge}
         ${expiredBadge}
         ${challenge.marcador ? `<span>${escapeHTML(challenge.marcador)} · Ganó ${escapeHTML(ganadorName || '-')}</span>` : ''}
       </div>
@@ -1583,7 +1756,6 @@ function handleChallengeAction(event) {
   if (button.dataset.action === 'dispute-challenge') disputeChallenge(id, button);
   if (button.dataset.action === 'edit-challenge') openEditChallengeModal(id);
   if (button.dataset.action === 'delete-challenge') {
-    if (!confirm('¿Eliminar este desafío? Se marcará como rechazado y quedará en el historial.')) return;
     deleteChallenge(id);
   }
 }
@@ -1693,20 +1865,52 @@ async function saveChallengeComment(challengeId) {
 window.saveChallengeComment = saveChallengeComment;
 
 async function deleteChallenge(id) {
-  if (DB.isCloudConfigured()) {
+  const challenge = DB.getChallenges().find(c => c.id === id);
+  if (!challenge) return;
+  
+  if (!confirm('¿Deseas eliminar este partido/desafío por completo? Esta acción es irreversible y se eliminará físicamente de local, nube, Google Sheets y Google Calendar.')) return;
+  
+  const targetStatus = 'eliminado';
+  
+  if (DB.isCloudConfigured() || window.CONFIG?.API_URL) {
     try {
-      const challenge = await DB.updateChallengeCloud(id, {
-        status: 'rechazado',
-        deletedAt: new Date().toISOString()
-      });
-      upsertLocalChallenge(challenge);
+      if (window.CONFIG?.API_URL) {
+        await fetch(window.CONFIG.API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: JSON.stringify({
+            action: 'respond_challenge',
+            id: id,
+            status: targetStatus,
+            accept: targetStatus
+          })
+        }).catch(()=>{});
+      }
+      
+      if (DB.isCloudConfigured()) {
+        await DB.deleteChallengeCloud(id);
+        const list = DB.getChallenges().filter(c => c.id !== id);
+        DB.saveChallenges(list);
+      } else {
+        const list = DB.getChallenges().filter(c => c.id !== id);
+        DB.saveChallenges(list);
+      }
     } catch (error) {
-      console.warn('No se pudo eliminar el desafío en Firebase. Usando respaldo local.', error);
-      DB.respondChallenge(id, false);
+      console.warn('Error al eliminar en la nube, usando respaldo local:', error);
+      const list = DB.getChallenges().filter(c => c.id !== id);
+      DB.saveChallenges(list);
     }
   } else {
-    DB.respondChallenge(id, false);
+    const list = DB.getChallenges().filter(c => c.id !== id);
+    DB.saveChallenges(list);
   }
+  
+  if (challenge.status === 'completado' && challenge.tipo !== 'amistoso' && challenge.genero) {
+    DB.recalcRanking(challenge.genero);
+  }
+  
+  closeModal('profileModal');
+  closeModal('scoreModal');
   renderChallenges();
   renderMyChallenges();
 }
@@ -1854,21 +2058,28 @@ async function handleCompleteProfile(event) {
     const existingPlayer = getAllPlayers().find(p => normalizeKey(p.nombre) === normalizeKey(data.nombre));
     const playerId = existingPlayer ? existingPlayer.id : result.user.id;
     const position = (existingPlayer && Number.isFinite(existingPlayer.pos)) ? existingPlayer.pos : (rankingState.lists[data.genero] || []).length + 1;
+    const playerPayload = {
+      id: playerId,
+      nombre: data.nombre,
+      email: data.email,
+      genero: data.genero,
+      categoria: normalizeCategory(data.categoria),
+      mano: data.mano,
+      reves: data.reves,
+      foto: data.foto,
+      telefono: data.telefono,
+      activo: true,
+      participaRanking: true,
+      posicion: position
+    };
 
     try {
-      await DB.savePlayerCloud({
-        id: playerId,
-        nombre: data.nombre,
-        email: data.email,
-        genero: data.genero,
-        categoria: normalizeCategory(data.categoria),
-        mano: data.mano,
-        reves: data.reves,
-        foto: data.foto,
-        telefono: data.telefono,
-        activo: true,
-        posicion: position
-      }, actorPayload(result.user));
+      const savedPlayer = await DB.savePlayerCloud(playerPayload, actorPayload(result.user));
+      try {
+        await syncOwnPlayerToSheets(savedPlayer, { ...result.user, email: data.email, nombre: data.nombre });
+      } catch (sheetErr) {
+        console.warn('No se pudo sincronizar la ficha inicial con Google Sheets:', sheetErr);
+      }
 
       if (existingPlayer) {
         result.user.id = existingPlayer.id;
@@ -1876,19 +2087,7 @@ async function handleCompleteProfile(event) {
       }
     } catch (cloudErr) {
       console.warn('No se pudo guardar la ficha inicial en Firebase.', cloudErr);
-      savePlayerEditLocally({
-        id: playerId,
-        nombre: data.nombre,
-        email: data.email,
-        genero: data.genero,
-        categoria: normalizeCategory(data.categoria),
-        mano: data.mano,
-        reves: data.reves,
-        foto: data.foto,
-        telefono: data.telefono,
-        activo: true,
-        posicion: position
-      });
+      savePlayerEditLocally(playerPayload);
 
       if (existingPlayer) {
         result.user.id = existingPlayer.id;
@@ -2083,14 +2282,20 @@ async function submitChallenge(event) {
       return;
     }
 
-    // 1. Reservar la cancha en Google Calendar
-    const r = await DB.createBookingAPI(session.id, courtId, fecha, slot);
-    if (!r.ok) {
-      error.textContent = 'Error al reservar la cancha: ' + r.msg;
-      return;
+    // 1. Intentar reservar la cancha en Google Calendar (opcional - puede fallar para jugadores nuevos)
+    let bookingEventId = null;
+    try {
+      const r = await DB.createBookingAPI(session.id, courtId, fecha, slot);
+      if (r.ok) {
+        bookingEventId = r.booking?.id || null;
+      } else {
+        console.warn('No se pudo agendar en Google Calendar (el desafío se crea igual en Firebase):', r.msg);
+      }
+    } catch (calErr) {
+      console.warn('Error conectando a Google Calendar, continuando sin agendar:', calErr);
     }
 
-    // 2. Crear y enviar desafío
+    // 2. Crear y enviar desafío (siempre, independiente del calendario)
     const saved = await createChallengeRemoteOrLocal({
       retadorId: session.id,
       retadorNombre: session.nombre,
@@ -2104,7 +2309,8 @@ async function submitChallenge(event) {
       cancha: courtLabel,
       slot: slot,
       courtId: courtId,
-      courtLabel: courtLabel
+      courtLabel: courtLabel,
+      ...(bookingEventId ? { eventId: bookingEventId } : {})
     });
 
     showChallengeSuccess(saved, retado, retadoPlayer);
@@ -2290,8 +2496,9 @@ function triggerWhatsAppChallenge(challenge, telefono) {
     }
   } catch (e) {}
 
+  const currentUrl = window.location.origin + window.location.pathname;
   const slotStr = challenge.slot ? ` · Hora: ${challenge.slot}` : '';
-  const text = `🎾 ¡Hola! Te he desafiado en UCTenis.\n\n📅 Fecha: ${dateFormatted}${slotStr}\n🏟️ Cancha: ${courtName}\n\nPor favor, ingresa a la página para aceptar o rechazar el desafío:\nhttps://uctenis.github.io/reservas-canchas-staging/ranking.html\n\n¡Nos vemos en la cancha! 🏆`;
+  const text = `🎾 ¡Hola! Te he desafiado en UCTenis.\n\n📅 Fecha: ${dateFormatted}${slotStr}\n🏟️ Cancha: ${courtName}\n\nPor favor, ingresa a la página para aceptar o rechazar el desafío:\n${currentUrl}\n\n¡Nos vemos en la cancha! 🏆`;
   
   const waUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`;
   return waUrl;
@@ -2318,8 +2525,9 @@ window.triggerManualWhatsApp = function() {
     }
   } catch (e) {}
 
+  const currentUrl = window.location.origin + window.location.pathname;
   const slotStr = challenge.slot ? ` · Hora: ${challenge.slot}` : '';
-  const text = `🎾 ¡Hola! Te he desafiado en UCTenis.\n\n📅 Fecha: ${dateFormatted}${slotStr}\n🏟️ Cancha: ${courtName}\n\nPor favor, ingresa a la página para aceptar o rechazar el desafío:\nhttps://uctenis.github.io/reservas-canchas-staging/ranking.html\n\n¡Nos vemos en la cancha! 🏆`;
+  const text = `🎾 ¡Hola! Te he desafiado en UCTenis.\n\n📅 Fecha: ${dateFormatted}${slotStr}\n🏟️ Cancha: ${courtName}\n\nPor favor, ingresa a la página para aceptar o rechazar el desafío:\n${currentUrl}\n\n¡Nos vemos en la cancha! 🏆`;
   
   const waUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`;
   window.open(waUrl, '_blank');
@@ -2387,6 +2595,7 @@ function showChallengeSuccess(challenge, retado, retadoPlayer) {
 }
 
 function upsertLocalChallenge(challenge) {
+  challenge = rankingNormalizeChallenge(challenge);
   const list = DB.getChallenges();
   const idx = list.findIndex(item => item.id === challenge.id);
   if (idx >= 0) list[idx] = { ...list[idx], ...challenge };
@@ -2487,6 +2696,68 @@ async function respondChallenge(id, accept) {
 }
 
 function openScoreModal(challengeId) {
+  const isDirectFriendly = !challengeId;
+  const session = DB.getSession();
+  const me = getSessionPlayer(session);
+
+  if (isDirectFriendly) {
+    if (!me) {
+      alert('Debes iniciar sesión para registrar un partido amistoso.');
+      return;
+    }
+    rankingState.currentChallengeId = null;
+
+    // Show friendly fields
+    document.getElementById('scoreFriendlyFields').style.display = 'block';
+
+    // Lock Match Type to 'amistoso'
+    const typeSelect = document.getElementById('scoreType');
+    typeSelect.value = 'amistoso';
+    typeSelect.disabled = true;
+
+    // Populate active opponents of the same gender
+    const myGender = me.gender || me.genero || 'M';
+    const activeOpponents = getAllPlayers()
+      .filter(p => (p.gender === myGender || p.genero === myGender) && p.id !== me.id && isPlayerActive(p))
+      .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+
+    const opponentSelect = document.getElementById('scoreOpponent');
+    opponentSelect.innerHTML = activeOpponents.map(p => `<option value="${escapeAttr(p.id)}">${escapeHTML(p.nombre)}</option>`).join('');
+
+    const updateOpponentName = () => {
+      const selectedId = opponentSelect.value;
+      const opp = activeOpponents.find(p => p.id === selectedId);
+      document.getElementById('scorePlayerB').textContent = opp ? opp.nombre : 'Oponente';
+    };
+    opponentSelect.onchange = () => {
+      updateOpponentName();
+      updateScoreMatchState();
+    };
+
+    document.getElementById('scorePlayers').textContent = 'Registrar Partido Amistoso Directo';
+    document.getElementById('scorePlayerA').textContent = me.nombre || 'Yo';
+    updateOpponentName();
+
+    document.getElementById('scoreDate').value = new Date().toISOString().split('T')[0];
+    document.getElementById('scoreCourt').value = 'cec1';
+
+    // Clear scores
+    document.getElementById('scoreSet1A').value = '';
+    document.getElementById('scoreSet1B').value = '';
+    document.getElementById('scoreSet2A').value = '';
+    document.getElementById('scoreSet2B').value = '';
+    document.getElementById('scoreSet3A').value = '';
+    document.getElementById('scoreSet3B').value = '';
+    document.getElementById('scoreWinner').value = '';
+    document.getElementById('scoreError').textContent = '';
+    document.getElementById('scoreWinnerText').innerHTML = 'Ganador: <strong>Sin resultado</strong>';
+
+    updateScoreMatchState();
+    openModal('scoreModal');
+    return;
+  }
+
+  // Normal challenge path
   const challenge = DB.getChallenges().find(item => item.id === challengeId);
   if (!challenge) return;
   const users = DB.getUsers();
@@ -2496,6 +2767,15 @@ function openScoreModal(challengeId) {
   const retadoName = challenge.retadoNombre || retado?.nombre || 'Jugador';
 
   rankingState.currentChallengeId = challengeId;
+
+  // Hide friendly fields
+  document.getElementById('scoreFriendlyFields').style.display = 'none';
+
+  // Enable and set match type select
+  const typeSelect = document.getElementById('scoreType');
+  typeSelect.value = challenge.tipo || 'ranking';
+  typeSelect.disabled = false;
+
   document.getElementById('scorePlayers').textContent = `${retadorName} vs ${retadoName} · ${formatShortDate(challenge.fecha)}`;
   document.getElementById('scorePlayerA').textContent = retadorName;
   document.getElementById('scorePlayerB').textContent = retadoName;
@@ -2722,8 +3002,9 @@ function updateScoreMatchState() {
   const hiddenWinner = document.getElementById('scoreWinner');
   const submitButton = document.getElementById('btnSubmitScore');
   const challenge = DB.getChallenges().find(item => item.id === rankingState.currentChallengeId);
+  const isDirectFriendly = !rankingState.currentChallengeId;
 
-  if (!challenge) {
+  if (!challenge && !isDirectFriendly) {
     winnerText.innerHTML = 'Ganador: <strong>Sin desafío seleccionado</strong>';
     submitButton.disabled = true;
     return;
@@ -2737,9 +3018,26 @@ function updateScoreMatchState() {
   }
 
   const winnerId = scoreResult.winnerId || '';
-  const winnerName = winnerId === challenge.retadorId ? (challenge.retadorNombre || '') : (winnerId === challenge.retadoId ? (challenge.retadoNombre || '') : '');
+  let winnerName = '';
+
+  if (isDirectFriendly) {
+    const me = getSessionPlayer();
+    const opponentSelect = document.getElementById('scoreOpponent');
+    const selectedOpponentId = opponentSelect.value;
+    const activeOpponents = getAllPlayers();
+    const opponent = activeOpponents.find(p => p.id === selectedOpponentId);
+
+    const nameA = me ? me.nombre : 'Jugador A';
+    const nameB = opponent ? opponent.nombre : 'Jugador B';
+
+    winnerName = winnerId === 'A' ? nameA : (winnerId === 'B' ? nameB : '');
+    hiddenWinner.value = winnerId === 'A' ? (me?.id || '') : (opponent?.id || '');
+  } else {
+    winnerName = winnerId === challenge.retadorId ? (challenge.retadorNombre || '') : (winnerId === challenge.retadoId ? (challenge.retadoNombre || '') : '');
+    hiddenWinner.value = winnerId;
+  }
+
   winnerText.innerHTML = `Ganador: <strong>${escapeHTML(winnerName || 'Jugador')}</strong> (${scoreResult.marcador})`;
-  hiddenWinner.value = winnerId;
   submitButton.disabled = false;
 }
 
@@ -2749,7 +3047,9 @@ async function submitScore(event) {
   const error = document.getElementById('scoreError');
   error.textContent = '';
 
-  if (!challenge) {
+  const isDirectFriendly = !rankingState.currentChallengeId;
+
+  if (!challenge && !isDirectFriendly) {
     error.textContent = 'No se encontró el desafío.';
     return;
   }
@@ -2761,8 +3061,114 @@ async function submitScore(event) {
   }
 
   const marcador = scoreResult.marcador;
-  const ganadorId = scoreResult.winnerId || '';
+  const matchType = document.getElementById('scoreType').value;
 
+  if (isDirectFriendly) {
+    const me = getSessionPlayer();
+    if (!me) {
+      error.textContent = 'Usuario no autenticado.';
+      return;
+    }
+    const opponentId = document.getElementById('scoreOpponent').value;
+    const opponent = getAllPlayers().find(p => p.id === opponentId);
+    if (!opponent) {
+      error.textContent = 'Oponente no seleccionado o no válido.';
+      return;
+    }
+    const dateVal = document.getElementById('scoreDate').value;
+    const courtVal = document.getElementById('scoreCourt').value;
+    const courtSelect = document.getElementById('scoreCourt');
+    const courtLabel = courtSelect.options[courtSelect.selectedIndex]?.text || courtVal;
+
+    const winnerOption = scoreResult.winnerId; // 'A' or 'B'
+    const ganadorId = winnerOption === 'A' ? me.id : opponent.id;
+    const challengeId = Date.now().toString();
+
+    const payload = {
+      id: challengeId,
+      retadorId: me.id,
+      retadorNombre: me.nombre,
+      retadorEmail: me.email || '',
+      retadoId: opponent.id,
+      retadoNombre: opponent.nombre,
+      retadoEmail: opponent.email || '',
+      genero: me.gender || me.genero || 'M',
+      fecha: dateVal,
+      cancha: courtLabel,
+      courtId: courtVal,
+      status: 'completado',
+      tipo: 'amistoso',
+      marcador,
+      ganadorId
+    };
+
+    let saved = false;
+
+    // 1. Firebase
+    if (DB.isCloudConfigured()) {
+      try {
+        const created = await DB.saveChallengeCloud(payload);
+        upsertLocalChallenge(created);
+        saved = true;
+      } catch (cloudError) {
+        console.warn('No se pudo guardar el amistoso en Firebase:', cloudError);
+      }
+    }
+
+    // 2. Sheets
+    if (window.CONFIG?.API_URL) {
+      try {
+        const res = await fetch(window.CONFIG.API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({
+            action: 'create_challenge',
+            ...payload
+          })
+        });
+        const data = await res.json().catch(() => null);
+        if (data && data.ok) {
+          if (data.challenge) {
+            upsertLocalChallenge({ ...payload, ...data.challenge });
+          }
+          saved = true;
+        }
+      } catch (sheetErr) {
+        console.warn('No se pudo registrar el amistoso en Google Sheets:', sheetErr);
+      }
+    }
+
+    if (!saved) {
+      const local = DB.createChallenge(payload.retadorId, payload.retadoId, payload.genero, payload.fecha, payload.cancha);
+      if (local) {
+        local.status = 'completado';
+        local.tipo = 'amistoso';
+        local.marcador = marcador;
+        local.ganadorId = ganadorId;
+        DB.saveChallenges(DB.getChallenges().map(c => c.id === local.id ? local : c));
+      }
+    }
+
+    closeModal('scoreModal');
+    if (saved) await refreshRankingPage();
+    else {
+      refreshLocalRankingIfNeeded();
+      renderAll();
+    }
+    return;
+  }
+
+  // Normal path: updating an existing challenge
+  const ganadorId = scoreResult.winnerId || '';
+  const completedChallenge = rankingNormalizeChallenge({
+    ...challenge,
+    status: 'completado',
+    marcador,
+    ganadorId,
+    tipo: matchType,
+    actualizado: new Date().toISOString()
+  });
+  upsertLocalChallenge(completedChallenge);
   let savedInCloud = false;
 
   // 1. Intentar registrar en Firebase
@@ -2772,13 +3178,16 @@ async function submitScore(event) {
       const updated = await DB.updateChallengeCloud(rankingState.currentChallengeId, {
         status: 'completado',
         marcador,
-        ganadorId
+        ganadorId,
+        tipo: matchType
       });
-      upsertLocalChallenge(updated);
-      if (!wasCompleted) {
+      upsertLocalChallenge(rankingMergeChallengeRecords(completedChallenge, updated));
+      if (!wasCompleted && matchType !== 'amistoso') {
         await applyChallengeResultToCloudRanking({ ...updated, marcador, ganadorId });
-        
-        // Send notification email to the loser
+      }
+      
+      // Send notification email to the loser
+      if (!wasCompleted) {
         try {
           const users = DB.getUsers();
           const retadorUser = users.find(u => u.id === challenge.retadorId);
@@ -2827,14 +3236,21 @@ async function submitScore(event) {
           action: 'submit_challenge_result',
           id: rankingState.currentChallengeId,
           marcador,
-          ganadorId
+          ganadorId,
+          tipo: matchType
         })
       });
       const data = await res.json().catch(() => null);
       if (data && data.ok) {
         console.log('Resultado registrado exitosamente en Google Sheets.');
         if (data.challenge) {
-          upsertLocalChallenge({ ...challenge, ...data.challenge });
+          const sheetChallenge = rankingMergeChallengeRecords(completedChallenge, data.challenge);
+          upsertLocalChallenge(sheetChallenge);
+          if (DB.isCloudConfigured()) {
+            DB.saveChallengeCloud(sheetChallenge).catch(err => {
+              console.warn('No se pudo reflejar el resultado de Sheets en Firebase:', err);
+            });
+          }
         }
         savedInCloud = true;
       }
@@ -2844,7 +3260,7 @@ async function submitScore(event) {
   }
 
   if (!savedInCloud) {
-    DB.submitResult(rankingState.currentChallengeId, marcador, ganadorId);
+    DB.submitResult(rankingState.currentChallengeId, marcador, ganadorId, matchType);
   }
 
   closeModal('scoreModal');
@@ -2856,6 +3272,7 @@ async function submitScore(event) {
 }
 
 async function applyChallengeResultToCloudRanking(challenge) {
+  if (challenge.tipo === 'amistoso') return;
   const gender = normalizeGender(challenge.genero);
   const list = [...(rankingState.lists[gender] || [])];
   if (!gender || !list.length) return;
@@ -2867,7 +3284,7 @@ async function applyChallengeResultToCloudRanking(challenge) {
 
   const loserId = winnerIsRetador ? challenge.retadoId : challenge.retadorId;
   const loserEmail = winnerIsRetador ? challenge.retadoEmail : challenge.retadorEmail;
-  const loserNombre = winnerIsRetador ? challenge.retadorNombre : challenge.retadorNombre;
+  const loserNombre = winnerIsRetador ? challenge.retadoNombre : challenge.retadorNombre;
 
   const winnerIndex = findChallengePlayerIndex(list, winnerId, winnerEmail, winnerNombre);
   const loserIndex = findChallengePlayerIndex(list, loserId, loserEmail, loserNombre);
@@ -2973,9 +3390,10 @@ function showPlayerProfile(playerKey) {
               ? (c.retadoNombre || users.find(u=>u.id===c.retadoId)?.nombre || 'Jugador')
               : (c.retadorNombre || users.find(u=>u.id===c.retadorId)?.nombre || 'Jugador');
             const won = playerMatchesChallengeRef(player, c.ganadorId);
+            const friendlyText = c.tipo === 'amistoso' ? ' (Amistoso)' : '';
             return `
               <li style="display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.02); padding:6px 10px; border-radius:6px; border-left:3px solid ${won ? '#4ade80' : '#f87171'}; font-size:0.82rem;">
-                <span style="color:var(--text-primary);">vs ${escapeHTML(oppName)}</span>
+                <span style="color:var(--text-primary);">vs ${escapeHTML(oppName)}${friendlyText}</span>
                 <strong style="color:var(--text-secondary); font-variant-numeric:tabular-nums;">${escapeHTML(c.marcador)}</strong>
               </li>
             `;
@@ -3127,6 +3545,11 @@ async function submitOwnProfile(event) {
     Object.assign(payload, await readPhotoAttachment('ownPhotoFile'));
     if (payload.photoDataUrl) payload.foto = payload.photoDataUrl;
     const saved = await DB.savePlayerCloud(payload, actorPayload(session));
+    try {
+      await syncOwnPlayerToSheets(saved, session);
+    } catch (sheetErr) {
+      console.warn('No se pudo sincronizar la ficha propia con Google Sheets:', sheetErr);
+    }
     upsertLocalUser(profileToSessionUser(saved, session));
     closeModal('profileModal');
     await refreshRankingPage();
@@ -3145,6 +3568,8 @@ function openAdminModal() {
   if (!isPlayerAdminSession()) return;
   resetAdminForm();
   renderAdminPlayerList();
+  document.getElementById('adminListView').classList.remove('hidden');
+  document.getElementById('adminFormView').classList.add('hidden');
   openModal('adminModal');
 }
 
@@ -3264,6 +3689,86 @@ async function manualSeedDatabase(event) {
     btn.innerHTML = originalText;
   }
 }
+
+async function resetSystemData(event) {
+  if (event) event.preventDefault();
+  if (!isPlayerAdminSession()) {
+    alert("No tienes permisos de administrador para realizar esta acción.");
+    return;
+  }
+
+  const confirmMsg = "⚠️ ¡ATENCIÓN! ⚠️\n\n¿Estás seguro de que deseas reiniciar la temporada?\nEsto realizará las siguientes acciones:\n\n1. ELIMINARÁ todos los desafíos de la base de datos de Firebase.\n2. RESTABLECERÁ a cero (0) las estadísticas de todos los jugadores (PJ, PG, PP, Puntos) en Firebase.\n3. Inicializará la posición anterior al valor de su posición actual.\n\nEsta operación es destructiva y NO se puede deshacer. ¿Deseas continuar?";
+  if (!confirm(confirmMsg)) return;
+
+  const phrase = prompt("Para confirmar el reinicio del sistema, escribe la palabra REINICIAR en mayúsculas:");
+  if (phrase !== "REINICIAR") {
+    alert("Confirmación incorrecta. Acción cancelada.");
+    return;
+  }
+
+  const btn = document.getElementById('btnResetSystem');
+  const originalText = btn ? btn.innerHTML : '';
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '🔄 Reiniciando...';
+  }
+
+  try {
+    if (!DB.isCloudConfigured() || typeof firebase === 'undefined') {
+      throw new Error("Firestore no está inicializado o configurado.");
+    }
+
+    const db = firebase.firestore();
+
+    // 1. Eliminar desafíos de Firebase
+    console.log("Eliminando desafíos...");
+    const challengeSnapshot = await db.collection('ranking_challenges').get();
+    if (!challengeSnapshot.empty) {
+      const challengeBatch = db.batch();
+      challengeSnapshot.docs.forEach(doc => {
+        challengeBatch.delete(doc.ref);
+      });
+      await challengeBatch.commit();
+      console.log("Desafíos eliminados con éxito.");
+    }
+
+    // 2. Restablecer estadísticas de jugadores en Firebase
+    console.log("Restableciendo jugadores...");
+    const playerSnapshot = await db.collection('ranking_players').get();
+    if (!playerSnapshot.empty) {
+      const playerBatch = db.batch();
+      playerSnapshot.docs.forEach(doc => {
+        const data = doc.data();
+        const posVal = data.posicion ?? data.pos ?? null;
+        const patch = {
+          pj: 0,
+          pg: 0,
+          pp: 0,
+          pts: 0,
+          posicionAnterior: posVal !== null ? Number(posVal) : '',
+          prev: posVal !== null ? Number(posVal) : ''
+        };
+        playerBatch.update(doc.ref, patch);
+      });
+      await playerBatch.commit();
+      console.log("Jugadores restablecidos con éxito.");
+    }
+
+    // 3. Limpiar caché local
+    localStorage.removeItem('uctenis_challenges');
+
+    alert("El sistema ha sido reiniciado con éxito. Todos los contadores de desafíos y amistosos se han restablecido a cero.");
+    location.reload();
+  } catch (error) {
+    console.error("Error al reiniciar el sistema:", error);
+    alert("Error al reiniciar el sistema: " + error.message);
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = originalText;
+    }
+  }
+}
+window.resetSystemData = resetSystemData;
 
 function renderAdminPlayerList() {
   const div = document.getElementById('adminPlayerList');
@@ -3430,10 +3935,18 @@ async function submitAdminPlayer(event) {
       : player;
 
     try {
+      let playerForSheetSync = savedPlayer;
       if (reorderedPlayers) {
         await DB.savePlayersCloud(reorderedPlayers, adminPayload(session));
       } else {
-        await DB.savePlayerCloud(player, adminPayload(session));
+        playerForSheetSync = await DB.savePlayerCloud(player, adminPayload(session));
+      }
+      let sheetsSynced = false;
+      try {
+        await syncPlayerToSheets(playerForSheetSync, session);
+        sheetsSynced = true;
+      } catch (sheetErr) {
+        console.warn('No se pudo sincronizar el jugador con Google Sheets:', sheetErr);
       }
       // Always persist the full reordered ladder locally so moves are visible immediately.
       savePlayerEditsLocally(reorderedPlayers || savedPlayer);
@@ -3452,8 +3965,8 @@ async function submitAdminPlayer(event) {
         });
       });
       successMsg.textContent = player.activo
-        ? 'Cambios guardados en Firebase.'
-        : 'Jugador guardado como inactivo en Firebase.';
+        ? (sheetsSynced ? 'Cambios guardados en Firebase y Google Sheets.' : 'Cambios guardados en Firebase. Google Sheets no respondió.')
+        : (sheetsSynced ? 'Jugador guardado como inactivo en Firebase y Google Sheets.' : 'Jugador guardado como inactivo en Firebase. Google Sheets no respondió.');
       if (reorderedPlayers) {
         rankingState.lists[genero] = renumberRankingList(reorderedPlayers, genero);
         renderAll();
@@ -3525,6 +4038,219 @@ async function deletePlayerFromAdmin(playerKey) {
     applyLocalPlayerEdits(rankingState.lists, rankingState.inactive);
     renderAll();
     error.textContent = err.message || 'No se pudo actualizar Firebase; quedó inactivo solo localmente.';
+  }
+}
+
+async function deletePlayerPhysicalFromAdmin(playerId) {
+  const session = DB.getSession();
+  if (!playerId || !isPlayerAdminSession(session)) return;
+  
+  // Find player by ID
+  const player = getAllPlayers().find(p => p.id === playerId);
+  if (!player) return;
+  
+  if (!confirm(`¿Estás seguro de que deseas ELIMINAR COMPLETAMENTE a ${player.nombre}? Esta acción es irreversible y borrará al jugador de LocalStorage y Firebase Firestore.`)) return;
+  
+  const error = document.getElementById('adminErr');
+  const successMsg = document.getElementById('adminSuccess');
+  const deleteBtn = document.getElementById('btnAdminDeletePlayerPhysical');
+  const originalText = deleteBtn.textContent;
+  
+  try {
+    deleteBtn.disabled = true;
+    deleteBtn.textContent = 'Eliminando...';
+    error.textContent = '';
+    successMsg.textContent = '';
+    
+    // 1. Delete from Firestore
+    if (DB.isCloudConfigured()) {
+      await DB.deletePlayerCloud(player.id);
+    }
+    
+    // 3. Delete from LocalStorage
+    const users = DB.getUsers().filter(u => u.id !== player.id);
+    DB.saveUsers(users);
+    
+    // Remove session if they deleted themselves
+    if (session.id === player.id) {
+      DB.logout();
+      location.reload();
+      return;
+    }
+    
+    // Refresh page
+    await refreshRankingPage();
+    
+    // Go back to list view
+    document.getElementById('adminFormView').classList.add('hidden');
+    document.getElementById('adminListView').classList.remove('hidden');
+    renderAdminPlayerList();
+    
+  } catch (err) {
+    console.error('Error deleting player:', err);
+    error.textContent = err.message || 'No se pudo eliminar el jugador.';
+  } finally {
+    deleteBtn.disabled = false;
+    deleteBtn.textContent = originalText;
+  }
+}
+
+// Variable to store the currently dragged row key
+let draggedPlayerKey = null;
+
+function setupDraggableRanking() {
+  if (!isPlayerAdminSession()) return;
+
+  const tbody = document.getElementById('rankBody');
+  if (!tbody) return;
+
+  tbody.addEventListener('dragstart', event => {
+    const tr = event.target.closest('tr[data-player-key]');
+    if (!tr) return;
+    draggedPlayerKey = tr.dataset.playerKey;
+    tr.classList.add('dragging');
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', tr.dataset.playerKey);
+  });
+
+  tbody.addEventListener('dragend', event => {
+    const tr = event.target.closest('tr[data-player-key]');
+    if (tr) tr.classList.remove('dragging');
+    const rows = tbody.querySelectorAll('tr');
+    rows.forEach(r => r.classList.remove('drag-over-top', 'drag-over-bottom'));
+  });
+
+  tbody.addEventListener('dragover', event => {
+    event.preventDefault();
+    const tr = event.target.closest('tr[data-player-key]');
+    if (!tr || tr.dataset.playerKey === draggedPlayerKey) return;
+
+    const rect = tr.getBoundingClientRect();
+    const relativeY = event.clientY - rect.top;
+    const isTopHalf = relativeY < rect.height / 2;
+
+    if (isTopHalf) {
+      tr.classList.add('drag-over-top');
+      tr.classList.remove('drag-over-bottom');
+    } else {
+      tr.classList.add('drag-over-bottom');
+      tr.classList.remove('drag-over-top');
+    }
+  });
+
+  tbody.addEventListener('dragleave', event => {
+    const tr = event.target.closest('tr[data-player-key]');
+    if (tr) {
+      tr.classList.remove('drag-over-top', 'drag-over-bottom');
+    }
+  });
+
+  tbody.addEventListener('drop', event => {
+    event.preventDefault();
+    const tr = event.target.closest('tr[data-player-key]');
+    if (!tr) return;
+
+    const targetKey = tr.dataset.playerKey;
+    if (!draggedPlayerKey || draggedPlayerKey === targetKey) return;
+
+    const rect = tr.getBoundingClientRect();
+    const relativeY = event.clientY - rect.top;
+    const insertBefore = relativeY < rect.height / 2;
+
+    reorderRankingState(draggedPlayerKey, targetKey, insertBefore);
+  });
+}
+
+function reorderRankingState(draggedKey, targetKey, insertBefore) {
+  const gender = rankingState.currentGender;
+  const list = [...(rankingState.lists[gender] || [])];
+  
+  const draggedIdx = list.findIndex(p => p.key === draggedKey);
+  if (draggedIdx < 0) return;
+  const draggedPlayer = list.splice(draggedIdx, 1)[0];
+  
+  let targetIdx = list.findIndex(p => p.key === targetKey);
+  if (targetIdx < 0) return;
+  
+  if (!insertBefore) {
+    targetIdx += 1;
+  }
+  
+  list.splice(targetIdx, 0, draggedPlayer);
+  
+  const oldPositions = {};
+  rankingState.lists[gender].forEach(p => {
+    oldPositions[p.key] = p.pos || p.posicion;
+  });
+
+  const updatedList = list.map((player, idx) => {
+    const newPos = idx + 1;
+    const oldPos = oldPositions[player.key];
+    return {
+      ...player,
+      pos: newPos,
+      posicion: newPos,
+      prev: oldPos,
+      posicionAnterior: oldPos
+    };
+  });
+  
+  rankingState.lists[gender] = updatedList;
+  
+  renderRanking();
+  
+  const btn = document.getElementById('btnConfirmRankingOrder');
+  if (btn) {
+    btn.style.display = 'inline-flex';
+  }
+}
+
+async function confirmRankingOrder() {
+  const session = DB.getSession();
+  if (!isPlayerAdminSession(session)) return;
+  
+  const gender = rankingState.currentGender;
+  const list = rankingState.lists[gender] || [];
+  
+  const btn = document.getElementById('btnConfirmRankingOrder');
+  const originalText = btn.textContent;
+  
+  try {
+    btn.disabled = true;
+    btn.textContent = 'Guardando...';
+    
+    // 1. Prepare ordered IDs
+    const orderedIds = list.map(p => p.id || p.key);
+    
+    // 2. Save to Firebase
+    if (DB.isCloudConfigured()) {
+      await DB.savePlayersCloud(list, adminPayload(session));
+    }
+    
+    // 4. Update locally in DB.js and LocalStorage
+    list.forEach(p => {
+      const user = DB.getUsers().find(u => u.id === p.id);
+      if (user) {
+        user.pos = p.pos;
+        user.posicion = p.pos;
+        user.posicionAnterior = p.prev;
+        DB.upsertUserLocal(user);
+      }
+    });
+    
+    DB.saveRanking(gender, list);
+    
+    alert('¡El orden del ranking ha sido reordenado y guardado correctamente!');
+    btn.style.display = 'none';
+    
+    await refreshRankingPage();
+    
+  } catch (error) {
+    console.error('Error al guardar el nuevo orden:', error);
+    alert('Error al guardar el nuevo orden: ' + error.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalText;
   }
 }
 
@@ -3723,6 +4449,53 @@ function adminPayload(session = DB.getSession()) {
   };
 }
 
+async function syncPlayerToSheets(player, session = DB.getSession()) {
+  if (!window.CONFIG?.API_URL || !player) return null;
+  const payload = {
+    action: 'admin_save_player',
+    ...player,
+    posicion: player.posicion || player.pos || '',
+    genero: player.genero || player.gender || '',
+    adminEmail: session?.email || '',
+    adminName: session?.nombre || '',
+    actorEmail: session?.email || '',
+    actorName: session?.nombre || ''
+  };
+  const response = await fetch(window.CONFIG.API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(payload)
+  });
+  const data = await response.json().catch(() => null);
+  if (!response.ok || data?.ok === false) {
+    throw new Error(data?.msg || 'No se pudo sincronizar el jugador con Google Sheets.');
+  }
+  return data;
+}
+
+async function syncOwnPlayerToSheets(player, session = DB.getSession()) {
+  if (!window.CONFIG?.API_URL || !player) return null;
+  const payload = {
+    action: 'update_own_profile',
+    ...player,
+    posicion: player.posicion || player.pos || '',
+    genero: player.genero || player.gender || '',
+    actorId: player.id || session?.id || '',
+    actorName: player.nombre || session?.nombre || '',
+    actorEmail: session?.email || player.email || ''
+  };
+  const response = await fetch(window.CONFIG.API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(payload)
+  });
+  const data = await response.json().catch(() => null);
+  if (!response.ok || data?.ok === false) {
+    throw new Error(data?.msg || 'No se pudo sincronizar tu ficha con Google Sheets.');
+  }
+  return data;
+}
+
 function profileToSessionUser(player, current = DB.getSession()) {
   return {
     ...(current || {}),
@@ -3904,6 +4677,7 @@ function resolvePhoto(rawPhoto, id, gender) {
   if (photo) {
     if (/^https?:\/\//i.test(photo)) return photo;
     if (photo.startsWith('fotos/')) return photo;
+    if (photo.startsWith('data:')) return photo;
     if (/\.(png|jpg|jpeg|webp)$/i.test(photo)) return `fotos/${photo}`;
   }
   return id ? `fotos/${id}.png` : fallback;

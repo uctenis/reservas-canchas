@@ -10,7 +10,7 @@
   <meta property="og:description" content="Sistema de reservas y ranking de canchas de tenis UCT."/>
   <meta property="og:image" content="https://uctenis.github.io/reservas-canchas/logo_uctenis_v03.png"/>
   <meta name="theme-color" content="#0f172a"/>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=20260528_v10">
   <style>
     /* ── Actions Hero Grid (Top Priority) ── */
     .actions-hero-grid {
@@ -320,6 +320,35 @@
     .match-card.is-my-match {
       border: 1.5px solid var(--accent-tennis) !important;
       box-shadow: 0 0 10px rgba(198, 211, 0, 0.12);
+    }
+    .match-card.is-friendly {
+      border: 1px solid rgba(99, 102, 241, 0.15) !important;
+      background: rgba(15, 23, 42, 0.4);
+    }
+    .match-card.is-challenge-official {
+      border: 1px solid rgba(245, 158, 11, 0.3) !important;
+      background: linear-gradient(135deg, rgba(30, 41, 59, 0.6) 0%, rgba(15, 23, 42, 0.8) 100%);
+      box-shadow: 0 4px 15px rgba(245, 158, 11, 0.05);
+    }
+    .match-type-badge {
+      font-size: 0.62rem;
+      font-weight: 700;
+      padding: 1px 6px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+    }
+    .match-type-badge.is-friendly {
+      background: rgba(99, 102, 241, 0.12);
+      color: #a5b4fc;
+      border: 1px solid rgba(99, 102, 241, 0.25);
+    }
+    .match-type-badge.is-official {
+      background: rgba(245, 158, 11, 0.12);
+      color: #fcd34d;
+      border: 1px solid rgba(245, 158, 11, 0.25);
     }
     .my-match-label {
       position: absolute;
@@ -774,8 +803,8 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
 
-<script src="db.js?v=20260526_v5"></script>
-<script src="script.js?v=20260526_v3"></script>
+<script src="db.js?v=20260528_v10"></script>
+<script src="script.js?v=20260528_v10"></script>
 <script>
 // Admin emails (must match db.js)
 const ADMIN_EMAILS = ['uctenisclub@gmail.com'];
@@ -1000,43 +1029,96 @@ async function handleHomeMockLogin() {
 
 // ── Live Challenges & Results from Firebase/localStorage ──
 function formatDateShort(iso) {
-  if (!iso) return '';
-  const [y, m, d] = iso.split('-');
+  if (!iso || typeof iso !== 'string') return '';
+  // Accept YYYY-MM-DD or YYYY-MM-DDTHH:mm... format
+  const datePart = iso.split('T')[0];
+  const parts = datePart.split('-');
+  if (parts.length < 3) return '';
+  const y = parseInt(parts[0], 10);
+  const m = parseInt(parts[1], 10);
+  const d = parseInt(parts[2], 10);
+  if (!Number.isFinite(d) || !Number.isFinite(m) || m < 1 || m > 12 || d < 1 || d > 31) return '';
   const months = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-  return `${parseInt(d)} ${months[parseInt(m)-1]}`;
+  return `${d} ${months[m-1]}`;
+}
+
+function homeHasRecordedResult(challenge) {
+  return Boolean(
+    String(challenge?.marcador || '').trim() ||
+    String(challenge?.ganadorId || '').trim()
+  );
+}
+
+function homeNormalizeChallenge(challenge) {
+  const normalized = { ...(challenge || {}) };
+  if (homeHasRecordedResult(normalized) && normalized.status !== 'eliminado') {
+    normalized.status = 'completado';
+  }
+  return normalized;
+}
+
+function homeChallengeTime(challenge) {
+  const raw = challenge?.actualizado || challenge?.updatedAt || challenge?.creado || challenge?.fecha || '';
+  const time = raw ? new Date(raw).getTime() : NaN;
+  return Number.isFinite(time) ? time : 0;
+}
+
+function homeMergeChallengeRecords(current, incoming) {
+  const base = homeNormalizeChallenge(current || {});
+  const next = homeNormalizeChallenge(incoming || {});
+  const newer = homeChallengeTime(next) >= homeChallengeTime(base) ? next : base;
+  const older = newer === next ? base : next;
+  const merged = { ...older };
+
+  Object.entries(newer).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') {
+      merged[key] = value;
+    } else if (!(key in merged)) {
+      merged[key] = value;
+    }
+  });
+
+  if (homeHasRecordedResult(base) || homeHasRecordedResult(next)) {
+    const completed = homeHasRecordedResult(next) ? next : base;
+    merged.status = 'completado';
+    merged.marcador = completed.marcador || merged.marcador;
+    merged.ganadorId = completed.ganadorId || merged.ganadorId;
+    merged.actualizado = completed.actualizado || merged.actualizado || new Date().toISOString();
+  }
+
+  return homeNormalizeChallenge(merged);
+}
+
+function homeMergeChallengeSources(sources) {
+  const byId = new Map();
+  sources.flat().filter(Boolean).forEach(challenge => {
+    const normalized = homeNormalizeChallenge(challenge);
+    const key = normalized.id || `${normalized.retadorId || normalized.retadorNombre}-${normalized.retadoId || normalized.retadoNombre}-${normalized.fecha || normalized.creado}`;
+    byId.set(key, homeMergeChallengeRecords(byId.get(key), normalized));
+  });
+  return Array.from(byId.values());
 }
 
 async function loadLiveData() {
   let challenges = [];
-  let success = false;
+  const sources = [];
   
   // Try Firebase first
   if (DB.isCloudConfigured()) {
     try {
-      challenges = await DB.getChallengesCloud();
-      DB.saveChallenges(challenges); // sync to local
-      success = true;
+      sources.push(await DB.getChallengesCloud());
     } catch(e) {
       console.warn("Firebase offline para desafíos, intentando Google Sheets...", e);
     }
   }
 
-  // Fallback to Google Sheets if Firebase fails
-  if (!success && window.CONFIG?.API_URL) {
-    try {
-      const res = await fetch(`${window.CONFIG.API_URL}?action=get_challenges`);
-      const data = await res.json();
-      if (data && data.ok && Array.isArray(data.challenges)) {
-        challenges = data.challenges;
-        DB.saveChallenges(challenges); // sync to local
-        success = true;
-      }
-    } catch(e) {
-      console.warn("Error al cargar desafíos desde Google Sheets:", e);
-    }
-  }
+  // Note: Google Sheets source removed — Firebase is the single source of truth.
 
-  if (!success) {
+  if (sources.length) {
+    challenges = homeMergeChallengeSources(sources);
+    DB.saveChallenges(challenges); // sync to local
+    challenges = DB.getChallenges(); // reload to get filtered list
+  } else {
     challenges = DB.getChallenges();
   }
 
@@ -1071,12 +1153,13 @@ async function loadLiveData() {
       });
 
       if (bestMover) {
+        const currentPos = Number(bestMover.posicion ?? bestMover.pos ?? 0);
         topMoverCard = {
           badgeClass: 'badge-torneo',
           badgeText: 'Destacado',
           title: `¡Evolución del Ranking: Felicitaciones a ${bestMover.nombre}!`,
-          body: `Saludamos a ${bestMover.nombre} por ser el jugador con mayor ascenso en el ranking recientemente, subiendo un total de ${bestMover.diff} puestos para posicionarse en el lugar #${bestMover.pos} de la escalerilla oficial del club. ¡Excelente juego!`,
-          date: '27 May, 2026'
+          body: `Saludamos a ${bestMover.nombre} por ser el jugador con mayor ascenso en el ranking recientemente, subiendo un total de ${bestMover.diff} puestos para posicionarse en el lugar #${currentPos || '?'} de la escalerilla oficial del club. ¡Excelente juego!`,
+          date: new Date().toLocaleDateString('es-CL', { day: 'numeric', month: 'short', year: 'numeric' })
         };
       }
     } catch(e) {
@@ -1084,16 +1167,7 @@ async function loadLiveData() {
     }
   }
 
-  // Fallback top mover if offline or none found
-  if (!topMoverCard) {
-    topMoverCard = {
-      badgeClass: 'badge-torneo',
-      badgeText: 'Destacado',
-      title: '¡Evolución del Ranking: Felicitaciones a Violeta Moreno!',
-      body: 'Felicitamos a Violeta Moreno por su excelente rendimiento en la escalerilla de UCTenis, logrando ascender al puesto #1 en el ranking femenino tras sus sólidas victorias consecutivas. ¡A seguir defendiendo la posición!',
-      date: '27 May, 2026'
-    };
-  }
+  // No fallback card — only show real data from Firebase
 
   // Render the news section dynamically
   renderNewsGrid(topMoverCard);
@@ -1102,26 +1176,35 @@ async function loadLiveData() {
   const session = DB.getSession();
   const sessionIds = [];
   if (session) {
-    sessionIds.push(session.id);
+    if (session.id) sessionIds.push(session.id);
     const emailLower = (session.email || '').toLowerCase().trim();
     const nameLower = (session.nombre || '').toLowerCase().trim();
-    if (playersMap[emailLower]) sessionIds.push(playersMap[emailLower].id);
-    if (playersMap[nameLower]) sessionIds.push(playersMap[nameLower].id);
+    if (playersMap[emailLower] && playersMap[emailLower].id) sessionIds.push(playersMap[emailLower].id);
+    if (playersMap[nameLower] && playersMap[nameLower].id) sessionIds.push(playersMap[nameLower].id);
   }
 
   const isMyChallenge = (c) => {
     if (!session) return false;
     const emailLower = (session.email || '').toLowerCase().trim();
-    const nameLower = (session.nombre || '').toLowerCase().trim();
-    
-    const retadorEmail = (c.retadorEmail || '').toLowerCase().trim();
-    const retadoEmail = (c.retadoEmail || '').toLowerCase().trim();
-    const retadorName = (c.retadorNombre || '').toLowerCase().trim();
-    const retadoName = (c.retadoNombre || '').toLowerCase().trim();
-    
-    return sessionIds.includes(c.retadorId) || sessionIds.includes(c.retadoId) ||
-           retadorEmail === emailLower || retadoEmail === emailLower ||
-           retadorName === nameLower || retadoName === nameLower;
+
+    // 1. ID match (más confiable)
+    if (c.retadorId && sessionIds.includes(c.retadorId)) return true;
+    if (c.retadoId && sessionIds.includes(c.retadoId)) return true;
+
+    // 2. Email match (solo si ambos tienen email)
+    if (emailLower) {
+      if (c.retadorEmail && c.retadorEmail.toLowerCase().trim() === emailLower) return true;
+      if (c.retadoEmail && c.retadoEmail.toLowerCase().trim() === emailLower) return true;
+    }
+
+    // 3. Nombre solo si el desafío NO tiene ID ni email (registros muy viejos)
+    if (!c.retadorId && !c.retadorEmail && !c.retadoId && !c.retadoEmail) {
+      const nameLower = (session.nombre || '').toLowerCase().trim();
+      if (nameLower && c.retadorNombre && c.retadorNombre.toLowerCase().trim() === nameLower) return true;
+      if (nameLower && c.retadoNombre && c.retadoNombre.toLowerCase().trim() === nameLower) return true;
+    }
+
+    return false;
   };
 
   // Resolve player photo based on Firestore or static fallbacks
@@ -1180,13 +1263,23 @@ async function loadLiveData() {
   // Active challenges (pendiente or aceptado)
   const active = challenges
     .filter(c => c.status === 'pendiente' || c.status === 'aceptado')
-    .sort((a, b) => (b.creado || '').localeCompare(a.creado || ''))
+    .sort((a, b) => {
+      const myA = isMyChallenge(a) ? 1 : 0;
+      const myB = isMyChallenge(b) ? 1 : 0;
+      if (myA !== myB) return myB - myA; // My challenges first
+      return (b.creado || '').localeCompare(a.creado || '');
+    })
     .slice(0, 4);
 
   // Latest results (completado)
   const results = challenges
     .filter(c => c.status === 'completado' && c.ganadorId)
-    .sort((a, b) => (b.actualizado || b.creado || '').localeCompare(a.actualizado || a.creado || ''))
+    .sort((a, b) => {
+      const myA = isMyChallenge(a) ? 1 : 0;
+      const myB = isMyChallenge(b) ? 1 : 0;
+      if (myA !== myB) return myB - myA; // My results first
+      return (b.actualizado || b.creado || '').localeCompare(a.actualizado || a.creado || '');
+    })
     .slice(0, 3);
 
   // Render active challenges
@@ -1204,17 +1297,21 @@ async function loadLiveData() {
       const photoRetador = getPlayerPhoto(retadorName);
       const photoRetado = getPlayerPhoto(retadoName);
       
-      const courtStr = c.courtLabel || c.cancha || 'Cancha';
-      const dateStr = formatDateShort(c.fecha);
+      const courtStr = (c.courtLabel || c.cancha || '').trim() || 'Cancha';
+      const dateStr = formatDateShort(c.fecha) || '';
+      if (!c.retadorId && !c.retadorNombre && !c.retadoId && !c.retadoNombre) return ''; // skip corrupt records
       
       const isMyChallengeActive = isMyChallenge(c);
       const myMatchLabel = isMyChallengeActive ? `<div class="my-match-label">Tu Desafío</div>` : '';
-      const cardClass = isMyChallengeActive ? 'match-card is-my-match' : 'match-card';
+      const isFriendly = c.tipo === 'amistoso';
+      const typeClass = isFriendly ? 'is-friendly' : 'is-challenge-official';
+      const cardClass = `match-card ${typeClass} ${isMyChallengeActive ? 'is-my-match' : ''}`;
       
       return `<div class="${cardClass}">
         ${myMatchLabel}
         <div class="match-header">
           <span class="match-court">${courtStr}</span>
+          <span class="match-type-badge ${isFriendly ? 'is-friendly' : 'is-official'}">${isFriendly ? '🤝 Amistoso' : '⚔️ Desafío'}</span>
           <span class="match-date">${dateStr}</span>
         </div>
         <div class="match-players-row">
@@ -1246,9 +1343,10 @@ async function loadLiveData() {
       const photoWinner = getPlayerPhoto(winnerName);
       const photoLoser = getPlayerPhoto(loserName);
       
-      const courtStr = c.courtLabel || c.cancha || 'Cancha';
-      const dateStr = formatDateShort(c.fecha);
+      const courtStr = (c.courtLabel || c.cancha || '').trim() || 'Cancha';
+      const dateStr = formatDateShort(c.fecha) || '';
       const scoreStr = c.marcador || 'v/d';
+      if (!c.retadorId && !c.retadorNombre && !c.retadoId && !c.retadoNombre) return ''; // skip corrupt records
       
       // Comments rendering (chat bubbles only, no emojis inside comments)
       let commentsHtml = '';
@@ -1275,12 +1373,15 @@ async function loadLiveData() {
       
       const isMyChallengeResult = isMyChallenge(c);
       const myMatchLabel = isMyChallengeResult ? `<div class="my-match-label">Tu Desafío</div>` : '';
-      const cardClass = isMyChallengeResult ? 'match-card is-my-match' : 'match-card';
+      const isFriendly = c.tipo === 'amistoso';
+      const typeClass = isFriendly ? 'is-friendly' : 'is-challenge-official';
+      const cardClass = `match-card ${typeClass} ${isMyChallengeResult ? 'is-my-match' : ''}`;
       
       return `<div class="${cardClass}">
         ${myMatchLabel}
         <div class="match-header">
           <span class="match-court">${courtStr}</span>
+          <span class="match-type-badge ${isFriendly ? 'is-friendly' : 'is-official'}">${isFriendly ? '🤝 Amistoso' : '⚔️ Desafío'}</span>
           <span class="match-date">${dateStr}</span>
         </div>
         <div class="match-players-row">
@@ -1452,7 +1553,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js').catch(()=>{});
+    navigator.serviceWorker.register('sw.js').then(reg => {
+      reg.update().catch(()=>{});
+    }).catch(()=>{});
   });
 }
 </script>
