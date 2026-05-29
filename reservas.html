@@ -613,7 +613,8 @@ async function loadFriendlyOpponents() {
     const sortedPlayers = allPlayers
       .filter(p => {
         const isMe = (p.email && p.email.toLowerCase() === meEmail) || (p.nombre && p.nombre.toLowerCase() === meNombre) || p.id === session.id;
-        return !isMe;
+        const isActive = p.activo !== false && p.participaRanking !== false;
+        return !isMe && isActive;
       })
       .sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '', 'es'));
 
@@ -626,10 +627,9 @@ async function loadFriendlyOpponents() {
       .replace(/'/g, '&#039;');
 
     sortedPlayers.forEach(p => {
-      const activeText = (p.activo ?? p.participaRanking) === false ? ' (Inactivo)' : '';
       const opt = document.createElement('option');
       opt.value = p.id;
-      opt.textContent = p.nombre + activeText;
+      opt.textContent = p.nombre;
       opt.dataset.nombre = p.nombre;
       opt.dataset.email = p.email || '';
       opt.dataset.telefono = p.telefono || '';
