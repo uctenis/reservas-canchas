@@ -830,27 +830,38 @@ function renderNewsGrid(topMoverCard, latestMatchCard, nextMatchCard, birthdaysC
   const newsList = [];
   
   // 1. Add custom news from database/admin
-  customNews.forEach(item => {
-    const badgeClasses = {
-      torneo: 'badge-torneo',
-      maint: 'badge-maint',
-      app: 'badge-app',
-      aviso: 'badge-app'
-    };
-    const badgeTexts = {
-      torneo: 'Torneo',
-      maint: 'Mantención',
-      app: 'Plataforma',
-      aviso: 'Aviso'
-    };
-    newsList.push({
-      badgeClass: badgeClasses[item.category] || 'badge-torneo',
-      badgeText: badgeTexts[item.category] || 'Aviso',
-      title: item.title,
-      body: item.body,
-      date: formatDateShort(item.date) || item.date || ''
+  if (customNews && customNews.length > 0) {
+    customNews.forEach(item => {
+      const badgeClasses = {
+        torneo: 'badge-torneo',
+        maint: 'badge-maint',
+        app: 'badge-app',
+        aviso: 'badge-app'
+      };
+      const badgeTexts = {
+        torneo: 'Torneo',
+        maint: 'Mantención',
+        app: 'Plataforma',
+        aviso: 'Aviso'
+      };
+      newsList.push({
+        badgeClass: badgeClasses[item.category] || 'badge-torneo',
+        badgeText: badgeTexts[item.category] || 'Aviso',
+        title: item.title,
+        body: item.body,
+        date: formatDateShort(item.date) || item.date || ''
+      });
     });
-  });
+  } else {
+    // Si la base de datos de novedades está vacía, forzamos la del interclub como novedad principal por defecto
+    newsList.push({
+      badgeClass: 'badge-torneo',
+      badgeText: 'Interclub',
+      title: 'Gran Campeonato de Vuelta: UCTenis vs Club de Tenis de Funcionarios UFRO',
+      body: 'Este lunes comenzó la serie de vuelta del tradicional campeonato interclub entre los clubes UCTenis y el Club de Tenis de funcionarios de la UFRO (Universidad de la Frontera). Tras haber ganado la primera copa, ¡nuestro equipo de hombres y mujeres lucha para mantener el trofeo en casa! Hasta ahora vamos liderando la serie 3 a 1. ¡Vamos UCTenis!',
+      date: '27 May, 2026'
+    });
+  }
   
   // 2. Add automatic dynamic news cards
   if (topMoverCard) newsList.push(topMoverCard);
