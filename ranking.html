@@ -3740,6 +3740,10 @@ function openOwnProfileEditor() {
         <label for="ownNombre">Jugador</label>
         <input type="text" id="ownNombre" value="${escapeAttr(player.nombre)}" required>
       </div>
+      <div class="form-group">
+        <label for="ownEmail">Correo electrónico (No editable)</label>
+        <input type="email" id="ownEmail" value="${escapeAttr(player.email || '')}" readonly style="background: rgba(255,255,255,0.05); color: var(--text-secondary); cursor: not-allowed; opacity: 0.85;">
+      </div>
       <div class="form-row">
         <div class="form-group">
           <label for="ownFechaNacimiento">Fecha nacimiento</label>
