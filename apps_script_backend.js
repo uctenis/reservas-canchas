@@ -1197,7 +1197,11 @@ function adminSavePlayer(data) {
 
     const rowNumber = existing ? existing.rowNumber : index.sheet.getLastRow() + 1;
     index.sheet.getRange(rowNumber, 1, 1, PLAYER_HEADERS.length).setValues([playerToRow(player)]);
-    ensurePlayerInRanking(ss, player, numberOrBlank(data.posicion));
+    if (player.activo) {
+      ensurePlayerInRanking(ss, player, numberOrBlank(data.posicion));
+    } else {
+      removePlayerFromRankings(ss, player);
+    }
 
     return { ok: true, player: publicPlayer(player), ranking: getRanking() };
   } finally {
@@ -1435,9 +1439,13 @@ function ensurePlayerInRanking(ss, player, desiredPosition) {
 function removePlayerFromRankings(ss, player) {
   ['M', 'F'].forEach(genero => {
     const entries = readRankingEntries(ss, genero);
-    const previousMap = buildPreviousPositionMap(entries);
     const filtered = entries.filter(entry => !matchesPlayerReference(entry, player));
     if (filtered.length !== entries.length) {
+      const previousMap = {};
+      filtered.forEach((entry, index) => {
+        const key = rankingEntryKey(entry);
+        previousMap[key] = index + 1;
+      });
       writeRankingEntries(ss, genero, filtered, previousMap);
       syncPlayerRankingColumns(ss, genero, filtered, previousMap);
     }
@@ -1515,6 +1523,7 @@ function playerFromRow(row, rowNumber) {
 function normalizePlayerPayload(data, existing) {
   const base = existing || {};
   const genero = normalizeGender(payloadField(data, ['genero', 'gender'], base.genero));
+  const activo = data.activo !== false && data.activo !== 'false' && data.participaRanking !== false && data.participaRanking !== 'false';
 
   return {
     id: payloadField(data, ['id', 'codigo', 'uid'], base.id),
@@ -1528,7 +1537,8 @@ function normalizePlayerPayload(data, existing) {
     ranking: numberOrBlank(payloadField(data, ['ranking', 'posicion'], base.ranking)),
     posicionAnterior: numberOrBlank(payloadField(data, ['posicionAnterior', 'prev'], base.posicionAnterior)),
     email: payloadField(data, ['email', 'correo'], base.email),
-    rut: payloadField(data, ['rut'], base.rut)
+    rut: payloadField(data, ['rut'], base.rut),
+    activo: activo
   };
 }
 

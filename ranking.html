@@ -2137,47 +2137,45 @@ async function deleteChallenge(id) {
   
   const targetStatus = 'eliminado';
   
-  if (DB.isCloudConfigured() || window.CONFIG?.API_URL) {
-    try {
-      if (window.CONFIG?.API_URL) {
-        await fetch(window.CONFIG.API_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/plain' },
-          body: JSON.stringify({
-            action: 'respond_challenge',
-            id: id,
-            status: targetStatus,
-            accept: targetStatus
-          })
-        }).catch(()=>{});
-      }
-      
-      if (DB.isCloudConfigured()) {
-        await DB.deleteChallengeCloud(id);
-        const list = DB.getChallenges().filter(c => c.id !== id);
-        DB.saveChallenges(list);
-      } else {
-        const list = DB.getChallenges().filter(c => c.id !== id);
-        DB.saveChallenges(list);
-      }
-    } catch (error) {
-      console.warn('Error al eliminar en la nube, usando respaldo local:', error);
-      const list = DB.getChallenges().filter(c => c.id !== id);
-      DB.saveChallenges(list);
-    }
-  } else {
-    const list = DB.getChallenges().filter(c => c.id !== id);
-    DB.saveChallenges(list);
-  }
+  // Optimistically remove challenge from local storage and update local rankings if completed
+  const list = DB.getChallenges().filter(c => c.id !== id);
+  DB.saveChallenges(list);
   
   if (challenge.status === 'completado' && challenge.tipo !== 'amistoso' && challenge.genero) {
     DB.recalcRanking(challenge.genero);
   }
   
+  // Close modals and render UI instantly
   closeModal('profileModal');
   closeModal('scoreModal');
-  renderChallenges();
-  renderMyChallenges();
+  renderAll();
+  
+  // Background Sync
+  if (DB.isCloudConfigured() || window.CONFIG?.API_URL) {
+    (async () => {
+      try {
+        if (window.CONFIG?.API_URL) {
+          await fetch(window.CONFIG.API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify({
+              action: 'respond_challenge',
+              id: id,
+              status: targetStatus,
+              accept: targetStatus
+            })
+          }).catch(()=>{});
+        }
+        
+        if (DB.isCloudConfigured()) {
+          await DB.deleteChallengeCloud(id);
+        }
+        console.log(`Challenge ${id} successfully deleted from cloud in background.`);
+      } catch (error) {
+        console.warn('Error al eliminar en la nube en segundo plano:', error);
+      }
+    })();
+  }
 }
 
 function openAuthModal() {
@@ -3373,59 +3371,54 @@ async function submitScore(event) {
       ganadorId
     };
 
-    let saved = false;
-
-    // 1. Firebase
-    if (DB.isCloudConfigured()) {
-      try {
-        const created = await DB.saveChallengeCloud(payload);
-        upsertLocalChallenge(created);
-        saved = true;
-      } catch (cloudError) {
-        console.warn('No se pudo guardar el amistoso en Firebase:', cloudError);
-      }
-    }
-
-    // 2. Sheets
-    if (window.CONFIG?.API_URL) {
-      try {
-        const res = await fetch(window.CONFIG.API_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify({
-            action: 'create_challenge',
-            ...payload
-          })
-        });
-        const data = await res.json().catch(() => null);
-        if (data && data.ok) {
-          if (data.challenge) {
-            upsertLocalChallenge({ ...payload, ...data.challenge });
-          }
-          saved = true;
-        }
-      } catch (sheetErr) {
-        console.warn('No se pudo registrar el amistoso en Google Sheets:', sheetErr);
-      }
-    }
-
-    if (!saved) {
-      const local = DB.createChallenge(payload.retadorId, payload.retadoId, payload.genero, payload.fecha, payload.cancha);
-      if (local) {
-        local.status = 'completado';
-        local.tipo = 'amistoso';
-        local.marcador = marcador;
-        local.ganadorId = ganadorId;
-        DB.saveChallenges(DB.getChallenges().map(c => c.id === local.id ? local : c));
-      }
-    }
-
+    // Optimistic UI updates
+    upsertLocalChallenge(payload);
     closeModal('scoreModal');
-    if (saved) await refreshRankingPage();
-    else {
-      refreshLocalRankingIfNeeded();
-      renderAll();
-    }
+    refreshLocalRankingIfNeeded();
+    renderAll();
+
+    // Background sync
+    (async () => {
+      let saved = false;
+
+      // 1. Firebase
+      if (DB.isCloudConfigured()) {
+        try {
+          const created = await DB.saveChallengeCloud(payload);
+          upsertLocalChallenge(created);
+          saved = true;
+        } catch (cloudError) {
+          console.warn('No se pudo guardar el amistoso en Firebase:', cloudError);
+        }
+      }
+
+      // 2. Sheets
+      if (window.CONFIG?.API_URL) {
+        try {
+          const res = await fetch(window.CONFIG.API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({
+              action: 'create_challenge',
+              ...payload
+            })
+          });
+          const data = await res.json().catch(() => null);
+          if (data && data.ok) {
+            if (data.challenge) {
+              upsertLocalChallenge({ ...payload, ...data.challenge });
+            }
+            saved = true;
+          }
+        } catch (sheetErr) {
+          console.warn('No se pudo registrar el amistoso en Google Sheets:', sheetErr);
+        }
+      }
+
+      if (saved) {
+        await refreshRankingPage().catch(() => {});
+      }
+    })();
     return;
   }
 
@@ -3439,107 +3432,114 @@ async function submitScore(event) {
     tipo: matchType,
     actualizado: new Date().toISOString()
   });
+
+  // Optimistic UI Update: Save score and apply local ranking changes
   upsertLocalChallenge(completedChallenge);
-  let savedInCloud = false;
+  refreshLocalRankingIfNeeded();
+  closeModal('scoreModal');
+  renderAll();
 
-  // 1. Intentar registrar en Firebase
-  if (DB.isCloudConfigured()) {
-    try {
-      const wasCompleted = challenge.status === 'completado';
-      const updated = await DB.updateChallengeCloud(rankingState.currentChallengeId, {
-        status: 'completado',
-        marcador,
-        ganadorId,
-        tipo: matchType
-      });
-      upsertLocalChallenge(rankingMergeChallengeRecords(completedChallenge, updated));
-      if (!wasCompleted && matchType !== 'amistoso') {
-        await applyChallengeResultToCloudRanking({ ...updated, marcador, ganadorId });
-      }
-      
-      // Send notification email to the loser
-      if (!wasCompleted) {
-        try {
-          const users = DB.getUsers();
-          const retadorUser = users.find(u => u.id === challenge.retadorId);
-          const retadoUser = users.find(u => u.id === challenge.retadoId);
-          const retadorEmail = challenge.retadorEmail || retadorUser?.email;
-          const retadoEmail = challenge.retadoEmail || retadoUser?.email;
-          
-          const ganadorNombre = ganadorId === challenge.retadorId ? (challenge.retadorNombre || retadorUser?.nombre) : (challenge.retadoNombre || retadoUser?.nombre);
-          const ganadorEmail = ganadorId === challenge.retadorId ? retadorEmail : retadoEmail;
-          const perdedorNombre = ganadorId === challenge.retadorId ? (challenge.retadoNombre || retadoUser?.nombre) : (challenge.retadorNombre || retadorUser?.nombre);
-          const perdedorEmail = ganadorId === challenge.retadorId ? retadoEmail : retadorEmail;
+  // Background Sync
+  (async () => {
+    let savedInCloud = false;
 
-          if (perdedorEmail) {
-            fetch(window.CONFIG.API_URL, {
-              method: 'POST',
-              body: JSON.stringify({
-                action: 'notify_result',
-                challengeId: challenge.id,
-                ganadorNombre,
-                ganadorEmail,
-                perdedorNombre,
-                perdedorEmail,
-                marcador,
-                fecha: challenge.fecha,
-                cancha: challenge.cancha
-              })
-            }).catch(err => console.warn('Error al enviar correo de resultado:', err));
-          }
-        } catch (err) {
-          console.warn('Error al preparar correo de resultado:', err);
-        }
-      }
-      savedInCloud = true;
-    } catch (cloudError) {
-      console.warn('No se pudo guardar el resultado en Firebase.', cloudError);
-    }
-  }
-
-  // 2. Intentar registrar en Google Sheets via Apps Script (también notifica e invalida reservas/ranking)
-  if (window.CONFIG?.API_URL) {
-    try {
-      const res = await fetch(window.CONFIG.API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({
-          action: 'submit_challenge_result',
-          id: rankingState.currentChallengeId,
+    // 1. Intentar registrar en Firebase
+    if (DB.isCloudConfigured()) {
+      try {
+        const wasCompleted = challenge.status === 'completado';
+        const updated = await DB.updateChallengeCloud(rankingState.currentChallengeId, {
+          status: 'completado',
           marcador,
           ganadorId,
           tipo: matchType
-        })
-      });
-      const data = await res.json().catch(() => null);
-      if (data && data.ok) {
-        console.log('Resultado registrado exitosamente en Google Sheets.');
-        if (data.challenge) {
-          const sheetChallenge = rankingMergeChallengeRecords(completedChallenge, data.challenge);
-          upsertLocalChallenge(sheetChallenge);
-          if (DB.isCloudConfigured()) {
-            DB.saveChallengeCloud(sheetChallenge).catch(err => {
-              console.warn('No se pudo reflejar el resultado de Sheets en Firebase:', err);
-            });
+        });
+        upsertLocalChallenge(rankingMergeChallengeRecords(completedChallenge, updated));
+        
+        if (!wasCompleted && matchType !== 'amistoso') {
+          await applyChallengeResultToCloudRanking({ ...updated, marcador, ganadorId });
+        }
+        
+        // Send notification email to the loser
+        if (!wasCompleted) {
+          try {
+            const users = DB.getUsers();
+            const retadorUser = users.find(u => u.id === challenge.retadorId);
+            const retadoUser = users.find(u => u.id === challenge.retadoId);
+            const retadorEmail = challenge.retadorEmail || retadorUser?.email;
+            const retadoEmail = challenge.retadoEmail || retadoUser?.email;
+            
+            const ganadorNombre = ganadorId === challenge.retadorId ? (challenge.retadorNombre || retadorUser?.nombre) : (challenge.retadoNombre || retadorUser?.nombre);
+            const ganadorEmail = ganadorId === challenge.retadorId ? retadorEmail : retadoEmail;
+            const perdedorNombre = ganadorId === challenge.retadorId ? (challenge.retadoNombre || retadorUser?.nombre) : (challenge.retadorNombre || retadorUser?.nombre);
+            const perdedorEmail = ganadorId === challenge.retadorId ? retadoEmail : retadorEmail;
+
+            if (perdedorEmail) {
+              fetch(window.CONFIG.API_URL, {
+                method: 'POST',
+                body: JSON.stringify({
+                  action: 'notify_result',
+                  challengeId: challenge.id,
+                  ganadorNombre,
+                  ganadorEmail,
+                  perdedorNombre,
+                  perdedorEmail,
+                  marcador,
+                  fecha: challenge.fecha,
+                  cancha: challenge.cancha
+                })
+              }).catch(err => console.warn('Error al enviar correo de resultado:', err));
+            }
+          } catch (err) {
+            console.warn('Error al preparar correo de resultado:', err);
           }
         }
         savedInCloud = true;
+      } catch (cloudError) {
+        console.warn('No se pudo guardar el resultado en Firebase.', cloudError);
       }
-    } catch (sheetErr) {
-      console.warn('No se pudo registrar el resultado en Google Sheets:', sheetErr);
     }
-  }
 
-  if (!savedInCloud) {
-    DB.submitResult(rankingState.currentChallengeId, marcador, ganadorId, matchType);
-  }
+    // 2. Intentar registrar en Google Sheets via Apps Script (también notifica e invalida reservas/ranking)
+    if (window.CONFIG?.API_URL) {
+      try {
+        const res = await fetch(window.CONFIG.API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({
+            action: 'submit_challenge_result',
+            id: rankingState.currentChallengeId,
+            marcador,
+            ganadorId,
+            tipo: matchType
+          })
+        });
+        const data = await res.json().catch(() => null);
+        if (data && data.ok) {
+          console.log('Resultado registrado exitosamente en Google Sheets.');
+          if (data.challenge) {
+            const sheetChallenge = rankingMergeChallengeRecords(completedChallenge, data.challenge);
+            upsertLocalChallenge(sheetChallenge);
+            if (DB.isCloudConfigured()) {
+              DB.saveChallengeCloud(sheetChallenge).catch(err => {
+                console.warn('No se pudo reflejar el resultado de Sheets en Firebase:', err);
+              });
+            }
+          }
+          savedInCloud = true;
+        }
+      } catch (sheetErr) {
+        console.warn('No se pudo registrar el resultado en Google Sheets:', sheetErr);
+      }
+    }
 
-  closeModal('scoreModal');
-  if (savedInCloud) await refreshRankingPage();
-  else {
-    refreshLocalRankingIfNeeded();
-    renderAll();
-  }
+    if (savedInCloud) {
+      await refreshRankingPage().catch(() => {});
+    } else {
+      DB.submitResult(rankingState.currentChallengeId, marcador, ganadorId, matchType);
+      refreshLocalRankingIfNeeded();
+      renderAll();
+    }
+  })();
 }
 
 async function applyChallengeResultToCloudRanking(challenge) {
