@@ -1859,3 +1859,24 @@ tr.drag-over-bottom {
     height: 48px;
   }
 }
+
+
+/* Estilos agregados para estados de partidos y botones destacados */
+.challenge-card.status-terminado {
+  border-left-color: #94a3b8;
+}
+
+.btn-score-highlight {
+  background: linear-gradient(90deg, #b5c900 0%, #d4e000 100%) !important;
+  color: #08111f !important;
+  font-weight: 900 !important;
+  box-shadow: 0 4px 12px rgba(198,211,0,0.3) !important;
+  border: none !important;
+}
+
+
+/* Resaltado del banner modo edición */
+@keyframes pulseEditBorder {
+  0% { border-color: rgba(99,102,241,0.35); box-shadow: 0 4px 20px rgba(99,102,241,0.05); }
+  100% { border-color: rgba(99,102,241,0.7); box-shadow: 0 4px 20px rgba(99,102,241,0.2); }
+}

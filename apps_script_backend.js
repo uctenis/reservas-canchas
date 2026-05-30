@@ -221,7 +221,8 @@ function notifyChallenge(data) {
     fechaLabel: fechaLabel,
     slot: slot,
     cancha: cancha,
-    courtId: text(data.courtId)
+    courtId: text(data.courtId),
+    tipo: text(data.tipo)
   });
 
   const rankingUrl = 'https://uctenis.github.io/reservas-canchas/ranking.html';
@@ -424,7 +425,7 @@ function adminFreeSpecialSlots(data) {
 function createChallengeCalendarInvite(data) {
   const fecha = text(data.fecha);
   if (!fecha || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
-    return { ok: false, msg: 'Fecha de desafio no valida.' };
+    return { ok: false, msg: 'Fecha no valida.' };
   }
 
   const calendar = CalendarApp.getDefaultCalendar();
@@ -433,16 +434,19 @@ function createChallengeCalendarInvite(data) {
   try {
     const slot = text(data.slot);
     const guests = [text(data.retadorEmail), text(data.retadoEmail)].filter(Boolean).join(',');
-    const title = 'Desafio ranking UCTenis: ' + text(data.retadorNombre) + ' vs ' + text(data.retadoNombre);
+    const isFriendly = text(data.tipo) === 'amistoso';
+    const title = (isFriendly ? 'Partido amistoso UCTenis: ' : 'Desafio ranking UCTenis: ') + text(data.retadorNombre) + ' vs ' + text(data.retadoNombre);
     const description = [
-      'Desafio de ranking UCTenis.',
-      'Retador: ' + text(data.retadorNombre) + ' <' + text(data.retadorEmail) + '>',
-      'Retado: ' + text(data.retadoNombre) + ' <' + text(data.retadoEmail) + '>',
+      isFriendly ? 'Partido amistoso UCTenis.' : 'Desafio de ranking UCTenis.',
+      'Organizador: ' + text(data.retadorNombre) + ' <' + text(data.retadorEmail) + '>',
+      'Invitado: ' + text(data.retadoNombre) + ' <' + text(data.retadoEmail) + '>',
       'Fecha: ' + (text(data.fechaLabel) || fecha),
       slot ? 'Hora: ' + slot : '',
       'Cancha: ' + text(data.cancha),
       '',
-      'La cancha ya queda reservada por el sistema. Acepten o rechacen el desafio en la pagina de ranking.'
+      isFriendly 
+        ? 'Acepten o rechacen el partido amistoso en la pagina de UCTenis.' 
+        : 'La cancha ya queda reservada por el sistema. Acepten o rechacen el desafio en la pagina de ranking.'
     ].filter(Boolean).join('\n');
 
     let event;
@@ -524,12 +528,20 @@ function getChallenges() {
               sheet.getRange(i + 1, 11).setValue('aceptado');
               sheet.getRange(i + 1, 15).setValue(challenge.actualizado);
               updatedAny = true;
+              updateChallengeInFirebase(challenge.id, {
+                status: 'aceptado',
+                actualizado: challenge.actualizado
+              });
             } else if (status === CalendarApp.GuestStatus.NO) {
               challenge.status = 'rechazado';
               challenge.actualizado = new Date().toISOString();
               sheet.getRange(i + 1, 11).setValue('rechazado');
               sheet.getRange(i + 1, 15).setValue(challenge.actualizado);
               updatedAny = true;
+              updateChallengeInFirebase(challenge.id, {
+                status: 'rechazado',
+                actualizado: challenge.actualizado
+              });
 
               // Deletar reserva de cancha también
               try {
@@ -589,7 +601,7 @@ function createChallenge(data) {
   normalizeChallengeCompletion(challenge);
 
   try {
-    if (challenge.status !== 'completado' && challenge.tipo !== 'amistoso' && challenge.retadoEmail) {
+    if (challenge.status !== 'completado' && challenge.retadoEmail) {
       const res = notifyChallenge(challenge);
       if (res.ok && res.calendar && res.calendar.ok) {
         challenge.eventId = res.calendar.eventId;
@@ -758,6 +770,18 @@ function hasRecordedChallengeResult(challenge) {
 function normalizeChallengeCompletion(challenge) {
   if (hasRecordedChallengeResult(challenge) && challenge.status !== 'eliminado') {
     challenge.status = 'completado';
+  } else if (challenge && ['pendiente', 'aceptado', 'terminado'].includes(challenge.status)) {
+    if (challenge.fecha) {
+      const dateParts = challenge.fecha.split('-').map(Number);
+      const slot = challenge.slot || '23:59';
+      const timeParts = slot.split(':').map(Number);
+      if (dateParts.length === 3 && timeParts.length >= 2) {
+        const matchStart = new Date(dateParts[0], dateParts[1] - 1, dateParts[2], timeParts[0], timeParts[1], 0);
+        if (new Date() > matchStart) {
+          challenge.status = 'terminado';
+        }
+      }
+    }
   }
   return challenge;
 }
@@ -841,6 +865,44 @@ function validateMember(email) {
   }
 
   return { ok: false, msg: "El correo no se encuentra registrado en Firebase." };
+}
+
+function updateChallengeInFirebase(challengeId, fields) {
+  if (!CONFIG.FIREBASE_PROJECT_ID || !CONFIG.FIREBASE_API_KEY || !challengeId) return;
+  try {
+    const firestoreUrl = 'https://firestore.googleapis.com/v1/projects/'
+      + encodeURIComponent(CONFIG.FIREBASE_PROJECT_ID)
+      + '/databases/(default)/documents/ranking_challenges/'
+      + encodeURIComponent(challengeId)
+      + '?key=' + encodeURIComponent(CONFIG.FIREBASE_API_KEY);
+    
+    const docFields = {};
+    const fieldPaths = [];
+    Object.entries(fields).forEach(([key, val]) => {
+      if (val === null || val === undefined) return;
+      docFields[key] = { stringValue: String(val) };
+      fieldPaths.push('updateMask.fieldPaths=' + encodeURIComponent(key));
+    });
+
+    const payload = {
+      fields: docFields
+    };
+
+    const urlWithMask = firestoreUrl + '&' + fieldPaths.join('&');
+
+    const response = UrlFetchApp.fetch(urlWithMask, {
+      method: 'patch',
+      contentType: 'application/json',
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    });
+
+    if (response.getResponseCode() >= 300) {
+      console.warn('Error updating Firebase Firestore in updateChallengeInFirebase: ' + response.getContentText());
+    }
+  } catch (err) {
+    console.warn('Error updating Firebase Firestore in updateChallengeInFirebase:', err);
+  }
 }
 
 function findFirebasePlayerByEmail(email) {

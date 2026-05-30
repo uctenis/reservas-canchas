@@ -47,9 +47,25 @@
       <div class="rank-actions">
         <span class="rank-status" id="rankApiStatus" aria-live="polite">Conectando...</span>
         <button class="btn-primary pulse-confirm" id="btnConfirmRankingOrder" type="button" style="display:none; background:#10b981; border:none; border-radius:8px; font-weight:800; padding:8px 16px; font-size:0.85rem; width:auto; min-height:auto; cursor:pointer; color:#0f172a; align-items:center; justify-content:center; gap:6px;">💾 Guardar Orden</button>
+        <button class="btn-admin-panel" id="btnModoEdicion" type="button" style="display:none; background:rgba(99, 102, 241, 0.15); border-color:rgba(99, 102, 241, 0.35); color:#a5b4fc; font-weight:800;">✏️ Modo Edición</button>
         <button class="btn-admin-panel" id="btnAdminPlayers" type="button" data-action="open-admin" style="display:none">Panel Administrador</button>
         <button class="btn-challenge-new" id="btnNuevoDesafio" type="button" style="display:none">Nuevo desafío</button>
         <button class="btn-challenge-new" id="btnNuevoAmistoso" type="button" style="display:none; background:#64748b; color:#fff; border-color:#64748b;">Registrar Amistoso</button>
+      </div>
+    </div>
+
+    <!-- BANNER MODO EDICION -->
+    <div id="editModeBanner" style="display:none; background: linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(99, 102, 241, 0.05) 100%); border: 1px solid rgba(99, 102, 241, 0.35); border-radius: 12px; padding: 14px 20px; margin-bottom: 20px; align-items: center; justify-content: space-between; gap: 16px; box-shadow: 0 4px 20px rgba(99,102,241,0.1); animation: pulseEditBorder 2.5s infinite alternate;">
+      <div style="display:flex; align-items:center; gap:12px;">
+        <span style="font-size:1.6rem; filter:drop-shadow(0 2px 4px rgba(0,0,0,0.3));">✏️</span>
+        <div>
+          <strong style="color:#a5b4fc; font-size:0.95rem; display:block; margin-bottom:2px;">Modo Edición Ranking Activo</strong>
+          <span style="font-size:0.8rem; color:var(--text-secondary);">Arrastra y suelta a los jugadores para cambiar sus posiciones. Presiona "Guardar Cambios" para confirmar.</span>
+        </div>
+      </div>
+      <div style="display:flex; gap:10px; flex-shrink:0;">
+        <button class="btn-primary" id="btnSaveRankingEdits" type="button" style="background:#10b981; color:#0f172a; border:none; border-radius:8px; padding:8px 16px; font-weight:800; font-size:0.82rem; cursor:pointer; width:auto; min-height:auto; display:inline-flex; align-items:center; box-shadow: 0 4px 12px rgba(16,185,129,0.25);">Guardar Cambios</button>
+        <button class="btn-secondary" id="btnCancelRankingEdits" type="button" style="border-radius:8px; padding:8px 16px; font-size:0.82rem; cursor:pointer; width:auto; min-height:auto; background:rgba(255,255,255,0.06); color:#fff; border:1px solid var(--panel-line); display:inline-flex; align-items:center;">Cancelar</button>
       </div>
     </div>
 
@@ -781,6 +797,9 @@ const rankingState = {
   editingChallengeId: null
 };
 
+let rankingEditMode = false;
+let initialRankingOrder = [];
+
 document.addEventListener('DOMContentLoaded', () => {
   DB.seed();
   setupEvents();
@@ -897,6 +916,19 @@ function setupEvents() {
   const btnConfirmOrder = document.getElementById('btnConfirmRankingOrder');
   if (btnConfirmOrder) {
     btnConfirmOrder.addEventListener('click', confirmRankingOrder);
+  }
+
+  const btnEdit = document.getElementById('btnModoEdicion');
+  if (btnEdit) {
+    btnEdit.addEventListener('click', toggleRankingEditMode);
+  }
+  const btnSaveEdits = document.getElementById('btnSaveRankingEdits');
+  if (btnSaveEdits) {
+    btnSaveEdits.addEventListener('click', saveRankingEdits);
+  }
+  const btnCancelEdits = document.getElementById('btnCancelRankingEdits');
+  if (btnCancelEdits) {
+    btnCancelEdits.addEventListener('click', cancelRankingEdits);
   }
 
   document.addEventListener('submit', event => {
@@ -1250,6 +1282,11 @@ async function syncChallengesFromCloud() {
   // Firebase es la única fuente de verdad — Google Sheets eliminado
   if (!DB.isCloudConfigured()) return;
 
+  // Sincronizar en segundo plano con Google Calendar (a través de Google Sheets)
+  if (window.CONFIG?.API_URL) {
+    fetch(window.CONFIG.API_URL + '?action=get_challenges').catch(e => console.warn('Background Calendar sync failed:', e));
+  }
+
   try {
     const cloudChallenges = await withTimeout(DB.getChallengesCloud(), CLOUD_TIMEOUT_MS, 'Firebase desafíos');
     // Reemplazar localStorage con lo que viene de Firebase (fuente autoritativa)
@@ -1510,7 +1547,7 @@ function renderRanking() {
       ? `<img src="fotos/leader_badge.png" alt="1" style="width: 32px; height: 32px; object-fit: contain; vertical-align: middle;">`
       : `<span class="rank-number rank-${player.pos <= 3 ? player.pos : 'other'}">${player.pos}</span>`;
 
-    const draggableAttr = isAdmin ? 'draggable="true" style="cursor: grab;"' : '';
+    const draggableAttr = (isAdmin && rankingEditMode) ? 'draggable="true" style="cursor: grab;"' : '';
 
     return `
       <tr class="${player.pos <= 3 ? 'top-row' : ''}" data-player-key="${escapeAttr(player.key)}" ${draggableAttr}>
@@ -1710,9 +1747,11 @@ window.addEventListener('resize', () => {
 
 function renderAdminControls() {
   const btn = document.getElementById('btnAdminPlayers');
+  const btnEdit = document.getElementById('btnModoEdicion');
   const status = document.getElementById('rankApiStatus');
   const isAdmin = isPlayerAdminSession();
   if (btn) btn.style.display = isAdmin ? 'inline-flex' : 'none';
+  if (btnEdit) btnEdit.style.display = isAdmin ? 'inline-flex' : 'none';
   if (status) status.style.display = isAdmin ? 'inline-flex' : 'none';
 }
 
@@ -1810,7 +1849,7 @@ function renderChallenges() {
   const session = DB.getSession();
   const users = DB.getUsers();
   const list = DB.getChallenges()
-    .filter(challenge => challenge.genero === rankingState.currentGender && ['pendiente', 'aceptado'].includes(challenge.status))
+    .filter(challenge => challenge.genero === rankingState.currentGender && ['pendiente', 'aceptado', 'terminado'].includes(challenge.status))
     .sort(sortChallenges);
   const div = document.getElementById('challengesList');
   document.getElementById('activeChallengeCount').textContent = list.length ? `${list.length} activo${list.length === 1 ? '' : 's'}` : '';
@@ -1839,7 +1878,7 @@ function renderMyChallenges() {
     .filter(challenge => isUserInChallenge(session, challenge));
 
   const activeChallenges = allChallenges
-    .filter(challenge => ['pendiente', 'aceptado'].includes(challenge.status))
+    .filter(challenge => ['pendiente', 'aceptado', 'terminado'].includes(challenge.status))
     .sort(sortChallenges);
 
   // Tab badge for mobile
@@ -1900,7 +1939,7 @@ function challengeCard(challenge, users, session, compact) {
   const involved = session && isUserInChallenge(session, challenge);
   const isAdmin = isAdminSession(session);
   const canRespond = session && isUserRetadoInChallenge(session, challenge) && challenge.status === 'pendiente';
-  const canScore = involved && (challenge.status === 'aceptado' || isAdmin);
+  const canScore = involved && (['aceptado', 'terminado'].includes(challenge.status) || isAdmin);
   const canManage = (involved && ['pendiente', 'aceptado'].includes(challenge.status)) || isAdmin;
   const status = statusLabel(challenge.status);
 
@@ -1926,7 +1965,9 @@ function challengeCard(challenge, users, session, compact) {
         <button class="btn-reject" type="button" data-action="reject-challenge" data-challenge-id="${escapeAttr(challenge.id)}">Rechazar</button>`;
     }
     if (canScore) {
-      actions += `<button class="btn-score" type="button" data-action="score-challenge" data-challenge-id="${escapeAttr(challenge.id)}">Ingresar resultado</button>`;
+      const isHighlighted = challenge.status === 'terminado';
+      const highlightClass = isHighlighted ? ' btn-score-highlight' : '';
+      actions += `<button class="btn-score${highlightClass}" type="button" data-action="score-challenge" data-challenge-id="${escapeAttr(challenge.id)}">Ingresar resultado</button>`;
     }
     if (canManage) {
       actions += `
@@ -2958,6 +2999,16 @@ async function respondChallenge(id, accept) {
 
   if (!saved) {
     DB.respondChallenge(id, accept);
+  }
+
+  if (accept) {
+    const challenge = DB.getChallenges().find(c => c.id === id);
+    const isFriendly = challenge && challenge.tipo === 'amistoso';
+    if (isFriendly) {
+      alert("¡Partido amistoso aceptado! 🤝");
+    } else {
+      alert("¡Desafío aceptado! ⚔️\nChallenge accepted!");
+    }
   }
 
   renderChallenges();
@@ -4420,7 +4471,7 @@ async function deletePlayerPhysicalFromAdmin(playerId) {
 let draggedPlayerKey = null;
 
 function setupDraggableRanking() {
-  if (!isPlayerAdminSession()) return;
+  if (!isPlayerAdminSession() || !rankingEditMode) return;
 
   const tbody = document.getElementById('rankBody');
   if (!tbody) return;
@@ -4520,10 +4571,152 @@ function reorderRankingState(draggedKey, targetKey, insertBefore) {
   
   renderRanking();
   
-  const btn = document.getElementById('btnConfirmRankingOrder');
-  if (btn) {
-    btn.style.display = 'inline-flex';
+  // Guardado inmediato deshabilitado: se controla por el banner en Modo Edición
+  // const btn = document.getElementById('btnConfirmRankingOrder');
+  // if (btn) {
+  //   btn.style.display = 'inline-flex';
+  // }
+}
+
+function toggleRankingEditMode() {
+  const session = DB.getSession();
+  if (!isPlayerAdminSession(session)) return;
+
+  rankingEditMode = !rankingEditMode;
+  
+  const btn = document.getElementById('btnModoEdicion');
+  const banner = document.getElementById('editModeBanner');
+  const table = document.getElementById('rankTable');
+
+  if (rankingEditMode) {
+    if (btn) {
+      btn.innerHTML = '✏️ Modo Edición: Activo';
+      btn.style.background = '#e11d48'; 
+      btn.style.borderColor = '#e11d48';
+    }
+    if (banner) {
+      banner.style.display = 'flex';
+    }
+    if (table) {
+      table.style.boxShadow = '0 0 0 2px rgba(99, 102, 241, 0.4)';
+    }
+    
+    const gender = rankingState.currentGender;
+    initialRankingOrder = (rankingState.lists[gender] || []).map(p => p.id || p.key);
+  } else {
+    if (btn) {
+      btn.innerHTML = '✏️ Modo Edición';
+      btn.style.background = 'rgba(255, 255, 255, 0.06)';
+      btn.style.borderColor = 'var(--panel-line)';
+    }
+    if (banner) {
+      banner.style.display = 'none';
+    }
+    if (table) {
+      table.style.boxShadow = 'none';
+    }
+    initialRankingOrder = [];
   }
+  
+  renderRanking();
+}
+
+async function saveRankingEdits() {
+  const session = DB.getSession();
+  if (!isPlayerAdminSession(session)) return;
+  
+  const gender = rankingState.currentGender;
+  const list = rankingState.lists[gender] || [];
+  
+  const currentOrder = list.map(p => p.id || p.key);
+  const hasChanges = currentOrder.some((id, idx) => id !== initialRankingOrder[idx]);
+  if (!hasChanges) {
+    alert("No se detectaron cambios en el ranking.");
+    return;
+  }
+  
+  if (!confirm("¿Deseas actualizar las posiciones del ranking?")) return;
+  
+  const btn = document.getElementById('btnSaveRankingEdits');
+  const originalText = btn.textContent;
+  
+  try {
+    btn.disabled = true;
+    btn.textContent = 'Guardando...';
+    
+    if (DB.isCloudConfigured()) {
+      await DB.savePlayersCloud(list, adminPayload(session));
+    }
+    
+    list.forEach(p => {
+      const user = DB.getUsers().find(u => u.id === p.id);
+      if (user) {
+        user.pos = p.pos;
+        user.posicion = p.pos;
+        user.posicionAnterior = p.prev;
+        DB.upsertUserLocal(user);
+      }
+    });
+    
+    DB.saveRanking(gender, list);
+    
+    const nowStr = new Date().toISOString();
+    const genderText = gender === 'F' ? 'femenino' : 'masculino';
+    const newsItem = {
+      id: 'manual-reorder-' + gender + '-' + Date.now(),
+      category: 'Destacado',
+      badgeClass: 'badge-torneo',
+      badgeText: 'Ranking',
+      title: 'Modificacion manual del ranking ' + genderText,
+      body: 'El administrador ' + session.nombre + ' (' + session.email + ') ha modificado manualmente las posiciones en la escalerilla del ranking ' + genderText + ' el ' + new Date().toLocaleDateString('es-CL', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }) + '.',
+      date: new Date().toLocaleDateString('es-CL', { day: 'numeric', month: 'short' }),
+      creado: nowStr,
+      actualizado: nowStr
+    };
+    if (DB.isCloudConfigured()) {
+      await DB.saveNewsCloud(newsItem, { email: session.email });
+    } else {
+      const localNews = DB.getNews();
+      localNews.unshift(newsItem);
+      DB.saveNews(localNews);
+    }
+
+    alert('¡El orden del ranking ha sido reordenado y guardado correctamente!');
+    
+    rankingEditMode = false;
+    toggleRankingEditMode();
+    await refreshRankingPage();
+    
+  } catch (error) {
+    console.error('Error al guardar el nuevo orden:', error);
+    alert('Error al guardar el nuevo orden: ' + error.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalText;
+  }
+}
+
+function cancelRankingEdits() {
+  rankingEditMode = false;
+  
+  const btn = document.getElementById('btnModoEdicion');
+  const banner = document.getElementById('editModeBanner');
+  const table = document.getElementById('rankTable');
+
+  if (btn) {
+    btn.innerHTML = '✏️ Modo Edición';
+    btn.style.background = 'rgba(255, 255, 255, 0.06)';
+    btn.style.borderColor = 'var(--panel-line)';
+  }
+  if (banner) {
+    banner.style.display = 'none';
+  }
+  if (table) {
+    table.style.boxShadow = 'none';
+  }
+  initialRankingOrder = [];
+  
+  refreshRankingPage();
 }
 
 async function confirmRankingOrder() {
@@ -5025,7 +5218,8 @@ function statusLabel(status) {
     pendiente: 'Pendiente',
     aceptado: 'Aceptado',
     rechazado: 'Rechazado',
-    completado: 'Completado'
+    completado: 'Completado',
+    terminado: 'Terminado'
   }[status] || status;
 }
 

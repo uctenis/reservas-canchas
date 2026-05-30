@@ -925,7 +925,7 @@ async function finalConfirmNormal(s, btn) {
       slot: sel.slot,
       courtId: sel.court.id,
       courtLabel: sel.court.label,
-      status: 'aceptado', // Ya está confirmado al reservar
+      status: 'pendiente', // Reservado inicialmente como pendiente
       tipo: 'amistoso',
       bookingId: tempBookingId
     });
@@ -978,7 +978,7 @@ async function finalConfirmNormal(s, btn) {
           slot: challenge.slot,
           courtId: challenge.courtId,
           courtLabel: challenge.courtLabel,
-          status: 'aceptado',
+          status: 'pendiente',
           tipo: 'amistoso',
           bookingId: r.booking.id
         });

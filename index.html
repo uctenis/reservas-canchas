@@ -259,6 +259,11 @@
       color: #4ade80;
       border: 1px solid rgba(74, 222, 128, 0.18);
     }
+    .match-vs-badge.status-terminado {
+      background: rgba(148, 163, 184, 0.08);
+      color: #94a3b8;
+      border: 1px solid rgba(148, 163, 184, 0.18);
+    }
     .match-score-badge {
       font-size: 0.76rem;
       font-weight: 800;
@@ -1411,9 +1416,9 @@ async function loadLiveData() {
     return 'fotos/default_avatar_h.png';
   }
 
-  // Active challenges (pendiente or aceptado)
+  // Active challenges (pendiente, aceptado or terminado)
   const active = challenges
-    .filter(c => c.status === 'pendiente' || c.status === 'aceptado')
+    .filter(c => c.status === 'pendiente' || c.status === 'aceptado' || c.status === 'terminado')
     .sort((a, b) => {
       const myA = isMyChallenge(a) ? 1 : 0;
       const myB = isMyChallenge(b) ? 1 : 0;
@@ -1440,8 +1445,15 @@ async function loadLiveData() {
   if (activeCard) activeCard.classList.toggle('is-empty-compact', !active.length);
   if (active.length) {
     activeEl.innerHTML = active.map(c => {
-      const statusClass = c.status === 'aceptado' ? 'status-aceptado' : 'status-pendiente';
-      const statusText = c.status === 'aceptado' ? 'Aceptado' : 'Pendiente';
+      let statusClass = 'status-pendiente';
+      let statusText = 'Pendiente';
+      if (c.status === 'aceptado') {
+        statusClass = 'status-aceptado';
+        statusText = 'Aceptado';
+      } else if (c.status === 'terminado') {
+        statusClass = 'status-terminado';
+        statusText = 'Terminado';
+      }
       const retadorName = c.retadorNombre || 'Jugador';
       const retadoName = c.retadoNombre || 'Jugador';
       
