@@ -70,6 +70,23 @@ function normalizeChallengeRecord(challenge) {
   const normalized = { ...(challenge || {}) };
   if (hasRecordedChallengeResult(normalized) && normalized.status !== 'eliminado') {
     normalized.status = 'completado';
+  } else if (normalized && ['pendiente', 'aceptado', 'terminado'].includes(normalized.status)) {
+    if (normalized.fecha) {
+      const parts = normalized.fecha.split('-');
+      if (parts.length === 3) {
+        const y = parseInt(parts[0], 10);
+        const m = parseInt(parts[1], 10);
+        const d = parseInt(parts[2], 10);
+        const slot = normalized.slot || '23:59';
+        const [sh, sm] = slot.split(':').map(Number);
+        
+        // Build Date object using local timezone
+        const matchTime = new Date(y, m - 1, d, sh, sm);
+        if (new Date() > matchTime) {
+          normalized.status = 'terminado';
+        }
+      }
+    }
   }
   return normalized;
 }
