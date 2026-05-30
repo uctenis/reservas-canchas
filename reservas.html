@@ -890,18 +890,32 @@ async function finalConfirm() {
 }
 
 async function finalConfirmNormal(s, btn) {
-  const r = await DB.createBookingAPI(s.id, sel.court.id, sel.date, sel.slot);
+  // Generate optimistic booking ID
+  const tempBookingId = 'temp_' + Date.now();
   
-  if (!r.ok) {
-    alert(r.msg);
-    btn.disabled = false;
-    btn.innerHTML = '✅ Confirmar reserva';
-    return;
-  }
+  // Create temporary local booking
+  const b = { 
+    id: tempBookingId, 
+    userId: s.id, 
+    courtId: sel.court.id, 
+    fecha: sel.date, 
+    slot: sel.slot, 
+    status: 'confirmada', 
+    creado: new Date().toISOString() 
+  };
   
-  // Si es partido amistoso con oponente seleccionado, crear el registro del encuentro
+  // Save booking locally
+  const bookings = DB.getBookings();
+  bookings.push(b);
+  DB.saveBookings(bookings);
+
+  // If friendly match with opponent, create the challenge locally
+  let challenge = null;
+  let tempChallengeId = null;
   if (sel.isFriendly && sel.retadoId) {
-    const challenge = DB.createChallenge(s.id, sel.retadoId, s.genero || 'M', sel.date, sel.court.label);
+    tempChallengeId = 'temp_ch_' + Date.now();
+    challenge = DB.createChallenge(s.id, sel.retadoId, s.genero || 'M', sel.date, sel.court.label);
+    challenge.id = tempChallengeId;
     Object.assign(challenge, {
       retadorNombre: s.nombre,
       retadorEmail: s.email || '',
@@ -913,64 +927,122 @@ async function finalConfirmNormal(s, btn) {
       courtLabel: sel.court.label,
       status: 'aceptado', // Ya está confirmado al reservar
       tipo: 'amistoso',
-      bookingId: r.booking?.id || ''
+      bookingId: tempBookingId
     });
     DB.saveChallenges(DB.getChallenges().map(item => item.id === challenge.id ? { ...item, ...challenge } : item));
-
-    // Guardar Firebase si está disponible
-    if (DB.isCloudConfigured()) {
-      try {
-        await DB.saveChallengeCloud(challenge);
-      } catch (cloudErr) {
-        console.warn('No se pudo guardar el amistoso en Firebase:', cloudErr);
-      }
-    }
-
-    // Guardar Google Sheets via API si está disponible
-    if (window.CONFIG?.API_URL) {
-      try {
-        await fetch(window.CONFIG.API_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify({
-            action: 'create_challenge',
-            ...challenge
-          })
-        });
-      } catch (sheetErr) {
-        console.warn('No se pudo registrar el amistoso en Google Sheets:', sheetErr);
-      }
-    }
   }
 
+  // Update success modal and show it immediately
   const wd = dayOfWeekFromISO(sel.date);
   const [y, m, d] = sel.date.split('-');
-  document.getElementById('successIcon').textContent = '🎉';
+  document.getElementById('successIcon').textContent = '🎉'; // 🎉
   document.getElementById('successTitle').textContent = '¡Reserva confirmada!';
   document.getElementById('successMsg').textContent =
     `${sel.court.label} · ${DAYS_LONG[wd]}, ${parseInt(d)} de ${MONTHS_LONG[parseInt(m) - 1]} ${y} · ${sel.slot}`;
   document.getElementById('whatsappLinkContainer').style.display = 'none';
   document.getElementById('successModal').classList.add('visible');
+
   renderMyBookings();
-  await refreshSlotAvailability();
+  refreshSlotAvailability();
+
+  // Reset selection and close form
   sel = { court: null, date: null, slot: null, isChallenge: false, isFriendly: false, retadoId: null, retadoNombre: null, retadoEmail: null, retadoTelefono: null };
   btn.disabled = false;
   btn.innerHTML = '✅ Confirmar reserva';
   setTimeout(() => goStep(1), 200);
+
+  // Background Sync
+  (async () => {
+    const r = await DB.createBookingAPI(s.id, b.courtId, b.fecha, b.slot);
+    
+    // Remove temporary booking
+    const cleanBookings = DB.getBookings().filter(bk => bk.id !== tempBookingId);
+    DB.saveBookings(cleanBookings);
+    
+    if (tempChallengeId) {
+      // Remove temporary challenge
+      const cleanChallenges = DB.getChallenges().filter(ch => ch.id !== tempChallengeId);
+      DB.saveChallenges(cleanChallenges);
+    }
+
+    if (r.ok) {
+      if (challenge) {
+        // Re-create challenge with real booking ID and actual ID
+        const realChallenge = DB.createChallenge(s.id, challenge.retadoId, s.genero || 'M', challenge.fecha, challenge.cancha);
+        Object.assign(realChallenge, {
+          retadorNombre: challenge.retadorNombre,
+          retadorEmail: challenge.retadorEmail,
+          retadoNombre: challenge.retadoNombre,
+          retadoEmail: challenge.retadoEmail,
+          retadoTelefono: challenge.retadoTelefono,
+          slot: challenge.slot,
+          courtId: challenge.courtId,
+          courtLabel: challenge.courtLabel,
+          status: 'aceptado',
+          tipo: 'amistoso',
+          bookingId: r.booking.id
+        });
+        DB.saveChallenges(DB.getChallenges().map(item => item.id === realChallenge.id ? realChallenge : item));
+
+        // Save in Firebase background
+        if (DB.isCloudConfigured()) {
+          try {
+            await DB.saveChallengeCloud(realChallenge);
+          } catch (cloudErr) {
+            console.warn('No se pudo guardar el amistoso en Firebase:', cloudErr);
+          }
+        }
+
+        // Save in Google Sheets background
+        if (window.CONFIG?.API_URL) {
+          try {
+            await fetch(window.CONFIG.API_URL, {
+              method: 'POST',
+              headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+              body: JSON.stringify({
+                action: 'create_challenge',
+                ...realChallenge
+              })
+            });
+          } catch (sheetErr) {
+            console.warn('No se pudo registrar el amistoso en Google Sheets:', sheetErr);
+          }
+        }
+      }
+    } else {
+      console.warn('Google Calendar booking failed in background:', r.msg);
+      alert(`Tu reserva del ${b.fecha} a las ${b.slot} falló: ${r.msg}`);
+    }
+
+    renderMyBookings();
+    refreshSlotAvailability();
+  })();
 }
 
 async function finalConfirmChallenge(s, btn) {
-  // 1. Crear la reserva en Google Calendar
-  const r = await DB.createBookingAPI(s.id, sel.court.id, sel.date, sel.slot);
-  if (!r.ok) {
-    alert('Error al reservar la cancha: ' + r.msg);
-    btn.disabled = false;
-    btn.innerHTML = '✅ Confirmar reserva';
-    return;
-  }
+  // Generate optimistic IDs
+  const tempBookingId = 'temp_' + Date.now();
+  const tempChallengeId = 'temp_ch_' + Date.now();
 
-  // 2. Crear el desafío localmente
+  // Create temporary local booking
+  const b = { 
+    id: tempBookingId, 
+    userId: s.id, 
+    courtId: sel.court.id, 
+    fecha: sel.date, 
+    slot: sel.slot, 
+    status: 'confirmada', 
+    creado: new Date().toISOString() 
+  };
+  
+  // Save booking locally
+  const bookings = DB.getBookings();
+  bookings.push(b);
+  DB.saveBookings(bookings);
+
+  // Create challenge locally
   const challenge = DB.createChallenge(s.id, sel.retadoId, s.genero || 'M', sel.date, sel.court.label);
+  challenge.id = tempChallengeId;
   Object.assign(challenge, {
     retadorNombre: s.nombre,
     retadorEmail: s.email,
@@ -979,61 +1051,36 @@ async function finalConfirmChallenge(s, btn) {
     retadoTelefono: sel.retadoTelefono || '',
     slot: sel.slot,
     courtId: sel.court.id,
-    courtLabel: sel.court.label
+    courtLabel: sel.court.label,
+    bookingId: tempBookingId
   });
+  
+  // Save challenge locally
   DB.saveChallenges(DB.getChallenges().map(item => item.id === challenge.id ? { ...item, ...challenge } : item));
 
-  // 3. Enviar notificación al retado (correo + calendar invite)
+  // Instantly generate WhatsApp URL locally
   let whatsappUrl = null;
-  try {
-    const wd = dayOfWeekFromISO(sel.date);
-    const [y, m, d] = sel.date.split('-');
-    const response = await fetch(window.CONFIG.API_URL, {
-      method: 'POST',
-      body: JSON.stringify({
-        action: 'notify_challenge',
-        challengeId: challenge.id,
-        retadorNombre: s.nombre,
-        retadorEmail: s.email,
-        retadoNombre: sel.retadoNombre,
-        retadoEmail: sel.retadoEmail || '',
-        retadoId: sel.retadoId,
-        retadoTelefono: sel.retadoTelefono || '',
-        fecha: sel.date,
-        fechaLabel: `${DAYS_LONG[wd]}, ${parseInt(d)} de ${MONTHS_LONG[parseInt(m)-1]} ${y}`,
-        slot: sel.slot,
-        cancha: sel.court.label,
-        courtId: sel.court.id
-      })
-    });
-    const data = await response.json();
-    if (data.whatsappUrl) whatsappUrl = data.whatsappUrl;
-  } catch(e) {
-    console.warn('No se pudo enviar notificación de desafío:', e);
+  const cleanPhone = String(sel.retadoTelefono || '').replace(/[^0-9]/g, '');
+  if (cleanPhone) {
+    const parts = sel.date.split('-');
+    const dateFormatted = parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : sel.date;
+    const currentUrl = window.location.origin + window.location.pathname.replace('reservas.html', 'ranking.html');
+    const text = `🎾 ¡Hola! Te he desafiado en UCTenis.
+
+📅 Fecha: ${dateFormatted} · Hora: ${sel.slot}
+🏟️ Cancha: ${sel.court.label}
+
+Por favor, ingresa a la página para aceptar o rechazar el desafío:
+${currentUrl}
+
+¡Nos vemos en la cancha! 🏆`;
+    whatsappUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`;
   }
 
-  // 4. Guardar desafío en Firebase si está disponible
-  if (DB.isCloudConfigured()) {
-    try {
-      await DB.saveChallengeCloud({
-        ...challenge,
-        retadorNombre: s.nombre,
-        retadorEmail: s.email,
-        retadoNombre: sel.retadoNombre,
-        retadoEmail: sel.retadoEmail || '',
-        retadoTelefono: sel.retadoTelefono || '',
-        slot: sel.slot,
-        courtId: sel.court.id,
-        courtLabel: sel.court.label
-      });
-    } catch(e) {
-      console.warn('Error guardando desafío en Firebase:', e);
-    }
-  }
-
+  // Update success modal and show it immediately
   const wd = dayOfWeekFromISO(sel.date);
   const [y, m, d] = sel.date.split('-');
-  document.getElementById('successIcon').textContent = '⚔️';
+  document.getElementById('successIcon').textContent = '⚔️'; // ⚔️
   document.getElementById('successTitle').textContent = '¡Desafío enviado!';
   document.getElementById('successMsg').textContent =
     `Has retado a ${sel.retadoNombre} · ${DAYS_LONG[wd]}, ${parseInt(d)} de ${MONTHS_LONG[parseInt(m)-1]} ${y} · ${sel.slot} · ${sel.court.label}`;
@@ -1047,11 +1094,87 @@ async function finalConfirmChallenge(s, btn) {
 
   document.getElementById('successModal').classList.add('visible');
   renderMyBookings();
-  await refreshSlotAvailability();
+  refreshSlotAvailability();
+  
+  // Reset selection and close form
   sel = { court: null, date: null, slot: null, isChallenge: false, retadoId: null, retadoNombre: null, retadoEmail: null, retadoTelefono: null };
   btn.disabled = false;
   btn.innerHTML = '✅ Confirmar reserva';
   setTimeout(() => goStep(1), 200);
+
+  // Background sync
+  (async () => {
+    // 1. Create booking in Google Calendar API
+    const r = await DB.createBookingAPI(s.id, b.courtId, b.fecha, b.slot);
+    
+    // Remove temporary booking
+    const cleanBookings = DB.getBookings().filter(bk => bk.id !== tempBookingId);
+    DB.saveBookings(cleanBookings);
+    
+    // Remove temporary challenge
+    const cleanChallenges = DB.getChallenges().filter(ch => ch.id !== tempChallengeId);
+    DB.saveChallenges(cleanChallenges);
+
+    if (r.ok) {
+      // Re-create the challenge with the actual booking ID and a real challenge ID
+      const realChallenge = DB.createChallenge(s.id, challenge.retadoId, s.genero || 'M', challenge.fecha, challenge.cancha);
+      Object.assign(realChallenge, {
+        retadorNombre: challenge.retadorNombre,
+        retadorEmail: challenge.retadorEmail,
+        retadoNombre: challenge.retadoNombre,
+        retadoEmail: challenge.retadoEmail,
+        retadoTelefono: challenge.retadoTelefono,
+        slot: challenge.slot,
+        courtId: challenge.courtId,
+        courtLabel: challenge.courtLabel,
+        bookingId: r.booking.id
+      });
+      DB.saveChallenges(DB.getChallenges().map(item => item.id === realChallenge.id ? realChallenge : item));
+
+      // 2. Notify challenge to opponent in the background
+      try {
+        const response = await fetch(window.CONFIG.API_URL, {
+          method: 'POST',
+          body: JSON.stringify({
+            action: 'notify_challenge',
+            challengeId: realChallenge.id,
+            retadorNombre: s.nombre,
+            retadorEmail: s.email,
+            retadoNombre: realChallenge.retadoNombre,
+            retadoEmail: realChallenge.retadoEmail || '',
+            retadoId: realChallenge.retadoId,
+            retadoTelefono: realChallenge.retadoTelefono || '',
+            fecha: realChallenge.fecha,
+            fechaLabel: `${DAYS_LONG[wd]}, ${parseInt(d)} de ${MONTHS_LONG[parseInt(m)-1]} ${y}`,
+            slot: realChallenge.slot,
+            cancha: realChallenge.courtLabel,
+            courtId: realChallenge.courtId
+          })
+        });
+        const data = await response.json().catch(() => null);
+        if (data && data.whatsappUrl) {
+          document.getElementById('whatsappLink').href = data.whatsappUrl;
+        }
+      } catch(e) {
+        console.warn('Error notify challenge in background:', e);
+      }
+
+      // 3. Save challenge to Firebase
+      if (DB.isCloudConfigured()) {
+        try {
+          await DB.saveChallengeCloud(realChallenge);
+        } catch(e) {
+          console.warn('Error saving to Firebase:', e);
+        }
+      }
+    } else {
+      console.warn('Google Calendar booking failed in background:', r.msg);
+      alert(`Tu desafío a ${challenge.retadoNombre} del ${challenge.fecha} falló: ${r.msg}`);
+    }
+
+    renderMyBookings();
+    refreshSlotAvailability();
+  })();
 }
 
 function closeSuccess() {

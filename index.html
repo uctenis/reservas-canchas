@@ -1201,6 +1201,7 @@ async function loadLiveData() {
       if (bestMover) {
         const currentPos = Number(bestMover.posicion ?? bestMover.pos ?? 0);
         topMoverCard = {
+          id: 'auto-top-mover',
           badgeClass: 'badge-torneo',
           badgeText: 'Destacado',
           title: `¡Evolución del Ranking: Felicitaciones a ${bestMover.nombre}!`,
@@ -1236,6 +1237,7 @@ async function loadLiveData() {
       const isFriendly = latestMatch.tipo === 'amistoso';
       
       latestMatchCard = {
+        id: `auto-latest-match-${latestMatch.id}`,
         badgeClass: isFriendly ? 'badge-app' : 'badge-torneo',
         badgeText: isFriendly ? 'Amistoso' : 'Desafío',
         title: isFriendly 
@@ -1259,6 +1261,7 @@ async function loadLiveData() {
       const isFriendly = nextMatch.tipo === 'amistoso';
       
       nextMatchCard = {
+        id: `auto-next-match-${nextMatch.id}`,
         badgeClass: isFriendly ? 'badge-app' : 'badge-torneo',
         badgeText: isFriendly ? 'Próximo Amistoso' : 'Próximo Desafío',
         title: isFriendly 
@@ -1289,6 +1292,7 @@ async function loadLiveData() {
       const namesStr = bdays.map(p => p.nombre).join(', ');
       
       birthdaysCard = {
+        id: `auto-birthdays-${currentMonth}`,
         badgeClass: 'badge-app',
         badgeText: 'Cumpleaños',
         title: `¡Feliz cumpleaños en ${monthNames[currentMonth - 1]}!`,
@@ -1300,8 +1304,24 @@ async function loadLiveData() {
     console.warn("Error calculating automatic news cards:", err);
   }
 
+  // Filter out hidden news cards
+  const hiddenNewsIds = new Set(
+    (customNews || [])
+      .filter(item => item.deleted || item.category === 'hidden' || item.status === 'hidden')
+      .map(item => item.id)
+  );
+
+  const activeCustomNews = (customNews || []).filter(
+    item => !hiddenNewsIds.has(item.id) && item.category !== 'hidden' && !item.deleted && item.status !== 'hidden'
+  );
+
+  const filteredTopMover = (topMoverCard && !hiddenNewsIds.has(topMoverCard.id)) ? topMoverCard : null;
+  const filteredLatestMatch = (latestMatchCard && !hiddenNewsIds.has(latestMatchCard.id)) ? latestMatchCard : null;
+  const filteredNextMatch = (nextMatchCard && !hiddenNewsIds.has(nextMatchCard.id)) ? nextMatchCard : null;
+  const filteredBirthdays = (birthdaysCard && !hiddenNewsIds.has(birthdaysCard.id)) ? birthdaysCard : null;
+
   // Render the news section dynamically with all cards
-  renderNewsGrid(topMoverCard, latestMatchCard, nextMatchCard, birthdaysCard, customNews);
+  renderNewsGrid(filteredTopMover, filteredLatestMatch, filteredNextMatch, filteredBirthdays, activeCustomNews);
 
   // Resolve session challenge IDs
   const session = DB.getSession();
