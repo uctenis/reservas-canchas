@@ -1539,7 +1539,12 @@ tr.drag-over-bottom {
     display: none;
   }
 
-  #rankTable td:last-child {
+  #rankTable td.table-actions {
+    display: none;
+  }
+
+  #rankTable td.table-actions:has(.btn-mini-challenge) {
+    display: block;
     grid-column: 2;
     margin-top: 10px;
   }
@@ -1569,6 +1574,17 @@ tr.drag-over-bottom {
   .action-buttons .btn-mini-profile,
   .action-buttons .btn-mini-challenge {
     width: auto;
+  }
+
+  .player-avatar {
+    width: 64px;
+    height: 64px;
+    border-radius: 10px;
+  }
+
+  #rankTable .btn-mini-profile,
+  .inactive-player-row .btn-mini-profile {
+    display: none !important;
   }
 
   .admin-modal-grid {
@@ -1675,16 +1691,18 @@ tr.drag-over-bottom {
   }
 
   .player-avatar {
-    width: 44px;
-    height: 44px;
+    width: 64px;
+    height: 64px;
   }
 
-  .inactive-player-row,
+  .inactive-player-row {
+    grid-template-columns: 64px minmax(0, 1fr);
+  }
+
   .admin-player-row {
     grid-template-columns: 44px minmax(0, 1fr);
   }
 
-  .inactive-player-row .btn-mini-profile,
   .admin-player-actions {
     grid-column: 1 / -1;
     justify-content: flex-start;

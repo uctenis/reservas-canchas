@@ -808,8 +808,8 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
 
-<script src="db.js?v=20260529_v1"></script>
-<script src="script.js?v=20260529_v1"></script>
+<script src="db.js?v=20260530_v1"></script>
+<script src="script.js?v=20260530_v1"></script>
 <script>
 // Admin emails (must match db.js)
 const ADMIN_EMAILS = ['uctenisclub@gmail.com', 'dsilva@uct.cl'];
@@ -1317,13 +1317,52 @@ async function loadLiveData() {
   );
 
   const activeCustomNews = (customNews || []).filter(
-    item => !hiddenNewsIds.has(item.id) && item.category !== 'hidden' && !item.deleted && item.status !== 'hidden'
+    item => !hiddenNewsIds.has(item.id) && item.category !== 'hidden' && !item.deleted && item.status !== 'hidden' && !String(item.id).startsWith('auto-')
   );
 
-  const filteredTopMover = (topMoverCard && !hiddenNewsIds.has(topMoverCard.id)) ? topMoverCard : null;
-  const filteredLatestMatch = (latestMatchCard && !hiddenNewsIds.has(latestMatchCard.id)) ? latestMatchCard : null;
-  const filteredNextMatch = (nextMatchCard && !hiddenNewsIds.has(nextMatchCard.id)) ? nextMatchCard : null;
-  const filteredBirthdays = (birthdaysCard && !hiddenNewsIds.has(birthdaysCard.id)) ? birthdaysCard : null;
+  const applyOverride = (card, override) => {
+    if (!override) return card;
+    const badgeClasses = {
+      torneo: 'badge-torneo',
+      maint: 'badge-maint',
+      app: 'badge-app',
+      aviso: 'badge-app'
+    };
+    const badgeTexts = {
+      torneo: 'Torneo',
+      maint: 'Mantención',
+      app: 'Plataforma',
+      aviso: 'Aviso'
+    };
+    return {
+      ...card,
+      title: override.title || card.title,
+      body: override.body || card.body,
+      date: formatDateShort(override.date) || override.date || card.date,
+      badgeClass: badgeClasses[override.category] || card.badgeClass,
+      badgeText: badgeTexts[override.category] || card.badgeText
+    };
+  };
+
+  const overrideTopMover = (customNews || []).find(item => item.id === 'auto-top-mover');
+  const filteredTopMover = (topMoverCard && !hiddenNewsIds.has(topMoverCard.id))
+    ? applyOverride(topMoverCard, overrideTopMover)
+    : null;
+
+  const overrideLatestMatch = latestMatchCard ? (customNews || []).find(item => item.id === latestMatchCard.id) : null;
+  const filteredLatestMatch = (latestMatchCard && !hiddenNewsIds.has(latestMatchCard.id))
+    ? applyOverride(latestMatchCard, overrideLatestMatch)
+    : null;
+
+  const overrideNextMatch = nextMatchCard ? (customNews || []).find(item => item.id === nextMatchCard.id) : null;
+  const filteredNextMatch = (nextMatchCard && !hiddenNewsIds.has(nextMatchCard.id))
+    ? applyOverride(nextMatchCard, overrideNextMatch)
+    : null;
+
+  const overrideBirthdays = birthdaysCard ? (customNews || []).find(item => item.id === birthdaysCard.id) : null;
+  const filteredBirthdays = (birthdaysCard && !hiddenNewsIds.has(birthdaysCard.id))
+    ? applyOverride(birthdaysCard, overrideBirthdays)
+    : null;
 
   // Render the news section dynamically with all cards
   renderNewsGrid(filteredTopMover, filteredLatestMatch, filteredNextMatch, filteredBirthdays, activeCustomNews);

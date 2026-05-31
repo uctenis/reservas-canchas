@@ -10,7 +10,7 @@
   <meta property="og:image" content="https://uctenis.github.io/reservas-canchas/logo_uctenis_v03.png">
   <link rel="icon" href="logo_uctenis_v03.png" type="image/png">
   <link rel="stylesheet" href="style.css?v=20260528_v10">
-  <link rel="stylesheet" href="ranking.css?v=20260528_v10">
+  <link rel="stylesheet" href="ranking.css?v=20260530_v2">
 </head>
 <body>
 <div class="main-container ranking-page">
@@ -699,7 +699,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-<script src="db.js?v=20260529_v1"></script>
+<script src="db.js?v=20260530_v1"></script>
 
 <script>
 // Helper functions for RUT
@@ -5518,6 +5518,8 @@ window.switchAdminSubSection = function(section) {
   }
 }
 
+window.adminNewsListCache = [];
+
 window.renderAdminNewsList = async function() {
   const listDiv = document.getElementById('adminNewsList');
   if (!listDiv) return;
@@ -5527,17 +5529,192 @@ window.renderAdminNewsList = async function() {
   try {
     if (DB.isCloudConfigured()) {
       newsItems = await DB.getNewsCloud();
+      if (newsItems.length === 0) {
+        const seeded = DB.seedNewsLocal();
+        const session = DB.getSession();
+        for (const item of seeded) {
+          try {
+            await DB.saveNewsCloud(item, adminPayload(session));
+          } catch (cloudErr) {
+            console.error('Error seeding news to cloud:', cloudErr);
+          }
+        }
+        newsItems = await DB.getNewsCloud();
+      }
       DB.saveNews(newsItems);
     } else {
       newsItems = DB.getNews();
+      if (newsItems.length === 0) {
+        newsItems = DB.seedNewsLocal();
+      }
     }
   } catch(e) {
     console.warn('Error cargando novedades de la nube, usando caché local:', e);
     newsItems = DB.getNews();
+    if (newsItems.length === 0) {
+      newsItems = DB.seedNewsLocal();
+    }
   }
+
+  // Generar novedades dinámicas automáticas
+  const autoItems = [];
+  
+  // 1. Top Mover (Evolución de Ranking)
+  try {
+    let bestMover = null;
+    let maxDiff = 0;
+    const playersList = getAllPlayers();
+    playersList.forEach(p => {
+      const pos = Number(p.posicion ?? p.pos ?? 0);
+      const prev = Number(p.posicionAnterior ?? p.prev ?? 0);
+      if (pos > 0 && prev > 0 && prev > pos) {
+        const diff = prev - pos;
+        if (diff > maxDiff) {
+          maxDiff = diff;
+          bestMover = { ...p, diff };
+        }
+      }
+    });
+
+    if (bestMover) {
+      const currentPos = Number(bestMover.posicion ?? bestMover.pos ?? 0);
+      autoItems.push({
+        id: 'auto-top-mover',
+        category: 'aviso',
+        title: `¡Evolución del Ranking: Felicitaciones a ${bestMover.nombre}!`,
+        body: `Saludamos a ${bestMover.nombre} por ser el jugador con mayor ascenso en el ranking recientemente, subiendo un total de ${bestMover.diff} puestos para posicionarse en el lugar #${currentPos || '?'} de la escalerilla oficial del club. ¡Excelente juego!`,
+        date: todayISO()
+      });
+    }
+  } catch (err) {
+    console.warn("Error resolviendo top mover:", err);
+  }
+
+  // 2. Latest Completed Match
+  try {
+    const challenges = DB.getChallenges();
+    const completed = challenges.filter(c => c.status === 'completado' && c.ganadorId && c.marcador);
+    if (completed.length > 0) {
+      completed.sort((a, b) => (b.actualizado || b.creado || b.id || '').localeCompare(a.actualizado || a.creado || a.id || ''));
+      const latestMatch = completed[0];
+      const winnerName = latestMatch.ganadorId === latestMatch.retadorId ? (latestMatch.retadorNombre || 'Jugador') : (latestMatch.retadoNombre || 'Jugador');
+      const loserName = latestMatch.ganadorId === latestMatch.retadorId ? (latestMatch.retadoNombre || 'Jugador') : (latestMatch.retadorNombre || 'Jugador');
+      const genderText = latestMatch.genero === 'F' ? 'femenino' : 'masculino';
+      const isFriendly = latestMatch.tipo === 'amistoso';
+      
+      autoItems.push({
+        id: `auto-latest-match-${latestMatch.id}`,
+        category: isFriendly ? 'app' : 'torneo',
+        title: isFriendly 
+          ? `¡Partido Amistoso: ${winnerName} vence a ${loserName}!` 
+          : `¡Gran Desafío: ${winnerName} vence a ${loserName}!`,
+        body: isFriendly
+          ? `En el encuentro amistoso jugado en ${latestMatch.cancha || 'UCTenis'} el ${latestMatch.fecha}, ${winnerName} superó a ${loserName} por un marcador de ${latestMatch.marcador}. ¡Buen juego!`
+          : `En el duelo oficial del ranking ${genderText} jugado en ${latestMatch.cancha || 'UCTenis'} el ${latestMatch.fecha}, ${winnerName} superó a ${loserName} por un marcador de ${latestMatch.marcador}, escalando posiciones en la escalerilla. ¡Felicitaciones a ambos!`,
+        date: (latestMatch.actualizado || latestMatch.creado || latestMatch.fecha).split('T')[0]
+      });
+    }
+  } catch (err) {
+    console.warn("Error resolviendo último partido:", err);
+  }
+
+  // 3. Next Scheduled Match
+  try {
+    const challenges = DB.getChallenges();
+    const todayIso = todayISO();
+    const upcoming = challenges.filter(c => c.status === 'aceptado' && c.fecha >= todayIso);
+    if (upcoming.length > 0) {
+      upcoming.sort((a, b) => a.fecha.localeCompare(b.fecha));
+      const nextMatch = upcoming[0];
+      const genderText = nextMatch.genero === 'F' ? 'femenino' : 'masculino';
+      const slotStr = nextMatch.slot ? ` (Hora: ${nextMatch.slot})` : '';
+      const isFriendly = nextMatch.tipo === 'amistoso';
+      
+      autoItems.push({
+        id: `auto-next-match-${nextMatch.id}`,
+        category: isFriendly ? 'app' : 'torneo',
+        title: isFriendly 
+          ? `¡Amistoso agendado: ${nextMatch.retadorNombre || 'Jugador'} vs ${nextMatch.retadoNombre || 'Jugador'}!` 
+          : `¡Desafío en camino: ${nextMatch.retadorNombre || 'Jugador'} vs ${nextMatch.retadoNombre || 'Jugador'}!`,
+        body: isFriendly
+          ? `Un encuentro amistoso está agendado para el ${nextMatch.fecha} en ${nextMatch.cancha || 'UCTenis'}${slotStr}. ¡Éxito a ambos en este partido de práctica!`
+          : `El encuentro oficial por el ranking ${genderText} está agendado para el ${nextMatch.fecha} en ${nextMatch.cancha || 'UCTenis'}${slotStr}. ¡Mucho éxito a ambos en este importante duelo que define cambios de posiciones en la escalerilla!`,
+        date: (nextMatch.creado || nextMatch.fecha).split('T')[0]
+      });
+    }
+  } catch (err) {
+    console.warn("Error resolviendo próximo partido:", err);
+  }
+
+  // 4. Birthdays
+  try {
+    const playersList = getAllPlayers();
+    const currentMonth = new Date().getMonth() + 1; // 1-12
+    const bdays = playersList.filter(p => {
+      if (!p.fechaNacimiento || p.activo === false || p.participaRanking === false) return false;
+      let month = 0;
+      if (p.fechaNacimiento.includes('-')) {
+        month = Number(p.fechaNacimiento.split('-')[1]);
+      } else if (p.fechaNacimiento.includes('/')) {
+        month = Number(p.fechaNacimiento.split('/')[1]);
+      }
+      return month === currentMonth;
+    });
+
+    if (bdays.length > 0) {
+      const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+      const namesStr = bdays.map(p => p.nombre).join(', ');
+      
+      autoItems.push({
+        id: `auto-birthdays-${currentMonth}`,
+        category: 'app',
+        title: `¡Feliz cumpleaños en ${monthNames[currentMonth - 1]}!`,
+        body: `Saludamos afectuosamente en su mes de cumpleaños a nuestros jugadores: ${namesStr}. ¡Que tengan un excelente año y nos vemos en las canchas! 🎂🎈`,
+        date: `${new Date().getFullYear()}-${String(currentMonth).padStart(2, '0')}-01`
+      });
+    }
+  } catch (err) {
+    console.warn("Error resolviendo cumpleaños:", err);
+  }
+
+  // Mezclar novedades manuales con las automáticas aplicando sobrescrituras
+  const finalNewsItems = [];
+  
+  // Agregar novedades manuales
+  const manualItems = newsItems.filter(item => !String(item.id).startsWith('auto-'));
+  finalNewsItems.push(...manualItems);
+  
+  // Procesar novedades automáticas con sus overrides
+  autoItems.forEach(auto => {
+    const override = newsItems.find(item => item.id === auto.id);
+    if (override) {
+      if (override.deleted || override.category === 'hidden' || override.status === 'hidden') {
+        finalNewsItems.push({
+          ...auto,
+          ...override,
+          isAutomatic: true,
+          isAutoHidden: true
+        });
+      } else {
+        finalNewsItems.push({
+          ...auto,
+          ...override,
+          isAutomatic: true,
+          isAutoOverride: true
+        });
+      }
+    } else {
+      finalNewsItems.push({
+        ...auto,
+        isAutomatic: true
+      });
+    }
+  });
+
+  window.adminNewsListCache = finalNewsItems;
   
   const searchQuery = (document.getElementById('adminNewsSearch')?.value || '').trim().toLowerCase();
-  const filtered = newsItems.filter(item => 
+  const filtered = finalNewsItems.filter(item => 
     !searchQuery || 
     (item.title || '').toLowerCase().includes(searchQuery) || 
     (item.body || '').toLowerCase().includes(searchQuery)
@@ -5555,16 +5732,29 @@ window.renderAdminNewsList = async function() {
     aviso: '📢 Aviso'
   };
   
-  listDiv.innerHTML = filtered.map(item => `
-    <article class="inactive-player-row" style="padding: 12px; margin-bottom: 8px; background: rgba(255,255,255,0.03); border-radius: 8px; display: flex; justify-content: space-between; align-items: center; border: 1px solid rgba(255,255,255,0.05);">
-      <div style="flex: 1; text-align: left; padding-right: 12px;">
-        <span style="font-size: 0.72rem; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.08); color: var(--text-secondary);">${categories[item.category] || item.category || 'Novedad'}</span>
-        <strong style="display: block; font-size: 0.95rem; margin-top: 4px; color: #fff;">${escapeHTML(item.title)}</strong>
-        <span style="font-size: 0.75rem; color: var(--text-secondary);">${formatShortDate(item.date)}</span>
-      </div>
-      <button class="btn-mini-profile" type="button" onclick="openAdminNewsForm('${item.id}')" style="width: auto; min-width: 60px;">Editar</button>
-    </article>
-  `).join('');
+  listDiv.innerHTML = filtered.map(item => {
+    let autoBadge = '';
+    let rowStyle = 'padding: 12px; margin-bottom: 8px; background: rgba(255,255,255,0.03); border-radius: 8px; display: flex; justify-content: space-between; align-items: center; border: 1px solid rgba(255,255,255,0.05);';
+    if (item.isAutomatic) {
+      if (item.isAutoHidden) {
+        autoBadge = ` <span style="font-size: 0.72rem; padding: 2px 6px; border-radius: 4px; background: rgba(239, 68, 68, 0.2); color: #fca5a5; margin-left: 4px; font-weight: bold;">🤖 Auto (Oculta)</span>`;
+        rowStyle += ' opacity: 0.5;';
+      } else {
+        autoBadge = ` <span style="font-size: 0.72rem; padding: 2px 6px; border-radius: 4px; background: rgba(16, 185, 129, 0.2); color: #a7f3d0; margin-left: 4px; font-weight: bold;">🤖 Auto</span>`;
+      }
+    }
+    return `
+      <article class="inactive-player-row" style="${rowStyle}">
+        <div style="flex: 1; text-align: left; padding-right: 12px;">
+          <span style="font-size: 0.72rem; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.08); color: var(--text-secondary);">${categories[item.category] || item.category || 'Novedad'}</span>
+          ${autoBadge}
+          <strong style="display: block; font-size: 0.95rem; margin-top: 4px; color: #fff;">${escapeHTML(item.title)}</strong>
+          <span style="font-size: 0.75rem; color: var(--text-secondary);">${formatShortDate(item.date)}</span>
+        </div>
+        <button class="btn-mini-profile" type="button" onclick="openAdminNewsForm('${item.id}')" style="width: auto; min-width: 60px;">Editar</button>
+      </article>
+    `;
+  }).join('');
 }
 
 window.openAdminNewsForm = async function(id) {
@@ -5583,10 +5773,12 @@ window.openAdminNewsForm = async function(id) {
   successEl.textContent = '';
   
   if (id) {
-    titleEl.textContent = 'Editar novedad';
+    const isAuto = String(id).startsWith('auto-');
+    titleEl.textContent = isAuto ? 'Editar novedad automática' : 'Editar novedad';
     deleteBtn.style.display = 'inline-flex';
+    deleteBtn.textContent = isAuto ? '🗑️ Ocultar Novedad' : '🗑️ Eliminar Novedad';
     
-    const news = DB.getNews().find(n => n.id === id);
+    const news = (window.adminNewsListCache || []).find(n => n.id === id) || DB.getNews().find(n => n.id === id);
     if (news) {
       idEl.value = news.id || '';
       creadoEl.value = news.creado || '';
@@ -5643,6 +5835,12 @@ window.submitAdminNews = async function(event) {
     date,
     body
   };
+
+  const isAuto = id && String(id).startsWith('auto-');
+  if (isAuto) {
+    newsItem.deleted = false;
+    newsItem.status = 'active';
+  }
   
   try {
     if (DB.isCloudConfigured()) {
@@ -5682,7 +5880,12 @@ window.deleteNewsFromAdminClick = async function(event) {
   const id = document.getElementById('adminNewsId').value.trim();
   if (!id) return;
   
-  if (!confirm('¿Estás seguro de que deseas eliminar esta novedad de forma permanente?')) return;
+  const isAuto = String(id).startsWith('auto-');
+  const confirmMsg = isAuto 
+    ? '¿Estás seguro de que deseas ocultar esta novedad automática del sistema?'
+    : '¿Estás seguro de que deseas eliminar esta novedad de forma permanente?';
+  
+  if (!confirm(confirmMsg)) return;
   
   const errEl = document.getElementById('adminNewsErr');
   const successEl = document.getElementById('adminNewsSuccess');
@@ -5695,12 +5898,32 @@ window.deleteNewsFromAdminClick = async function(event) {
   deleteBtn.textContent = 'Eliminando...';
   
   try {
-    if (DB.isCloudConfigured()) {
-      await DB.deleteNewsCloud(id);
+    if (isAuto) {
+      const session = DB.getSession();
+      const newsItem = {
+        id,
+        deleted: true,
+        status: 'hidden',
+        title: document.getElementById('adminNewsTitle').value.trim(),
+        category: 'hidden',
+        date: document.getElementById('adminNewsDate').value,
+        body: document.getElementById('adminNewsBody').value.trim()
+      };
+      if (DB.isCloudConfigured()) {
+        await DB.saveNewsCloud(newsItem, adminPayload(session));
+      } else {
+        const localNews = DB.getNews().filter(n => n.id !== id);
+        localNews.unshift(newsItem);
+        DB.saveNews(localNews);
+      }
+    } else {
+      if (DB.isCloudConfigured()) {
+        await DB.deleteNewsCloud(id);
+      }
+      const currentList = DB.getNews().filter(n => n.id !== id);
+      DB.saveNews(currentList);
     }
-    const currentList = DB.getNews().filter(n => n.id !== id);
-    DB.saveNews(currentList);
-    successEl.textContent = 'Novedad eliminada exitosamente.';
+    successEl.textContent = isAuto ? 'Novedad oculta exitosamente.' : 'Novedad eliminada exitosamente.';
     setTimeout(() => {
       closeAdminNewsForm();
       deleteBtn.disabled = false;
