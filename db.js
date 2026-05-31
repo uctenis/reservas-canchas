@@ -886,30 +886,69 @@ const DB = {
     }
   },
 
+  seedNewsLocal() {
+    const defaultNews = [
+      {
+        id: 'default-interclub',
+        category: 'torneo',
+        title: 'Gran Campeonato de Vuelta: UCTenis vs Club de Tenis de Funcionarios UFRO',
+        body: 'Este lunes comenzó la serie de vuelta del tradicional campeonato interclub entre los clubes UCTenis y el Club de Tenis de funcionarios de la UFRO (Universidad de la Frontera). Tras haber ganado la primera copa, ¡nuestro equipo de hombres y mujeres lucha para mantener el trofeo en casa! Hasta ahora vamos liderando la serie 3 a 1. ¡Vamos UCTenis!',
+        date: '2026-05-27',
+        creado: new Date('2026-05-27T12:00:00Z').toISOString(),
+        actualizado: new Date('2026-05-27T12:00:00Z').toISOString()
+      },
+      {
+        id: 'default-maint',
+        category: 'maint',
+        title: 'Cuidado de las Canchas de Arcilla',
+        body: 'Recordatorio obligatorio para todos los socios: al terminar tu bloque en arcilla, debes pasar el escobillón, barrer las líneas y regar la cancha para el siguiente turno.',
+        date: '2026-05-24',
+        creado: new Date('2026-05-24T12:00:00Z').toISOString(),
+        actualizado: new Date('2026-05-24T12:00:00Z').toISOString()
+      },
+      {
+        id: 'default-app',
+        category: 'app',
+        title: 'Optimización para iPhone y Móviles',
+        body: 'Hemos actualizado la sección de ranking para dispositivos móviles. Ahora verás una barra de navegación fluida que separa la Escalera de tu Ficha personal.',
+        date: '2026-05-20',
+        creado: new Date('2026-05-20T12:00:00Z').toISOString(),
+        actualizado: new Date('2026-05-20T12:00:00Z').toISOString()
+      }
+    ];
+    this.saveNews(defaultNews);
+    return defaultNews;
+  },
+
   // ──────────────── SEED DATA ────────────────
   seed() {
-    if (this.getUsers().length > 0) return;
-    const hombres = [
-      { nombre: 'Luis Otth', email: 'luis@uct.cl', genero: 'M', categoria: 'Primera' },
-      { nombre: 'Ismael Devia', email: 'ismael@uct.cl', genero: 'M', categoria: 'Primera' },
-      { nombre: 'Paulo Garrido', email: 'paulo@uct.cl', genero: 'M', categoria: 'Segunda' },
-      { nombre: 'Roberto Bermudez', email: 'roberto@uct.cl', genero: 'M', categoria: 'Segunda' },
-      { nombre: 'Francisco Encina', email: 'fencina@uct.cl', genero: 'M', categoria: 'Principiante' },
-      { nombre: 'Gustavo Curaqueo', email: 'gcuraqueo@uct.cl', genero: 'M', categoria: 'Principiante' },
-      { nombre: 'Cristian Henriquez', email: 'chenriquez@uct.cl', genero: 'M', categoria: 'Primera' },
-      { nombre: 'Matías Cáceres', email: 'mcaceres@uct.cl', genero: 'M', categoria: 'Segunda' },
-    ];
-    const mujeres = [
-      { nombre: 'Carolina Cárdenas', email: 'ccardeneas@uct.cl', genero: 'F', categoria: 'Primera' },
-      { nombre: 'Angélica Encina', email: 'aencina@uct.cl', genero: 'F', categoria: 'Primera' },
-      { nombre: 'Violeta Moreno', email: 'vmoreno@uct.cl', genero: 'F', categoria: 'Segunda' },
-      { nombre: 'Valeria Schatter', email: 'vschatter@uct.cl', genero: 'F', categoria: 'Principiante' },
-      { nombre: 'María José', email: 'mjose@uct.cl', genero: 'F', categoria: 'Segunda' },
-    ];
-    [...hombres, ...mujeres].forEach(u => {
-      this.registerUser({ ...u, password: '1234' });
-    });
-    this.recalcRanking('M');
-    this.recalcRanking('F');
+    if (this.getUsers().length === 0) {
+      const hombres = [
+        { nombre: 'Luis Otth', email: 'luis@uct.cl', genero: 'M', categoria: 'Primera' },
+        { nombre: 'Ismael Devia', email: 'ismael@uct.cl', genero: 'M', categoria: 'Primera' },
+        { nombre: 'Paulo Garrido', email: 'paulo@uct.cl', genero: 'M', categoria: 'Segunda' },
+        { nombre: 'Roberto Bermudez', email: 'roberto@uct.cl', genero: 'M', categoria: 'Segunda' },
+        { nombre: 'Francisco Encina', email: 'fencina@uct.cl', genero: 'M', categoria: 'Principiante' },
+        { nombre: 'Gustavo Curaqueo', email: 'gcuraqueo@uct.cl', genero: 'M', categoria: 'Principiante' },
+        { nombre: 'Cristian Henriquez', email: 'chenriquez@uct.cl', genero: 'M', categoria: 'Primera' },
+        { nombre: 'Matías Cáceres', email: 'mcaceres@uct.cl', genero: 'M', categoria: 'Segunda' },
+      ];
+      const mujeres = [
+        { nombre: 'Carolina Cárdenas', email: 'ccardeneas@uct.cl', genero: 'F', categoria: 'Primera' },
+        { nombre: 'Angélica Encina', email: 'aencina@uct.cl', genero: 'F', categoria: 'Primera' },
+        { nombre: 'Violeta Moreno', email: 'vmoreno@uct.cl', genero: 'F', categoria: 'Segunda' },
+        { nombre: 'Valeria Schatter', email: 'vschatter@uct.cl', genero: 'F', categoria: 'Principiante' },
+        { nombre: 'María José', email: 'mjose@uct.cl', genero: 'F', categoria: 'Segunda' },
+      ];
+      [...hombres, ...mujeres].forEach(u => {
+        this.registerUser({ ...u, password: '1234' });
+      });
+      this.recalcRanking('M');
+      this.recalcRanking('F');
+    }
+
+    if (this.getNews().length === 0) {
+      this.seedNewsLocal();
+    }
   }
 };
