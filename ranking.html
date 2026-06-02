@@ -1653,8 +1653,9 @@ function renderRanking() {
   const isAdmin = isPlayerAdminSession();
 
   tbody.innerHTML = list.map(player => {
-    const canChallenge = canChallengePlayer(player);
-    const challengeButton = `<button class="btn-mini-challenge" type="button" data-action="challenge-player" data-player-key="${escapeAttr(player.key)}" ${!canChallenge ? 'disabled' : ''}>Retar</button>`;
+    const challengeButton = canChallengePlayer(player)
+      ? `<button class="btn-mini-challenge" type="button" data-action="challenge-player" data-player-key="${escapeAttr(player.id)}">Retar</button>`
+      : '';
 
     const rankBadgeHtml = player.pos === 1
       ? `<img src="fotos/leader_badge.png" alt="1" style="width: 32px; height: 32px; object-fit: contain; vertical-align: middle;">`
@@ -1663,7 +1664,7 @@ function renderRanking() {
     const draggableAttr = (isAdmin && rankingEditMode) ? 'draggable="true" style="cursor: grab;"' : '';
 
     return `
-      <tr class="${player.pos <= 3 ? 'top-row' : ''}" data-player-key="${escapeAttr(player.key)}" ${draggableAttr}>
+      <tr class="${player.pos <= 3 ? 'top-row' : ''}" data-player-key="${escapeAttr(player.id)}" ${draggableAttr}>
         <td class="pos-cell">${rankBadgeHtml}</td>
         <td class="name-cell">
           <div class="player-cell">
@@ -1681,7 +1682,7 @@ function renderRanking() {
         <td>${evolutionHtml(player)}</td>
         <td class="table-actions">
           <div class="action-buttons">
-            <button class="btn-mini-profile" type="button" data-action="show-profile" data-player-key="${escapeAttr(player.key)}">Ver</button>
+            <button class="btn-mini-profile" type="button" data-action="show-profile" data-player-key="${escapeAttr(player.id)}">Ver</button>
             ${challengeButton}
           </div>
         </td>
@@ -1768,12 +1769,12 @@ function renderInactivePlayers() {
     const genderFallback = player.gender === 'F' ? GENDERS.F.fallbackAvatar : GENDERS.M.fallbackAvatar;
     const genderTag = `<span style="font-size:0.7rem; background:rgba(255,255,255,0.06); padding:2px 6px; border-radius:4px; margin-left:8px; color:var(--text-secondary);">${player.gender === 'F' ? 'Fem' : 'Masc'}</span>`;
     return `
-      <article class="inactive-player-row" data-player-key="${escapeAttr(player.key)}">
+      <article class="inactive-player-row" data-player-key="${escapeAttr(player.id)}">
         <img class="player-avatar" src="${escapeAttr(player.foto)}" data-fallback="${escapeAttr(genderFallback)}" onerror="useFallbackAvatar(this)" alt="${escapeAttr(player.nombre)}">
         <div class="inactive-player-info">
           <strong>${escapeHTML(player.nombre)} ${genderTag}</strong>
         </div>
-        <button class="btn-mini-profile" type="button" data-action="show-profile" data-player-key="${escapeAttr(player.key)}">Ver</button>
+        <button class="btn-mini-profile" type="button" data-action="show-profile" data-player-key="${escapeAttr(player.id)}">Ver</button>
       </article>`;
   }).join('');
 }
@@ -4141,7 +4142,7 @@ function showPlayerProfile(playerKey) {
 
 function showSessionProfile() {
   const player = getSessionPlayer();
-  if (player) showPlayerProfile(player.key);
+  if (player) showPlayerProfile(player.id);
 }
 
 function openOwnProfileEditor() {
@@ -4516,8 +4517,8 @@ function renderAdminPlayerList() {
         <span>${escapeHTML(GENDERS[player.gender].label)} · ${isPlayerActive(player) ? 'Activo' : 'Inactivo'} · ${escapeHTML(player.email || 'Sin correo')}</span>
       </div>
       <div class="admin-player-actions">
-        <button class="btn-mini-profile" type="button" data-action="admin-edit-player" data-player-key="${escapeAttr(player.key)}">Editar</button>
-        <button class="btn-reject" type="button" data-action="admin-delete-player" data-player-key="${escapeAttr(player.key)}">${isPlayerActive(player) ? 'Inactivar' : 'Mantener inactivo'}</button>
+        <button class="btn-mini-profile" type="button" data-action="admin-edit-player" data-player-key="${escapeAttr(player.id)}">Editar</button>
+        <button class="btn-reject" type="button" data-action="admin-delete-player" data-player-key="${escapeAttr(player.id)}">${isPlayerActive(player) ? 'Inactivar' : 'Mantener inactivo'}</button>
       </div>
     </article>`).join('');
 }
@@ -4901,11 +4902,11 @@ function reorderRankingState(draggedKey, targetKey, insertBefore) {
   const gender = rankingState.currentGender;
   const list = [...(rankingState.lists[gender] || [])];
   
-  const draggedIdx = list.findIndex(p => p.key === draggedKey);
+  const draggedIdx = list.findIndex(p => p.id === draggedKey);
   if (draggedIdx < 0) return;
   const draggedPlayer = list.splice(draggedIdx, 1)[0];
   
-  let targetIdx = list.findIndex(p => p.key === targetKey);
+  let targetIdx = list.findIndex(p => p.id === targetKey);
   if (targetIdx < 0) return;
   
   if (!insertBefore) {
@@ -4916,12 +4917,12 @@ function reorderRankingState(draggedKey, targetKey, insertBefore) {
   
   const oldPositions = {};
   rankingState.lists[gender].forEach(p => {
-    oldPositions[p.key] = p.pos || p.posicion;
+    oldPositions[p.id] = p.pos || p.posicion;
   });
 
   const updatedList = list.map((player, idx) => {
     const newPos = idx + 1;
-    const oldPos = oldPositions[player.key];
+    const oldPos = oldPositions[player.id];
     return {
       ...player,
       pos: newPos,
@@ -5514,8 +5515,8 @@ function resizePhotoFile(file) {
 }
 
 function getPlayerByKey(key) {
-  return getAllPlayers().find(player => player.key === key);
-}
+  return getAllPlayers().find(player => player.id === key);
+
 
 function getAllPlayers() {
   return [
@@ -6152,9 +6153,15 @@ window.renderAdminNewsList = async function() {
     aviso: '📢 Aviso'
   };
   
-  listDiv.innerHTML = filtered.map(item => {
+  // Sort filtered items by newsOrder field (default to index if not set)
+  filtered.forEach((item, index) => {
+    if (item.newsOrder === undefined) item.newsOrder = index;
+  });
+  filtered.sort((a, b) => (a.newsOrder || 0) - (b.newsOrder || 0));
+  
+  listDiv.innerHTML = filtered.map((item, index) => {
     let autoBadge = '';
-    let rowStyle = 'padding: 12px; margin-bottom: 8px; background: rgba(255,255,255,0.03); border-radius: 8px; display: flex; justify-content: space-between; align-items: center; border: 1px solid rgba(255,255,255,0.05);';
+    let rowStyle = 'padding: 12px; margin-bottom: 8px; background: rgba(255,255,255,0.03); border-radius: 8px; display: flex; justify-content: space-between; align-items: center; border: 1px solid rgba(255,255,255,0.05); cursor: grab; transition: all 0.2s ease;';
     if (item.isAutomatic) {
       if (item.isAutoHidden) {
         autoBadge = ` <span style="font-size: 0.72rem; padding: 2px 6px; border-radius: 4px; background: rgba(239, 68, 68, 0.2); color: #fca5a5; margin-left: 4px; font-weight: bold;">🤖 Auto (Oculta)</span>`;
@@ -6164,8 +6171,9 @@ window.renderAdminNewsList = async function() {
       }
     }
     return `
-      <article class="inactive-player-row" style="${rowStyle}">
+      <article class="inactive-player-row" draggable="true" data-news-id="${escapeAttr(item.id)}" data-news-index="${index}" style="${rowStyle}" ondragstart="handleNewsDragStart(event)" ondragover="handleNewsDragOver(event)" ondrop="handleNewsDrop(event)" ondragend="handleNewsDragEnd(event)" ondragleave="handleNewsDragLeave(event)">
         <div style="flex: 1; text-align: left; padding-right: 12px;">
+          <span style="font-size: 0.72rem; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.08); color: var(--text-secondary);">⠿ ${index + 1}</span>
           <span style="font-size: 0.72rem; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.08); color: var(--text-secondary);">${categories[item.category] || item.category || 'Novedad'}</span>
           ${autoBadge}
           <strong style="display: block; font-size: 0.95rem; margin-top: 4px; color: #fff;">${escapeHTML(item.title)}</strong>
@@ -6175,6 +6183,91 @@ window.renderAdminNewsList = async function() {
       </article>
     `;
   }).join('');
+  
+  setupNewsOrderChangeDetector();
+}
+
+// ── Drag & Drop Order Handler for News ──
+let draggedNewsElement = null;
+let draggedNewsId = null;
+
+window.handleNewsDragStart = function(event) {
+  draggedNewsElement = event.currentTarget;
+  draggedNewsId = event.currentTarget.dataset.newsId;
+  event.dataTransfer.effectAllowed = 'move';
+  event.currentTarget.style.opacity = '0.5';
+  event.currentTarget.style.transform = 'scale(0.98)';
+};
+
+window.handleNewsDragOver = function(event) {
+  event.preventDefault();
+  event.dataTransfer.dropEffect = 'move';
+  const afterElement = getDragAfterElement(document.getElementById('adminNewsList'), event.clientY);
+  const listDiv = document.getElementById('adminNewsList');
+  if (afterElement == null) {
+    listDiv.appendChild(draggedNewsElement);
+  } else {
+    listDiv.insertBefore(draggedNewsElement, afterElement);
+  }
+};
+
+window.handleNewsDrop = function(event) {
+  event.preventDefault();
+};
+
+window.handleNewsDragEnd = function(event) {
+  event.currentTarget.style.opacity = '1';
+  event.currentTarget.style.transform = 'scale(1)';
+  saveNewsOrderFromDOM();
+};
+
+window.handleNewsDragLeave = function(event) {
+  // Optional: Add visual feedback
+};
+
+function getDragAfterElement(container, y) {
+  const draggableElements = [...container.querySelectorAll('[draggable="true"]:not(.dragging)')];
+  return draggableElements.reduce((closest, child) => {
+    const box = child.getBoundingClientRect();
+    const offset = y - box.top - box.height / 2;
+    if (offset < 0 && offset > closest.offset) {
+      return { offset: offset, element: child };
+    } else {
+      return closest;
+    }
+  }, { offset: Number.NEGATIVE_INFINITY }).element;
+}
+
+function saveNewsOrderFromDOM() {
+  const listDiv = document.getElementById('adminNewsList');
+  const articles = listDiv.querySelectorAll('[data-news-id]');
+  const newsItems = DB.getNews() || [];
+  const orderedIds = Array.from(articles).map(el => el.dataset.newsId);
+  
+  const updated = newsItems.map(item => {
+    const newIndex = orderedIds.indexOf(item.id);
+    return {
+      ...item,
+      newsOrder: newIndex >= 0 ? newIndex : (item.newsOrder || 999)
+    };
+  });
+  
+  DB.saveNews(updated);
+  
+  if (DB.isCloudConfigured()) {
+    const session = DB.getSession();
+    updated.forEach(item => {
+      DB.saveNewsCloud(item, adminPayload(session)).catch(err => 
+        console.warn('Error guardando orden de novedad en nube:', err)
+      );
+    });
+  }
+  
+  setTimeout(() => renderAdminNewsList(), 100);
+}
+
+function setupNewsOrderChangeDetector() {
+  // Optional: Add any additional setup if needed
 }
 
 window.openAdminNewsForm = async function(id) {
@@ -6253,7 +6346,8 @@ window.submitAdminNews = async function(event) {
     title,
     category,
     date,
-    body
+    body,
+    newsOrder: undefined
   };
 
   const isAuto = id && String(id).startsWith('auto-');
@@ -6267,7 +6361,9 @@ window.submitAdminNews = async function(event) {
       const session = DB.getSession();
       const saved = await DB.saveNewsCloud(newsItem, adminPayload(session));
       const currentList = DB.getNews().filter(n => n.id !== saved.id);
-      currentList.unshift(saved);
+      const nextOrder = Math.max(0, ...currentList.map(n => n.newsOrder || 0)) + 1;
+      saved.newsOrder = saved.newsOrder ?? nextOrder;
+      currentList.push(saved);
       DB.saveNews(currentList);
     } else {
       const localId = newsItem.id || `local-news-${Date.now()}`;
@@ -6278,7 +6374,9 @@ window.submitAdminNews = async function(event) {
         actualizado: new Date().toISOString()
       };
       const currentList = DB.getNews().filter(n => n.id !== localId);
-      currentList.unshift(saved);
+      const nextOrder = Math.max(0, ...currentList.map(n => n.newsOrder || 0)) + 1;
+      saved.newsOrder = saved.newsOrder ?? nextOrder;
+      currentList.push(saved);
       DB.saveNews(currentList);
     }
     successEl.textContent = 'Novedad guardada exitosamente.';
