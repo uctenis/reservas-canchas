@@ -597,61 +597,114 @@
   .slot-card { padding: 5px 4px !important; }
 }
 
-/* Weather Widget in Reservations */
-.weather-compact-box .forecast-container {
+/* Weather Detail Card in Reservations */
+.weather-detail-box {
+  transition: all 0.3s ease;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(10px);
+}
+@media (max-width: 600px) {
+  .weather-detail-box > div {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 16px !important;
+  }
+  #weatherDetailRecommendationCol {
+    padding-left: 0 !important;
+    border-left: none !important;
+    border-top: 1.5px solid rgba(255, 255, 255, 0.08) !important;
+    padding-top: 14px !important;
+    width: 100%;
+  }
+}
+
+/* Weather Detail Card Step 2 (Hourly Detail) */
+.weather-step2-box {
+  transition: all 0.3s ease;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(10px);
+}
+.hourly-weather-timeline {
   display: flex;
-  gap: 12px;
+  gap: 10px;
   overflow-x: auto;
-  padding: 8px 4px 14px;
-  scrollbar-width: none;
+  padding: 8px 2px 12px 2px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
 }
-.weather-compact-box .forecast-container::-webkit-scrollbar {
-  display: none;
+.hourly-weather-timeline::-webkit-scrollbar {
+  height: 6px;
 }
-.weather-compact-box .forecast-day {
-  flex: 0 0 106px;
+.hourly-weather-timeline::-webkit-scrollbar-track {
+  background: transparent;
+}
+.hourly-weather-timeline::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+}
+.hourly-weather-timeline::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.hourly-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 14px;
-  padding: 12px 8px;
+  padding: 10px 8px;
+  min-width: 65px;
+  flex: 0 0 auto;
   text-align: center;
-  transition: transform 0.2s ease, background 0.2s ease;
+  transition: all 0.2s ease;
 }
-.weather-compact-box .forecast-day:hover {
-  transform: translateY(-2px);
+.hourly-item:hover {
   background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.12);
+  transform: translateY(-2px);
 }
-.weather-compact-box .weather-icon-emoji {
-  font-size: 1.8rem;
-  margin: 6px 0;
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
-}
-.weather-compact-box .forecast-day span {
-  display: block;
-  font-size: 0.76rem;
+.hourly-time {
+  font-size: 0.72rem;
+  font-weight: 700;
   color: var(--text-secondary);
-  margin-top: 3px;
+  margin-bottom: 4px;
 }
-.weather-compact-box .forecast-day span:first-child {
-  color: var(--text-primary);
-  font-weight: 600;
+.hourly-icon {
+  font-size: 1.35rem;
+  margin-bottom: 4px;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.15));
+}
+.hourly-temp {
   font-size: 0.85rem;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+.hourly-rain {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #60a5fa;
+  margin-top: 3px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  justify-content: center;
 }
 
 @media (max-width: 600px) {
-  .weather-compact-box .forecast-day {
-    flex: 0 0 92px;
-    padding: 8px 6px;
+  .weather-step2-body > div {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 16px !important;
   }
-  .weather-compact-box .weather-icon-emoji {
-    font-size: 1.5rem;
-    margin: 4px 0;
-  }
-  .weather-compact-box .forecast-day span {
-    font-size: 0.72rem;
-  }
-  .weather-compact-box .forecast-day span:first-child {
-    font-size: 0.78rem;
+  #step2WeatherRecommendationCol {
+    padding-left: 0 !important;
+    border-left: none !important;
+    border-top: 1.5px solid rgba(255, 255, 255, 0.08) !important;
+    padding-top: 12px !important;
+    width: 100%;
   }
 }
