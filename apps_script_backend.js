@@ -173,6 +173,15 @@ function handleRequest(data) {
       case "submit_challenge_result":
         response = submitChallengeResult(data);
         break;
+      case "confirm_challenge_result":
+        response = confirmChallengeResult(data);
+        break;
+      case "dispute_challenge_result":
+        response = disputeChallengeResult(data);
+        break;
+      case "set_challenge_walkover":
+        response = setChallengeWalkover(data);
+        break;
       case "admin_save_player":
         response = adminSavePlayer(data);
         break;
@@ -490,11 +499,36 @@ function courtKeyFromName(value) {
   return '';
 }
 
+const CHALLENGE_RESPONSE_MS = 48 * 60 * 60 * 1000;
+const CHALLENGE_RESULT_CONFIRM_MS = 48 * 60 * 60 * 1000;
+const CHALLENGE_ACTIVE_STATUSES = ['pendiente', 'aceptado', 'resultado_pendiente'];
+const CHALLENGE_HISTORY_STATUSES = ['completado', 'wo_retador', 'wo_retado', 'vencido', 'rechazado'];
+const CHALLENGE_OFFICIAL_STATUSES = CHALLENGE_ACTIVE_STATUSES.concat(CHALLENGE_HISTORY_STATUSES);
+
+function challengeTime(value) {
+  const raw = text(value);
+  if (!raw) return 0;
+  const time = new Date(raw).getTime();
+  return isNaN(time) ? 0 : time;
+}
+
+function isChallengeResultDisputed(challenge) {
+  return Boolean(
+    challenge &&
+    (challenge.resultadoReclamado === true ||
+     challenge.resultadoReclamado === 'true' ||
+     text(challenge.reclamoResultado))
+  );
+}
+
+function isActiveChallengeStatus(status) {
+  return CHALLENGE_ACTIVE_STATUSES.indexOf(text(status)) >= 0;
+}
+
 function getChallenges() {
   const sheet = getChallengesSheet();
   const values = sheet.getDataRange().getValues();
   const challenges = [];
-  let updatedAny = false;
 
   for (let i = 1; i < values.length; i++) {
     const row = values[i];
@@ -502,12 +536,20 @@ function getChallenges() {
     let challenge = challengeFromRow(row);
     const rowStatus = text(row[10]);
 
-    if (challenge.status === 'completado' && rowStatus !== 'completado') {
-      const completedAt = challenge.actualizado || new Date().toISOString();
-      challenge.actualizado = completedAt;
-      sheet.getRange(i + 1, 11).setValue('completado');
-      sheet.getRange(i + 1, 15).setValue(completedAt);
-      updatedAny = true;
+    if (challenge.status !== rowStatus) {
+      const updatedAt = challenge.actualizado || new Date().toISOString();
+      challenge.actualizado = updatedAt;
+      sheet.getRange(i + 1, 11).setValue(challenge.status);
+      sheet.getRange(i + 1, 15).setValue(updatedAt);
+      if (challenge.fechaConfirmacion) sheet.getRange(i + 1, 24).setValue(challenge.fechaConfirmacion);
+      if (challenge.confirmadoPor) sheet.getRange(i + 1, 25).setValue(challenge.confirmadoPor);
+      if (challenge.status === 'completado' && rowStatus === 'resultado_pendiente' && !challenge.rankingAplicado) {
+        const rankingUpdate = applyChallengeResultToRanking(challenge);
+        if (rankingUpdate.ok) {
+          sheet.getRange(i + 1, 30).setValue(new Date().toISOString());
+          challenge.rankingAplicado = new Date().toISOString();
+        }
+      }
     }
 
     // Sync with Google Calendar if it's pending and has an eventId
@@ -527,7 +569,6 @@ function getChallenges() {
               challenge.actualizado = new Date().toISOString();
               sheet.getRange(i + 1, 11).setValue('aceptado');
               sheet.getRange(i + 1, 15).setValue(challenge.actualizado);
-              updatedAny = true;
               updateChallengeInFirebase(challenge.id, {
                 status: 'aceptado',
                 actualizado: challenge.actualizado
@@ -537,7 +578,6 @@ function getChallenges() {
               challenge.actualizado = new Date().toISOString();
               sheet.getRange(i + 1, 11).setValue('rechazado');
               sheet.getRange(i + 1, 15).setValue(challenge.actualizado);
-              updatedAny = true;
               updateChallengeInFirebase(challenge.id, {
                 status: 'rechazado',
                 actualizado: challenge.actualizado
@@ -596,9 +636,22 @@ function createChallenge(data) {
     courtId: text(data.courtId),
     eventId: '',
     bookingId: text(data.bookingId),
-    tipo: text(data.tipo) || 'ranking'
+    tipo: text(data.tipo) || 'ranking',
+    fechaResultado: text(data.fechaResultado),
+    resultadoIngresadoPor: text(data.resultadoIngresadoPor),
+    resultadoIngresadoPorEmail: text(data.resultadoIngresadoPorEmail),
+    fechaConfirmacion: text(data.fechaConfirmacion),
+    confirmadoPor: text(data.confirmadoPor),
+    resultadoReclamado: data.resultadoReclamado === true || data.resultadoReclamado === 'true',
+    reclamoResultado: text(data.reclamoResultado),
+    fechaReclamo: text(data.fechaReclamo),
+    reclamadoPor: text(data.reclamadoPor),
+    rankingAplicado: text(data.rankingAplicado)
   };
   normalizeChallengeCompletion(challenge);
+
+  const rulesCheck = validateChallengeCreation(challenge);
+  if (!rulesCheck.ok) return rulesCheck;
 
   try {
     if (challenge.status !== 'completado' && challenge.retadoEmail) {
@@ -632,7 +685,17 @@ function respondChallenge(data) {
   }
   
   // Read challenge data from row before doing any updates or deletions
-  const challenge = challengeFromRow(found.sheet.getRange(found.rowNumber, 1, 1, 20).getValues()[0]);
+  const challenge = challengeFromRow(found.sheet.getRange(found.rowNumber, 1, 1, 30).getValues()[0]);
+  if (challenge.status === 'vencido') {
+    setChallengeRowPatch(found.sheet, found.rowNumber, {
+      status: 'vencido',
+      actualizado: challenge.actualizado || new Date().toISOString()
+    });
+    return { ok: false, msg: 'El plazo de 48 horas para responder este desafío ya venció.', challenge: publicChallenge(challenge) };
+  }
+  if (challenge.status !== 'pendiente' && status !== 'eliminado') {
+    return { ok: false, msg: 'Solo se puede responder un desafío pendiente.', challenge: publicChallenge(challenge) };
+  }
 
   // If status is rechazado or eliminado, free the calendar reservations!
   if (status === 'rechazado' || status === 'eliminado') {
@@ -687,27 +750,227 @@ function submitChallengeResult(data) {
     const found = findChallengeRow(text(data.id));
     if (!found) return { ok: false, msg: 'Desafío no encontrado.' };
 
-    const previous = challengeFromRow(found.sheet.getRange(found.rowNumber, 1, 1, 20).getValues()[0]);
-    const wasCompleted = previous.status === 'completado';
+    const previous = challengeFromRow(found.sheet.getRange(found.rowNumber, 1, 1, 30).getValues()[0]);
+    if (['completado', 'wo_retador', 'wo_retado'].indexOf(previous.status) >= 0 && previous.rankingAplicado) {
+      return { ok: false, msg: 'El resultado ya fue confirmado.' };
+    }
 
-    found.sheet.getRange(found.rowNumber, 11).setValue('completado');
+    const now = new Date().toISOString();
+    found.sheet.getRange(found.rowNumber, 11).setValue('resultado_pendiente');
     found.sheet.getRange(found.rowNumber, 12).setValue(text(data.marcador));
     found.sheet.getRange(found.rowNumber, 13).setValue(text(data.ganadorId));
-    found.sheet.getRange(found.rowNumber, 15).setValue(new Date().toISOString());
+    found.sheet.getRange(found.rowNumber, 15).setValue(now);
     if (data.tipo) {
       found.sheet.getRange(found.rowNumber, 20).setValue(text(data.tipo));
     }
+    found.sheet.getRange(found.rowNumber, 21, 1, 10).setValues([[
+      text(data.fechaResultado) || now,
+      text(data.resultadoIngresadoPor || data.actorId || data.actorEmail),
+      text(data.resultadoIngresadoPorEmail || data.actorEmail),
+      '',
+      '',
+      false,
+      '',
+      '',
+      '',
+      ''
+    ]]);
 
-    const updated = challengeFromRow(found.sheet.getRange(found.rowNumber, 1, 1, 20).getValues()[0]);
-    const rankingUpdate = wasCompleted
-      ? { ok: true, skipped: true, msg: 'El resultado ya estaba registrado; no se vuelve a mover el ranking.' }
-      : applyChallengeResultToRanking(updated);
+    const updated = challengeFromRow(found.sheet.getRange(found.rowNumber, 1, 1, 30).getValues()[0]);
 
     return {
       ok: true,
       challenge: publicChallenge(updated),
-      rankingUpdate: rankingUpdate
+      rankingUpdate: { ok: true, skipped: true, msg: 'Resultado pendiente de confirmación; la escalerilla aún no se mueve.' }
     };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function setChallengeRowPatch(sheet, rowNumber, patch) {
+  const columns = {
+    status: 11,
+    marcador: 12,
+    ganadorId: 13,
+    actualizado: 15,
+    tipo: 20,
+    fechaResultado: 21,
+    resultadoIngresadoPor: 22,
+    resultadoIngresadoPorEmail: 23,
+    fechaConfirmacion: 24,
+    confirmadoPor: 25,
+    resultadoReclamado: 26,
+    reclamoResultado: 27,
+    fechaReclamo: 28,
+    reclamadoPor: 29,
+    rankingAplicado: 30
+  };
+
+  Object.keys(patch).forEach(function(key) {
+    if (Object.prototype.hasOwnProperty.call(columns, key)) {
+      sheet.getRange(rowNumber, columns[key]).setValue(patch[key]);
+    }
+  });
+}
+
+function confirmChallengeResult(data) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+
+  try {
+    const found = findChallengeRow(text(data.id));
+    if (!found) return { ok: false, msg: 'Desafío no encontrado.' };
+
+    const challenge = challengeFromRow(found.sheet.getRange(found.rowNumber, 1, 1, 30).getValues()[0]);
+    if (isChallengeResultDisputed(challenge)) {
+      return { ok: false, msg: 'El resultado está reclamado y requiere revisión administrativa.' };
+    }
+    if (!hasRecordedChallengeResult(challenge)) {
+      return { ok: false, msg: 'No hay resultado para confirmar.' };
+    }
+    if (['resultado_pendiente', 'completado'].indexOf(challenge.status) < 0) {
+      return { ok: false, msg: 'El desafío no está esperando confirmación.' };
+    }
+
+    const now = new Date().toISOString();
+    const patch = {
+      status: 'completado',
+      fechaConfirmacion: text(data.fechaConfirmacion) || now,
+      confirmadoPor: text(data.confirmadoPor || data.actorId || data.actorEmail) || (data.automatic ? 'automatico_48h' : ''),
+      actualizado: now
+    };
+
+    const updated = normalizeChallengeCompletion({ ...challenge, ...patch });
+    let rankingUpdate = { ok: true, skipped: true, msg: 'Ranking ya aplicado previamente.' };
+    if (!challenge.rankingAplicado) {
+      rankingUpdate = applyChallengeResultToRanking(updated);
+      if (rankingUpdate.ok) {
+        patch.rankingAplicado = now;
+        updated.rankingAplicado = now;
+      }
+    }
+
+    setChallengeRowPatch(found.sheet, found.rowNumber, patch);
+    updateChallengeInFirebase(challenge.id, {
+      status: 'completado',
+      fechaConfirmacion: patch.fechaConfirmacion,
+      confirmadoPor: patch.confirmadoPor,
+      actualizado: now,
+      rankingAplicado: patch.rankingAplicado || challenge.rankingAplicado || ''
+    });
+
+    const saved = challengeFromRow(found.sheet.getRange(found.rowNumber, 1, 1, 30).getValues()[0]);
+    return { ok: true, challenge: publicChallenge(saved), rankingUpdate: rankingUpdate };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function disputeChallengeResult(data) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+
+  try {
+    const found = findChallengeRow(text(data.id || data.challengeId));
+    if (!found) return { ok: false, msg: 'Desafío no encontrado.' };
+
+    const challenge = challengeFromRow(found.sheet.getRange(found.rowNumber, 1, 1, 30).getValues()[0]);
+    if (challenge.status !== 'resultado_pendiente') {
+      return { ok: false, msg: 'Solo se puede reclamar un resultado pendiente.' };
+    }
+
+    const now = new Date().toISOString();
+    const patch = {
+      resultadoReclamado: true,
+      reclamoResultado: text(data.reclamoResultado) || 'Resultado reclamado por el rival.',
+      fechaReclamo: now,
+      reclamadoPor: text(data.reclamadoPor || data.disputanteEmail || data.disputanteNombre),
+      actualizado: now
+    };
+    setChallengeRowPatch(found.sheet, found.rowNumber, patch);
+
+    notifyDispute({
+      challengeId: challenge.id,
+      disputanteNombre: text(data.disputanteNombre || data.reclamadoPor) || 'Un jugador',
+      disputanteEmail: text(data.disputanteEmail),
+      contrarioNombre: text(data.contrarioNombre) || 'su oponente',
+      marcador: challenge.marcador,
+      fecha: challenge.fecha
+    });
+
+    updateChallengeInFirebase(challenge.id, {
+      resultadoReclamado: 'true',
+      reclamoResultado: patch.reclamoResultado,
+      fechaReclamo: patch.fechaReclamo,
+      reclamadoPor: patch.reclamadoPor,
+      actualizado: now
+    });
+
+    const saved = challengeFromRow(found.sheet.getRange(found.rowNumber, 1, 1, 30).getValues()[0]);
+    return { ok: true, challenge: publicChallenge(saved) };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function setChallengeWalkover(data) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+
+  try {
+    const found = findChallengeRow(text(data.id));
+    if (!found) return { ok: false, msg: 'Desafío no encontrado.' };
+
+    const status = text(data.status);
+    if (status !== 'wo_retador' && status !== 'wo_retado') {
+      return { ok: false, msg: 'Tipo de W.O. inválido.' };
+    }
+
+    const challenge = challengeFromRow(found.sheet.getRange(found.rowNumber, 1, 1, 30).getValues()[0]);
+    if (challenge.status !== 'aceptado') {
+      return { ok: false, msg: 'Solo se puede marcar W.O. en un desafío aceptado.' };
+    }
+
+    const now = new Date().toISOString();
+    const ganadorId = status === 'wo_retador' ? challenge.retadoId : challenge.retadorId;
+    const patch = {
+      status: status,
+      marcador: 'W.O.',
+      ganadorId: ganadorId,
+      fechaResultado: now,
+      resultadoIngresadoPor: text(data.actorId || data.actorEmail),
+      resultadoIngresadoPorEmail: text(data.actorEmail),
+      fechaConfirmacion: now,
+      confirmadoPor: text(data.actorId || data.actorEmail || data.actorName),
+      resultadoReclamado: false,
+      reclamoResultado: '',
+      fechaReclamo: '',
+      reclamadoPor: '',
+      actualizado: now
+    };
+
+    const updated = normalizeChallengeCompletion({ ...challenge, ...patch });
+    const rankingUpdate = applyChallengeResultToRanking(updated);
+    if (rankingUpdate.ok) {
+      patch.rankingAplicado = now;
+      updated.rankingAplicado = now;
+    }
+
+    setChallengeRowPatch(found.sheet, found.rowNumber, patch);
+    updateChallengeInFirebase(challenge.id, {
+      status: status,
+      marcador: 'W.O.',
+      ganadorId: ganadorId,
+      fechaResultado: now,
+      fechaConfirmacion: now,
+      confirmadoPor: patch.confirmadoPor,
+      actualizado: now,
+      rankingAplicado: patch.rankingAplicado || ''
+    });
+
+    const saved = challengeFromRow(found.sheet.getRange(found.rowNumber, 1, 1, 30).getValues()[0]);
+    return { ok: true, challenge: publicChallenge(saved), rankingUpdate: rankingUpdate };
   } finally {
     lock.releaseLock();
   }
@@ -718,9 +981,15 @@ function getChallengesSheet() {
   let sheet = ss.getSheetByName(' LIBRO DESAFIOS') || ss.getSheetByName('LIBRO DESAFIOS');
   if (!sheet) sheet = ss.insertSheet(' LIBRO DESAFIOS');
 
-  const headers = ['id', 'retadorId', 'retadorNombre', 'retadorEmail', 'retadoId', 'retadoNombre', 'retadoEmail', 'genero', 'fecha', 'cancha', 'status', 'marcador', 'ganadorId', 'creado', 'actualizado', 'slot', 'courtId', 'eventId', 'bookingId', 'tipo'];
+  const headers = ['id', 'retadorId', 'retadorNombre', 'retadorEmail', 'retadoId', 'retadoNombre', 'retadoEmail', 'genero', 'fecha', 'cancha', 'status', 'marcador', 'ganadorId', 'creado', 'actualizado', 'slot', 'courtId', 'eventId', 'bookingId', 'tipo', 'fechaResultado', 'resultadoIngresadoPor', 'resultadoIngresadoPorEmail', 'fechaConfirmacion', 'confirmadoPor', 'resultadoReclamado', 'reclamoResultado', 'fechaReclamo', 'reclamadoPor', 'rankingAplicado'];
   const first = sheet.getRange(1, 1, 1, headers.length).getValues()[0];
-  if (!text(first[0])) sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  if (!text(first[0])) {
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  } else {
+    headers.forEach(function(header, index) {
+      if (!text(first[index])) sheet.getRange(1, index + 1).setValue(header);
+    });
+  }
   return sheet;
 }
 
@@ -732,6 +1001,74 @@ function findChallengeRow(id) {
     if (text(values[i][0]) === id) return { sheet: sheet, rowNumber: i + 1 };
   }
   return null;
+}
+
+function challengePlayerMatchesRole(challenge, role, ref) {
+  const prefix = role === 'retado' ? 'retado' : 'retador';
+  const id = text(ref.id);
+  const email = text(ref.email).toLowerCase();
+  const nombre = norm(ref.nombre);
+  return Boolean(
+    (id && text(challenge[prefix + 'Id']) === id) ||
+    (email && text(challenge[prefix + 'Email']).toLowerCase() === email) ||
+    (nombre && norm(challenge[prefix + 'Nombre']) === nombre)
+  );
+}
+
+function hasActiveChallengeInRole(sheet, role, ref, excludeId) {
+  const values = sheet.getDataRange().getValues();
+  for (let i = 1; i < values.length; i++) {
+    const challenge = challengeFromRow(values[i]);
+    if (!challenge.id || challenge.id === excludeId) continue;
+    if (text(challenge.tipo) === 'amistoso' || text(challenge.tipo) === 'campeonato') continue;
+    if (!isActiveChallengeStatus(challenge.status)) continue;
+    if (challengePlayerMatchesRole(challenge, role, ref)) return true;
+  }
+  return false;
+}
+
+function validateChallengeCreation(challenge) {
+  if (text(challenge.tipo) === 'amistoso' || text(challenge.tipo) === 'campeonato') {
+    return { ok: true };
+  }
+  if (challenge.status !== 'pendiente') {
+    return { ok: true };
+  }
+
+  const genero = normalizeGender(challenge.genero);
+  if (!genero) return { ok: false, msg: 'Género de desafío no válido.' };
+
+  const ss = getSpreadsheet();
+  const entries = readRankingEntries(ss, genero);
+  const retadorRef = {
+    id: challenge.retadorId,
+    nombre: challenge.retadorNombre,
+    email: challenge.retadorEmail
+  };
+  const retadoRef = {
+    id: challenge.retadoId,
+    nombre: challenge.retadoNombre,
+    email: challenge.retadoEmail
+  };
+  const retadorIndex = findRankingEntryIndex(entries, retadorRef);
+  const retadoIndex = findRankingEntryIndex(entries, retadoRef);
+
+  if (retadorIndex < 0 || retadoIndex < 0) {
+    return { ok: false, msg: 'Ambos jugadores deben estar activos en la escalerilla.' };
+  }
+  if (!(retadoIndex < retadorIndex && retadorIndex - retadoIndex <= 3)) {
+    return { ok: false, msg: 'Solo se puede desafiar hasta 3 posiciones superiores.' };
+  }
+
+  const sheet = getChallengesSheet();
+  if (hasActiveChallengeInRole(sheet, 'retador', retadorRef, challenge.id)) {
+    return { ok: false, msg: 'El retador ya tiene un desafío activo como retador.' };
+  }
+  if (hasActiveChallengeInRole(sheet, 'retado', retadoRef, challenge.id)) {
+    return { ok: false, msg: 'El retado ya tiene un desafío activo como retado.' };
+  }
+
+  return { ok: true };
 }
 
 function challengeFromRow(row) {
@@ -755,7 +1092,17 @@ function challengeFromRow(row) {
     courtId: text(row[16]) || '',
     eventId: text(row[17]) || '',
     bookingId: text(row[18]) || '',
-    tipo: text(row[19]) || 'ranking'
+    tipo: text(row[19]) || 'ranking',
+    fechaResultado: text(row[20]) || '',
+    resultadoIngresadoPor: text(row[21]) || '',
+    resultadoIngresadoPorEmail: text(row[22]) || '',
+    fechaConfirmacion: text(row[23]) || '',
+    confirmadoPor: text(row[24]) || '',
+    resultadoReclamado: row[25] === true || text(row[25]) === 'true',
+    reclamoResultado: text(row[26]) || '',
+    fechaReclamo: text(row[27]) || '',
+    reclamadoPor: text(row[28]) || '',
+    rankingAplicado: text(row[29]) || ''
   };
   return normalizeChallengeCompletion(challenge);
 }
@@ -768,19 +1115,38 @@ function hasRecordedChallengeResult(challenge) {
 }
 
 function normalizeChallengeCompletion(challenge) {
-  if (hasRecordedChallengeResult(challenge) && challenge.status !== 'eliminado') {
-    challenge.status = 'completado';
-  } else if (challenge && ['pendiente', 'aceptado', 'terminado'].includes(challenge.status)) {
-    if (challenge.fecha) {
-      const dateParts = challenge.fecha.split('-').map(Number);
-      const slot = challenge.slot || '23:59';
-      const timeParts = slot.split(':').map(Number);
-      if (dateParts.length === 3 && timeParts.length >= 2) {
-        const matchStart = new Date(dateParts[0], dateParts[1] - 1, dateParts[2], timeParts[0], timeParts[1], 0);
-        if (new Date() > matchStart) {
-          challenge.status = 'terminado';
-        }
-      }
+  if (!challenge) return challenge;
+
+  if (!challenge.status) {
+    challenge.status = hasRecordedChallengeResult(challenge) ? 'completado' : 'pendiente';
+  } else if (challenge.status === 'terminado') {
+    challenge.status = hasRecordedChallengeResult(challenge) ? 'completado' : 'aceptado';
+  }
+
+  if (CHALLENGE_OFFICIAL_STATUSES.indexOf(challenge.status) < 0 && challenge.status !== 'eliminado') {
+    challenge.status = hasRecordedChallengeResult(challenge) ? 'completado' : 'pendiente';
+  }
+
+  if (hasRecordedChallengeResult(challenge) && !challenge.fechaResultado) {
+    challenge.fechaResultado = challenge.actualizado || challenge.creado || new Date().toISOString();
+  }
+
+  const now = new Date().getTime();
+  if (challenge.status === 'pendiente') {
+    const createdAt = challengeTime(challenge.creado || challenge.actualizado);
+    if (createdAt && now - createdAt >= CHALLENGE_RESPONSE_MS) {
+      challenge.status = 'vencido';
+      challenge.actualizado = challenge.actualizado || new Date().toISOString();
+    }
+  }
+
+  if (challenge.status === 'resultado_pendiente' && !isChallengeResultDisputed(challenge)) {
+    const resultAt = challengeTime(challenge.fechaResultado || challenge.actualizado);
+    if (resultAt && now - resultAt >= CHALLENGE_RESULT_CONFIRM_MS) {
+      challenge.status = 'completado';
+      challenge.fechaConfirmacion = challenge.fechaConfirmacion || new Date().toISOString();
+      challenge.confirmadoPor = challenge.confirmadoPor || 'automatico_48h';
+      challenge.actualizado = challenge.fechaConfirmacion;
     }
   }
   return challenge;
@@ -807,7 +1173,17 @@ function challengeToRow(challenge) {
     challenge.courtId || '',
     challenge.eventId || '',
     challenge.bookingId || '',
-    challenge.tipo || 'ranking'
+    challenge.tipo || 'ranking',
+    challenge.fechaResultado || '',
+    challenge.resultadoIngresadoPor || '',
+    challenge.resultadoIngresadoPorEmail || '',
+    challenge.fechaConfirmacion || '',
+    challenge.confirmadoPor || '',
+    challenge.resultadoReclamado === true,
+    challenge.reclamoResultado || '',
+    challenge.fechaReclamo || '',
+    challenge.reclamadoPor || '',
+    challenge.rankingAplicado || ''
   ];
 }
 
@@ -830,7 +1206,17 @@ function publicChallenge(challenge) {
     courtId: challenge.courtId || '',
     eventId: challenge.eventId || '',
     bookingId: challenge.bookingId || '',
-    tipo: challenge.tipo || 'ranking'
+    tipo: challenge.tipo || 'ranking',
+    fechaResultado: challenge.fechaResultado || '',
+    resultadoIngresadoPor: challenge.resultadoIngresadoPor || '',
+    resultadoIngresadoPorEmail: challenge.resultadoIngresadoPorEmail || '',
+    fechaConfirmacion: challenge.fechaConfirmacion || '',
+    confirmadoPor: challenge.confirmadoPor || '',
+    resultadoReclamado: challenge.resultadoReclamado === true,
+    reclamoResultado: challenge.reclamoResultado || '',
+    fechaReclamo: challenge.fechaReclamo || '',
+    reclamadoPor: challenge.reclamadoPor || '',
+    rankingAplicado: challenge.rankingAplicado || ''
   };
 }
 
@@ -1422,6 +1808,18 @@ function applyChallengeResultToRanking(challenge) {
   if (text(challenge.tipo) === 'amistoso') {
     return { ok: true, moved: false, msg: 'Partido amistoso: no se altera el ranking.' };
   }
+  if (text(challenge.tipo) === 'campeonato') {
+    return { ok: true, moved: false, msg: 'Partido de campeonato: no se altera el ranking.' };
+  }
+  if (challenge.status === 'resultado_pendiente') {
+    return { ok: true, moved: false, msg: 'Resultado pendiente de confirmación: no se altera el ranking.' };
+  }
+  if (challenge.status === 'wo_retador') {
+    return { ok: true, moved: false, msg: 'W.O. del retador: gana el retado y no cambia la escalerilla.' };
+  }
+  if (['completado', 'wo_retado'].indexOf(challenge.status) < 0) {
+    return { ok: true, moved: false, msg: 'Estado sin movimiento de ranking.' };
+  }
 
   const genero = normalizeGender(challenge.genero);
   const ganadorId = text(challenge.ganadorId);
@@ -1939,7 +2337,7 @@ function getChallengeStatsByPlayer() {
 
   for (let i = 1; i < values.length; i++) {
     const challenge = challengeFromRow(values[i]);
-    if (challenge.status !== 'completado') continue;
+    if (['completado', 'wo_retador', 'wo_retado'].indexOf(challenge.status) < 0) continue;
 
     const retador = ensure(challenge.retadorId);
     const retado = ensure(challenge.retadoId);

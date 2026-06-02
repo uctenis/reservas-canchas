@@ -59,6 +59,23 @@ function cleanFirestoreData(data) {
   return out;
 }
 
+const CHALLENGE_RESPONSE_MS = 48 * 60 * 60 * 1000;
+const CHALLENGE_RESULT_CONFIRM_MS = 48 * 60 * 60 * 1000;
+const CHALLENGE_ACTIVE_STATUSES = ['pendiente', 'aceptado', 'resultado_pendiente'];
+const CHALLENGE_HISTORY_STATUSES = ['completado', 'wo_retador', 'wo_retado', 'vencido', 'rechazado'];
+const CHALLENGE_OFFICIAL_STATUSES = [
+  ...CHALLENGE_ACTIVE_STATUSES,
+  ...CHALLENGE_HISTORY_STATUSES
+];
+
+window.UCTENNIS_CHALLENGE_RULES = {
+  RESPONSE_MS: CHALLENGE_RESPONSE_MS,
+  RESULT_CONFIRM_MS: CHALLENGE_RESULT_CONFIRM_MS,
+  ACTIVE_STATUSES: CHALLENGE_ACTIVE_STATUSES,
+  HISTORY_STATUSES: CHALLENGE_HISTORY_STATUSES,
+  OFFICIAL_STATUSES: CHALLENGE_OFFICIAL_STATUSES
+};
+
 function hasRecordedChallengeResult(challenge) {
   return Boolean(
     String(challenge?.marcador || '').trim() ||
@@ -66,28 +83,55 @@ function hasRecordedChallengeResult(challenge) {
   );
 }
 
+function challengeTimestamp(value) {
+  const time = value ? new Date(value).getTime() : NaN;
+  return Number.isFinite(time) ? time : 0;
+}
+
+function isChallengeResultDisputed(challenge) {
+  return Boolean(
+    challenge?.resultadoReclamado === true ||
+    challenge?.resultadoReclamado === 'true' ||
+    String(challenge?.reclamoResultado || '').trim()
+  );
+}
+
 function normalizeChallengeRecord(challenge) {
   const normalized = { ...(challenge || {}) };
-  if (hasRecordedChallengeResult(normalized) && normalized.status !== 'eliminado') {
-    normalized.status = 'completado';
-  } else if (normalized && ['pendiente', 'aceptado', 'terminado'].includes(normalized.status)) {
-    if (normalized.fecha) {
-      const parts = normalized.fecha.split('-');
-      if (parts.length === 3) {
-        const y = parseInt(parts[0], 10);
-        const m = parseInt(parts[1], 10);
-        const d = parseInt(parts[2], 10);
-        const slot = normalized.slot || '23:59';
-        const [sh, sm] = slot.split(':').map(Number);
-        
-        // Build Date object using local timezone
-        const matchTime = new Date(y, m - 1, d, sh, sm);
-        if (new Date() > matchTime) {
-          normalized.status = 'terminado';
-        }
-      }
+  const now = Date.now();
+
+  if (!normalized.status) {
+    normalized.status = hasRecordedChallengeResult(normalized) ? 'completado' : 'pendiente';
+  } else if (normalized.status === 'terminado') {
+    normalized.status = hasRecordedChallengeResult(normalized) ? 'completado' : 'aceptado';
+  }
+
+  if (!CHALLENGE_OFFICIAL_STATUSES.includes(normalized.status) && normalized.status !== 'eliminado') {
+    normalized.status = hasRecordedChallengeResult(normalized) ? 'completado' : 'pendiente';
+  }
+
+  if (hasRecordedChallengeResult(normalized) && !normalized.fechaResultado) {
+    normalized.fechaResultado = normalized.actualizado || normalized.updatedAt || normalized.creado || new Date().toISOString();
+  }
+
+  if (normalized.status === 'pendiente') {
+    const createdAt = challengeTimestamp(normalized.creado || normalized.createdAt || normalized.actualizado);
+    if (createdAt && now - createdAt >= CHALLENGE_RESPONSE_MS) {
+      normalized.status = 'vencido';
+      normalized.actualizado = normalized.actualizado || new Date().toISOString();
     }
   }
+
+  if (normalized.status === 'resultado_pendiente' && !isChallengeResultDisputed(normalized)) {
+    const resultAt = challengeTimestamp(normalized.fechaResultado || normalized.actualizado);
+    if (resultAt && now - resultAt >= CHALLENGE_RESULT_CONFIRM_MS) {
+      normalized.status = 'completado';
+      normalized.confirmadoAutomaticamente = true;
+      normalized.fechaConfirmacion = normalized.fechaConfirmacion || new Date().toISOString();
+      normalized.actualizado = normalized.fechaConfirmacion;
+    }
+  }
+
   return normalized;
 }
 
@@ -599,7 +643,12 @@ const DB = {
   },
   recalcRanking(genero) {
     const users = this.getUsers().filter(u => u.genero === genero);
-    const challenges = this.getChallenges().filter(c => c.status === 'completado' && c.genero === genero && c.tipo !== 'amistoso' && c.tipo !== 'campeonato');
+    const challenges = this.getChallenges().filter(c =>
+      ['completado', 'wo_retado'].includes(c.status) &&
+      c.genero === genero &&
+      c.tipo !== 'amistoso' &&
+      c.tipo !== 'campeonato'
+    );
 
     // Build ladder baseline from users. If a user has an explicit position (pos or posicion), respect it.
     const ranking = users.map((user, index) => {
@@ -628,15 +677,15 @@ const DB = {
     });
 
     sortedChallenges.forEach(challenge => {
+      if (challenge.status === 'wo_retador') return;
       const winnerId = challenge.ganadorId;
       const loserId = winnerId === challenge.retadorId ? challenge.retadoId : challenge.retadorId;
       const winnerIndex = findIndex(winnerId);
       const loserIndex = findIndex(loserId);
       if (winnerIndex < 0 || loserIndex < 0) return;
       if (winnerIndex > loserIndex) {
-        const temp = ranking[winnerIndex];
-        ranking[winnerIndex] = ranking[loserIndex];
-        ranking[loserIndex] = temp;
+        const moved = ranking.splice(winnerIndex, 1)[0];
+        ranking.splice(loserIndex, 0, moved);
       }
     });
 
@@ -677,7 +726,7 @@ const DB = {
       id: Date.now().toString(),
       retadorId, retadoId, genero,
       fecha, cancha,
-      status: 'pendiente', // pendiente | aceptado | rechazado | completado
+      status: 'pendiente',
       marcador: null,
       ganadorId: null,
       tipo: 'ranking',
@@ -695,13 +744,24 @@ const DB = {
     this.saveChallenges(list);
   },
   submitResult(id, marcador, ganadorId, tipo) {
+    const now = new Date().toISOString();
     const list = this.getChallenges().map(c => {
-      if (c.id === id) return { ...c, status: 'completado', marcador, ganadorId, tipo: tipo || c.tipo || 'ranking' };
+      if (c.id === id) {
+        return {
+          ...c,
+          status: 'resultado_pendiente',
+          marcador,
+          ganadorId,
+          tipo: tipo || c.tipo || 'ranking',
+          fechaResultado: now,
+          resultadoReclamado: false,
+          reclamoResultado: '',
+          actualizado: now
+        };
+      }
       return c;
     });
     this.saveChallenges(list);
-    const c = list.find(x => x.id === id);
-    if (c) this.recalcRanking(c.genero);
   },
   getUserChallenges(userId) {
     return this.getChallenges().filter(c => c.retadorId === userId || c.retadoId === userId);
