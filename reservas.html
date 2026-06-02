@@ -528,11 +528,37 @@ function updateSelectedDayWeather(iso) {
   const wDesc = getWeatherDesc(wCode);
   
   // Custom suggestion logic based on that day's weather
+  let maxPlayingRainProb = 0;
+  let hasHourlyData = false;
+  if (window.weatherData && window.weatherData.hourly) {
+    const hourly = window.weatherData.hourly;
+    for (let i = 0; i < hourly.time.length; i++) {
+      const timeStr = hourly.time[i];
+      if (timeStr.startsWith(iso)) {
+        const hourStr = timeStr.split('T')[1];
+        const hourNum = parseInt(hourStr.split(':')[0], 10);
+        // Horario de juego: 08:00 a 20:00
+        if (hourNum >= 8 && hourNum <= 20) {
+          hasHourlyData = true;
+          const hRain = hourly.precipitation_probability[i];
+          if (hRain > maxPlayingRainProb) {
+            maxPlayingRainProb = hRain;
+          }
+        }
+      }
+    }
+  }
+
   let suggestion = '';
   let suggestionColor = 'var(--accent-tennis)';
   if (rainProb > 40) {
-    suggestion = `🌧️ Alta probabilidad de lluvia (${rainProb}%). Las canchas de arcilla (CEC) podrían no estar jugables. Te recomendamos preferir canchas de asfalto (CJP) o reagendar.`;
-    suggestionColor = '#f87171'; // Red
+    if (hasHourlyData && maxPlayingRainProb <= 30) {
+      suggestion = `🌧️ Lluvia en la madrugada/noche, pero el horario de juego (08:00 a 20:00) se ve despejado/seco. Ojo: las canchas de arcilla (CEC) podrían estar muy húmedas por la lluvia previa, pero las de asfalto (CJP) estarán jugables.`;
+      suggestionColor = '#fbbf24'; // Yellow
+    } else {
+      suggestion = `🌧️ Alta probabilidad de lluvia (${rainProb}%). Las canchas de arcilla (CEC) podrían no estar jugables. Te recomendamos preferir canchas de asfalto (CJP) o reagendar.`;
+      suggestionColor = '#f87171'; // Red
+    }
   } else if (maxTemp > 28) {
     suggestion = `☀️ ¡Día caluroso! Temperatura máxima de ${maxTemp}°C. Evita los horarios de mayor radiación solar, usa bloqueador e hidrátate constantemente.`;
     suggestionColor = '#fbbf24'; // Yellow
