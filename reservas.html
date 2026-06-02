@@ -222,11 +222,21 @@
             </div>
           </div>
         </label>
+        <label class="challenge-type-option" id="optCampeonato" style="display:none;">
+          <input type="radio" name="challengeType" value="campeonato" onchange="onChallengeTypeChange()">
+          <div class="challenge-type-card">
+            <span class="challenge-type-icon">🏆</span>
+            <div>
+              <strong>Partido de Campeonato</strong>
+              <p>Partido oficial de torneo / campeonato</p>
+            </div>
+          </div>
+        </label>
       </div>
 
       <!-- Opción Amistoso (solo visible si es Reserva Normal) -->
       <div id="friendlySection" style="margin-top: 15px; padding: 15px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 16px;">
-        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; font-size: 0.95rem; color: var(--text-primary);">
+        <label id="friendlyMatchLabel" style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; font-size: 0.95rem; color: var(--text-primary);">
           <input type="checkbox" id="chkFriendlyMatch" onchange="onFriendlyMatchChange()" style="width: 16px; height: 16px; accent-color: var(--accent-tennis);">
           ¿Es un Partido Amistoso?
         </label>
@@ -556,6 +566,7 @@ function openChallengeModal() {
   // reset state
   sel.isChallenge = false;
   sel.isFriendly = false;
+  sel.isCampeonato = false;
   sel.retadoId = null;
   sel.retadoNombre = null;
   sel.retadoEmail = null;
@@ -564,9 +575,25 @@ function openChallengeModal() {
   document.getElementById('chkFriendlyMatch').checked = false;
   document.getElementById('friendlyOpponentGroup').style.display = 'none';
   document.getElementById('friendlySection').style.display = 'block';
+  
+  const friendlyMatchLabel = document.getElementById('friendlyMatchLabel');
+  if (friendlyMatchLabel) friendlyMatchLabel.style.display = 'flex';
+  
+  const opLabel = document.querySelector('#friendlyOpponentGroup label');
+  if (opLabel) opLabel.textContent = 'Selecciona tu oponente (opcional)';
+
   document.getElementById('challengeeSection').style.display = 'none';
   document.getElementById('challengeeError').style.display = 'none';
   document.getElementById('challengeeList').innerHTML = '';
+
+  // Show campeonato options for admin only
+  const session = DB.getSession();
+  const isAdmin = session && (session.isAdmin || ['uctenisclub@gmail.com', 'dsilva@uct.cl'].includes((session.email || '').toLowerCase()));
+  const optCampeonato = document.getElementById('optCampeonato');
+  if (optCampeonato) {
+    optCampeonato.style.display = isAdmin ? 'block' : 'none';
+  }
+
   loadFriendlyOpponents();
   document.getElementById('challengeModal').classList.add('visible');
 }
@@ -643,6 +670,7 @@ async function loadFriendlyOpponents() {
 function onChallengeTypeChange() {
   const type = document.querySelector('input[name="challengeType"]:checked').value;
   const isChallenge = type === 'challenge';
+  const isCampeonato = type === 'campeonato';
   
   document.getElementById('challengeeSection').style.display = isChallenge ? 'block' : 'none';
   document.getElementById('friendlySection').style.display = isChallenge ? 'none' : 'block';
@@ -653,11 +681,25 @@ function onChallengeTypeChange() {
   sel.retadoEmail = null;
   sel.retadoTelefono = null;
 
+  const friendlyMatchLabel = document.getElementById('friendlyMatchLabel');
+  const opLabel = document.querySelector('#friendlyOpponentGroup label');
+
   if (isChallenge) {
     document.getElementById('chkFriendlyMatch').checked = false;
     document.getElementById('friendlyOpponentGroup').style.display = 'none';
     loadChallengeablePlayers();
   } else {
+    if (isCampeonato) {
+      document.getElementById('chkFriendlyMatch').checked = false;
+      if (friendlyMatchLabel) friendlyMatchLabel.style.display = 'none';
+      document.getElementById('friendlyOpponentGroup').style.display = 'block';
+      if (opLabel) opLabel.textContent = 'Selecciona al contrincante del campeonato (opcional)';
+    } else {
+      if (friendlyMatchLabel) friendlyMatchLabel.style.display = 'flex';
+      document.getElementById('chkFriendlyMatch').checked = false;
+      document.getElementById('friendlyOpponentGroup').style.display = 'none';
+      if (opLabel) opLabel.textContent = 'Selecciona tu oponente (opcional)';
+    }
     loadFriendlyOpponents();
   }
 }
@@ -791,6 +833,7 @@ function selectChallengee(id, nombre, el, email = '', telefono = '') {
 function proceedFromChallengeModal() {
   const type = document.querySelector('input[name="challengeType"]:checked').value;
   sel.isChallenge = type === 'challenge';
+  sel.isCampeonato = type === 'campeonato';
 
   if (sel.isChallenge) {
     if (!sel.retadoId && !sel.retadoNombre) {
@@ -801,9 +844,11 @@ function proceedFromChallengeModal() {
     }
     sel.isFriendly = false;
   } else {
-    const isFriendly = document.getElementById('chkFriendlyMatch').checked;
+    const isFriendly = type === 'normal' && document.getElementById('chkFriendlyMatch').checked;
     sel.isFriendly = isFriendly;
-    if (isFriendly) {
+    
+    const hasOpponent = (type === 'normal' && isFriendly) || type === 'campeonato';
+    if (hasOpponent) {
       const select = document.getElementById('friendlyOpponent');
       const selectedOpt = select.options[select.selectedIndex];
       if (select.value) {
@@ -862,6 +907,18 @@ function buildConfirmCard() {
       <div class="cd-row"><span>📅 Fecha</span><strong>${fechaLabel}</strong></div>
       <div class="cd-row"><span>⏰ Horario</span><strong>${sel.slot} – ${endStr}</strong></div>
       <div class="cd-row"><span>⏱ Duración</span><strong>1 hora 30 min</strong></div>`;
+  } else if (sel.isCampeonato) {
+    const contraRow = sel.retadoNombre ? `<div class="cd-row"><span>👥 Contra</span><strong>${sel.retadoNombre}</strong></div>` : '';
+    document.getElementById('confirmIcon').textContent = '🏆';
+    document.getElementById('confirmTitle').textContent = 'Confirma tu Partido de Campeonato';
+    document.getElementById('confirmDetails').innerHTML = `
+      <div class="cd-row cd-challenge-badge"><span>🏆 Tipo</span><strong class="badge-torneo" style="padding:2px 6px; border-radius:4px; font-size:0.72rem; font-weight:900; text-transform:uppercase;">Partido de Campeonato</strong></div>
+      ${contraRow}
+      <div class="cd-row"><span>🎾 Cancha</span><strong>${sel.court.label}</strong></div>
+      <div class="cd-row"><span>🏗️ Superficie</span><strong>${sel.court.surface}</strong></div>
+      <div class="cd-row"><span>📅 Fecha</span><strong>${fechaLabel}</strong></div>
+      <div class="cd-row"><span>⏰ Horario</span><strong>${sel.slot} – ${endStr}</strong></div>
+      <div class="cd-row"><span>⏱ Duración</span><strong>1 hora 30 min</strong></div>`;
   } else {
     document.getElementById('confirmIcon').textContent = '🎾';
     document.getElementById('confirmTitle').textContent = 'Confirma tu reserva';
@@ -909,7 +966,7 @@ async function finalConfirmNormal(s, btn) {
   bookings.push(b);
   DB.saveBookings(bookings);
 
-  // If friendly match with opponent, create the challenge locally
+  // If friendly match or campeonato with opponent, create the challenge locally
   let challenge = null;
   let tempChallengeId = null;
   if (sel.isFriendly && sel.retadoId) {
@@ -930,6 +987,24 @@ async function finalConfirmNormal(s, btn) {
       bookingId: tempBookingId
     });
     DB.saveChallenges(DB.getChallenges().map(item => item.id === challenge.id ? { ...item, ...challenge } : item));
+  } else if (sel.isCampeonato && sel.retadoId) {
+    tempChallengeId = 'temp_ch_' + Date.now();
+    challenge = DB.createChallenge(s.id, sel.retadoId, s.genero || 'M', sel.date, sel.court.label);
+    challenge.id = tempChallengeId;
+    Object.assign(challenge, {
+      retadorNombre: s.nombre,
+      retadorEmail: s.email || '',
+      retadoNombre: sel.retadoNombre,
+      retadoEmail: sel.retadoEmail || '',
+      retadoTelefono: sel.retadoTelefono || '',
+      slot: sel.slot,
+      courtId: sel.court.id,
+      courtLabel: sel.court.label,
+      status: 'aceptado', // Reservado e inmediatamente aceptado
+      tipo: 'campeonato',
+      bookingId: tempBookingId
+    });
+    DB.saveChallenges(DB.getChallenges().map(item => item.id === challenge.id ? { ...item, ...challenge } : item));
   }
 
   // Update success modal and show it immediately
@@ -946,7 +1021,7 @@ async function finalConfirmNormal(s, btn) {
   refreshSlotAvailability();
 
   // Reset selection and close form
-  sel = { court: null, date: null, slot: null, isChallenge: false, isFriendly: false, retadoId: null, retadoNombre: null, retadoEmail: null, retadoTelefono: null };
+  sel = { court: null, date: null, slot: null, isChallenge: false, isFriendly: false, isCampeonato: false, retadoId: null, retadoNombre: null, retadoEmail: null, retadoTelefono: null };
   btn.disabled = false;
   btn.innerHTML = '✅ Confirmar reserva';
   setTimeout(() => goStep(1), 200);
@@ -978,8 +1053,8 @@ async function finalConfirmNormal(s, btn) {
           slot: challenge.slot,
           courtId: challenge.courtId,
           courtLabel: challenge.courtLabel,
-          status: 'pendiente',
-          tipo: 'amistoso',
+          status: challenge.status,
+          tipo: challenge.tipo,
           bookingId: r.booking.id
         });
         DB.saveChallenges(DB.getChallenges().map(item => item.id === realChallenge.id ? realChallenge : item));
