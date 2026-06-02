@@ -3377,10 +3377,10 @@ function openScoreModal(challengeId) {
   const me = getSessionPlayer(session);
   const isAdmin = isAdminSession(session);
 
-  // Toggle option Torneo/Campeonato visibility based on admin status
+  // Toggle option Torneo/Campeonato visibility (hidden until launch)
   const optCampeonato = document.getElementById('scoreTypeCampeonato');
   if (optCampeonato) {
-    optCampeonato.style.display = isAdmin ? 'block' : 'none';
+    optCampeonato.style.display = 'none';
   }
 
   if (isDirectFriendly) {
