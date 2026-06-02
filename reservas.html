@@ -854,12 +854,12 @@ function openChallengeModal() {
   document.getElementById('challengeeError').style.display = 'none';
   document.getElementById('challengeeList').innerHTML = '';
 
-  // Show campeonato options for admin only
+  // Show campeonato options (hidden until launch)
   const session = DB.getSession();
   const isAdmin = session && (session.isAdmin || ['uctenisclub@gmail.com', 'dsilva@uct.cl'].includes((session.email || '').toLowerCase()));
   const optCampeonato = document.getElementById('optCampeonato');
   if (optCampeonato) {
-    optCampeonato.style.display = isAdmin ? 'block' : 'none';
+    optCampeonato.style.display = 'none';
   }
 
   loadFriendlyOpponents();
