@@ -314,6 +314,29 @@ body {
   box-shadow: 0 12px 26px rgba(198, 211, 0, 0.2);
 }
 
+/* Style for disabled mini buttons */
+.btn-mini-profile:disabled,
+.btn-mini-challenge:disabled,
+.btn-accept:disabled,
+.btn-reject:disabled,
+.btn-score:disabled,
+.btn-edit:disabled,
+.btn-delete:disabled {
+  opacity: 0.50;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-mini-profile:disabled:hover,
+.btn-mini-challenge:disabled:hover,
+.btn-accept:disabled:hover,
+.btn-reject:disabled:hover,
+.btn-score:disabled:hover,
+.btn-edit:disabled:hover,
+.btn-delete:disabled:hover {
+  transform: none;
+}
+
 /* Highlight the confirm score button to make it clearly visible */
 #btnSubmitScore {
   min-width: 220px;
