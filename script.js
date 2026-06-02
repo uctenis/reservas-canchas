@@ -403,6 +403,22 @@ function closeModal() {
 document.addEventListener('DOMContentLoaded', () => {
     setDate();
 
+    // ✅ Inicializar listeners de Firestore en tiempo real
+    if (typeof DB !== 'undefined' && DB.isCloudConfigured && DB.isCloudConfigured()) {
+      DB.initPlayersListener();
+      DB.initChallengesListener();
+      DB.initNewsListener();
+      console.log('✅ Listeners de Firestore inicializados - Datos en tiempo real activado');
+      
+      // Listener para actualizar ranking cuando cambien los desafíos
+      DB.addEventListener('challenges-updated', (data) => {
+        console.log('📊 Desafíos actualizados, recalculando ranking...');
+        if (typeof loadRanking === 'function') {
+          loadRanking();
+        }
+      });
+    }
+
     // Check which page we are on
     if (document.getElementById('forecast') || document.getElementById('selectedWeatherBox')) {
         fetchWeather();

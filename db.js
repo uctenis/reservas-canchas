@@ -186,6 +186,14 @@ function normalizeCategoryForDb(value) {
     : raw;
 }
 
+// ──────────────── VARIABLES GLOBALES PARA LISTENERS ────────────────
+let playersListeners = [];
+let challengesListeners = [];
+let newsListeners = [];
+let cachedPlayers = [];
+let cachedChallenges = [];
+let cachedNews = [];
+
 const DB = {
 
   // ──────────────── USUARIOS ────────────────
@@ -430,6 +438,8 @@ const DB = {
     return JSON.parse(localStorage.getItem('uctenis_session') || 'null');
   },
   logout() {
+    // ✅ Limpiar listeners en tiempo real
+    this.cleanupListeners();
     localStorage.removeItem('uctenis_session');
     if (this.isFirebaseConfigured()) {
       firebaseAuth.signOut().catch(err => console.error("Error al cerrar sesión de Firebase:", err));
@@ -443,9 +453,43 @@ const DB = {
 
   // ──────────────── FIREBASE: JUGADORES ────────────────
   async getPlayersCloud() {
+    // ✅ OPTIMIZACIÓN: Retorna caché en tiempo real si listener está activo
+    if (cachedPlayers.length > 0) {
+      return cachedPlayers;
+    }
     if (!this.isCloudConfigured()) throw new Error('Firestore no está disponible.');
+    // Si no hay caché, hacer fetch manual
     const snapshot = await firebaseDb.collection(FIREBASE_COLLECTIONS.players).get();
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  },
+
+  // ✅ NUEVO: Inicializar listener de jugadores en tiempo real
+  initPlayersListener() {
+    if (!this.isCloudConfigured()) return null;
+    
+    // Desuscribir listeners anteriores
+    playersListeners.forEach(unsubscribe => unsubscribe());
+    playersListeners = [];
+    
+    // Crear nuevo listener
+    const unsubscribe = firebaseDb
+      .collection(FIREBASE_COLLECTIONS.players)
+      .onSnapshot(
+        snapshot => {
+          cachedPlayers = snapshot.docs.map(doc => ({ 
+            id: doc.id, 
+            ...doc.data() 
+          }));
+          this.dispatchEvent('players-updated', { count: cachedPlayers.length });
+          console.log(`✅ ${cachedPlayers.length} jugadores actualizados en tiempo real`);
+        },
+        error => {
+          console.error('❌ Error en listener de jugadores:', error);
+        }
+      );
+    
+    playersListeners.push(unsubscribe);
+    return unsubscribe;
   },
 
   async findPlayerByEmailCloud(email) {
@@ -453,34 +497,14 @@ const DB = {
     if (!normalized || !this.isCloudConfigured()) return null;
 
     try {
-      // 1. Intentar buscar por emailLower (todo en minúsculas)
-      let snapshot = await firebaseDb
+      // ✅ OPTIMIZACIÓN: Una sola query buscando por emailLower
+      // Asegúrate de que todos los documentos tengan emailLower guardado
+      const snapshot = await firebaseDb
         .collection(FIREBASE_COLLECTIONS.players)
         .where('emailLower', '==', normalized)
         .limit(1)
         .get();
-      if (!snapshot.empty) {
-        const doc = snapshot.docs[0];
-        return { id: doc.id, ...doc.data() };
-      }
-
-      // 2. Intentar buscar por email (coincidencia exacta del valor original)
-      snapshot = await firebaseDb
-        .collection(FIREBASE_COLLECTIONS.players)
-        .where('email', '==', email)
-        .limit(1)
-        .get();
-      if (!snapshot.empty) {
-        const doc = snapshot.docs[0];
-        return { id: doc.id, ...doc.data() };
-      }
-
-      // 3. Intentar buscar por email (coincidencia con el normalizado en minúsculas)
-      snapshot = await firebaseDb
-        .collection(FIREBASE_COLLECTIONS.players)
-        .where('email', '==', normalized)
-        .limit(1)
-        .get();
+      
       if (!snapshot.empty) {
         const doc = snapshot.docs[0];
         return { id: doc.id, ...doc.data() };
@@ -565,11 +589,44 @@ const DB = {
 
   // ──────────────── FIREBASE: DESAFÍOS ────────────────
   async getChallengesCloud() {
+    // ✅ OPTIMIZACIÓN: Retorna caché en tiempo real si listener está activo
+    if (cachedChallenges.length > 0) {
+      return cachedChallenges;
+    }
     if (!this.isCloudConfigured()) throw new Error('Firestore no está disponible.');
+    // Si no hay caché, hacer fetch manual
     const snapshot = await firebaseDb.collection(FIREBASE_COLLECTIONS.challenges).get();
     return snapshot.docs
       .map(doc => normalizeChallengeRecord({ id: doc.id, ...doc.data() }))
       .sort((a, b) => (a.fecha || '').localeCompare(b.fecha || '') || (b.creado || '').localeCompare(a.creado || ''));
+  },
+
+  // ✅ NUEVO: Inicializar listener de desafíos en tiempo real
+  initChallengesListener() {
+    if (!this.isCloudConfigured()) return null;
+    
+    // Desuscribir listeners anteriores
+    challengesListeners.forEach(unsubscribe => unsubscribe());
+    challengesListeners = [];
+    
+    // Crear nuevo listener
+    const unsubscribe = firebaseDb
+      .collection(FIREBASE_COLLECTIONS.challenges)
+      .onSnapshot(
+        snapshot => {
+          cachedChallenges = snapshot.docs
+            .map(doc => normalizeChallengeRecord({ id: doc.id, ...doc.data() }))
+            .sort((a, b) => (a.fecha || '').localeCompare(b.fecha || '') || (b.creado || '').localeCompare(a.creado || ''));
+          this.dispatchEvent('challenges-updated', { count: cachedChallenges.length });
+          console.log(`✅ ${cachedChallenges.length} desafíos actualizados en tiempo real`);
+        },
+        error => {
+          console.error('❌ Error en listener de desafíos:', error);
+        }
+      );
+    
+    challengesListeners.push(unsubscribe);
+    return unsubscribe;
   },
 
   async saveChallengeCloud(challenge) {
@@ -606,11 +663,44 @@ const DB = {
     localStorage.setItem('uctenis_news', JSON.stringify(list || []));
   },
   async getNewsCloud() {
+    // ✅ OPTIMIZACIÓN: Retorna caché en tiempo real si listener está activo
+    if (cachedNews.length > 0) {
+      return cachedNews;
+    }
     if (!this.isCloudConfigured()) throw new Error('Firestore no está disponible.');
+    // Si no hay caché, hacer fetch manual
     const snapshot = await firebaseDb.collection(FIREBASE_COLLECTIONS.news).get();
     return snapshot.docs
       .map(doc => ({ id: doc.id, ...doc.data() }))
       .sort((a, b) => (b.date || b.creado || '').localeCompare(a.date || a.creado || ''));
+  },
+
+  // ✅ NUEVO: Inicializar listener de noticias en tiempo real
+  initNewsListener() {
+    if (!this.isCloudConfigured()) return null;
+    
+    // Desuscribir listeners anteriores
+    newsListeners.forEach(unsubscribe => unsubscribe());
+    newsListeners = [];
+    
+    // Crear nuevo listener
+    const unsubscribe = firebaseDb
+      .collection(FIREBASE_COLLECTIONS.news)
+      .onSnapshot(
+        snapshot => {
+          cachedNews = snapshot.docs
+            .map(doc => ({ id: doc.id, ...doc.data() }))
+            .sort((a, b) => (b.date || b.creado || '').localeCompare(a.date || a.creado || ''));
+          this.dispatchEvent('news-updated', { count: cachedNews.length });
+          console.log(`✅ ${cachedNews.length} noticias actualizadas en tiempo real`);
+        },
+        error => {
+          console.error('❌ Error en listener de noticias:', error);
+        }
+      );
+    
+    newsListeners.push(unsubscribe);
+    return unsubscribe;
   },
   async saveNewsCloud(newsItem, actor = {}) {
     if (!this.isCloudConfigured()) throw new Error('Firestore no está disponible.');
@@ -630,6 +720,31 @@ const DB = {
     if (!this.isCloudConfigured()) throw new Error('Firestore no está disponible.');
     if (!id) throw new Error('Se requiere el ID de la novedad para eliminarla.');
     await firebaseDb.collection(FIREBASE_COLLECTIONS.news).doc(id).delete();
+  },
+
+  // ✅ UTILIDAD: Disparar eventos personalizados
+  dispatchEvent(eventName, data) {
+    const event = new CustomEvent(eventName, { detail: data });
+    window.dispatchEvent(event);
+  },
+
+  // ✅ UTILIDAD: Escuchar eventos de actualización en tiempo real
+  addEventListener(eventName, callback) {
+    window.addEventListener(eventName, (e) => callback(e.detail));
+  },
+
+  // ✅ UTILIDAD: Limpiar todos los listeners (para logout)
+  cleanupListeners() {
+    playersListeners.forEach(unsubscribe => unsubscribe());
+    challengesListeners.forEach(unsubscribe => unsubscribe());
+    newsListeners.forEach(unsubscribe => unsubscribe());
+    playersListeners = [];
+    challengesListeners = [];
+    newsListeners = [];
+    cachedPlayers = [];
+    cachedChallenges = [];
+    cachedNews = [];
+    console.log('✅ Listeners limpios');
   },
 
   // ──────────────── RANKING ────────────────
