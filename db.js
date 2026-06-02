@@ -930,19 +930,20 @@ const DB = {
       let users = this.getUsers();
       let migrated = false;
       users = users.map(u => {
-        if (u.nombre === 'Ismael Devia' && u.email === 'ismael@uct.cl') { u.email = 'idevia@uct.cl'; migrated = true; }
-        if (u.nombre === 'Luis Otth' && u.email === 'luis@uct.cl') { u.email = 'lotth@uct.cl'; migrated = true; }
-        if (u.nombre === 'Paulo Garrido' && u.email === 'paulo@uct.cl') { u.email = 'pgarrido@uct.cl'; migrated = true; }
-        if (u.nombre === 'Carolina Cárdenas' && u.email === 'ccardeneas@uct.cl') { u.email = 'ccardenas@uct.cl'; migrated = true; }
+        if (u.nombre === 'Ismael Devia' && (u.email === 'ismael@uct.cl' || u.id === 'ismael@uct.cl')) { u.email = 'idevia@uct.cl'; u.id = 'm002'; migrated = true; }
+        if (u.nombre === 'Luis Otth' && (u.email === 'luis@uct.cl' || u.id === 'luis@uct.cl')) { u.email = 'lotth@uct.cl'; u.id = 'm004'; migrated = true; }
+        if (u.nombre === 'Paulo Garrido' && (u.email === 'paulo@uct.cl' || u.id === 'paulo@uct.cl')) { u.email = 'pgarrido@uct.cl'; u.id = 'm031'; migrated = true; }
+        if (u.nombre === 'Carolina Cárdenas' && (u.email === 'ccardenas@uct.cl' || u.email === 'ccardeneas@uct.cl') && u.id !== 'f008') { u.email = 'ccardeneas@uct.cl'; u.id = 'f008'; migrated = true; }
         return u;
       });
       if (migrated) {
         this.saveUsers(users);
         const session = this.getSession();
         if (session) {
-          if (session.nombre === 'Ismael Devia' && session.email === 'ismael@uct.cl') { session.email = 'idevia@uct.cl'; localStorage.setItem('uctenis_session', JSON.stringify(session)); }
-          if (session.nombre === 'Luis Otth' && session.email === 'luis@uct.cl') { session.email = 'lotth@uct.cl'; localStorage.setItem('uctenis_session', JSON.stringify(session)); }
-          if (session.nombre === 'Paulo Garrido' && session.email === 'paulo@uct.cl') { session.email = 'pgarrido@uct.cl'; localStorage.setItem('uctenis_session', JSON.stringify(session)); }
+          if (session.nombre === 'Ismael Devia') { session.email = 'idevia@uct.cl'; session.id = 'm002'; localStorage.setItem('uctenis_session', JSON.stringify(session)); }
+          if (session.nombre === 'Luis Otth') { session.email = 'lotth@uct.cl'; session.id = 'm004'; localStorage.setItem('uctenis_session', JSON.stringify(session)); }
+          if (session.nombre === 'Paulo Garrido') { session.email = 'pgarrido@uct.cl'; session.id = 'm031'; localStorage.setItem('uctenis_session', JSON.stringify(session)); }
+          if (session.nombre === 'Carolina Cárdenas') { session.email = 'ccardeneas@uct.cl'; session.id = 'f008'; localStorage.setItem('uctenis_session', JSON.stringify(session)); }
         }
       }
     } catch (e) {
