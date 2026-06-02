@@ -700,7 +700,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-<script src="db.js?v=20260602_v2"></script>
+<script src="db.js?v=20260602_v3"></script>
 
 <script>
 // Helper functions for RUT
@@ -1061,13 +1061,46 @@ function finalizeRankingLoad() {
   catch (e) { console.warn('Error sincronizando usuarios locales:', e); }
 }
 
+function shouldChallengeMoveRanking(challenge) {
+  return Boolean(
+    challenge &&
+    ['completado', 'wo_retado'].includes(challenge.status) &&
+    challenge.tipo !== 'amistoso' &&
+    challenge.tipo !== 'campeonato' &&
+    challenge.ganadorId
+  );
+}
+
+function applyChallengeLadderMovement(list, challenge) {
+  const ranked = [...(list || [])];
+  if (!shouldChallengeMoveRanking(challenge)) return ranked;
+
+  const winnerIsRetador = challenge.ganadorId === challenge.retadorId;
+  const winnerId = challenge.ganadorId;
+  const winnerEmail = winnerIsRetador ? challenge.retadorEmail : challenge.retadoEmail;
+  const winnerNombre = winnerIsRetador ? challenge.retadorNombre : challenge.retadoNombre;
+
+  const loserId = winnerIsRetador ? challenge.retadoId : challenge.retadorId;
+  const loserEmail = winnerIsRetador ? challenge.retadoEmail : challenge.retadorEmail;
+  const loserNombre = winnerIsRetador ? challenge.retadoNombre : challenge.retadorNombre;
+
+  const winnerIndex = findChallengePlayerIndex(ranked, winnerId, winnerEmail, winnerNombre);
+  const loserIndex = findChallengePlayerIndex(ranked, loserId, loserEmail, loserNombre);
+
+  if (winnerIndex < 0 || loserIndex < 0 || winnerIndex < loserIndex) return ranked;
+
+  const moved = ranked.splice(winnerIndex, 1)[0];
+  ranked.splice(loserIndex, 0, moved);
+  return ranked;
+}
+
 function applyLocalChallengesToRanking() {
-  const completed = DB.getChallenges().filter(challenge => challenge.status === 'completado');
+  const completed = DB.getChallenges().filter(shouldChallengeMoveRanking);
   if (!completed.length) return;
 
   ['M', 'F'].forEach(gender => {
     const list = rankingState.lists[gender] || [];
-    const ranked = [...list];
+    let ranked = [...list];
 
     completed
       .filter(challenge => normalizeGender(challenge.genero) === gender)
@@ -1077,22 +1110,7 @@ function applyLocalChallengesToRanking() {
         return timeA - timeB || String(a.id).localeCompare(String(b.id));
       })
       .forEach(challenge => {
-        const winnerIsRetador = challenge.ganadorId === challenge.retadorId;
-        const winnerId = challenge.ganadorId;
-        const winnerEmail = winnerIsRetador ? challenge.retadorEmail : challenge.retadoEmail;
-        const winnerNombre = winnerIsRetador ? challenge.retadorNombre : challenge.retadoNombre;
-
-        const loserId = winnerIsRetador ? challenge.retadoId : challenge.retadorId;
-        const loserEmail = winnerIsRetador ? challenge.retadoEmail : challenge.retadorEmail;
-        const loserNombre = winnerIsRetador ? challenge.retadorNombre : challenge.retadorNombre;
-
-        let winnerIndex = findChallengePlayerIndex(ranked, winnerId, winnerEmail, winnerNombre);
-        let loserIndex = findChallengePlayerIndex(ranked, loserId, loserEmail, loserNombre);
-
-        if (winnerIndex < 0 || loserIndex < 0 || winnerIndex < loserIndex) return;
-        const temp = ranked[winnerIndex];
-        ranked[winnerIndex] = ranked[loserIndex];
-        ranked[loserIndex] = temp;
+        ranked = applyChallengeLadderMovement(ranked, challenge);
       });
 
     rankingState.lists[gender] = ranked.map((player, index) => ({ ...player, pos: index + 1 }));
@@ -1229,11 +1247,74 @@ function rankingHasRecordedResult(challenge) {
   );
 }
 
+function challengeRules() {
+  return window.UCTENNIS_CHALLENGE_RULES || {
+    RESPONSE_MS: 48 * 60 * 60 * 1000,
+    RESULT_CONFIRM_MS: 48 * 60 * 60 * 1000,
+    ACTIVE_STATUSES: ['pendiente', 'aceptado', 'resultado_pendiente'],
+    HISTORY_STATUSES: ['completado', 'wo_retador', 'wo_retado', 'vencido', 'rechazado'],
+    OFFICIAL_STATUSES: ['pendiente', 'aceptado', 'rechazado', 'resultado_pendiente', 'completado', 'wo_retador', 'wo_retado', 'vencido']
+  };
+}
+
+function challengeTimestamp(value) {
+  const time = value ? new Date(value).getTime() : NaN;
+  return Number.isFinite(time) ? time : 0;
+}
+
+function isChallengeActiveStatus(status) {
+  return challengeRules().ACTIVE_STATUSES.includes(status);
+}
+
+function isChallengeHistoryStatus(status) {
+  return challengeRules().HISTORY_STATUSES.includes(status);
+}
+
+function isChallengeResultDisputed(challenge) {
+  return Boolean(
+    challenge?.resultadoReclamado === true ||
+    challenge?.resultadoReclamado === 'true' ||
+    String(challenge?.reclamoResultado || '').trim()
+  );
+}
+
 function rankingNormalizeChallenge(challenge) {
   const normalized = { ...(challenge || {}) };
-  if (rankingHasRecordedResult(normalized) && normalized.status !== 'eliminado') {
-    normalized.status = 'completado';
+  const rules = challengeRules();
+  const now = Date.now();
+
+  if (!normalized.status) {
+    normalized.status = rankingHasRecordedResult(normalized) ? 'completado' : 'pendiente';
+  } else if (normalized.status === 'terminado') {
+    normalized.status = rankingHasRecordedResult(normalized) ? 'completado' : 'aceptado';
   }
+
+  if (!rules.OFFICIAL_STATUSES.includes(normalized.status) && normalized.status !== 'eliminado') {
+    normalized.status = rankingHasRecordedResult(normalized) ? 'completado' : 'pendiente';
+  }
+
+  if (rankingHasRecordedResult(normalized) && !normalized.fechaResultado) {
+    normalized.fechaResultado = normalized.actualizado || normalized.updatedAt || normalized.creado || new Date().toISOString();
+  }
+
+  if (normalized.status === 'pendiente') {
+    const createdAt = challengeTimestamp(normalized.creado || normalized.createdAt || normalized.actualizado);
+    if (createdAt && now - createdAt >= rules.RESPONSE_MS) {
+      normalized.status = 'vencido';
+      normalized.actualizado = normalized.actualizado || new Date().toISOString();
+    }
+  }
+
+  if (normalized.status === 'resultado_pendiente' && !isChallengeResultDisputed(normalized)) {
+    const resultAt = challengeTimestamp(normalized.fechaResultado || normalized.actualizado);
+    if (resultAt && now - resultAt >= rules.RESULT_CONFIRM_MS) {
+      normalized.status = 'completado';
+      normalized.confirmadoAutomaticamente = true;
+      normalized.fechaConfirmacion = normalized.fechaConfirmacion || new Date().toISOString();
+      normalized.actualizado = normalized.fechaConfirmacion;
+    }
+  }
+
   return normalized;
 }
 
@@ -1259,11 +1340,10 @@ function rankingMergeChallengeRecords(current, incoming) {
   });
 
   if (rankingHasRecordedResult(base) || rankingHasRecordedResult(next)) {
-    const completed = rankingHasRecordedResult(next) ? next : base;
-    merged.status = 'completado';
-    merged.marcador = completed.marcador || merged.marcador;
-    merged.ganadorId = completed.ganadorId || merged.ganadorId;
-    merged.actualizado = completed.actualizado || merged.actualizado || new Date().toISOString();
+    const resultSource = rankingHasRecordedResult(newer) ? newer : (rankingHasRecordedResult(next) ? next : base);
+    merged.marcador = resultSource.marcador || merged.marcador;
+    merged.ganadorId = resultSource.ganadorId || merged.ganadorId;
+    merged.fechaResultado = resultSource.fechaResultado || merged.fechaResultado;
   }
 
   return rankingNormalizeChallenge(merged);
@@ -1281,7 +1361,10 @@ function rankingMergeChallengeSources(sources) {
 
 async function syncChallengesFromCloud() {
   // Firebase es la única fuente de verdad — Google Sheets eliminado
-  if (!DB.isCloudConfigured()) return;
+  if (!DB.isCloudConfigured()) {
+    await syncChallengeAutomation();
+    return;
+  }
 
   // Sincronizar en segundo plano con Google Calendar (a través de Google Sheets)
   if (window.CONFIG?.API_URL) {
@@ -1294,6 +1377,36 @@ async function syncChallengesFromCloud() {
     DB.saveChallenges(cloudChallenges);
   } catch (error) {
     console.warn('No se pudieron sincronizar los desafíos desde Firebase, usando caché local.', error);
+  }
+
+  await syncChallengeAutomation();
+}
+
+async function syncChallengeAutomation() {
+  const rawList = JSON.parse(localStorage.getItem('uctenis_challenges') || '[]');
+  if (!rawList.length) return;
+
+  const normalizedList = rawList.map(rankingNormalizeChallenge);
+  const changed = normalizedList.filter((challenge, index) => {
+    const before = rawList[index] || {};
+    return challenge.status !== before.status ||
+      challenge.fechaConfirmacion !== before.fechaConfirmacion ||
+      challenge.confirmadoAutomaticamente !== before.confirmadoAutomaticamente;
+  });
+
+  if (!changed.length) return;
+  DB.saveChallenges(normalizedList);
+
+  for (const challenge of changed) {
+    const before = rawList.find(item => item.id === challenge.id) || {};
+    if (before.status === 'resultado_pendiente' && challenge.status === 'completado') {
+      await completeChallengeResult(challenge.id, { automatic: true, challengeOverride: challenge });
+    } else if (challenge.status === 'vencido') {
+      await persistChallengePatch(challenge.id, {
+        status: 'vencido',
+        actualizado: challenge.actualizado || new Date().toISOString()
+      });
+    }
   }
 }
 
@@ -1791,8 +1904,7 @@ function renderMyProfile() {
 
   const todayIso = new Date().toISOString().split('T')[0];
   const expiredChallenges = DB.getChallenges().filter(c =>
-    ['pendiente', 'aceptado'].includes(c.status) &&
-    c.fecha < todayIso &&
+    (c.status === 'vencido' || (c.status === 'aceptado' && c.fecha < todayIso)) &&
     isUserInChallenge(session, c)
   );
 
@@ -1850,7 +1962,7 @@ function renderChallenges() {
   const session = DB.getSession();
   const users = DB.getUsers();
   const list = DB.getChallenges()
-    .filter(challenge => challenge.genero === rankingState.currentGender && ['pendiente', 'aceptado', 'terminado'].includes(challenge.status))
+    .filter(challenge => challenge.genero === rankingState.currentGender && isChallengeActiveStatus(challenge.status))
     .sort(sortChallenges);
   const div = document.getElementById('challengesList');
   document.getElementById('activeChallengeCount').textContent = list.length ? `${list.length} activo${list.length === 1 ? '' : 's'}` : '';
@@ -1878,12 +1990,20 @@ function renderMyChallenges() {
   const allChallenges = DB.getChallenges()
     .filter(challenge => isUserInChallenge(session, challenge));
 
-  const activeChallenges = allChallenges
-    .filter(challenge => ['pendiente', 'aceptado', 'terminado'].includes(challenge.status))
+  const pendingChallenges = allChallenges
+    .filter(challenge => challenge.status === 'pendiente')
+    .sort(sortChallenges);
+
+  const acceptedChallenges = allChallenges
+    .filter(challenge => challenge.status === 'aceptado')
+    .sort(sortChallenges);
+
+  const resultPendingChallenges = allChallenges
+    .filter(challenge => challenge.status === 'resultado_pendiente')
     .sort(sortChallenges);
 
   // Tab badge for mobile
-  const pendingCount = activeChallenges.filter(c => c.status === 'pendiente' && isUserRetadoInChallenge(session, c)).length;
+  const pendingCount = pendingChallenges.filter(c => isUserRetadoInChallenge(session, c)).length;
   const btnPanel = document.getElementById('btnTabPanel');
   if (btnPanel) {
     if (pendingCount > 0) {
@@ -1894,7 +2014,7 @@ function renderMyChallenges() {
   }
 
   const historyChallenges = allChallenges
-    .filter(challenge => ['completado', 'rechazado'].includes(challenge.status))
+    .filter(challenge => isChallengeHistoryStatus(challenge.status))
     .sort((a, b) => (b.fecha || '').localeCompare(a.fecha || '') || (b.creado || '').localeCompare(a.creado || ''));
 
   const totalCount = allChallenges.length;
@@ -1907,15 +2027,18 @@ function renderMyChallenges() {
 
   let html = '';
 
-  // Render Activos Group
-  html += `<div class="my-challenges-group">`;
-  html += `<h4 class="my-challenges-subheading">Activos (${activeChallenges.length})</h4>`;
-  if (activeChallenges.length > 0) {
-    html += activeChallenges.map(challenge => challengeCard(challenge, users, session, true)).join('');
-  } else {
-    html += '<p class="empty-state" style="padding: 10px 0;">No tienes desafíos activos.</p>';
-  }
-  html += `</div>`;
+  const renderGroup = (title, items, emptyText) => {
+    html += `<div class="my-challenges-group">`;
+    html += `<h4 class="my-challenges-subheading">${title} (${items.length})</h4>`;
+    html += items.length
+      ? items.map(challenge => challengeCard(challenge, users, session, true)).join('')
+      : `<p class="empty-state" style="padding: 10px 0;">${emptyText}</p>`;
+    html += `</div>`;
+  };
+
+  renderGroup('Pendientes de responder', pendingChallenges, 'No tienes desafíos pendientes de respuesta.');
+  renderGroup('Partidos aceptados', acceptedChallenges, 'No tienes partidos aceptados.');
+  renderGroup('Resultados esperando confirmación', resultPendingChallenges, 'No tienes resultados esperando confirmación.');
 
   // Render Historial Group
   html += `<div class="my-challenges-group">`;
@@ -1930,6 +2053,23 @@ function renderMyChallenges() {
   div.innerHTML = html;
 }
 
+function isSessionResultSubmitter(session, challenge) {
+  if (!session || !challenge) return false;
+  const player = getSessionPlayer(session);
+  const ids = [session.id, player?.id, player?.localId].filter(Boolean);
+  const emails = [session.email, player?.email].map(normalizeEmail).filter(Boolean);
+  const names = [session.nombre, player?.nombre].map(normalizeKey).filter(Boolean);
+  const submitterId = challenge.resultadoIngresadoPor || challenge.resultadoReportadoPor || '';
+  const submitterEmail = normalizeEmail(challenge.resultadoIngresadoPorEmail || challenge.resultadoReportadoPorEmail || '');
+  const submitterName = normalizeKey(challenge.resultadoIngresadoPorNombre || challenge.resultadoReportadoPorNombre || '');
+
+  return Boolean(
+    (submitterId && ids.includes(submitterId)) ||
+    (submitterEmail && emails.includes(submitterEmail)) ||
+    (submitterName && names.includes(submitterName))
+  );
+}
+
 function challengeCard(challenge, users, session, compact) {
   const retador = users.find(user => user.id === challenge.retadorId);
   const retado = users.find(user => user.id === challenge.retadoId);
@@ -1938,20 +2078,24 @@ function challengeCard(challenge, users, session, compact) {
   const retadoName = challenge.retadoNombre || retado?.nombre || 'Jugador';
   const ganadorName = challenge.ganadorId ? (challenge.ganadorNombre || ganador?.nombre || 'Jugador') : null;
   const involved = session && isUserInChallenge(session, challenge);
+  const isRetador = session && isUserRetadorInChallenge(session, challenge);
+  const isRetado = session && isUserRetadoInChallenge(session, challenge);
   const isAdmin = isAdminSession(session);
-  const canRespond = session && isUserRetadoInChallenge(session, challenge) && challenge.status === 'pendiente';
-  const canScore = involved && (['aceptado', 'terminado'].includes(challenge.status) || isAdmin);
+  const canRespond = isRetado && challenge.status === 'pendiente';
+  const canScore = (involved && challenge.status === 'aceptado') || (isAdmin && challenge.status === 'aceptado');
   const canManage = (involved && ['pendiente', 'aceptado'].includes(challenge.status)) || isAdmin;
+  const canReviewResult = challenge.status === 'resultado_pendiente' &&
+    (isAdmin || (involved && !isSessionResultSubmitter(session, challenge)));
   const status = statusLabel(challenge.status);
 
   const todayIso = new Date().toISOString().split('T')[0];
-  const isExpired = challenge.fecha < todayIso && ['pendiente', 'aceptado'].includes(challenge.status);
-  const expiredBadge = isExpired ? `<span class="badge-expired" style="background:rgba(251,191,36,0.12); border:1px solid rgba(251,191,36,0.3); color:#fbbf24; padding:2px 6px; border-radius:4px; font-size:0.72rem; font-weight:900; text-transform:uppercase;">⚠️ Sin resultado</span>` : '';
+  const needsScoreBadge = challenge.fecha < todayIso && challenge.status === 'aceptado';
+  const expiredBadge = needsScoreBadge ? `<span class="badge-expired" style="background:rgba(251,191,36,0.12); border:1px solid rgba(251,191,36,0.3); color:#fbbf24; padding:2px 6px; border-radius:4px; font-size:0.72rem; font-weight:900; text-transform:uppercase;">Sin resultado</span>` : '';
   const friendlyBadge = challenge.tipo === 'amistoso' ? `<span class="badge-friendly" style="background:rgba(99,102,241,0.15); border:1px solid rgba(99,102,241,0.3); color:#a5b4fc; padding:2px 6px; border-radius:4px; font-size:0.72rem; font-weight:900; text-transform:uppercase; margin-left:6px;">Amistoso</span>` : '';
   const campeonatoBadge = challenge.tipo === 'campeonato' ? `<span class="badge-campeonato" style="background:rgba(251,191,36,0.15); border:1px solid rgba(251,191,36,0.3); color:#fcd34d; padding:2px 6px; border-radius:4px; font-size:0.72rem; font-weight:900; text-transform:uppercase; margin-left:6px;">Campeonato</span>` : '';
 
   let actions = '';
-  if (challenge.status === 'completado' || challenge.status === 'rechazado') {
+  if (isChallengeHistoryStatus(challenge.status)) {
     if (involved || isAdmin) {
       if (challenge.status === 'completado') {
         actions += `
@@ -1960,6 +2104,15 @@ function challengeCard(challenge, users, session, compact) {
       actions += `
         <button class="btn-delete" type="button" data-action="delete-challenge" data-challenge-id="${escapeAttr(challenge.id)}">Eliminar</button>`;
     }
+  } else if (challenge.status === 'resultado_pendiente') {
+    if (canReviewResult && !isChallengeResultDisputed(challenge)) {
+      actions += `
+        <button class="btn-accept" type="button" data-action="confirm-result" data-challenge-id="${escapeAttr(challenge.id)}">Confirmar resultado</button>
+        <button class="btn-reject" type="button" data-action="dispute-result" data-challenge-id="${escapeAttr(challenge.id)}">Reclamar resultado</button>`;
+    }
+    if (isChallengeResultDisputed(challenge)) {
+      actions += `<span class="chal-status" style="align-self:center;">Reclamo enviado</span>`;
+    }
   } else {
     if (canRespond) {
       actions += `
@@ -1967,9 +2120,17 @@ function challengeCard(challenge, users, session, compact) {
         <button class="btn-reject" type="button" data-action="reject-challenge" data-challenge-id="${escapeAttr(challenge.id)}">Rechazar</button>`;
     }
     if (canScore) {
-      const isHighlighted = challenge.status === 'terminado';
+      const isHighlighted = needsScoreBadge;
       const highlightClass = isHighlighted ? ' btn-score-highlight' : '';
       actions += `<button class="btn-score${highlightClass}" type="button" data-action="score-challenge" data-challenge-id="${escapeAttr(challenge.id)}">Ingresar resultado</button>`;
+    }
+    if (challenge.status === 'aceptado') {
+      if (isRetado || isAdmin) {
+        actions += `<button class="btn-reject" type="button" data-action="wo-retador" data-challenge-id="${escapeAttr(challenge.id)}">WO retador</button>`;
+      }
+      if (isRetador || isAdmin) {
+        actions += `<button class="btn-accept" type="button" data-action="wo-retado" data-challenge-id="${escapeAttr(challenge.id)}">WO retado</button>`;
+      }
     }
     if (canManage) {
       actions += `
@@ -1995,10 +2156,11 @@ function challengeCard(challenge, users, session, compact) {
     const allChallenges = DB.getChallenges();
     const playerAId = retador?.id || challenge.retadorId;
     const playerBId = retado?.id || challenge.retadoId;
-    const winsA = allChallenges.filter(c => c.ganadorId === playerAId).length;
-    const winsB = allChallenges.filter(c => c.ganadorId === playerBId).length;
-    const lossesA = allChallenges.filter(c => (c.retadorId === playerAId || c.retadoId === playerAId) && c.ganadorId && c.ganadorId !== playerAId).length;
-    const lossesB = allChallenges.filter(c => (c.retadorId === playerBId || c.retadoId === playerBId) && c.ganadorId && c.ganadorId !== playerBId).length;
+    const finalChallenges = allChallenges.filter(c => ['completado', 'wo_retador', 'wo_retado'].includes(c.status));
+    const winsA = finalChallenges.filter(c => c.ganadorId === playerAId).length;
+    const winsB = finalChallenges.filter(c => c.ganadorId === playerBId).length;
+    const lossesA = finalChallenges.filter(c => (c.retadorId === playerAId || c.retadoId === playerAId) && c.ganadorId && c.ganadorId !== playerAId).length;
+    const lossesB = finalChallenges.filter(c => (c.retadorId === playerBId || c.retadoId === playerBId) && c.ganadorId && c.ganadorId !== playerBId).length;
     compactStats = `<div class="chal-stats"><span>${winsA}W-${lossesA}L · ${winsB}W-${lossesB}L</span></div>`;
   }
 
@@ -2062,10 +2224,176 @@ function handleChallengeAction(event) {
   if (button.dataset.action === 'accept-challenge') respondChallenge(id, true);
   if (button.dataset.action === 'reject-challenge') respondChallenge(id, false);
   if (button.dataset.action === 'score-challenge') openScoreModal(id);
+  if (button.dataset.action === 'confirm-result') completeChallengeResult(id, { button });
+  if (button.dataset.action === 'dispute-result') disputeChallenge(id, button);
   if (button.dataset.action === 'dispute-challenge') disputeChallenge(id, button);
+  if (button.dataset.action === 'wo-retador') setChallengeWalkover(id, 'wo_retador', button);
+  if (button.dataset.action === 'wo-retado') setChallengeWalkover(id, 'wo_retado', button);
   if (button.dataset.action === 'edit-challenge') openEditChallengeModal(id);
   if (button.dataset.action === 'delete-challenge') {
     deleteChallenge(id);
+  }
+}
+
+async function persistChallengePatch(id, patch) {
+  const current = DB.getChallenges().find(c => c.id === id) || {};
+  const local = rankingNormalizeChallenge({
+    ...current,
+    ...patch,
+    id,
+    actualizado: patch.actualizado || new Date().toISOString()
+  });
+  upsertLocalChallenge(local);
+
+  if (DB.isCloudConfigured()) {
+    try {
+      const updated = await DB.updateChallengeCloud(id, patch);
+      upsertLocalChallenge(rankingMergeChallengeRecords(local, updated));
+      return rankingMergeChallengeRecords(local, updated);
+    } catch (error) {
+      console.warn('No se pudo actualizar el desafío en Firebase.', error);
+    }
+  }
+
+  return local;
+}
+
+async function completeChallengeResult(id, options = {}) {
+  const challenge = options.challengeOverride || DB.getChallenges().find(c => c.id === id);
+  if (!challenge) return;
+  if (isChallengeResultDisputed(challenge) && !options.force) return;
+
+  const session = DB.getSession() || {};
+  if (!options.automatic) {
+    const canConfirm = isAdminSession(session) ||
+      (isUserInChallenge(session, challenge) && !isSessionResultSubmitter(session, challenge));
+    if (!canConfirm) {
+      alert('El resultado debe confirmarlo el rival.');
+      return;
+    }
+  }
+
+  const now = new Date().toISOString();
+  const patch = {
+    status: 'completado',
+    fechaConfirmacion: challenge.fechaConfirmacion || now,
+    confirmadoPor: options.automatic ? 'automatico_48h' : (session.id || session.email || 'usuario'),
+    confirmadoPorEmail: options.automatic ? '' : (session.email || ''),
+    confirmadoAutomaticamente: Boolean(options.automatic),
+    actualizado: now
+  };
+
+  const btn = options.button;
+  const originalHtml = btn ? btn.innerHTML : '';
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = 'Confirmando...';
+  }
+
+  try {
+    const completed = await persistChallengePatch(id, patch);
+
+    if (window.CONFIG?.API_URL) {
+      fetch(window.CONFIG.API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          action: 'confirm_challenge_result',
+          id,
+          automatic: Boolean(options.automatic),
+          confirmadoPor: patch.confirmadoPor,
+          confirmadoPorEmail: patch.confirmadoPorEmail
+        })
+      }).catch(err => console.warn('No se pudo confirmar el resultado en Google Sheets:', err));
+    }
+
+    if (!completed.rankingAplicado && shouldChallengeMoveRanking(completed)) {
+      if (DB.isCloudConfigured()) {
+        await applyChallengeResultToCloudRanking(completed);
+      }
+      await persistChallengePatch(id, {
+        rankingAplicado: true,
+        rankingAplicadoAt: new Date().toISOString()
+      });
+    }
+
+    refreshLocalRankingIfNeeded();
+    renderAll();
+    if (!options.automatic) alert('Resultado confirmado. La escalerilla fue actualizada.');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = originalHtml;
+    }
+  }
+}
+
+async function setChallengeWalkover(id, status, button) {
+  const challenge = DB.getChallenges().find(c => c.id === id);
+  if (!challenge) return;
+  const isRetadorWo = status === 'wo_retador';
+  const label = isRetadorWo ? 'WO del retador' : 'WO del retado';
+  if (!confirm(`¿Confirmas ${label}?`)) return;
+
+  const session = DB.getSession() || {};
+  const now = new Date().toISOString();
+  const ganadorId = isRetadorWo ? challenge.retadoId : challenge.retadorId;
+  const patch = {
+    status,
+    marcador: 'W.O.',
+    ganadorId,
+    fechaResultado: now,
+    fechaConfirmacion: now,
+    resultadoIngresadoPor: session.id || session.email || '',
+    resultadoIngresadoPorEmail: session.email || '',
+    resultadoIngresadoPorNombre: session.nombre || '',
+    confirmadoPor: session.id || session.email || '',
+    confirmadoPorEmail: session.email || '',
+    actualizado: now
+  };
+
+  const originalHtml = button ? button.innerHTML : '';
+  if (button) {
+    button.disabled = true;
+    button.innerHTML = 'Guardando...';
+  }
+
+  try {
+    const updated = await persistChallengePatch(id, patch);
+
+    if (window.CONFIG?.API_URL) {
+      fetch(window.CONFIG.API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          action: 'set_challenge_walkover',
+          id,
+          status,
+          actorId: session.id || '',
+          actorEmail: session.email || '',
+          actorName: session.nombre || ''
+        })
+      }).catch(err => console.warn('No se pudo registrar el W.O. en Google Sheets:', err));
+    }
+
+    if (!updated.rankingAplicado && shouldChallengeMoveRanking(updated)) {
+      if (DB.isCloudConfigured()) {
+        await applyChallengeResultToCloudRanking(updated);
+      }
+      await persistChallengePatch(id, {
+        rankingAplicado: true,
+        rankingAplicadoAt: new Date().toISOString()
+      });
+    }
+
+    refreshLocalRankingIfNeeded();
+    renderAll();
+    alert(`${label} registrado.`);
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.innerHTML = originalHtml;
+    }
   }
 }
 
@@ -2084,13 +2412,36 @@ async function disputeChallenge(id, button) {
   const retador = users.find(u => u.id === challenge.retadorId);
   const retado = users.find(u => u.id === challenge.retadoId);
   const contrarioName = session.id === challenge.retadorId ? (challenge.retadoNombre || retado?.nombre) : (challenge.retadorNombre || retador?.nombre);
+  const now = new Date().toISOString();
+  const patch = {
+    resultadoReclamado: true,
+    reclamoResultado: 'Resultado reclamado por el rival.',
+    fechaReclamo: now,
+    reclamadoPor: session.id || session.email || '',
+    reclamadoPorEmail: session.email || '',
+    reclamadoPorNombre: session.nombre || '',
+    actualizado: now
+  };
   
   try {
+    await persistChallengePatch(id, patch);
+
+    if (!window.CONFIG?.API_URL) {
+      alert('Reclamo registrado localmente. Un administrador deberá revisar el caso.');
+      button.innerHTML = 'Disputado ⚠️';
+      button.disabled = true;
+      renderChallenges();
+      renderMyChallenges();
+      return;
+    }
+
     const response = await fetch(window.CONFIG.API_URL, {
       method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({
-        action: 'notify_dispute',
+        action: 'dispute_challenge_result',
         challengeId: challenge.id,
+        id: challenge.id,
         disputanteNombre: session.nombre,
         disputanteEmail: session.email,
         contrarioNombre: contrarioName,
@@ -2185,7 +2536,7 @@ async function deleteChallenge(id) {
   const list = DB.getChallenges().filter(c => c.id !== id);
   DB.saveChallenges(list);
   
-  if (challenge.status === 'completado' && challenge.tipo !== 'amistoso' && challenge.tipo !== 'campeonato' && challenge.genero) {
+  if (['completado', 'wo_retado'].includes(challenge.status) && challenge.tipo !== 'amistoso' && challenge.tipo !== 'campeonato' && challenge.genero) {
     DB.recalcRanking(challenge.genero);
   }
   
@@ -2478,6 +2829,9 @@ function openChallengeModal(playerKey) {
     select.innerHTML = '<option value="">Sin rivales disponibles</option>';
     select.disabled = true;
     submit.disabled = true;
+    document.getElementById('challengeError').textContent = hasActiveChallengeInRole(sessionPlayer, 'retador')
+      ? 'Ya tienes un desafío activo como retador.'
+      : '';
   } else {
     select.disabled = false;
     submit.disabled = false;
@@ -2488,9 +2842,9 @@ function openChallengeModal(playerKey) {
     }).join('');
   }
 
-  document.getElementById('challengeError').textContent = target && !canChallengePlayer(target)
-    ? 'Solo puedes retar a jugadores ubicados hasta 3 puestos por encima de ti.'
-    : '';
+  if (target) {
+    document.getElementById('challengeError').textContent = getChallengeBlockReason(sessionPlayer, target);
+  }
   updateChallengeAvailableSlots();
   openModal('challengeModal');
 }
@@ -2526,8 +2880,9 @@ async function submitChallenge(event) {
     error.textContent = 'Tu ficha está inactiva para la escalerilla.';
     return;
   }
-  if (!retadoPlayer || !canChallengePlayer(retadoPlayer)) {
-    error.textContent = 'Solo puedes retar a jugadores ubicados hasta 3 puestos por encima de ti.';
+  const blockReason = getChallengeBlockReason(retadorPlayer, retadoPlayer, editId || '');
+  if (blockReason) {
+    error.textContent = blockReason;
     return;
   }
   if (!fecha || fecha < todayISO()) {
@@ -2538,30 +2893,11 @@ async function submitChallenge(event) {
     error.textContent = 'Selecciona un horario disponible.';
     return;
   }
-  if (retado.genero !== retadorPlayer.gender) {
-    error.textContent = 'Solo puedes desafiar jugadores de tu mismo ranking.';
-    return;
-  }
-  if (retado.id === session.id || normalizeKey(retado.nombre) === normalizeKey(session.nombre)) {
-    error.textContent = 'No puedes desafiarte a ti mismo.';
-    return;
-  }
-
-  const existing = DB.getChallenges().find(challenge =>
-    ['pendiente', 'aceptado'].includes(challenge.status) &&
-    ((isUserRetadorInChallenge(session, challenge) && challenge.retadoId === retadoId) ||
-     (isUserRetadoInChallenge(session, challenge) && challenge.retadorId === retadoId))
-  );
-
-  if (existing && !editId) {
-    error.textContent = 'Ya hay un desafío pendiente o aceptado con ese jugador.';
-    return;
-  }
-
   const courtObj = DB.COURTS.find(c => c.id === courtId);
   const courtLabel = courtObj ? courtObj.label : courtId;
 
   const restoreButton = setButtonBusy(submitBtn, editId ? 'Guardando...' : 'Enviando...');
+  let bookingEventId = null;
 
   try {
     if (editId) {
@@ -2596,7 +2932,6 @@ async function submitChallenge(event) {
     }
 
     // 1. Intentar reservar la cancha en Google Calendar (obligatorio para confirmar la disponibilidad real)
-    let bookingEventId = null;
     try {
       const r = await DB.createBookingAPI(session.id, courtId, fecha, slot);
       if (r.ok) {
@@ -2635,7 +2970,13 @@ async function submitChallenge(event) {
     renderMyChallenges();
   } catch (err) {
     console.error('Error al enviar el desafío:', err);
-    error.textContent = 'Error al procesar el desafío. Intenta nuevamente.';
+    if (bookingEventId) {
+      DB.cancelBooking(bookingEventId, session.id);
+      DB.cancelBookingAPI(bookingEventId, courtId).catch(cancelErr => {
+        console.warn('No se pudo revertir la reserva del desafío fallido:', cancelErr);
+      });
+    }
+    error.textContent = err.message || 'Error al procesar el desafío. Intenta nuevamente.';
   } finally {
     restoreButton();
   }
@@ -2769,8 +3110,16 @@ async function createChallengeRemoteOrLocal(payload) {
           upsertLocalChallenge(merged);
           savedChallenge = merged;
         }
+      } else if (data && data.ok === false) {
+        if (savedChallenge && DB.isCloudConfigured()) {
+          DB.deleteChallengeCloud(challenge.id).catch(err => console.warn('No se pudo revertir el desafío rechazado en Firebase:', err));
+        }
+        const validationError = new Error(data.msg || 'El desafío fue rechazado por las reglas de escalerilla.');
+        validationError.isChallengeValidationError = true;
+        throw validationError;
       }
     } catch (sheetErr) {
+      if (sheetErr.isChallengeValidationError) throw sheetErr;
       console.warn('No se pudo crear el desafío en Google Sheets:', sheetErr);
     }
   }
@@ -3492,20 +3841,27 @@ async function submitScore(event) {
     return;
   }
 
-  // Normal path: updating an existing challenge
+  // Normal path: registrar resultado y esperar confirmación del rival
   const ganadorId = scoreResult.winnerId || '';
-  const completedChallenge = rankingNormalizeChallenge({
+  const session = DB.getSession() || {};
+  const now = new Date().toISOString();
+  const resultPendingChallenge = rankingNormalizeChallenge({
     ...challenge,
-    status: 'completado',
+    status: 'resultado_pendiente',
     marcador,
     ganadorId,
     tipo: matchType,
-    actualizado: new Date().toISOString()
+    fechaResultado: now,
+    resultadoIngresadoPor: session.id || session.email || '',
+    resultadoIngresadoPorEmail: session.email || '',
+    resultadoIngresadoPorNombre: session.nombre || '',
+    resultadoReclamado: false,
+    reclamoResultado: '',
+    actualizado: now
   });
 
-  // Optimistic UI Update: Save score and apply local ranking changes
-  upsertLocalChallenge(completedChallenge);
-  refreshLocalRankingIfNeeded();
+  // Optimistic UI Update: guardar score sin mover la escalerilla.
+  upsertLocalChallenge(resultPendingChallenge);
   closeModal('scoreModal');
   renderAll();
 
@@ -3516,52 +3872,52 @@ async function submitScore(event) {
     // 1. Intentar registrar en Firebase
     if (DB.isCloudConfigured()) {
       try {
-        const wasCompleted = challenge.status === 'completado';
         const updated = await DB.updateChallengeCloud(rankingState.currentChallengeId, {
-          status: 'completado',
+          status: 'resultado_pendiente',
           marcador,
           ganadorId,
-          tipo: matchType
+          tipo: matchType,
+          fechaResultado: now,
+          resultadoIngresadoPor: session.id || session.email || '',
+          resultadoIngresadoPorEmail: session.email || '',
+          resultadoIngresadoPorNombre: session.nombre || '',
+          resultadoReclamado: false,
+          reclamoResultado: ''
         });
-        upsertLocalChallenge(rankingMergeChallengeRecords(completedChallenge, updated));
-        
-        if (!wasCompleted && matchType !== 'amistoso') {
-          await applyChallengeResultToCloudRanking({ ...updated, marcador, ganadorId });
-        }
+        upsertLocalChallenge(rankingMergeChallengeRecords(resultPendingChallenge, updated));
         
         // Send notification email to the loser
-        if (!wasCompleted) {
-          try {
-            const users = DB.getUsers();
-            const retadorUser = users.find(u => u.id === challenge.retadorId);
-            const retadoUser = users.find(u => u.id === challenge.retadoId);
-            const retadorEmail = challenge.retadorEmail || retadorUser?.email;
-            const retadoEmail = challenge.retadoEmail || retadoUser?.email;
-            
-            const ganadorNombre = ganadorId === challenge.retadorId ? (challenge.retadorNombre || retadorUser?.nombre) : (challenge.retadoNombre || retadorUser?.nombre);
-            const ganadorEmail = ganadorId === challenge.retadorId ? retadorEmail : retadoEmail;
-            const perdedorNombre = ganadorId === challenge.retadorId ? (challenge.retadoNombre || retadorUser?.nombre) : (challenge.retadorNombre || retadorUser?.nombre);
-            const perdedorEmail = ganadorId === challenge.retadorId ? retadoEmail : retadorEmail;
+        try {
+          const users = DB.getUsers();
+          const retadorUser = users.find(u => u.id === challenge.retadorId);
+          const retadoUser = users.find(u => u.id === challenge.retadoId);
+          const retadorEmail = challenge.retadorEmail || retadorUser?.email;
+          const retadoEmail = challenge.retadoEmail || retadoUser?.email;
 
-            if (perdedorEmail) {
-              fetch(window.CONFIG.API_URL, {
-                method: 'POST',
-                body: JSON.stringify({
-                  action: 'notify_result',
-                  challengeId: challenge.id,
-                  ganadorNombre,
-                  ganadorEmail,
-                  perdedorNombre,
-                  perdedorEmail,
-                  marcador,
-                  fecha: challenge.fecha,
-                  cancha: challenge.cancha
-                })
-              }).catch(err => console.warn('Error al enviar correo de resultado:', err));
-            }
-          } catch (err) {
-            console.warn('Error al preparar correo de resultado:', err);
+          const ganadorNombre = ganadorId === challenge.retadorId ? (challenge.retadorNombre || retadorUser?.nombre) : (challenge.retadoNombre || retadoUser?.nombre);
+          const ganadorEmail = ganadorId === challenge.retadorId ? retadorEmail : retadoEmail;
+          const perdedorNombre = ganadorId === challenge.retadorId ? (challenge.retadoNombre || retadorUser?.nombre) : (challenge.retadorNombre || retadorUser?.nombre);
+          const perdedorEmail = ganadorId === challenge.retadorId ? retadoEmail : retadorEmail;
+
+          if (perdedorEmail && window.CONFIG?.API_URL) {
+            fetch(window.CONFIG.API_URL, {
+              method: 'POST',
+              headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+              body: JSON.stringify({
+                action: 'notify_result',
+                challengeId: challenge.id,
+                ganadorNombre,
+                ganadorEmail,
+                perdedorNombre,
+                perdedorEmail,
+                marcador,
+                fecha: challenge.fecha,
+                cancha: challenge.cancha
+              })
+            }).catch(err => console.warn('Error al enviar correo de resultado:', err));
           }
+        } catch (err) {
+          console.warn('Error al preparar correo de resultado:', err);
         }
         savedInCloud = true;
       } catch (cloudError) {
@@ -3580,14 +3936,18 @@ async function submitScore(event) {
             id: rankingState.currentChallengeId,
             marcador,
             ganadorId,
-            tipo: matchType
+            tipo: matchType,
+            fechaResultado: now,
+            resultadoIngresadoPor: session.id || session.email || '',
+            resultadoIngresadoPorEmail: session.email || '',
+            resultadoIngresadoPorNombre: session.nombre || ''
           })
         });
         const data = await res.json().catch(() => null);
         if (data && data.ok) {
           console.log('Resultado registrado exitosamente en Google Sheets.');
           if (data.challenge) {
-            const sheetChallenge = rankingMergeChallengeRecords(completedChallenge, data.challenge);
+            const sheetChallenge = rankingMergeChallengeRecords(resultPendingChallenge, data.challenge);
             upsertLocalChallenge(sheetChallenge);
             if (DB.isCloudConfigured()) {
               DB.saveChallengeCloud(sheetChallenge).catch(err => {
@@ -3606,37 +3966,22 @@ async function submitScore(event) {
       await refreshRankingPage().catch(() => {});
     } else {
       DB.submitResult(rankingState.currentChallengeId, marcador, ganadorId, matchType);
-      refreshLocalRankingIfNeeded();
       renderAll();
     }
   })();
 }
 
 async function applyChallengeResultToCloudRanking(challenge) {
-  if (challenge.tipo === 'amistoso' || challenge.tipo === 'campeonato') return;
+  if (!shouldChallengeMoveRanking(challenge)) return;
   const gender = normalizeGender(challenge.genero);
   const list = [...(rankingState.lists[gender] || [])];
   if (!gender || !list.length) return;
 
-  const winnerIsRetador = challenge.ganadorId === challenge.retadorId;
-  const winnerId = challenge.ganadorId;
-  const winnerEmail = winnerIsRetador ? challenge.retadorEmail : challenge.retadoEmail;
-  const winnerNombre = winnerIsRetador ? challenge.retadorNombre : challenge.retadoNombre;
+  const movedList = applyChallengeLadderMovement(list, challenge);
+  const changed = movedList.some((player, index) => player.id !== list[index]?.id);
+  if (!changed) return;
 
-  const loserId = winnerIsRetador ? challenge.retadoId : challenge.retadorId;
-  const loserEmail = winnerIsRetador ? challenge.retadoEmail : challenge.retadorEmail;
-  const loserNombre = winnerIsRetador ? challenge.retadoNombre : challenge.retadorNombre;
-
-  const winnerIndex = findChallengePlayerIndex(list, winnerId, winnerEmail, winnerNombre);
-  const loserIndex = findChallengePlayerIndex(list, loserId, loserEmail, loserNombre);
-
-  if (winnerIndex < 0 || loserIndex < 0 || winnerIndex < loserIndex) return;
-
-  const temp = list[winnerIndex];
-  list[winnerIndex] = list[loserIndex];
-  list[loserIndex] = temp;
-
-  const updated = list.map((player, index) => ({
+  const updated = movedList.map((player, index) => ({
     ...player,
     genero: gender,
     activo: true,
@@ -3710,13 +4055,14 @@ function showPlayerProfile(playerKey) {
     playerMatchesChallengeRef(player, c.retadorId) || playerMatchesChallengeRef(player, c.retadoId)
   );
 
-  const wins = playerChallenges.filter(c => c.status === 'completado' && playerMatchesChallengeRef(player, c.ganadorId)).length;
-  const losses = playerChallenges.filter(c => c.status === 'completado' && c.ganadorId && !playerMatchesChallengeRef(player, c.ganadorId)).length;
-  const pending = playerChallenges.filter(c => ['pendiente', 'aceptado'].includes(c.status)).length;
+  const finalPlayerChallenges = playerChallenges.filter(c => ['completado', 'wo_retador', 'wo_retado'].includes(c.status));
+  const wins = finalPlayerChallenges.filter(c => playerMatchesChallengeRef(player, c.ganadorId)).length;
+  const losses = finalPlayerChallenges.filter(c => c.ganadorId && !playerMatchesChallengeRef(player, c.ganadorId)).length;
+  const pending = playerChallenges.filter(c => isChallengeActiveStatus(c.status)).length;
 
   const users = DB.getUsers();
   const lastMatches = playerChallenges
-    .filter(c => c.status === 'completado')
+    .filter(c => ['completado', 'wo_retador', 'wo_retado'].includes(c.status))
     .sort((a,b) => (b.fecha || '').localeCompare(a.fecha || ''))
     .slice(0, 3);
 
@@ -4891,25 +5237,61 @@ function syncSessionWithRankingPlayer() {
   localStorage.setItem('uctenis_session', JSON.stringify(synced));
 }
 
-function canChallengePlayer(player) {
-  const session = DB.getSession();
-  const own = getSessionPlayer(session);
+function playerMatchesChallengeSide(player, challenge, side) {
+  if (!player || !challenge) return false;
+  const prefix = side === 'retado' ? 'retado' : 'retador';
+  const id = challenge[`${prefix}Id`];
+  const email = challenge[`${prefix}Email`];
+  const nombre = challenge[`${prefix}Nombre`];
+
   return Boolean(
-    session &&
-    own &&
-    isPlayerActive(own) &&
-    isPlayerActive(player) &&
-    own.gender === player.gender &&
-    !samePlayer(own, player) &&
-    player.pos < own.pos &&
-    own.pos - player.pos <= 3
+    (id && (player.id === id || player.localId === id)) ||
+    (email && normalizeEmail(player.email) === normalizeEmail(email)) ||
+    (nombre && normalizeKey(player.nombre) === normalizeKey(nombre))
   );
 }
 
-function getChallengeablePlayers(player) {
+function hasActiveChallengeInRole(player, role, ignoreId = '') {
+  return DB.getChallenges().some(challenge =>
+    challenge.id !== ignoreId &&
+    isChallengeActiveStatus(challenge.status) &&
+    playerMatchesChallengeSide(player, challenge, role)
+  );
+}
+
+function getChallengeBlockReason(retador, retado, ignoreId = '') {
+  if (!retador) return 'Tu cuenta no está enlazada a una ficha del ranking.';
+  if (!retado) return 'Selecciona un rival válido.';
+  if (!isPlayerActive(retador)) return 'Tu ficha está inactiva para la escalerilla.';
+  if (!isPlayerActive(retado)) return 'El rival no está activo en la escalerilla.';
+  if (retador.gender !== retado.gender) return 'Solo puedes desafiar jugadores de tu mismo ranking.';
+  if (samePlayer(retador, retado)) return 'No puedes desafiarte a ti mismo.';
+  if (!(retado.pos < retador.pos && retador.pos - retado.pos <= 3)) {
+    return 'Solo puedes retar a jugadores ubicados hasta 3 puestos por encima de ti.';
+  }
+  if (hasActiveChallengeInRole(retador, 'retador', ignoreId)) {
+    return 'Ya tienes un desafío activo como retador.';
+  }
+  if (hasActiveChallengeInRole(retado, 'retado', ignoreId)) {
+    return 'Ese jugador ya tiene un desafío activo como retado.';
+  }
+  return '';
+}
+
+function canCreateChallengeAgainst(retador, retado, ignoreId = '') {
+  return !getChallengeBlockReason(retador, retado, ignoreId);
+}
+
+function canChallengePlayer(player) {
+  const session = DB.getSession();
+  const own = getSessionPlayer(session);
+  return Boolean(session && canCreateChallengeAgainst(own, player));
+}
+
+function getChallengeablePlayers(player, ignoreId = '') {
   if (!isPlayerActive(player)) return [];
   return (rankingState.lists[player.gender] || [])
-    .filter(candidate => isPlayerActive(candidate) && candidate.pos < player.pos && player.pos - candidate.pos <= 3)
+    .filter(candidate => canCreateChallengeAgainst(player, candidate, ignoreId))
     .sort((a, b) => b.pos - a.pos);
 }
 
@@ -5237,13 +5619,28 @@ function statusLabel(status) {
     pendiente: 'Pendiente',
     aceptado: 'Aceptado',
     rechazado: 'Rechazado',
+    resultado_pendiente: 'Resultado pendiente',
     completado: 'Completado',
-    terminado: 'Terminado'
+    wo_retador: 'WO retador',
+    wo_retado: 'WO retado',
+    vencido: 'Vencido'
   }[status] || status;
 }
 
 function sortChallenges(a, b) {
-  return (a.fecha || '').localeCompare(b.fecha || '') || (b.creado || '').localeCompare(a.creado || '');
+  const order = {
+    pendiente: 1,
+    aceptado: 2,
+    resultado_pendiente: 3,
+    completado: 4,
+    wo_retador: 5,
+    wo_retado: 6,
+    vencido: 7,
+    rechazado: 8
+  };
+  return (order[a.status] || 99) - (order[b.status] || 99) ||
+    (a.fecha || '').localeCompare(b.fecha || '') ||
+    (b.creado || '').localeCompare(a.creado || '');
 }
 
 function isValidScore(value) {
@@ -5280,6 +5677,11 @@ async function simulateResultSwapDavidVsGustavo() {
     const chal = DB.createChallenge(david.id, gustavo.id, david.gender, fecha, 'CEC 1');
     const marcador = '6-4,6-4';
     DB.submitResult(chal.id, marcador, david.id);
+    DB.saveChallenges(DB.getChallenges().map(challenge =>
+      challenge.id === chal.id
+        ? { ...challenge, status: 'completado', fechaConfirmacion: new Date().toISOString() }
+        : challenge
+    ));
 
     // Forzar recálculo local y re-render
     refreshLocalRankingIfNeeded();
