@@ -212,13 +212,15 @@ const DB = {
       }
     }
 
-    // 2. Buscar en usuarios locales
-    const localUser = this.getUsers().find(user => normalizeEmailForDb(user.email) === normalizeEmailForDb(email));
-    if (localUser) return { ok: true, source: 'local' };
-
-    // 3. Buscar en jugadores de Firebase
-    const cloudPlayer = await this.findPlayerByEmailCloud(email);
-    if (cloudPlayer) return { ok: true, source: 'firebase', player: cloudPlayer };
+    // 2. Buscar en jugadores de Firebase (si está configurado)
+    if (this.isCloudConfigured()) {
+      const cloudPlayer = await this.findPlayerByEmailCloud(email);
+      if (cloudPlayer) return { ok: true, source: 'firebase', player: cloudPlayer };
+    } else {
+      // Si no hay Firebase (modo local/desarrollo), permitir buscar en usuarios locales
+      const localUser = this.getUsers().find(user => normalizeEmailForDb(user.email) === normalizeEmailForDb(email));
+      if (localUser) return { ok: true, source: 'local' };
+    }
 
     return { ok: false, msg: 'Acceso restringido a jugadores UCTenis registrados en Firebase.' };
   },
@@ -923,11 +925,35 @@ const DB = {
 
   // ──────────────── SEED DATA ────────────────
   seed() {
+    // Migración de correos mock antiguos en localStorage
+    try {
+      let users = this.getUsers();
+      let migrated = false;
+      users = users.map(u => {
+        if (u.nombre === 'Ismael Devia' && u.email === 'ismael@uct.cl') { u.email = 'idevia@uct.cl'; migrated = true; }
+        if (u.nombre === 'Luis Otth' && u.email === 'luis@uct.cl') { u.email = 'lotth@uct.cl'; migrated = true; }
+        if (u.nombre === 'Paulo Garrido' && u.email === 'paulo@uct.cl') { u.email = 'pgarrido@uct.cl'; migrated = true; }
+        if (u.nombre === 'Carolina Cárdenas' && u.email === 'ccardeneas@uct.cl') { u.email = 'ccardenas@uct.cl'; migrated = true; }
+        return u;
+      });
+      if (migrated) {
+        this.saveUsers(users);
+        const session = this.getSession();
+        if (session) {
+          if (session.nombre === 'Ismael Devia' && session.email === 'ismael@uct.cl') { session.email = 'idevia@uct.cl'; localStorage.setItem('uctenis_session', JSON.stringify(session)); }
+          if (session.nombre === 'Luis Otth' && session.email === 'luis@uct.cl') { session.email = 'lotth@uct.cl'; localStorage.setItem('uctenis_session', JSON.stringify(session)); }
+          if (session.nombre === 'Paulo Garrido' && session.email === 'paulo@uct.cl') { session.email = 'pgarrido@uct.cl'; localStorage.setItem('uctenis_session', JSON.stringify(session)); }
+        }
+      }
+    } catch (e) {
+      console.warn("Error migrating mock emails:", e);
+    }
+
     if (this.getUsers().length === 0) {
       const hombres = [
-        { nombre: 'Luis Otth', email: 'luis@uct.cl', genero: 'M', categoria: 'Primera' },
-        { nombre: 'Ismael Devia', email: 'ismael@uct.cl', genero: 'M', categoria: 'Primera' },
-        { nombre: 'Paulo Garrido', email: 'paulo@uct.cl', genero: 'M', categoria: 'Segunda' },
+        { nombre: 'Luis Otth', email: 'lotth@uct.cl', genero: 'M', categoria: 'Primera' },
+        { nombre: 'Ismael Devia', email: 'idevia@uct.cl', genero: 'M', categoria: 'Primera' },
+        { nombre: 'Paulo Garrido', email: 'pgarrido@uct.cl', genero: 'M', categoria: 'Segunda' },
         { nombre: 'Roberto Bermudez', email: 'roberto@uct.cl', genero: 'M', categoria: 'Segunda' },
         { nombre: 'Francisco Encina', email: 'fencina@uct.cl', genero: 'M', categoria: 'Principiante' },
         { nombre: 'Gustavo Curaqueo', email: 'gcuraqueo@uct.cl', genero: 'M', categoria: 'Principiante' },
@@ -935,7 +961,7 @@ const DB = {
         { nombre: 'Matías Cáceres', email: 'mcaceres@uct.cl', genero: 'M', categoria: 'Segunda' },
       ];
       const mujeres = [
-        { nombre: 'Carolina Cárdenas', email: 'ccardeneas@uct.cl', genero: 'F', categoria: 'Primera' },
+        { nombre: 'Carolina Cárdenas', email: 'ccardenas@uct.cl', genero: 'F', categoria: 'Primera' },
         { nombre: 'Angélica Encina', email: 'aencina@uct.cl', genero: 'F', categoria: 'Primera' },
         { nombre: 'Violeta Moreno', email: 'vmoreno@uct.cl', genero: 'F', categoria: 'Segunda' },
         { nombre: 'Valeria Schatter', email: 'vschatter@uct.cl', genero: 'F', categoria: 'Principiante' },
