@@ -9,6 +9,21 @@
   <link rel="stylesheet" href="reservas.css">
 </head>
 <body>
+  <div id="debug-error-console" style="background:#ef4444; color:#fff; padding:15px; font-family:monospace; font-size:13px; display:none; position:fixed; top:0; left:0; width:100%; z-index:999999; box-shadow:0 4px 12px rgba(0,0,0,0.3);">
+    <h3 style="margin:0 0 8px 0; font-size:14px; font-weight:800;">🚨 Error de JavaScript Detectado:</h3>
+    <pre id="debug-error-text" style="margin:0; white-space:pre-wrap; word-break:break-all;"></pre>
+    <button onclick="this.parentElement.style.display='none'" style="margin-top:10px; background:#fff; color:#ef4444; border:none; padding:4px 8px; border-radius:4px; font-weight:bold; cursor:pointer;">Cerrar</button>
+  </div>
+  <script>
+    window.addEventListener('error', function(e) {
+      document.getElementById('debug-error-console').style.display = 'block';
+      document.getElementById('debug-error-text').textContent += e.message + '\n  en ' + e.filename + ':' + e.lineno + ':' + e.colno + '\n\n';
+    });
+    window.addEventListener('unhandledrejection', function(e) {
+      document.getElementById('debug-error-console').style.display = 'block';
+      document.getElementById('debug-error-text').textContent += 'Rechazo de Promesa: ' + (e.reason ? (e.reason.stack || e.reason.message || e.reason) : e) + '\n\n';
+    });
+  </script>
 <div class="main-container">
 
   <header>
@@ -31,14 +46,24 @@
     <div class="date-strip" id="dateStrip"></div>
     <p class="rule-note">🚫 No hay reservas los domingos</p>
 
-    <!-- ── WEATHER ── -->
-    <div class="weather-compact-box" style="margin-top: 24px; padding-top: 18px; border-top: 1px solid rgba(255,255,255,0.06);">
-      <h3 style="font-size: 0.95rem; display: flex; align-items: center; gap: 8px; color: var(--text-primary); margin-bottom: 8px;">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="color:#fbbf24"><path d="M6.76 4.84l-1.8-1.79-1.41 1.41 1.79 1.79 1.42-1.41zM4 10.5H1v2h3v-2zm9-9.95h-2V3.5h2V.55zm7.45 3.91l-1.41-1.41-1.79 1.79 1.41 1.41 1.79-1.79zm-3.21 13.7l1.79 1.8 1.41-1.41-1.8-1.79-1.4 1.4zM20 10.5v2h3v-2h-3zm-8-5c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6zm-1 16.95h2V19.5h-2v2.95zm-7.45-3.91l1.41 1.41 1.79-1.8-1.41-1.41-1.79 1.8z"/></svg>
-        Pronóstico del Tiempo
+    <!-- ── WEATHER DETAIL FOR SELECTED DAY ── -->
+    <div class="weather-detail-box" id="selectedWeatherBox" style="margin-top: 24px; padding: 20px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 20px; display: none;">
+      <h3 style="font-size: 1rem; display: flex; align-items: center; gap: 10px; color: var(--text-primary); margin-top: 0; margin-bottom: 14px;">
+        <span id="weatherDetailIcon" style="font-size: 1.6rem; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.25));">🌤️</span>
+        <span id="weatherDetailTitle" style="font-weight: 800;">Pronóstico del tiempo</span>
       </h3>
-      <p class="smart-suggestion" id="smartSuggestion" style="font-size: 0.82rem; margin-bottom: 12px; line-height: 1.4; color: var(--accent-tennis);">Consultando el clima...</p>
-      <div class="forecast-container" id="forecast"></div>
+      <div style="display: flex; gap: 24px; align-items: center; flex-wrap: wrap;">
+        <div style="flex: 0 0 auto; min-width: 140px;">
+          <div style="font-size: 1.8rem; font-weight: 800; color: var(--text-primary); letter-spacing: -0.02em;" id="weatherDetailTemps">--°C / --°C</div>
+          <div style="font-size: 0.82rem; color: var(--text-secondary); margin-top: 4px; display: flex; align-items: center; gap: 4px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="color: #60a5fa;"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>
+            <span id="weatherDetailRain">Probabilidad: --%</span>
+          </div>
+        </div>
+        <div style="flex: 1; min-width: 220px; padding-left: 20px; border-left: 1.5px solid rgba(255,255,255,0.08)" id="weatherDetailRecommendationCol">
+          <p class="smart-suggestion" id="weatherDetailSuggestion" style="font-size: 0.88rem; line-height: 1.45; color: var(--accent-tennis); margin: 0; font-weight: 600;">Selecciona un día para ver la recomendación climática.</p>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -46,7 +71,42 @@
   <section id="stepSlot" class="step-section hidden">
     <h2 class="step-title">Elige tu cancha y horario</h2>
     <p class="step-sub" id="slotSubtitle"></p>
-    
+
+    <!-- ── WEATHER DETAIL FOR SELECTED DAY (HOURLY) ── -->
+    <div class="weather-detail-box weather-step2-box" id="step2WeatherBox" style="margin: 0 auto 24px auto; max-width: 800px; padding: 20px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 20px; display: none;">
+      <div class="weather-step2-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 12px; flex-wrap: wrap; gap: 10px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span id="step2WeatherIcon" style="font-size: 1.6rem; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.25));">🌤️</span>
+          <h3 style="font-size: 1rem; color: var(--text-primary); margin: 0; font-weight: 800; display: flex; align-items: center; gap: 6px;">Detalle del clima</h3>
+        </div>
+        <div style="font-weight: 700; color: var(--accent-tennis); font-size: 0.9rem;" id="step2WeatherSummaryText">--</div>
+      </div>
+      
+      <div class="weather-step2-body">
+        <div style="display: flex; gap: 24px; align-items: center; flex-wrap: wrap; margin-bottom: 16px;">
+          <div style="flex: 0 0 auto; min-width: 140px;">
+            <div style="font-size: 1.8rem; font-weight: 800; color: var(--text-primary); letter-spacing: -0.02em;" id="step2WeatherTemps">--°C / --°C</div>
+            <div style="font-size: 0.82rem; color: var(--text-secondary); margin-top: 4px; display: flex; align-items: center; gap: 4px;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="color: #60a5fa;"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>
+              <span id="step2WeatherRain">Probabilidad: --%</span>
+            </div>
+          </div>
+          <div style="flex: 1; min-width: 220px; padding-left: 20px; border-left: 1.5px solid rgba(255,255,255,0.08)" id="step2WeatherRecommendationCol">
+            <p class="smart-suggestion" id="step2WeatherSuggestion" style="font-size: 0.88rem; line-height: 1.45; color: var(--accent-tennis); margin: 0; font-weight: 600;">Cargando sugerencia...</p>
+          </div>
+        </div>
+        
+        <div style="border-top: 1px solid rgba(255,255,255,0.06); padding-top: 16px;">
+          <h4 style="font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); margin: 0 0 12px 0; font-weight: 700; display: flex; align-items: center; gap: 6px;">
+            ⏰ Pronóstico por Horas
+          </h4>
+          <div class="hourly-weather-timeline" id="step2HourlyTimeline">
+            <!-- Horas -->
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="legend-row">
       <span class="leg leg-free">Disponible</span>
       <span class="leg leg-busy">Ocupado</span>
@@ -319,6 +379,13 @@ function dayOfWeekFromISO(iso) {
 }
 
 // ── INIT ──
+window.onWeatherLoaded = function(daily) {
+  renderDateStrip();
+  // Default to showing today's weather or selected date
+  const selectedOrToday = sel.date || localISO(new Date());
+  updateSelectedDayWeather(selectedOrToday);
+};
+
 document.addEventListener('DOMContentLoaded', () => {
   DB.seed();
   renderUserBar();
@@ -371,7 +438,33 @@ function renderDateStrip() {
     btn.className = 'date-btn' + (isSun ? ' date-disabled' : '') + (isToday ? ' date-today' : '');
     btn.disabled = isSun;
     btn.dataset.iso = iso;
-    btn.innerHTML = `<span class="date-dow">${isToday ? 'HOY' : DAYS_SHORT[d.getDay()]}</span><span class="date-num">${d.getDate()}</span><span class="date-mon">${MONTHS_SHORT[d.getMonth()]}</span>`;
+
+    // Check if weather is available for this date
+    let weatherHtml = '';
+    if (window.weatherData && window.weatherData.daily) {
+      const idx = window.weatherData.daily.time.indexOf(iso);
+      if (idx >= 0) {
+        const wCode = window.weatherData.daily.weathercode[idx];
+        const maxTemp = Math.round(window.weatherData.daily.temperature_2m_max[idx]);
+        const rainProb = window.weatherData.daily.precipitation_probability_max[idx];
+        const icon = window.getWeatherIcon ? window.getWeatherIcon(wCode) : "🌤️";
+        
+        weatherHtml = `
+          <div class="date-btn-weather" style="margin-top: 6px; display: flex; flex-direction: column; align-items: center; gap: 2px; line-height: 1;">
+            <span class="date-w-icon" style="font-size: 1.15rem;" title="${rainProb}% lluvia">${icon}</span>
+            <span class="date-w-temp" style="font-size: 0.68rem; font-weight: 700; opacity: 0.95;">${maxTemp}°C</span>
+          </div>
+        `;
+      }
+    }
+
+    btn.innerHTML = `
+      <span class="date-dow">${isToday ? 'HOY' : DAYS_SHORT[d.getDay()]}</span>
+      <span class="date-num">${d.getDate()}</span>
+      <span class="date-mon">${MONTHS_SHORT[d.getMonth()]}</span>
+      ${weatherHtml}
+    `;
+
     btn.onclick = () => {
       document.querySelectorAll('.date-btn').forEach(b => b.classList.remove('date-active'));
       btn.classList.add('date-active');
@@ -381,11 +474,160 @@ function renderDateStrip() {
   }
 }
 
+function getWeatherDesc(wmoCode) {
+  const desc = {
+    0: "Despejado",
+    1: "Mayormente despejado",
+    2: "Parcialmente nublado",
+    3: "Nublado",
+    45: "Niebla",
+    48: "Niebla escarchada",
+    51: "Llovizna ligera",
+    53: "Llovizna moderada",
+    55: "Llovizna densa",
+    61: "Lluvia ligera",
+    63: "Lluvia moderada",
+    65: "Lluvia fuerte",
+    71: "Nieve ligera",
+    73: "Nieve moderada",
+    75: "Nieve fuerte",
+    77: "Granizo",
+    80: "Chubascos ligeros",
+    81: "Chubascos moderados",
+    82: "Chubascos violentos",
+    95: "Tormenta",
+    96: "Tormenta con granizo ligero",
+    99: "Tormenta con granizo fuerte"
+  };
+  return desc[wmoCode] || "Clima variable";
+}
+
+function updateSelectedDayWeather(iso) {
+  const box1 = document.getElementById('selectedWeatherBox');
+  const box2 = document.getElementById('step2WeatherBox');
+  
+  if (!iso || !window.weatherData || !window.weatherData.daily) {
+    if (box1) box1.style.display = 'none';
+    if (box2) box2.style.display = 'none';
+    return;
+  }
+  
+  const daily = window.weatherData.daily;
+  const idx = daily.time.indexOf(iso);
+  if (idx < 0) {
+    if (box1) box1.style.display = 'none';
+    if (box2) box2.style.display = 'none';
+    return;
+  }
+  
+  const wCode = daily.weathercode[idx];
+  const maxTemp = Math.round(daily.temperature_2m_max[idx]);
+  const minTemp = Math.round(daily.temperature_2m_min[idx]);
+  const rainProb = daily.precipitation_probability_max[idx];
+  const icon = window.getWeatherIcon ? window.getWeatherIcon(wCode) : "🌤️";
+  const wDesc = getWeatherDesc(wCode);
+  
+  // Custom suggestion logic based on that day's weather
+  let suggestion = '';
+  let suggestionColor = 'var(--accent-tennis)';
+  if (rainProb > 40) {
+    suggestion = `🌧️ Alta probabilidad de lluvia (${rainProb}%). Las canchas de arcilla (CEC) podrían no estar jugables. Te recomendamos preferir canchas de asfalto (CJP) o reagendar.`;
+    suggestionColor = '#f87171'; // Red
+  } else if (maxTemp > 28) {
+    suggestion = `☀️ ¡Día caluroso! Temperatura máxima de ${maxTemp}°C. Evita los horarios de mayor radiación solar, usa bloqueador e hidrátate constantemente.`;
+    suggestionColor = '#fbbf24'; // Yellow
+  } else if (maxTemp < 10) {
+    suggestion = `❄️ Día helado (${maxTemp}°C). Excelente para entrar en calor corriendo en la cancha. Recuerda hacer un buen calentamiento previo.`;
+    suggestionColor = '#60a5fa'; // Blue
+  } else {
+    suggestion = `🎾 Clima óptimo para jugar tenis. Temperatura agradable de ${maxTemp}°C y baja probabilidad de lluvia (${rainProb}%). ¡A disfrutar el juego!`;
+    suggestionColor = 'var(--accent-tennis)'; // Green
+  }
+
+  // 1. Update Paso 1 box
+  if (box1) {
+    box1.style.display = 'block';
+    const iconEl = document.getElementById('weatherDetailIcon');
+    const tempsEl = document.getElementById('weatherDetailTemps');
+    const rainEl = document.getElementById('weatherDetailRain');
+    const suggEl = document.getElementById('weatherDetailSuggestion');
+    if (iconEl) iconEl.textContent = icon;
+    if (tempsEl) tempsEl.textContent = `${maxTemp}°C / ${minTemp}°C`;
+    if (rainEl) rainEl.textContent = `Probabilidad: ${rainProb}%`;
+    if (suggEl) {
+      suggEl.textContent = suggestion;
+      suggEl.style.color = suggestionColor;
+    }
+  }
+  
+  // 2. Update Paso 2 box
+  if (box2) {
+    box2.style.display = 'block';
+    const iconEl2 = document.getElementById('step2WeatherIcon');
+    const tempsEl2 = document.getElementById('step2WeatherTemps');
+    const rainEl2 = document.getElementById('step2WeatherRain');
+    const suggEl2 = document.getElementById('step2WeatherSuggestion');
+    const summaryTextEl = document.getElementById('step2WeatherSummaryText');
+    const timelineEl = document.getElementById('step2HourlyTimeline');
+    
+    if (iconEl2) iconEl2.textContent = icon;
+    if (tempsEl2) tempsEl2.textContent = `${maxTemp}°C / ${minTemp}°C`;
+    if (rainEl2) rainEl2.textContent = `Probabilidad de lluvia: ${rainProb}%`;
+    if (suggEl2) {
+      suggEl2.textContent = suggestion;
+      suggEl2.style.color = suggestionColor;
+    }
+    if (summaryTextEl) {
+      summaryTextEl.textContent = `${wDesc} (${maxTemp}°C)`;
+    }
+    
+    // Build hourly timeline
+    if (timelineEl && window.weatherData.hourly) {
+      timelineEl.innerHTML = '';
+      const hourly = window.weatherData.hourly;
+      
+      for (let i = 0; i < hourly.time.length; i++) {
+        const timeStr = hourly.time[i]; // "YYYY-MM-DDTHH:MM"
+        if (timeStr.startsWith(iso)) {
+          const hourStr = timeStr.split('T')[1]; // "HH:MM"
+          const hourNum = parseInt(hourStr.split(':')[0], 10);
+          
+          // Include active tennis hours from 08:00 to 22:00
+          if (hourNum >= 8 && hourNum <= 22) {
+            const hTemp = Math.round(hourly.temperature_2m[i]);
+            const hRain = hourly.precipitation_probability[i];
+            const hCode = hourly.weathercode[i];
+            const hIcon = window.getWeatherIcon ? window.getWeatherIcon(hCode) : "🌤️";
+            const hDesc = getWeatherDesc(hCode);
+            
+            const item = document.createElement('div');
+            item.className = 'hourly-item';
+            item.title = hDesc;
+            
+            item.innerHTML = `
+              <div class="hourly-time">${hourStr}</div>
+              <div class="hourly-icon">${hIcon}</div>
+              <div class="hourly-temp">${hTemp}°C</div>
+              <div class="hourly-rain" style="${hRain > 20 ? 'color: #60a5fa; font-weight: bold;' : 'opacity: 0.6;'}">
+                💧 ${hRain}%
+              </div>
+            `;
+            timelineEl.appendChild(item);
+          }
+        }
+      }
+    }
+  }
+}
+
 async function selectDate(iso) {
   sel.date = iso;
   const wd = dayOfWeekFromISO(iso);
   const [y, m, d] = iso.split('-');
   document.getElementById('slotSubtitle').textContent = `📅 ${DAYS_LONG[wd]} ${parseInt(d)} de ${MONTHS_LONG[parseInt(m) - 1]} ${y}`;
+  
+  // Update detailed weather card for this day
+  updateSelectedDayWeather(iso);
   
   const container = document.getElementById('courtsSlotsContainer');
   container.innerHTML = '<div style="text-align:center; padding: 40px; color: var(--text-secondary);">Sincronizando con Google Calendar... ⌛</div>';

@@ -153,11 +153,10 @@ function updateMotivationalMessage(dailyData = null) {
 }
 
 async function fetchWeather() {
-    const forecastDiv = document.getElementById('forecast');
-    const suggestionEl = document.getElementById('smartSuggestion');
-    if (!forecastDiv || !suggestionEl) return;
+    // Expose getWeatherIcon globally
+    window.getWeatherIcon = getWeatherIcon;
 
-    const URL = `https://api.open-meteo.com/v1/forecast?latitude=${CONFIG.LAT}&longitude=${CONFIG.LON}&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_probability_max&hourly=temperature_2m,precipitation_probability,weathercode&timezone=America/Santiago`;
+    const URL = `https://api.open-meteo.com/v1/forecast?latitude=${CONFIG.LAT}&longitude=${CONFIG.LON}&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_probability_max&hourly=temperature_2m,precipitation_probability,weathercode&timezone=America/Santiago&forecast_days=14`;
 
     try {
         const response = await fetch(URL);
@@ -166,88 +165,103 @@ async function fetchWeather() {
         const daily = data.daily;
         const hourly = data.hourly;
 
-        // Render Daily Forecast
-        forecastDiv.innerHTML = "";
-        for (let i = 0; i < daily.time.length; i++) {
-            const date = new Date(daily.time[i] + 'T00:00:00');
-            const dayString = new Intl.DateTimeFormat('es-ES', { weekday: 'short' }).format(date).replace(/^\w/, c => c.toUpperCase());
-            const icon = getWeatherIcon(daily.weathercode[i]);
-            forecastDiv.innerHTML += `
-                <div class="forecast-day">
-                    <span>${dayString}</span>
-                    <div class="weather-icon-emoji">${icon}</div>
-                    <span>Máx: ${Math.round(daily.temperature_2m_max[i])}°C</span>
-                    <span>Mín: ${Math.round(daily.temperature_2m_min[i])}°C</span>
-                    <span>${daily.precipitation_probability_max[i]}% lluvia</span>
-                </div>`;
+        // Save data globally
+        window.weatherData = { daily, hourly };
+
+        // If there is an onWeatherLoaded callback, trigger it
+        if (typeof window.onWeatherLoaded === 'function') {
+            window.onWeatherLoaded(daily);
         }
 
-        // Smart Suggestion Logic (Next 4 hours)
-        const now = new Date();
-        const currentHour = now.getHours();
-        let suggestionText = "";
-
-        // Find index for current hour
-        let currentIndex = -1;
-        for (let i = 0; i < hourly.time.length; i++) {
-            if (new Date(hourly.time[i]).getHours() === currentHour && new Date(hourly.time[i]).getDate() === now.getDate()) {
-                currentIndex = i;
-                break;
+        const forecastDiv = document.getElementById('forecast');
+        const suggestionEl = document.getElementById('smartSuggestion');
+        if (forecastDiv && suggestionEl) {
+            // Render Daily Forecast (limit to 7 days to keep vertical/horizontal layout clean)
+            forecastDiv.innerHTML = "";
+            for (let i = 0; i < Math.min(7, daily.time.length); i++) {
+                const date = new Date(daily.time[i] + 'T00:00:00');
+                const dayString = new Intl.DateTimeFormat('es-ES', { weekday: 'short' }).format(date).replace(/^\w/, c => c.toUpperCase());
+                const icon = getWeatherIcon(daily.weathercode[i]);
+                forecastDiv.innerHTML += `
+                    <div class="forecast-day">
+                        <span>${dayString}</span>
+                        <div class="weather-icon-emoji">${icon}</div>
+                        <span>Máx: ${Math.round(daily.temperature_2m_max[i])}°C</span>
+                        <span>Mín: ${Math.round(daily.temperature_2m_min[i])}°C</span>
+                        <span>${daily.precipitation_probability_max[i]}% lluvia</span>
+                    </div>`;
             }
-        }
 
-        if (currentIndex !== -1) {
-            // Analyze next 3 hours
-            let willRain = false;
-            let maxRainProb = 0;
-            let avgTemp = 0;
-            let count = 0;
+            // Smart Suggestion Logic (Next 4 hours)
+            const now = new Date();
+            const currentHour = now.getHours();
+            let suggestionText = "";
 
-            for (let i = 0; i < 3; i++) {
-                if (currentIndex + i < hourly.time.length) {
-                    const prob = hourly.precipitation_probability[currentIndex + i];
-                    const temp = hourly.temperature_2m[currentIndex + i];
-                    if (prob > 30) willRain = true;
-                    if (prob > maxRainProb) maxRainProb = prob;
-                    avgTemp += temp;
-                    count++;
+            // Find index for current hour
+            let currentIndex = -1;
+            for (let i = 0; i < hourly.time.length; i++) {
+                if (new Date(hourly.time[i]).getHours() === currentHour && new Date(hourly.time[i]).getDate() === now.getDate()) {
+                    currentIndex = i;
+                    break;
                 }
             }
-            avgTemp = count > 0 ? avgTemp / count : 0;
 
-            // Generate Message
-            if (currentHour < 7 || currentHour > 22) {
-                suggestionText = "Las canchas descansan. ¡Tú también deberías! Mañana será otro día para jugar.";
-            } else if (willRain) {
-                const rainMessages = [
-                    `Se viene lluvia (${maxRainProb}% de prob.). Mejor guarda la raqueta y revisa partidos antiguos en YouTube.`,
-                    `El cielo se ve amenazante en las próximas horas. Quizás es momento de entrenamiento físico bajo techo.`,
-                    `Alta probabilidad de lluvia. La arcilla se convertirá en barro, ¡mejor no arriesgarse!`
-                ];
-                suggestionText = rainMessages[Math.floor(Math.random() * rainMessages.length)];
-            } else if (avgTemp > 28) {
-                suggestionText = `¡Hace calor (${Math.round(avgTemp)}°C)! Hidrátate bien y usa bloqueador si vas a jugar ahora.`;
-            } else if (avgTemp < 8) {
-                suggestionText = `Hace frío (${Math.round(avgTemp)}°C), pero no llueve. ¡Ideal para entrar en calor corriendo en la cancha!`;
+            if (currentIndex !== -1) {
+                // Analyze next 3 hours
+                let willRain = false;
+                let maxRainProb = 0;
+                let avgTemp = 0;
+                let count = 0;
+
+                for (let i = 0; i < 3; i++) {
+                    if (currentIndex + i < hourly.time.length) {
+                        const prob = hourly.precipitation_probability[currentIndex + i];
+                        const temp = hourly.temperature_2m[currentIndex + i];
+                        if (prob > 30) willRain = true;
+                        if (prob > maxRainProb) maxRainProb = prob;
+                        avgTemp += temp;
+                        count++;
+                    }
+                }
+                avgTemp = count > 0 ? avgTemp / count : 0;
+
+                // Generate Message
+                if (currentHour < 7 || currentHour > 22) {
+                    suggestionText = "Las canchas descansan. ¡Tú también deberías! Mañana será otro día para jugar.";
+                } else if (willRain) {
+                    const rainMessages = [
+                        `Se viene lluvia (${maxRainProb}% de prob.). Mejor guarda la raqueta y revisa partidos antiguos en YouTube.`,
+                        `El cielo se ve amenazante en las próximas horas. Quizás es momento de entrenamiento físico bajo techo.`,
+                        `Alta probabilidad de lluvia. La arcilla se convertirá en barro, ¡mejor no arriesgarse!`
+                    ];
+                    suggestionText = rainMessages[Math.floor(Math.random() * rainMessages.length)];
+                } else if (avgTemp > 28) {
+                    suggestionText = `¡Hace calor (${Math.round(avgTemp)}°C)! Hidrátate bien y usa bloqueador si vas a jugar ahora.`;
+                } else if (avgTemp < 8) {
+                    suggestionText = `Hace frío (${Math.round(avgTemp)}°C), pero no llueve. ¡Ideal para entrar en calor corriendo en la cancha!`;
+                } else {
+                    const goodWeatherMessages = [
+                        `El clima está ideal en las próximas horas. ¡La cancha te está llamando!`,
+                        `Ni mucho frío ni calor. Condiciones perfectas para un partido épico.`,
+                        `Cielo despejado y buena temperatura. No tienes excusa para no jugar hoy.`
+                    ];
+                    suggestionText = goodWeatherMessages[Math.floor(Math.random() * goodWeatherMessages.length)];
+                }
             } else {
-                const goodWeatherMessages = [
-                    `El clima está ideal en las próximas horas. ¡La cancha te está llamando!`,
-                    `Ni mucho frío ni calor. Condiciones perfectas para un partido épico.`,
-                    `Cielo despejado y buena temperatura. No tienes excusa para no jugar hoy.`
-                ];
-                suggestionText = goodWeatherMessages[Math.floor(Math.random() * goodWeatherMessages.length)];
+                suggestionText = "No pude leer el futuro inmediato, pero el pronóstico diario te dará una idea.";
             }
-        } else {
-            suggestionText = "No pude leer el futuro inmediato, pero el pronóstico diario te dará una idea.";
+
+            suggestionEl.textContent = suggestionText;
         }
 
-        suggestionEl.textContent = suggestionText;
         updateMotivationalMessage(daily);
 
     } catch (error) {
         console.error("Error clima:", error);
-        suggestionEl.textContent = "Los satélites del clima no responden. Mira por la ventana por si acaso.";
-        forecastDiv.innerHTML = "<p>Pronóstico no disponible.</p>";
+        const suggestionEl = document.getElementById('smartSuggestion');
+        if (suggestionEl) suggestionEl.textContent = "Los satélites del clima no responden. Mira por la ventana por si acaso.";
+        const forecastDiv = document.getElementById('forecast');
+        if (forecastDiv) forecastDiv.innerHTML = "<p>Pronóstico no disponible.</p>";
         updateMotivationalMessage();
     }
 }
@@ -390,7 +404,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setDate();
 
     // Check which page we are on
-    if (document.getElementById('forecast')) {
+    if (document.getElementById('forecast') || document.getElementById('selectedWeatherBox')) {
         fetchWeather();
         setInterval(fetchWeather, 60 * 60 * 1000);
     }
