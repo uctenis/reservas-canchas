@@ -335,6 +335,11 @@
       background: linear-gradient(135deg, rgba(30, 41, 59, 0.6) 0%, rgba(15, 23, 42, 0.8) 100%);
       box-shadow: 0 4px 15px rgba(245, 158, 11, 0.05);
     }
+    .match-card.is-campeonato {
+      border: 1px solid rgba(236, 72, 153, 0.3) !important;
+      background: linear-gradient(135deg, rgba(30, 41, 59, 0.6) 0%, rgba(15, 23, 42, 0.8) 100%);
+      box-shadow: 0 4px 15px rgba(236, 72, 153, 0.05);
+    }
     .match-type-badge {
       font-size: 0.62rem;
       font-weight: 700;
@@ -354,6 +359,11 @@
       background: rgba(245, 158, 11, 0.12);
       color: #fcd34d;
       border: 1px solid rgba(245, 158, 11, 0.25);
+    }
+    .match-type-badge.is-campeonato {
+      background: rgba(236, 72, 153, 0.12);
+      color: #f472b6;
+      border: 1px solid rgba(236, 72, 153, 0.25);
     }
     .my-match-label {
       position: absolute;
@@ -1168,6 +1178,13 @@ async function loadLiveData() {
     challenges = DB.getChallenges();
   }
 
+  // --- FILTER CAMPEONATO FOR NON-ADMINS ---
+  const sForFilter = DB.getSession();
+  const isAdminForFilter = sForFilter && (typeof ADMIN_EMAILS !== 'undefined' ? ADMIN_EMAILS : ['uctenisclub@gmail.com', 'dsilva@uct.cl']).includes((sForFilter.email || '').toLowerCase());
+  if (!isAdminForFilter) {
+    challenges = challenges.filter(c => c.tipo !== 'campeonato');
+  }
+
   // Always show the live section container
   document.getElementById('liveSection').style.display = 'grid';
 
@@ -1240,17 +1257,22 @@ async function loadLiveData() {
       const loserName = latestMatch.ganadorId === latestMatch.retadorId ? (latestMatch.retadoNombre || 'Jugador') : (latestMatch.retadorNombre || 'Jugador');
       const genderText = latestMatch.genero === 'F' ? 'femenino' : 'masculino';
       const isFriendly = latestMatch.tipo === 'amistoso';
+      const isCampeonato = latestMatch.tipo === 'campeonato';
       
       latestMatchCard = {
         id: `auto-latest-match-${latestMatch.id}`,
-        badgeClass: isFriendly ? 'badge-app' : 'badge-torneo',
-        badgeText: isFriendly ? 'Amistoso' : 'Desafío',
-        title: isFriendly 
-          ? `¡Partido Amistoso: ${winnerName} vence a ${loserName}!` 
-          : `¡Gran Desafío: ${winnerName} vence a ${loserName}!`,
-        body: isFriendly
-          ? `En el encuentro amistoso jugado en ${latestMatch.cancha || 'UCTenis'} el ${formatDateShort(latestMatch.fecha)}, ${winnerName} superó a ${loserName} por un marcador de ${latestMatch.marcador}. ¡Buen juego!`
-          : `En el duelo oficial del ranking ${genderText} jugado en ${latestMatch.cancha || 'UCTenis'} el ${formatDateShort(latestMatch.fecha)}, ${winnerName} superó a ${loserName} por un marcador de ${latestMatch.marcador}, escalando posiciones en la escalerilla. ¡Felicitaciones a ambos!`,
+        badgeClass: isCampeonato ? 'badge-torneo' : (isFriendly ? 'badge-app' : 'badge-torneo'),
+        badgeText: isCampeonato ? 'Campeonato' : (isFriendly ? 'Amistoso' : 'Desafío'),
+        title: isCampeonato 
+          ? `¡Partido de Campeonato: ${winnerName} vence a ${loserName}!` 
+          : (isFriendly 
+            ? `¡Partido Amistoso: ${winnerName} vence a ${loserName}!` 
+            : `¡Gran Desafío: ${winnerName} vence a ${loserName}!`),
+        body: isCampeonato
+          ? `En un emocionante encuentro por el Campeonato jugado en ${latestMatch.cancha || 'UCTenis'} el ${formatDateShort(latestMatch.fecha)}, ${winnerName} superó a ${loserName} por un marcador de ${latestMatch.marcador}. ¡Felicidades!`
+          : (isFriendly
+            ? `En el encuentro amistoso jugado en ${latestMatch.cancha || 'UCTenis'} el ${formatDateShort(latestMatch.fecha)}, ${winnerName} superó a ${loserName} por un marcador de ${latestMatch.marcador}. ¡Buen juego!`
+            : `En el duelo oficial del ranking ${genderText} jugado en ${latestMatch.cancha || 'UCTenis'} el ${formatDateShort(latestMatch.fecha)}, ${winnerName} superó a ${loserName} por un marcador de ${latestMatch.marcador}, escalando posiciones en la escalerilla. ¡Felicitaciones a ambos!`),
         date: formatDateShort(latestMatch.actualizado || latestMatch.creado || latestMatch.fecha)
       };
     }
@@ -1264,17 +1286,22 @@ async function loadLiveData() {
       const genderText = nextMatch.genero === 'F' ? 'femenino' : 'masculino';
       const slotStr = nextMatch.slot ? ` (Hora: ${nextMatch.slot})` : '';
       const isFriendly = nextMatch.tipo === 'amistoso';
+      const isCampeonato = nextMatch.tipo === 'campeonato';
       
       nextMatchCard = {
         id: `auto-next-match-${nextMatch.id}`,
-        badgeClass: isFriendly ? 'badge-app' : 'badge-torneo',
-        badgeText: isFriendly ? 'Próximo Amistoso' : 'Próximo Desafío',
-        title: isFriendly 
-          ? `¡Amistoso agendado: ${nextMatch.retadorNombre || 'Jugador'} vs ${nextMatch.retadoNombre || 'Jugador'}!` 
-          : `¡Desafío en camino: ${nextMatch.retadorNombre || 'Jugador'} vs ${nextMatch.retadoNombre || 'Jugador'}!`,
-        body: isFriendly
-          ? `Un encuentro amistoso está agendado para el ${formatDateShort(nextMatch.fecha)} en ${nextMatch.cancha || 'UCTenis'}${slotStr}. ¡Éxito a ambos en este partido de práctica!`
-          : `El encuentro oficial por el ranking ${genderText} está agendado para el ${formatDateShort(nextMatch.fecha)} en ${nextMatch.cancha || 'UCTenis'}${slotStr}. ¡Mucho éxito a ambos en este importante duelo que define cambios de posiciones en la escalerilla!`,
+        badgeClass: isCampeonato ? 'badge-torneo' : (isFriendly ? 'badge-app' : 'badge-torneo'),
+        badgeText: isCampeonato ? 'Próximo Campeonato' : (isFriendly ? 'Próximo Amistoso' : 'Próximo Desafío'),
+        title: isCampeonato 
+          ? `¡Duelo de Campeonato: ${nextMatch.retadorNombre || 'Jugador'} vs ${nextMatch.retadoNombre || 'Jugador'}!` 
+          : (isFriendly 
+            ? `¡Amistoso agendado: ${nextMatch.retadorNombre || 'Jugador'} vs ${nextMatch.retadoNombre || 'Jugador'}!` 
+            : `¡Desafío en camino: ${nextMatch.retadorNombre || 'Jugador'} vs ${nextMatch.retadoNombre || 'Jugador'}!`),
+        body: isCampeonato
+          ? `Un encuentro por el Campeonato está agendado para el ${formatDateShort(nextMatch.fecha)} en ${nextMatch.cancha || 'UCTenis'}${slotStr}. ¡Mucho éxito a ambos competidores en este torneo!`
+          : (isFriendly
+            ? `Un encuentro amistoso está agendado para el ${formatDateShort(nextMatch.fecha)} en ${nextMatch.cancha || 'UCTenis'}${slotStr}. ¡Éxito a ambos en este partido de práctica!`
+            : `El encuentro oficial por el ranking ${genderText} está agendado para el ${formatDateShort(nextMatch.fecha)} en ${nextMatch.cancha || 'UCTenis'}${slotStr}. ¡Mucho éxito a ambos en este importante duelo que define cambios de posiciones en la escalerilla!`),
         date: formatDateShort(nextMatch.creado || nextMatch.fecha)
       };
     }
@@ -1506,14 +1533,17 @@ async function loadLiveData() {
       const isMyChallengeActive = isMyChallenge(c);
       const myMatchLabel = isMyChallengeActive ? `<div class="my-match-label">Tu Desafío</div>` : '';
       const isFriendly = c.tipo === 'amistoso';
-      const typeClass = isFriendly ? 'is-friendly' : 'is-challenge-official';
+      const isCampeonato = c.tipo === 'campeonato';
+      const typeClass = isCampeonato ? 'is-campeonato' : (isFriendly ? 'is-friendly' : 'is-challenge-official');
       const cardClass = `match-card ${typeClass} ${isMyChallengeActive ? 'is-my-match' : ''}`;
+      const badgeTypeClass = isCampeonato ? 'is-campeonato' : (isFriendly ? 'is-friendly' : 'is-official');
+      const badgeText = isCampeonato ? '🏆 Campeonato' : (isFriendly ? '🤝 Amistoso' : '⚔️ Desafío');
       
       return `<div class="${cardClass}">
         ${myMatchLabel}
         <div class="match-header">
           <span class="match-court">${courtStr}</span>
-          <span class="match-type-badge ${isFriendly ? 'is-friendly' : 'is-official'}">${isFriendly ? '🤝 Amistoso' : '⚔️ Desafío'}</span>
+          <span class="match-type-badge ${badgeTypeClass}">${badgeText}</span>
           <span class="match-date">${dateStr}</span>
         </div>
         <div class="match-players-row">
@@ -1576,14 +1606,17 @@ async function loadLiveData() {
       const isMyChallengeResult = isMyChallenge(c);
       const myMatchLabel = isMyChallengeResult ? `<div class="my-match-label">Tu Desafío</div>` : '';
       const isFriendly = c.tipo === 'amistoso';
-      const typeClass = isFriendly ? 'is-friendly' : 'is-challenge-official';
+      const isCampeonato = c.tipo === 'campeonato';
+      const typeClass = isCampeonato ? 'is-campeonato' : (isFriendly ? 'is-friendly' : 'is-challenge-official');
       const cardClass = `match-card ${typeClass} ${isMyChallengeResult ? 'is-my-match' : ''}`;
+      const badgeTypeClass = isCampeonato ? 'is-campeonato' : (isFriendly ? 'is-friendly' : 'is-official');
+      const badgeText = isCampeonato ? '🏆 Campeonato' : (isFriendly ? '🤝 Amistoso' : '⚔️ Desafío');
       
       return `<div class="${cardClass}">
         ${myMatchLabel}
         <div class="match-header">
           <span class="match-court">${courtStr}</span>
-          <span class="match-type-badge ${isFriendly ? 'is-friendly' : 'is-official'}">${isFriendly ? '🤝 Amistoso' : '⚔️ Desafío'}</span>
+          <span class="match-type-badge ${badgeTypeClass}">${badgeText}</span>
           <span class="match-date">${dateStr}</span>
         </div>
         <div class="match-players-row">

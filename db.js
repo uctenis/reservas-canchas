@@ -597,7 +597,7 @@ const DB = {
   },
   recalcRanking(genero) {
     const users = this.getUsers().filter(u => u.genero === genero);
-    const challenges = this.getChallenges().filter(c => c.status === 'completado' && c.genero === genero && c.tipo !== 'amistoso');
+    const challenges = this.getChallenges().filter(c => c.status === 'completado' && c.genero === genero && c.tipo !== 'amistoso' && c.tipo !== 'campeonato');
 
     // Build ladder baseline from users. If a user has an explicit position (pos or posicion), respect it.
     const ranking = users.map((user, index) => {
@@ -779,6 +779,7 @@ const DB = {
         action: 'create_booking',
         email: user.email,
         name: user.nombre,
+        rut: user.rut || '',
         courtId: courtId,
         date: fecha,
         slot: slot

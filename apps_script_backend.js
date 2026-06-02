@@ -1187,7 +1187,7 @@ function createBooking(data) {
       startTime, 
       endTime,
       {
-        description: `Reserva automática generada desde la plataforma web.\nUsuario: ${data.name}\nCorreo: ${data.email}\nCancha: ${data.courtId.toUpperCase()}`,
+        description: `Reserva automática generada desde la plataforma web.\nUsuario: ${data.name}\nCorreo: ${data.email}\nRUT: ${data.rut || 'No registrado'}\nCancha: ${data.courtId.toUpperCase()}`,
         guests: data.email, // Invitar al usuario para que le llegue a su calendario
         sendInvites: true
       }

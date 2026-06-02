@@ -365,6 +365,7 @@
         <select id="scoreType" style="width:100%; padding:8px 12px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); border-radius:6px; color:#fff; outline:none; font-size:0.9rem;">
           <option value="ranking">Oficial (Ranking)</option>
           <option value="amistoso">Amistoso</option>
+          <option id="scoreTypeCampeonato" value="campeonato" style="display:none;">Torneo / Campeonato</option>
         </select>
       </div>
       <div class="score-summary">
@@ -1947,6 +1948,7 @@ function challengeCard(challenge, users, session, compact) {
   const isExpired = challenge.fecha < todayIso && ['pendiente', 'aceptado'].includes(challenge.status);
   const expiredBadge = isExpired ? `<span class="badge-expired" style="background:rgba(251,191,36,0.12); border:1px solid rgba(251,191,36,0.3); color:#fbbf24; padding:2px 6px; border-radius:4px; font-size:0.72rem; font-weight:900; text-transform:uppercase;">⚠️ Sin resultado</span>` : '';
   const friendlyBadge = challenge.tipo === 'amistoso' ? `<span class="badge-friendly" style="background:rgba(99,102,241,0.15); border:1px solid rgba(99,102,241,0.3); color:#a5b4fc; padding:2px 6px; border-radius:4px; font-size:0.72rem; font-weight:900; text-transform:uppercase; margin-left:6px;">Amistoso</span>` : '';
+  const campeonatoBadge = challenge.tipo === 'campeonato' ? `<span class="badge-campeonato" style="background:rgba(251,191,36,0.15); border:1px solid rgba(251,191,36,0.3); color:#fcd34d; padding:2px 6px; border-radius:4px; font-size:0.72rem; font-weight:900; text-transform:uppercase; margin-left:6px;">Campeonato</span>` : '';
 
   let actions = '';
   if (challenge.status === 'completado' || challenge.status === 'rechazado') {
@@ -2042,6 +2044,7 @@ function challengeCard(challenge, users, session, compact) {
         <span>${escapeHTML(challenge.cancha || 'Cancha por definir')}${challenge.slot ? ` · ${escapeHTML(challenge.slot)}` : ''}</span>
         <span class="chal-status">${escapeHTML(status)}</span>
         ${friendlyBadge}
+        ${campeonatoBadge}
         ${expiredBadge}
         ${challenge.marcador ? `<span>${escapeHTML(challenge.marcador)} · Ganó ${escapeHTML(ganadorName || '-')}</span>` : ''}
       </div>
@@ -2182,7 +2185,7 @@ async function deleteChallenge(id) {
   const list = DB.getChallenges().filter(c => c.id !== id);
   DB.saveChallenges(list);
   
-  if (challenge.status === 'completado' && challenge.tipo !== 'amistoso' && challenge.genero) {
+  if (challenge.status === 'completado' && challenge.tipo !== 'amistoso' && challenge.tipo !== 'campeonato' && challenge.genero) {
     DB.recalcRanking(challenge.genero);
   }
   
@@ -3019,6 +3022,13 @@ function openScoreModal(challengeId) {
   const isDirectFriendly = !challengeId;
   const session = DB.getSession();
   const me = getSessionPlayer(session);
+  const isAdmin = isAdminSession(session);
+
+  // Toggle option Torneo/Campeonato visibility based on admin status
+  const optCampeonato = document.getElementById('scoreTypeCampeonato');
+  if (optCampeonato) {
+    optCampeonato.style.display = isAdmin ? 'block' : 'none';
+  }
 
   if (isDirectFriendly) {
     if (!me) {
@@ -3030,10 +3040,15 @@ function openScoreModal(challengeId) {
     // Show friendly fields
     document.getElementById('scoreFriendlyFields').style.display = 'block';
 
-    // Lock Match Type to 'amistoso'
+    // Lock Match Type to 'amistoso' unless admin
     const typeSelect = document.getElementById('scoreType');
-    typeSelect.value = 'amistoso';
-    typeSelect.disabled = true;
+    if (isAdmin) {
+      typeSelect.value = 'amistoso';
+      typeSelect.disabled = false;
+    } else {
+      typeSelect.value = 'amistoso';
+      typeSelect.disabled = true;
+    }
 
     // Populate active opponents of the same gender
     const myGender = me.gender || me.genero || 'M';
@@ -3594,7 +3609,7 @@ async function submitScore(event) {
 }
 
 async function applyChallengeResultToCloudRanking(challenge) {
-  if (challenge.tipo === 'amistoso') return;
+  if (challenge.tipo === 'amistoso' || challenge.tipo === 'campeonato') return;
   const gender = normalizeGender(challenge.genero);
   const list = [...(rankingState.lists[gender] || [])];
   if (!gender || !list.length) return;
@@ -3756,7 +3771,7 @@ function showPlayerProfile(playerKey) {
     <ul class="modal-stats">
       <li><span class="label">Posición actual</span><span class="value">${active ? player.pos : 'Inactivo'}</span></li>
       <li><span class="label">ID Jugador</span><span class="value">${escapeHTML(player.id || '-')}</span></li>
-      <li><span class="label">RUT</span><span class="value">${escapeHTML(player.rut || '-')}</span></li>
+      ${(canEdit || isPlayerAdminSession()) ? `<li><span class="label">RUT</span><span class="value">${escapeHTML(player.rut || '-')}</span></li>` : ''}
       <li><span class="label">Posición anterior</span><span class="value">${player.prev || '-'}</span></li>
       <li><span class="label">Categoría</span><span class="value">${escapeHTML(normalizeCategory(player.categoria) || '-')}</span></li>
       <li><span class="label">Edad</span><span class="value">${escapeHTML(player.edad || '-')}</span></li>
