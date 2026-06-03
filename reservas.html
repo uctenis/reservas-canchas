@@ -703,8 +703,6 @@ function renderSlotsByCourt(apiData) {
     { name: 'Complejo CJP (Asfalto)', img: 'cjp.jpg', courts: DB.COURTS.filter(c => c.id.startsWith('cjp')) }
   ];
 
-  let html = '';
-
   complejos.forEach(comp => {
     html += `
       <div class="complejo-section" style="margin-bottom: 2rem;">
