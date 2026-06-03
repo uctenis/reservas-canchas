@@ -906,8 +906,13 @@ const DB = {
   getCourtBookings(courtId, fecha) {
     return this.getBookings().filter(b => b.courtId === courtId && b.fecha === fecha && b.status !== 'cancelada');
   },
-  // Si el usuario ya reservó HOY (regla: 1 por día)
+  // Si el usuario ya reservó HOY (regla: 1 por día, excepto administradores)
   userBookedToday(userId, fecha) {
+    const session = this.getSession();
+    const user = (session && session.id === userId) ? session : this.getUsers().find(u => u.id === userId);
+    if (user && (user.isAdmin || ['uctenisclub@gmail.com', 'dsilva@uct.cl'].includes((user.email || '').toLowerCase()))) {
+      return false;
+    }
     return this.getBookings().some(b => b.userId === userId && b.fecha === fecha && b.status !== 'cancelada');
   },
   createBooking(userId, courtId, fecha, slot) {
@@ -949,6 +954,11 @@ const DB = {
       }
     }
     if (!user) return { ok: false, msg: 'Usuario no encontrado' };
+
+    // Regla: 1 reserva por día (excepto administradores)
+    if (this.userBookedToday(user.id, fecha)) {
+      return { ok: false, msg: 'Solo se permite una reserva por día.' };
+    }
 
     try {
       // Usar la URL que está en script.js (CONFIG.API_URL)
