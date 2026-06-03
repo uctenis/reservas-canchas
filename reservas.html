@@ -1432,7 +1432,7 @@ ${currentUrl}
   refreshSlotAvailability();
   
   // Reset selection and close form
-  sel = { court: null, date: null, slot: null, isChallenge: false, retadoId: null, retadoNombre: null, retadoEmail: null, retadoTelefono: null };
+  sel = { court: null, date: null, slot: null, isChallenge: false, isFriendly: false, isCampeonato: false, retadoId: null, retadoNombre: null, retadoEmail: null, retadoTelefono: null };
   btn.disabled = false;
   btn.innerHTML = '✅ Confirmar reserva';
   setTimeout(() => goStep(1), 200);

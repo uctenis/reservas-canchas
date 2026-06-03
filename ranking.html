@@ -2677,6 +2677,11 @@ async function handleLoginResponse(result) {
 
   closeModal('authModal');
   await refreshRankingPage();
+
+  // Gatillar auto-aceptación si hay un desafío pendiente en cola
+  if (typeof window.triggerUrlChallengeAccept === 'function') {
+    setTimeout(window.triggerUrlChallengeAccept, 500);
+  }
 }
 
 async function handleCompleteProfile(event) {
@@ -2762,6 +2767,11 @@ async function handleCompleteProfile(event) {
     closeModal('authModal');
     switchGender(data.genero);
     await refreshRankingPage();
+
+    // Gatillar auto-aceptación si hay un desafío pendiente en cola
+    if (typeof window.triggerUrlChallengeAccept === 'function') {
+      setTimeout(window.triggerUrlChallengeAccept, 500);
+    }
   } catch (err) {
     error.textContent = err.message || 'No se pudo finalizar el registro.';
   } finally {
@@ -3316,13 +3326,16 @@ async function notifyChallenge(challenge, retador, retado) {
 
 async function respondChallenge(id, accept) {
   let saved = false;
+  let acceptedChallenge = null;
 
   if (DB.isCloudConfigured()) {
     try {
       const challenge = await DB.updateChallengeCloud(id, {
-        status: accept ? 'aceptado' : 'rechazado'
+        status: accept ? 'aceptado' : 'rechazado',
+        fechaRespuesta: new Date().toISOString()
       });
       upsertLocalChallenge(challenge);
+      if (accept) acceptedChallenge = challenge;
       saved = true;
     } catch (error) {
       console.warn('No se pudo responder el desafío en Firebase.', error);
@@ -3345,6 +3358,7 @@ async function respondChallenge(id, accept) {
         console.log('Respuesta registrada en Google Sheets.');
         if (data.challenge) {
           upsertLocalChallenge(data.challenge);
+          if (accept) acceptedChallenge = data.challenge;
         }
         saved = true;
       }
@@ -3355,20 +3369,217 @@ async function respondChallenge(id, accept) {
 
   if (!saved) {
     DB.respondChallenge(id, accept);
+    if (accept) acceptedChallenge = DB.getChallenges().find(c => c.id === id);
   }
 
-  if (accept) {
-    const challenge = DB.getChallenges().find(c => c.id === id);
-    const isFriendly = challenge && challenge.tipo === 'amistoso';
-    if (isFriendly) {
-      alert("¡Partido amistoso aceptado! 🤝");
-    } else {
-      alert("¡Desafío aceptado! ⚔️\nChallenge accepted!");
-    }
+  if (accept && acceptedChallenge) {
+    // Publicar novedad "Challenge Accepted" en Firestore para el feed del home
+    await publishChallengeAcceptedNews(acceptedChallenge);
+
+    // Mostrar modal de éxito con link de Google Calendar
+    showChallengeAcceptedModal(acceptedChallenge);
+  } else if (!accept) {
+    renderChallenges();
+    renderMyChallenges();
   }
 
   renderChallenges();
   renderMyChallenges();
+}
+
+// Publica una novedad tipo 'challenge_accepted' en Firestore para el feed del home
+async function publishChallengeAcceptedNews(challenge) {
+  try {
+    const newsItem = {
+      id: `challenge-accepted-${challenge.id}`,
+      category: 'challenge_accepted',
+      title: `⚔️ ¡Challenge Accepted! ${challenge.retadorNombre || 'Jugador'} vs ${challenge.retadoNombre || 'Jugador'}`,
+      body: `${challenge.retadoNombre || 'Jugador'} aceptó el desafío de ${challenge.retadorNombre || 'Jugador'}. El duelo será el ${formatShortDate(challenge.fecha)} en ${challenge.cancha || 'la cancha'}${challenge.slot ? ' a las ' + challenge.slot : ''}. ¡Que gane el mejor!`,
+      date: new Date().toISOString().split('T')[0],
+      creado: new Date().toISOString(),
+      actualizado: new Date().toISOString(),
+      challengeId: challenge.id,
+      retadorNombre: challenge.retadorNombre || '',
+      retadoNombre: challenge.retadoNombre || '',
+      retadorId: challenge.retadorId || '',
+      retadoId: challenge.retadoId || '',
+      fechaPartido: challenge.fecha || '',
+      cancha: challenge.cancha || '',
+      slot: challenge.slot || ''
+    };
+
+    if (DB.isCloudConfigured()) {
+      await DB.saveNewsCloud(newsItem);
+    }
+    // Guardar también en local
+    const localNews = DB.getNews();
+    const idx = localNews.findIndex(n => n.id === newsItem.id);
+    if (idx >= 0) localNews[idx] = newsItem;
+    else localNews.unshift(newsItem);
+    DB.saveNews(localNews);
+    console.log('✅ Novedad challenge accepted publicada en el feed.');
+  } catch (e) {
+    console.warn('No se pudo publicar novedad challenge accepted:', e);
+  }
+}
+
+// Genera link de Google Calendar para el evento del desafío
+function generateCalendarLink(challenge) {
+  try {
+    const COURT_LABELS = {
+      cec1: 'CEC – Cancha 1 (Arcilla)', cec2: 'CEC – Cancha 2 (Arcilla)',
+      cjp1: 'CJP – Cancha 1 (Asfalto)', cjp2: 'CJP – Cancha 2 (Asfalto)'
+    };
+    const title = encodeURIComponent(`🎾 UCTenis: ${challenge.retadorNombre} vs ${challenge.retadoNombre}`);
+    const location = encodeURIComponent(COURT_LABELS[challenge.courtId] || challenge.cancha || 'UCTenis');
+    const details = encodeURIComponent(`Desafío oficial UCTenis.\nRetador: ${challenge.retadorNombre}\nRetado: ${challenge.retadoNombre}\n\n👉 Ver en UCTenis: ${window.location.origin}${window.location.pathname}`);
+
+    if (!challenge.fecha) return null;
+    const [y, m, d] = challenge.fecha.split('-');
+    let startHH = 9, startMM = 0;
+    if (challenge.slot) {
+      const slotParts = challenge.slot.split(':').map(Number);
+      startHH = slotParts[0] || 9;
+      startMM = slotParts[1] || 0;
+    }
+    // Duration 1.5 hours
+    let endHH = startHH + 1, endMM = startMM + 30;
+    if (endMM >= 60) { endHH++; endMM -= 60; }
+    const pad = n => String(n).padStart(2, '0');
+    const startStr = `${y}${pad(m)}${pad(d)}T${pad(startHH)}${pad(startMM)}00`;
+    const endStr   = `${y}${pad(m)}${pad(d)}T${pad(endHH)}${pad(endMM)}00`;
+    return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${startStr}/${endStr}&details=${details}&location=${location}`;
+  } catch(e) {
+    return null;
+  }
+}
+
+// Muestra modal celebratorio + link de Calendar tras aceptar un desafío
+function showChallengeAcceptedModal(challenge) {
+  // Crear overlay modal
+  const existing = document.getElementById('challengeAcceptedOverlay');
+  if (existing) existing.remove();
+
+  const calLink = generateCalendarLink(challenge);
+  const calBtn = calLink
+    ? `<a href="${calLink}" target="_blank" rel="noopener" id="btnAddToCalendar" class="chal-accepted-cal-btn">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zm-7-7h5v5h-5z"/></svg>
+        Agregar al Calendario
+      </a>`
+    : '';
+
+  const overlay = document.createElement('div');
+  overlay.id = 'challengeAcceptedOverlay';
+  overlay.innerHTML = `
+    <style>
+      #challengeAcceptedOverlay {
+        position: fixed; inset: 0; z-index: 99999;
+        display: flex; align-items: center; justify-content: center;
+        background: rgba(0,0,0,0.75); backdrop-filter: blur(8px);
+        animation: fadeInOverlay 0.3s ease;
+      }
+      @keyframes fadeInOverlay { from { opacity:0; } to { opacity:1; } }
+      .chal-accepted-box {
+        background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+        border: 2px solid rgba(245, 158, 11, 0.6);
+        border-radius: 24px;
+        padding: 36px 32px 28px;
+        max-width: 420px; width: 90%;
+        text-align: center;
+        box-shadow: 0 25px 80px rgba(0,0,0,0.6), 0 0 50px rgba(245,158,11,0.15);
+        animation: zoomInBox 0.4s cubic-bezier(0.16,1,0.3,1);
+        position: relative; overflow: hidden;
+      }
+      @keyframes zoomInBox { from { transform:scale(0.7); opacity:0; } to { transform:scale(1); opacity:1; } }
+      .chal-accepted-box::before {
+        content:''; position:absolute; top:-40%; left:-20%;
+        width:200%; height:200%;
+        background: radial-gradient(ellipse at center, rgba(245,158,11,0.08) 0%, transparent 60%);
+        pointer-events: none;
+      }
+      .chal-accepted-swords { font-size: 3.5rem; display:block; margin-bottom: 4px;
+        animation: swordsPulse 1s ease-in-out infinite alternate; }
+      @keyframes swordsPulse { from { transform: scale(1) rotate(-5deg); } to { transform: scale(1.1) rotate(5deg); } }
+      .chal-accepted-badge {
+        display: inline-block;
+        background: linear-gradient(90deg, #f59e0b, #ef4444);
+        color: #fff; font-size: 0.72rem; font-weight: 900;
+        letter-spacing: 0.12em; text-transform: uppercase;
+        padding: 4px 16px; border-radius: 50px;
+        margin-bottom: 14px;
+        box-shadow: 0 4px 15px rgba(245,158,11,0.4);
+      }
+      .chal-accepted-title {
+        font-size: 1.6rem; font-weight: 900; color: #fff;
+        margin-bottom: 6px;
+        background: linear-gradient(90deg, #fcd34d, #f97316);
+        -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      }
+      .chal-accepted-vs {
+        font-size: 1rem; color: rgba(255,255,255,0.8);
+        margin-bottom: 16px; font-weight: 600;
+      }
+      .chal-accepted-details {
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 12px; padding: 12px 16px;
+        font-size: 0.85rem; color: rgba(255,255,255,0.7);
+        margin-bottom: 20px; text-align: left;
+      }
+      .chal-accepted-details span { display:block; margin-bottom: 4px; }
+      .chal-accepted-details span:last-child { margin-bottom: 0; }
+      .chal-accepted-cal-btn {
+        display: inline-flex; align-items: center; gap: 8px;
+        background: linear-gradient(135deg, #1a73e8, #1557b0);
+        color: #fff; font-weight: 700; font-size: 0.88rem;
+        padding: 11px 22px; border-radius: 50px;
+        text-decoration: none; margin-bottom: 10px;
+        width: 100%; justify-content: center;
+        box-shadow: 0 4px 15px rgba(26,115,232,0.35);
+        transition: all 0.2s;
+      }
+      .chal-accepted-cal-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(26,115,232,0.5); }
+      .chal-accepted-close {
+        display: block; width:100%;
+        background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.12);
+        color: #fff; font-weight: 600; font-size: 0.9rem;
+        padding: 10px; border-radius: 50px; cursor: pointer;
+        transition: all 0.2s; margin-top: 6px;
+      }
+      .chal-accepted-close:hover { background: rgba(255,255,255,0.12); }
+      .chal-confetti { position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; overflow:hidden; border-radius:24px; }
+      .chal-confetti span {
+        position: absolute; top: -10px;
+        animation: confettiFall linear infinite;
+        font-size: 1.2rem; opacity: 0.8;
+      }
+      @keyframes confettiFall {
+        0% { transform: translateY(-10px) rotate(0deg); opacity: 1; }
+        100% { transform: translateY(350px) rotate(720deg); opacity: 0; }
+      }
+    </style>
+    <div class="chal-accepted-box" id="chalAcceptedBox">
+      <div class="chal-confetti">
+        ${['🎾','⚔️','🏆','✨','🔥','💥'].map((e,i) => `<span style="left:${10+i*14}%;animation-duration:${1.5+i*0.3}s;animation-delay:${i*0.1}s">${e}</span>`).join('')}
+      </div>
+      <span class="chal-accepted-swords">⚔️</span>
+      <div class="chal-accepted-badge">Challenge Accepted!</div>
+      <div class="chal-accepted-title">¡Desafío Aceptado!</div>
+      <div class="chal-accepted-vs">${escapeHTML(challenge.retadorNombre || 'Jugador')} <span style="color:#f59e0b;">vs</span> ${escapeHTML(challenge.retadoNombre || 'Jugador')}</div>
+      <div class="chal-accepted-details">
+        <span>📅 ${formatShortDate(challenge.fecha) || challenge.fecha || '—'}</span>
+        <span>🏟️ ${escapeHTML(challenge.cancha || 'Cancha por confirmar')}</span>
+        ${challenge.slot ? `<span>⏰ ${escapeHTML(challenge.slot)}</span>` : ''}
+      </div>
+      ${calBtn}
+      <button class="chal-accepted-close" onclick="document.getElementById('challengeAcceptedOverlay').remove()">Entendido 👍</button>
+    </div>`;
+
+  document.body.appendChild(overlay);
+  // Auto-cerrar al hacer click fuera
+  overlay.addEventListener('click', e => {
+    if (e.target === overlay) overlay.remove();
+  });
 }
 
 function openScoreModal(challengeId) {
@@ -6599,6 +6810,86 @@ window.renderAdminSpecialDatesList = function() {
       </div>`;
   }).join('');
 }
+
+// ── Auto-aceptar desafío desde URL params (link de email/Calendar) ──
+(function handleUrlChallengeAccept() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const acceptId = params.get('accept');
+    if (acceptId) {
+      sessionStorage.setItem('pending_accept_challenge_id', acceptId);
+      // Limpiar URL para no repetir
+      const cleanUrl = window.location.pathname;
+      window.history.replaceState({}, document.title, cleanUrl);
+    }
+
+    // Esperar a que la página esté lista y el usuario tenga sesión
+    const tryAccept = async () => {
+      const pendingId = sessionStorage.getItem('pending_accept_challenge_id');
+      if (!pendingId) return;
+
+      const session = DB.getSession();
+      if (!session) {
+        // Mostrar aviso de que debe iniciar sesión para aceptar
+        if (!document.getElementById('url-accept-notice')) {
+          const alertDiv = document.createElement('div');
+          alertDiv.id = 'url-accept-notice';
+          alertDiv.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:rgba(245,158,11,0.15);border:2px solid rgba(245,158,11,0.6);border-radius:16px;padding:16px 24px;max-width:420px;text-align:center;color:#fff;font-weight:600;font-size:0.92rem;backdrop-filter:blur(10px);box-shadow:0 10px 40px rgba(0,0,0,0.4)';
+          alertDiv.innerHTML = '<div style="font-size:1.5rem;margin-bottom:8px;">⚔️</div>Tienes un desafío por aceptar.<br><span style="font-size:0.82rem;color:rgba(255,255,255,0.7);font-weight:400;">Inicia sesión para confirmar tu aceptación.</span>';
+          document.body.appendChild(alertDiv);
+          setTimeout(() => alertDiv.remove && alertDiv.remove(), 8000);
+        }
+        return;
+      }
+
+      // Remover del storage para no repetir
+      sessionStorage.removeItem('pending_accept_challenge_id');
+
+      // Limpiar aviso flotante si existe
+      const alertDiv = document.getElementById('url-accept-notice');
+      if (alertDiv) alertDiv.remove();
+
+      // Verificar que el desafío existe y el usuario es el retado
+      let challenges = DB.getChallenges();
+      if (!challenges.length && DB.isCloudConfigured()) {
+        try { challenges = await DB.getChallengesCloud(); } catch(e) {}
+      }
+      const challenge = challenges.find(c => c.id === pendingId);
+      if (!challenge) {
+        console.warn('No se encontró el desafío', pendingId, 'para auto-aceptar');
+        return;
+      }
+      if (challenge.status !== 'pendiente') {
+        console.log('Desafío ya respondido, status:', challenge.status);
+        return;
+      }
+
+      const emailLower = (session.email || '').toLowerCase();
+      const isRetado = (challenge.retadoId && challenge.retadoId === session.id) ||
+                       (challenge.retadoEmail && challenge.retadoEmail.toLowerCase() === emailLower);
+      if (!isRetado) {
+        console.warn('El usuario no es el retado de este desafío.');
+        return;
+      }
+
+      // Auto-aceptar
+      if (confirm(`⚔️ ¿Aceptas el desafío de ${challenge.retadorNombre || 'tu rival'} para el ${formatShortDate(challenge.fecha) || challenge.fecha}?`)) {
+        await respondChallenge(pendingId, true);
+      }
+    };
+
+    window.triggerUrlChallengeAccept = tryAccept;
+
+    // Esperar a que el DOM y Firebase estén listos
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => setTimeout(tryAccept, 1200));
+    } else {
+      setTimeout(tryAccept, 1200);
+    }
+  } catch(e) {
+    console.warn('Error en handleUrlChallengeAccept:', e);
+  }
+})();
 </script>
 </body>
 </html>

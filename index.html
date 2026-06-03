@@ -645,6 +645,131 @@
       margin-top: 10px;
       text-align: center;
     }
+
+    /* ── Challenge Accepted Feed Card ── */
+    .news-card.is-challenge-accepted {
+      background: linear-gradient(135deg, rgba(245, 158, 11, 0.12) 0%, rgba(239, 68, 68, 0.08) 100%);
+      border: 1.5px solid rgba(245, 158, 11, 0.45);
+      animation: chalAcceptedGlow 2.5s ease-in-out infinite alternate;
+    }
+    @keyframes chalAcceptedGlow {
+      0% { box-shadow: 0 4px 15px rgba(245, 158, 11, 0.08); border-color: rgba(245, 158, 11, 0.35); }
+      100% { box-shadow: 0 4px 25px rgba(245, 158, 11, 0.28); border-color: rgba(245, 158, 11, 0.65); }
+    }
+    .news-card.is-challenge-accepted .news-card-title {
+      background: linear-gradient(90deg, #fcd34d, #f97316);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .badge-challenge-accepted {
+      background: linear-gradient(90deg, rgba(245,158,11,0.2), rgba(239,68,68,0.15));
+      color: #fcd34d;
+      border: 1px solid rgba(245,158,11,0.4);
+    }
+    .chal-accepted-vs-mini {
+      display: flex; align-items: center; gap: 10px;
+      margin: 8px 0 6px;
+    }
+    .chal-accepted-player-avatar {
+      width: 34px; height: 34px; border-radius: 50%;
+      object-fit: cover;
+      border: 2px solid rgba(245, 158, 11, 0.4);
+      background: #1e293b;
+    }
+    .chal-accepted-player-name {
+      font-size: 0.8rem; font-weight: 700; color: #fff;
+    }
+    .chal-accepted-vs-divider {
+      font-size: 0.85rem; font-weight: 900;
+      color: #f59e0b;
+      flex-shrink: 0;
+    }
+    .chal-accepted-cal-link {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 0.72rem; color: #60a5fa; font-weight: 600;
+      margin-top: 8px; text-decoration: none;
+      padding: 4px 10px;
+      background: rgba(96,165,250,0.08);
+      border: 1px solid rgba(96,165,250,0.2);
+      border-radius: 50px;
+      transition: all 0.2s;
+    }
+    .chal-accepted-cal-link:hover { color: #93c5fd; background: rgba(96,165,250,0.14); }
+
+    /* ── Pending Challenge Modal ── */
+    #pendingChallengeModal {
+      display: none;
+      position: fixed; inset: 0; z-index: 9990;
+      align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.72); backdrop-filter: blur(8px);
+    }
+    #pendingChallengeModal.visible { display: flex; }
+    .pending-chal-box {
+      position: relative;
+      background: linear-gradient(135deg, #0f172a, #1e293b);
+      border: 2px solid rgba(239, 68, 68, 0.5);
+      border-radius: 24px;
+      padding: 28px 24px;
+      max-width: 400px; width: 92%;
+      box-shadow: 0 25px 80px rgba(0,0,0,0.6), 0 0 40px rgba(239,68,68,0.12);
+      animation: slideUpModal 0.35s cubic-bezier(0.16,1,0.3,1);
+    }
+    @keyframes slideUpModal { from { transform: translateY(40px); opacity:0; } to { transform: translateY(0); opacity:1; } }
+    .pending-chal-header {
+      text-align: center; margin-bottom: 20px;
+    }
+    .pending-chal-icon { font-size: 2.8rem; display: block; margin-bottom: 8px; }
+    .pending-chal-kicker {
+      font-size: 0.7rem; font-weight: 900; letter-spacing: 0.1em;
+      text-transform: uppercase; color: #f87171; margin-bottom: 6px;
+    }
+    .pending-chal-title {
+      font-size: 1.3rem; font-weight: 900; color: #fff;
+    }
+    .pending-chal-from {
+      font-size: 0.88rem; color: rgba(255,255,255,0.7); margin-top: 4px;
+    }
+    .pending-chal-details {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 12px; padding: 14px 16px;
+      margin-bottom: 20px;
+    }
+    .pending-chal-details span { display: block; font-size: 0.85rem; color: rgba(255,255,255,0.75); margin-bottom: 5px; }
+    .pending-chal-details span:last-child { margin-bottom: 0; }
+    .pending-chal-actions { display: flex; flex-direction: column; gap: 10px; }
+    .btn-accept-challenge {
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      background: linear-gradient(135deg, #10b981, #059669);
+      color: #fff; font-weight: 800; font-size: 0.95rem;
+      padding: 13px; border-radius: 12px; border: none; cursor: pointer;
+      box-shadow: 0 6px 20px rgba(16,185,129,0.3);
+      transition: all 0.2s;
+    }
+    .btn-accept-challenge:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(16,185,129,0.45); }
+    .btn-reject-challenge {
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      background: rgba(239,68,68,0.1); color: #f87171;
+      font-weight: 700; font-size: 0.88rem;
+      padding: 11px; border-radius: 12px;
+      border: 1px solid rgba(239,68,68,0.3); cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-reject-challenge:hover { background: rgba(239,68,68,0.18); }
+    .btn-view-ranking {
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.6);
+      font-weight: 600; font-size: 0.82rem;
+      padding: 10px; border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.08); cursor: pointer;
+      text-decoration: none; transition: all 0.2s;
+    }
+    .btn-view-ranking:hover { background: rgba(255,255,255,0.09); color: #fff; }
+    .pending-chal-counter {
+      text-align: center; font-size: 0.78rem; color: rgba(255,255,255,0.5);
+      margin-top: 12px;
+    }
   </style>
 </head>
 <body>
@@ -813,6 +938,13 @@
   </div>
 </div>
 
+<!-- ── PENDING CHALLENGE MODAL ── -->
+<div id="pendingChallengeModal" aria-modal="true" role="dialog">
+  <div class="pending-chal-box" id="pendingChalBoxContent">
+    <!-- filled by JS -->
+  </div>
+</div>
+
 <!-- Firebase SDK Compat -->
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
@@ -840,6 +972,38 @@ function renderNewsGrid(topMoverCard, latestMatchCard, nextMatchCard, birthdaysC
   
   const newsList = [];
   
+  // 0. Challenge Accepted cards (highest priority — always shown first)
+  const challengeAcceptedNews = (customNews || []).filter(item => item.category === 'challenge_accepted');
+  challengeAcceptedNews.forEach(item => {
+    const dateStr = formatDateShort(item.date) || item.date || '';
+    const calLink = item.fechaPartido ? (() => {
+      try {
+        const [y, m, d] = item.fechaPartido.split('-');
+        let hh = 9, mm = 0;
+        if (item.slot) { const sp = item.slot.split(':').map(Number); hh = sp[0]||9; mm = sp[1]||0; }
+        let eh = hh+1, em = mm+30; if (em>=60){eh++;em-=60;}
+        const pad = n => String(n).padStart(2,'0');
+        const t = encodeURIComponent(`🎾 UCTenis: ${item.retadorNombre} vs ${item.retadoNombre}`);
+        const det = encodeURIComponent(`Desafío UCTenis aceptado.\nPartido: ${item.retadorNombre} vs ${item.retadoNombre}`);
+        const loc = encodeURIComponent(item.cancha || 'UCTenis');
+        return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${t}&dates=${y}${pad(m)}${pad(d)}T${pad(hh)}${pad(mm)}00/${y}${pad(m)}${pad(d)}T${pad(eh)}${pad(em)}00&details=${det}&location=${loc}`;
+      } catch(e) { return null; }
+    })() : null;
+
+    newsList.push({
+      isChallAccepted: true,
+      challengeAcceptedData: item,
+      calLink,
+      badgeClass: 'badge-challenge-accepted',
+      badgeText: '⚔️ Challenge Accepted!!',
+      title: `¡${escapeHTML(item.retadoNombre || 'Jugador')} aceptó el desafío!`,
+      body: escapeHTML(item.body || ''),
+      date: dateStr,
+      retadorNombre: item.retadorNombre || '',
+      retadoNombre: item.retadoNombre || '',
+    });
+  });
+
   // 1. Add custom news from database/admin
   if (customNews && customNews.length > 0) {
     customNews.forEach(item => {
@@ -907,16 +1071,44 @@ function renderNewsGrid(topMoverCard, latestMatchCard, nextMatchCard, birthdaysC
     });
   }
   
-  // Limit to 4 cards max on the home page grid
   const limitedNews = newsList.slice(0, 4);
-  newsGrid.innerHTML = limitedNews.map(item => `
-    <article class="news-card">
+  newsGrid.innerHTML = limitedNews.map(item => {
+    if (item.isChallAccepted) {
+      const ca = item.challengeAcceptedData;
+      const calLinkHtml = item.calLink
+        ? `<a href="${item.calLink}" target="_blank" rel="noopener" class="chal-accepted-cal-link">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11z"/></svg>
+            Agregar al Calendario
+          </a>`
+        : '';
+      const photoRetador = (typeof window.getPlayerPhoto === 'function') ? window.getPlayerPhoto(item.retadorNombre) : 'fotos/default_avatar_h.png';
+      const photoRetado = (typeof window.getPlayerPhoto === 'function') ? window.getPlayerPhoto(item.retadoNombre) : 'fotos/default_avatar_h.png';
+      return `<article class="news-card is-challenge-accepted">
+        <div class="news-badge ${item.badgeClass}">${item.badgeText}</div>
+        <h3 class="news-card-title">${item.title}</h3>
+        <div class="chal-accepted-vs-mini">
+          <div style="flex:1;text-align:center">
+            <img src="${photoRetador}" class="chal-accepted-player-avatar" alt="${escapeHTML(item.retadorNombre)}" onerror="this.src='fotos/default_avatar_h.png'">
+            <div class="chal-accepted-player-name">${escapeHTML((item.retadorNombre||'').split(' ')[0])}</div>
+          </div>
+          <div class="chal-accepted-vs-divider">⚔️</div>
+          <div style="flex:1;text-align:center">
+            <img src="${photoRetado}" class="chal-accepted-player-avatar" alt="${escapeHTML(item.retadoNombre)}" onerror="this.src='fotos/default_avatar_h.png'">
+            <div class="chal-accepted-player-name">${escapeHTML((item.retadoNombre||'').split(' ')[0])}</div>
+          </div>
+        </div>
+        <p class="news-card-body">${item.body}</p>
+        ${calLinkHtml}
+        <div class="news-date">${item.date}</div>
+      </article>`;
+    }
+    return `<article class="news-card">
       <div class="news-badge ${item.badgeClass}">${item.badgeText}</div>
       <h3 class="news-card-title">${escapeHTML(item.title)}</h3>
       <p class="news-card-body">${escapeHTML(item.body)}</p>
       <div class="news-date">${item.date}</div>
-    </article>
-  `).join('');
+    </article>`;
+  }).join('');
 }
 window.renderNewsGrid = renderNewsGrid;
 
@@ -1481,6 +1673,7 @@ async function loadLiveData() {
     if (staticAvatars[nameKey]) return staticAvatars[nameKey];
     return 'fotos/default_avatar_h.png';
   }
+  window.getPlayerPhoto = getPlayerPhoto;
 
   // Active challenges (pendiente, aceptado or terminado)
   const active = challenges
@@ -1673,10 +1866,10 @@ function highlightPendingChallengesHome(challenges) {
           <span style="font-size:2.2rem; filter:drop-shadow(0 2px 4px rgba(0,0,0,0.3));">⚔️</span>
           <div>
             <strong style="font-size:1.15rem; color:#fca5a5; display:block; margin-bottom:4px;">¡Tienes un desafío pendiente!</strong>
-            <p style="font-size:0.9rem; color:var(--text-primary); margin:0;">Tienes ${pending.length} reto${pending.length > 1 ? 's' : ''} en el ranking esperando tu respuesta en el panel.</p>
+            <p style="font-size:0.9rem; color:var(--text-primary); margin:0;">Tienes ${pending.length} reto${pending.length > 1 ? 's' : ''} en el ranking esperando tu respuesta.</p>
           </div>
         </div>
-        <a href="ranking.html" style="background:var(--accent-tennis); color:#0f172a; font-weight:800; font-size:0.92rem; padding:12px 24px; border-radius:50px; text-decoration:none; white-space:nowrap; transition:all 0.3s; box-shadow:0 4px 15px rgba(198,211,0,0.35);" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(198,211,0,0.5)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 15px rgba(198,211,0,0.35)';">Ver Desafíos</a>
+        <button onclick="openPendingChallengeModal()" style="background:var(--accent-tennis); color:#0f172a; font-weight:800; font-size:0.92rem; padding:12px 24px; border-radius:50px; border:none; cursor:pointer; white-space:nowrap; transition:all 0.3s; box-shadow:0 4px 15px rgba(198,211,0,0.35);" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(198,211,0,0.5)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 15px rgba(198,211,0,0.35)';">Ver Desafío</button>
       </div>
       <style>
         @keyframes pulseAlert {
@@ -1685,6 +1878,8 @@ function highlightPendingChallengesHome(challenges) {
         }
       </style>
     `;
+    // Store pending challenges for the modal
+    window._pendingChallengesHome = pending;
   } else {
     alertContainer.style.display = 'none';
   }
@@ -1740,7 +1935,8 @@ function showFloatingAlert(count) {
       <button onclick="closeFloatingAlert()" style="background:none; border:none; color:var(--text-secondary); cursor:pointer; font-size:1.1rem; padding:0 4px;">✕</button>
     </div>
     <p style="font-size:0.85rem; color:var(--text-primary); margin:0;">Tienes <strong>${count}</strong> desafío${count > 1 ? 's' : ''} pendiente${count > 1 ? 's' : ''} por responder.</p>
-    <a href="ranking.html" onclick="closeFloatingAlert()" style="display:block; text-align:center; background:var(--accent-tennis); color:#000; font-weight:900; font-size:0.8rem; padding:8px 12px; border-radius:8px; text-decoration:none; transition:transform 0.2s;" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">Responder en Ranking</a>
+    <button onclick="openPendingChallengeModal(); closeFloatingAlert();" style="display:block; text-align:center; background:var(--accent-tennis); color:#000; font-weight:900; font-size:0.8rem; padding:8px 12px; border-radius:8px; border:none; cursor:pointer; transition:transform 0.2s;" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">Responder Desafío</button>
+    <a href="ranking.html" style="display:block; text-align:center; font-size:0.75rem; color:var(--text-secondary); text-decoration:none;">Ver en Ranking →</a>
   `;
 
   if (!document.getElementById('floating-alert-styles')) {
@@ -1771,6 +1967,14 @@ function closeFloatingAlert() {
 window.closeFloatingAlert = closeFloatingAlert;
 
 document.addEventListener('DOMContentLoaded', () => {
+  // Redirect to ranking.html if ?accept is in URL
+  const urlParams = new URLSearchParams(window.location.search);
+  const acceptId = urlParams.get('accept');
+  if (acceptId) {
+    window.location.href = `ranking.html?accept=${acceptId}`;
+    return;
+  }
+
   DB.seed();
   renderIndexUserBar();
   const btnHomeGoogle = document.getElementById('btnHomeGoogleLogin');
@@ -1781,10 +1985,165 @@ document.addEventListener('DOMContentLoaded', () => {
     if (event.target.closest('[data-open-home-auth]')) openHomeAuthModal();
     if (event.target.closest('[data-close-home-auth]')) closeHomeAuthModal();
     if (event.target.id === 'homeAuthModal') closeHomeAuthModal();
+    if (event.target.id === 'pendingChallengeModal') closePendingChallengeModal();
   });
   // Load live challenges after a short delay to allow Firebase to initialize
   setTimeout(() => loadLiveData(), 800);
 });
+
+// ── Pending Challenge Modal (accept/reject directly from Home) ──
+window._pendingChallengesHome = [];
+window._pendingChalCurrentIdx = 0;
+
+function openPendingChallengeModal() {
+  const challenges = window._pendingChallengesHome || [];
+  if (!challenges.length) {
+    window.location.href = 'ranking.html';
+    return;
+  }
+  window._pendingChalCurrentIdx = 0;
+  renderPendingChalModal(challenges[0], challenges.length);
+  const modal = document.getElementById('pendingChallengeModal');
+  if (modal) modal.classList.add('visible');
+}
+window.openPendingChallengeModal = openPendingChallengeModal;
+
+function closePendingChallengeModal() {
+  const modal = document.getElementById('pendingChallengeModal');
+  if (modal) modal.classList.remove('visible');
+}
+window.closePendingChallengeModal = closePendingChallengeModal;
+
+function formatDateShortHome(iso) {
+  if (!iso || typeof iso !== 'string') return '';
+  const datePart = iso.split('T')[0];
+  const parts = datePart.split('-');
+  if (parts.length < 3) return '';
+  const m = parseInt(parts[1], 10);
+  const d = parseInt(parts[2], 10);
+  if (!Number.isFinite(d) || !Number.isFinite(m)) return '';
+  const months = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  return `${d} ${months[m-1]}`;
+}
+
+function renderPendingChalModal(challenge, total) {
+  const box = document.getElementById('pendingChalBoxContent');
+  if (!box || !challenge) return;
+  const retadorName = challenge.retadorNombre || 'Jugador';
+  const fecha = formatDateShortHome(challenge.fecha) || challenge.fecha || '—';
+  const cancha = challenge.cancha || 'Cancha por confirmar';
+  const slot = challenge.slot ? ` · ${challenge.slot}` : '';
+  const counterHtml = total > 1
+    ? `<p class="pending-chal-counter">Desafío ${(window._pendingChalCurrentIdx||0)+1} de ${total}</p>`
+    : '';
+  box.innerHTML = `
+    <button onclick="closePendingChallengeModal()" style="position:absolute; top:16px; right:20px; background:none; border:none; color:rgba(255,255,255,0.4); cursor:pointer; font-size:1.4rem; padding:0 4px; transition:color 0.2s;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='rgba(255,255,255,0.4)'" aria-label="Cerrar">✕</button>
+    <div class="pending-chal-header">
+      <span class="pending-chal-icon">⚔️</span>
+      <div class="pending-chal-kicker">Desafío Recibido</div>
+      <div class="pending-chal-title">¡Te han retado!</div>
+      <div class="pending-chal-from">${escapeHTML(retadorName)} quiere medirse contigo</div>
+    </div>
+    <div class="pending-chal-details">
+      <span>📅 ${escapeHTML(fecha)}${slot ? ' · ' + escapeHTML(slot) : ''}</span>
+      <span>🏟️ ${escapeHTML(cancha)}</span>
+      <span>🎾 ${challenge.tipo === 'amistoso' ? 'Partido Amistoso' : 'Desafío Oficial de Ranking'}</span>
+    </div>
+    <div class="pending-chal-actions">
+      <button class="btn-accept-challenge" onclick="homeRespondChallenge('${challenge.id}', true)" id="btnHomeChalAccept">
+        ✅ Aceptar Desafío
+      </button>
+      <button class="btn-reject-challenge" onclick="homeRespondChallenge('${challenge.id}', false)" id="btnHomeChalReject">
+        ❌ Rechazar
+      </button>
+      <a href="ranking.html" class="btn-view-ranking">Ver todos los detalles en Ranking →</a>
+    </div>
+    ${counterHtml}
+  `;
+}
+
+async function homeRespondChallenge(challengeId, accept) {
+  const acceptBtn = document.getElementById('btnHomeChalAccept');
+  const rejectBtn = document.getElementById('btnHomeChalReject');
+  if (acceptBtn) { acceptBtn.disabled = true; acceptBtn.textContent = accept ? 'Aceptando...' : acceptBtn.textContent; }
+  if (rejectBtn) { rejectBtn.disabled = true; rejectBtn.textContent = !accept ? 'Rechazando...' : rejectBtn.textContent; }
+
+  try {
+    const patch = { status: accept ? 'aceptado' : 'rechazado', fechaRespuesta: new Date().toISOString() };
+    let challenge = null;
+
+    if (DB.isCloudConfigured()) {
+      challenge = await DB.updateChallengeCloud(challengeId, patch);
+    } else {
+      DB.respondChallenge(challengeId, accept);
+      challenge = DB.getChallenges().find(c => c.id === challengeId);
+    }
+
+    // Also notify via Apps Script
+    if (window.CONFIG?.API_URL) {
+      fetch(window.CONFIG.API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: 'respond_challenge', id: challengeId, accept })
+      }).catch(() => {});
+    }
+
+    if (accept && challenge) {
+      // Publish challenge_accepted news
+      try {
+        const newsItem = {
+          id: `challenge-accepted-${challengeId}`,
+          category: 'challenge_accepted',
+          title: `⚔️ ¡Challenge Accepted! ${challenge.retadorNombre||'Jugador'} vs ${challenge.retadoNombre||'Jugador'}`,
+          body: `${challenge.retadoNombre||'Jugador'} aceptó el desafío de ${challenge.retadorNombre||'Jugador'}. El duelo será el ${formatDateShortHome(challenge.fecha)} en ${challenge.cancha||'la cancha'}${challenge.slot ? ' a las '+challenge.slot : ''}. ¡Que gane el mejor!`,
+          date: new Date().toISOString().split('T')[0],
+          creado: new Date().toISOString(),
+          actualizado: new Date().toISOString(),
+          challengeId, retadorNombre: challenge.retadorNombre||'',
+          retadoNombre: challenge.retadoNombre||'',
+          fechaPartido: challenge.fecha||'', cancha: challenge.cancha||'', slot: challenge.slot||''
+        };
+        if (DB.isCloudConfigured()) await DB.saveNewsCloud(newsItem);
+        const ln = DB.getNews();
+        const idx = ln.findIndex(n => n.id === newsItem.id);
+        if (idx >= 0) ln[idx] = newsItem; else ln.unshift(newsItem);
+        DB.saveNews(ln);
+      } catch(e) { console.warn('Error publishing challenge accepted news:', e); }
+    }
+
+    closePendingChallengeModal();
+
+    // Remove this challenge from pending list and show next or reload
+    window._pendingChallengesHome = (window._pendingChallengesHome || []).filter(c => c.id !== challengeId);
+    const remaining = window._pendingChallengesHome;
+
+    if (accept) {
+      // Show success toast
+      const toast = document.createElement('div');
+      toast.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:linear-gradient(135deg,#10b981,#059669);color:#fff;font-weight:800;font-size:0.95rem;padding:14px 28px;border-radius:50px;box-shadow:0 8px 30px rgba(16,185,129,0.4);animation:slideInUp 0.4s cubic-bezier(0.16,1,0.3,1)';
+      toast.textContent = '⚔️ ¡Challenge Accepted! El desafío fue aceptado.';
+      document.body.appendChild(toast);
+      setTimeout(() => { toast.style.opacity='0'; toast.style.transition='opacity 0.4s'; setTimeout(()=>toast.remove(),400); }, 3500);
+    }
+
+    // Reload live data to refresh feed
+    setTimeout(() => loadLiveData(), 600);
+
+    if (remaining.length > 0 && accept === false) {
+      window._pendingChalCurrentIdx = 0;
+      renderPendingChalModal(remaining[0], remaining.length);
+      const modal = document.getElementById('pendingChallengeModal');
+      if (modal) modal.classList.add('visible');
+    }
+  } catch(e) {
+    console.error('Error respondiendo al desafío desde el home:', e);
+    const box = document.getElementById('pendingChalBoxContent');
+    if (box) box.innerHTML += `<p style="color:#f87171;font-size:0.85rem;text-align:center;margin-top:12px;">Error al procesar. <a href="ranking.html" style="color:var(--accent-tennis);">Ir al Ranking</a>.</p>`;
+    if (acceptBtn) { acceptBtn.disabled = false; acceptBtn.textContent = '✅ Aceptar Desafío'; }
+    if (rejectBtn) { rejectBtn.disabled = false; rejectBtn.textContent = '❌ Rechazar'; }
+  }
+}
+window.homeRespondChallenge = homeRespondChallenge;
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
