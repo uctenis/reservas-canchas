@@ -660,11 +660,13 @@ async function selectDate(iso) {
   goStep(2);
   
   const apiDisponibilidad = await DB.getSlotsAPI(iso);
+  if (sel.date !== iso) return;
   renderSlotsByCourt(apiDisponibilidad);
 }
 
 // ── STEP 2: SLOTS BY COURT ──
 function renderSlotsByCourt(apiData) {
+  if (!sel.date) return;
   const session = DB.getSession();
   const alreadyHasBooking = session ? DB.userBookedToday(session.id, sel.date) : false;
   const btnConfirm = document.getElementById('btnConfirmSlot');
@@ -818,8 +820,10 @@ function updateSelectedSlotInfo() {
 }
 
 async function refreshSlotAvailability() {
-  if (!sel.date) return;
-  const apiDisponibilidad = await DB.getSlotsAPI(sel.date);
+  const dateToRefresh = sel.date;
+  if (!dateToRefresh) return;
+  const apiDisponibilidad = await DB.getSlotsAPI(dateToRefresh);
+  if (sel.date !== dateToRefresh) return;
   renderSlotsByCourt(apiDisponibilidad);
 }
 
