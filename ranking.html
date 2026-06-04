@@ -600,6 +600,10 @@
               <label for="adminNewsDate" style="display:block; margin-bottom:6px; font-size:0.85rem; color:rgba(255,255,255,0.7);">Fecha de Publicación</label>
               <input type="date" id="adminNewsDate" required style="width:100%; padding:10px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:#fff; outline:none;">
             </div>
+            <div class="form-group" style="flex:1;">
+              <label for="adminNewsOrder" style="display:block; margin-bottom:6px; font-size:0.85rem; color:rgba(255,255,255,0.7);">Posición</label>
+              <input type="number" id="adminNewsOrder" min="1" placeholder="Ej: 1" style="width:100%; padding:10px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:#fff; outline:none;">
+            </div>
           </div>
           <div class="form-group" style="margin-bottom: 15px;">
             <label for="adminNewsBody" style="display:block; margin-bottom:6px; font-size:0.85rem; color:rgba(255,255,255,0.7);">Contenido de la Novedad</label>
@@ -1374,6 +1378,25 @@ async function syncChallengesFromCloud() {
 
   try {
     const cloudChallenges = await withTimeout(DB.getChallengesCloud(), CLOUD_TIMEOUT_MS, 'Firebase desafíos');
+    
+    // Auto-cleanup for Rob Roco challenge in the cloud if admin is logged in
+    const session = DB.getSession();
+    const isAdmin = session && ['uctenisclub@gmail.com', 'dsilva@uct.cl'].includes((session.email || '').toLowerCase().trim());
+    if (isAdmin) {
+      cloudChallenges.forEach(c => {
+        const retador = String(c.retadorNombre || '').toLowerCase();
+        const retado = String(c.retadoNombre || '').toLowerCase();
+        const retadorEmail = String(c.retadorEmail || '').toLowerCase();
+        const retadoEmail = String(c.retadoEmail || '').toLowerCase();
+        if (retador.includes('rob roco') || retado.includes('rob roco') ||
+            retadorEmail.includes('dsilvaroco') || retadoEmail.includes('dsilvaroco')) {
+          DB.deleteChallengeCloud(c.id).then(() => {
+            console.log(`Deleted Rob Roco challenge ${c.id} from Firestore cloud database.`);
+          }).catch(e => console.warn('Could not delete Rob Roco challenge from cloud:', e));
+        }
+      });
+    }
+
     // Reemplazar localStorage con lo que viene de Firebase (fuente autoritativa)
     DB.saveChallenges(cloudChallenges);
   } catch (error) {
@@ -3391,7 +3414,8 @@ async function respondChallenge(id, accept) {
 // Publica una novedad tipo 'challenge_accepted' en Firestore para el feed del home
 async function publishChallengeAcceptedNews(challenge) {
   try {
-    const isFriendly = challenge.tipo === 'amistoso';
+    const cleanSlot = challenge.slot ? formatSlotRobust(challenge.slot) : '';
+    const slotText = cleanSlot ? ' a las ' + cleanSlot : '';
     const newsItem = {
       id: `challenge-accepted-${challenge.id}`,
       category: 'challenge_accepted',
@@ -3399,8 +3423,8 @@ async function publishChallengeAcceptedNews(challenge) {
         ? `🤝 Amistoso confirmado: ${challenge.retadorNombre || 'Jugador'} vs ${challenge.retadoNombre || 'Jugador'}`
         : `⚔️ ¡Challenge Accepted! ${challenge.retadorNombre || 'Jugador'} vs ${challenge.retadoNombre || 'Jugador'}`,
       body: isFriendly
-        ? `${challenge.retadoNombre || 'Jugador'} aceptó el amistoso con ${challenge.retadorNombre || 'Jugador'}. El partido será el ${formatShortDate(challenge.fecha)} en ${challenge.cancha || 'la cancha'}${challenge.slot ? ' a las ' + challenge.slot : ''}.`
-        : `${challenge.retadoNombre || 'Jugador'} aceptó el desafío de ${challenge.retadorNombre || 'Jugador'}. El duelo será el ${formatShortDate(challenge.fecha)} en ${challenge.cancha || 'la cancha'}${challenge.slot ? ' a las ' + challenge.slot : ''}. ¡Que gane el mejor!`,
+        ? `${challenge.retadoNombre || 'Jugador'} aceptó el amistoso con ${challenge.retadorNombre || 'Jugador'}. El partido se jugará en ${challenge.cancha || 'la cancha'} el ${formatShortDate(challenge.fecha)}${slotText}.`
+        : `${challenge.retadoNombre || 'Jugador'} aceptó el desafío de ${challenge.retadorNombre || 'Jugador'}. El duelo se jugará en ${challenge.cancha || 'la cancha'} el ${formatShortDate(challenge.fecha)}${slotText}. ¡Que gane el mejor!`,
       date: new Date().toISOString().split('T')[0],
       creado: new Date().toISOString(),
       actualizado: new Date().toISOString(),
@@ -3411,7 +3435,7 @@ async function publishChallengeAcceptedNews(challenge) {
       retadoId: challenge.retadoId || '',
       fechaPartido: challenge.fecha || '',
       cancha: challenge.cancha || '',
-      slot: challenge.slot || '',
+      slot: cleanSlot,
       tipo: challenge.tipo || 'ranking'
     };
 
@@ -6015,9 +6039,80 @@ function formatDateTime(date) {
   return date.toLocaleDateString('es-CL', { day: '2-digit', month: 'long', year: 'numeric' });
 }
 
+function parseDateStringRobust(val) {
+  if (!val) return null;
+  const str = String(val).trim();
+  if (!str) return null;
+
+  // Case 1: YYYY-MM-DD
+  let match = str.match(/(\d{4})-(\d{2})-(\d{2})/);
+  if (match) {
+    return {
+      year: parseInt(match[1], 10),
+      month: parseInt(match[2], 10),
+      day: parseInt(match[3], 10)
+    };
+  }
+
+  // Case 2: Thu May 28 2026 ... (Date.toString())
+  const monthsEng = {
+    jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6,
+    jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12
+  };
+  match = str.match(/[A-Za-z]{3}\s+([A-Za-z]{3})\s+(\d{1,2})\s+(\d{4})/);
+  if (match) {
+    const mStr = match[1].toLowerCase();
+    const month = monthsEng[mStr];
+    if (month) {
+      return {
+        year: parseInt(match[3], 10),
+        month: month,
+        day: parseInt(match[2], 10)
+      };
+    }
+  }
+
+  // Case 3: standard date parsing fallback
+  const parsed = new Date(str);
+  if (!isNaN(parsed.getTime())) {
+    return {
+      year: parsed.getFullYear(),
+      month: parsed.getMonth() + 1,
+      day: parsed.getDate()
+    };
+  }
+
+  return null;
+}
+
+function formatSlotRobust(val) {
+  if (!val) return '';
+  const str = String(val).trim();
+  if (!str) return '';
+
+  if (str.includes('1899') || str.includes('GMT') || /^[A-Za-z]{3}\s[A-Za-z]{3}/.test(str)) {
+    const parsed = new Date(str);
+    if (!isNaN(parsed.getTime())) {
+      const hh = String(parsed.getHours()).padStart(2, '0');
+      const mm = String(parsed.getMinutes()).padStart(2, '0');
+      return `${hh}:${mm}`;
+    }
+  }
+
+  const match = str.match(/\b(\d{1,2}):(\d{2}):\d{2}\b/) || str.match(/\b(\d{1,2}):(\d{2})\b/);
+  if (match) {
+    return `${match[1].padStart(2, '0')}:${match[2]}`;
+  }
+
+  return str;
+}
+
 function formatShortDate(value) {
-  if (!value) return 'Fecha por definir';
-  return new Date(`${value}T00:00:00`).toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' });
+  const parsed = parseDateStringRobust(value);
+  if (!parsed) return value || 'Fecha por definir';
+  if (parsed.year === 1899) return '';
+  const months = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  return `${String(parsed.day).padStart(2, '0')} ${months[parsed.month - 1]} ${parsed.year}`;
 }
 
 function calculateAge(value) {
@@ -6460,6 +6555,7 @@ window.openAdminNewsForm = async function(id) {
   const categorySelect = document.getElementById('adminNewsCategory');
   const dateInput = document.getElementById('adminNewsDate');
   const bodyInput = document.getElementById('adminNewsBody');
+  const orderInput = document.getElementById('adminNewsOrder');
   const deleteBtn = document.getElementById('btnAdminDeleteNews');
   const errEl = document.getElementById('adminNewsErr');
   const successEl = document.getElementById('adminNewsSuccess');
@@ -6481,6 +6577,7 @@ window.openAdminNewsForm = async function(id) {
       categorySelect.value = news.category || 'aviso';
       dateInput.value = news.date || '';
       bodyInput.value = news.body || '';
+      if (orderInput) orderInput.value = (news.newsOrder !== undefined) ? (news.newsOrder + 1) : '';
     }
   } else {
     titleEl.textContent = 'Agregar nueva novedad';
@@ -6492,6 +6589,10 @@ window.openAdminNewsForm = async function(id) {
     categorySelect.value = 'aviso';
     dateInput.value = todayISO();
     bodyInput.value = '';
+    if (orderInput) {
+      const newsItems = window.adminNewsListCache || DB.getNews();
+      orderInput.value = newsItems.length + 1;
+    }
   }
   
   document.getElementById('adminNewsListView').classList.add('hidden');
@@ -6512,6 +6613,7 @@ window.submitAdminNews = async function(event) {
   const category = document.getElementById('adminNewsCategory').value;
   const date = document.getElementById('adminNewsDate').value;
   const body = document.getElementById('adminNewsBody').value.trim();
+  const orderInput = document.getElementById('adminNewsOrder');
   
   const errEl = document.getElementById('adminNewsErr');
   const successEl = document.getElementById('adminNewsSuccess');
@@ -6522,6 +6624,21 @@ window.submitAdminNews = async function(event) {
   saveBtn.disabled = true;
   saveBtn.textContent = 'Guardando...';
   
+  const specifiedOrder = orderInput ? parseInt(orderInput.value, 10) : NaN;
+  
+  // Load current list (without this item)
+  const currentList = (DB.getNews() || []).filter(n => n.id !== id);
+  currentList.sort((a, b) => (a.newsOrder ?? 999) - (b.newsOrder ?? 999));
+  
+  let targetOrder = 0;
+  if (!isNaN(specifiedOrder) && specifiedOrder >= 1) {
+    targetOrder = specifiedOrder - 1;
+  } else {
+    targetOrder = currentList.length;
+  }
+  
+  const insertIndex = Math.max(0, Math.min(targetOrder, currentList.length));
+  
   const newsItem = {
     id: id || null,
     creado: creado || null,
@@ -6529,7 +6646,7 @@ window.submitAdminNews = async function(event) {
     category,
     date,
     body,
-    newsOrder: undefined
+    newsOrder: insertIndex
   };
 
   const isAuto = id && String(id).startsWith('auto-');
@@ -6539,28 +6656,39 @@ window.submitAdminNews = async function(event) {
   }
   
   try {
+    let saved;
     if (DB.isCloudConfigured()) {
       const session = DB.getSession();
-      const saved = await DB.saveNewsCloud(newsItem, adminPayload(session));
-      const currentList = DB.getNews().filter(n => n.id !== saved.id);
-      const nextOrder = Math.max(0, ...currentList.map(n => n.newsOrder || 0)) + 1;
-      saved.newsOrder = saved.newsOrder ?? nextOrder;
-      currentList.push(saved);
-      DB.saveNews(currentList);
+      saved = await DB.saveNewsCloud(newsItem, adminPayload(session));
     } else {
       const localId = newsItem.id || `local-news-${Date.now()}`;
-      const saved = {
+      saved = {
         ...newsItem,
         id: localId,
         creado: newsItem.creado || new Date().toISOString(),
         actualizado: new Date().toISOString()
       };
-      const currentList = DB.getNews().filter(n => n.id !== localId);
-      const nextOrder = Math.max(0, ...currentList.map(n => n.newsOrder || 0)) + 1;
-      saved.newsOrder = saved.newsOrder ?? nextOrder;
-      currentList.push(saved);
-      DB.saveNews(currentList);
     }
+    
+    // Reconstruct list with sequential orders
+    currentList.splice(insertIndex, 0, saved);
+    currentList.forEach((item, idx) => {
+      item.newsOrder = idx;
+    });
+    
+    DB.saveNews(currentList);
+    
+    if (DB.isCloudConfigured()) {
+      const session = DB.getSession();
+      for (const item of currentList) {
+        if (item.id !== saved.id) {
+          await DB.saveNewsCloud(item, adminPayload(session)).catch(err => 
+            console.warn('Error syncing order to cloud:', err)
+          );
+        }
+      }
+    }
+    
     successEl.textContent = 'Novedad guardada exitosamente.';
     setTimeout(() => {
       closeAdminNewsForm();
