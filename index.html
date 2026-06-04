@@ -981,7 +981,8 @@ function renderNewsGrid(topMoverCard, latestMatchCard, nextMatchCard, birthdaysC
       try {
         const [y, m, d] = item.fechaPartido.split('-');
         let hh = 9, mm = 0;
-        if (item.slot) { const sp = item.slot.split(':').map(Number); hh = sp[0]||9; mm = sp[1]||0; }
+        const cleanSlot = item.slot ? formatSlotRobust(item.slot) : '';
+        if (cleanSlot) { const sp = cleanSlot.split(':').map(Number); hh = sp[0]||9; mm = sp[1]||0; }
         let eh = hh+1, em = mm+30; if (em>=60){eh++;em-=60;}
         const pad = n => String(n).padStart(2,'0');
         const t = encodeURIComponent(`🎾 UCTenis: ${item.retadorNombre} vs ${item.retadoNombre}`);
@@ -1000,7 +1001,15 @@ function renderNewsGrid(topMoverCard, latestMatchCard, nextMatchCard, birthdaysC
       title: isFriendlyAccepted
         ? `¡${escapeHTML(item.retadoNombre || 'Jugador')} aceptó el amistoso!`
         : `¡${escapeHTML(item.retadoNombre || 'Jugador')} aceptó el desafío!`,
-      body: escapeHTML(item.body || ''),
+      body: (() => {
+        const cleanSlot = item.slot ? formatSlotRobust(item.slot) : '';
+        const slotText = cleanSlot ? ' a las ' + cleanSlot : '';
+        const dateValue = item.fechaPartido || item.date || '';
+        const datePart = formatDateShortHome(dateValue) || dateValue || '';
+        return isFriendlyAccepted
+          ? `${escapeHTML(item.retadoNombre || 'Jugador')} aceptó el amistoso con ${escapeHTML(item.retadorNombre || 'Jugador')}. El partido se jugará en ${escapeHTML(item.cancha || 'la cancha')} el ${escapeHTML(datePart)}${escapeHTML(slotText)}.`
+          : `${escapeHTML(item.retadoNombre || 'Jugador')} aceptó el desafío de ${escapeHTML(item.retadorNombre || 'Jugador')}. El duelo se jugará en ${escapeHTML(item.cancha || 'la cancha')} el ${escapeHTML(datePart)}${escapeHTML(slotText)}. ¡Que gane el mejor!`;
+      })(),
       date: dateStr,
       retadorNombre: item.retadorNombre || '',
       retadoNombre: item.retadoNombre || '',
@@ -1032,13 +1041,13 @@ function renderNewsGrid(topMoverCard, latestMatchCard, nextMatchCard, birthdaysC
       });
     });
   } else {
-    // Si la base de datos de novedades está vacía, forzamos la del interclub como novedad principal por defecto
+    // Si la base de datos de novedades está vacía, forzamos la de mantención como novedad principal por defecto
     newsList.push({
-      badgeClass: 'badge-torneo',
-      badgeText: 'Interclub',
-      title: 'Gran Campeonato de Vuelta: UCTenis vs Club de Tenis de Funcionarios UFRO',
-      body: 'Este lunes comenzó la serie de vuelta del tradicional campeonato interclub entre los clubes UCTenis y el Club de Tenis de funcionarios de la UFRO (Universidad de la Frontera). Tras haber ganado la primera copa, ¡nuestro equipo de hombres y mujeres lucha para mantener el trofeo en casa! Hasta ahora vamos liderando la serie 3 a 1. ¡Vamos UCTenis!',
-      date: '27 May, 2026'
+      badgeClass: 'badge-maint',
+      badgeText: 'Mantención',
+      title: 'Cuidado de las Canchas de Arcilla',
+      body: 'Recordatorio obligatorio para todos los socios: al terminar tu bloque en arcilla, debes pasar el escobillón, barrer las líneas y regar la cancha para el siguiente turno.',
+      date: '24 May, 2026'
     });
   }
   
@@ -1050,14 +1059,6 @@ function renderNewsGrid(topMoverCard, latestMatchCard, nextMatchCard, birthdaysC
   
   // 3. Fallbacks if list is empty (traditional hardcoded news)
   if (newsList.length === 0) {
-    newsList.push({
-      badgeClass: 'badge-torneo',
-      badgeText: 'Interclub',
-      title: 'Gran Campeonato de Vuelta: UCTenis vs Club de Tenis de Funcionarios UFRO',
-      body: 'Este lunes comenzó la serie de vuelta del tradicional campeonato interclub entre los clubes UCTenis y el Club de Tenis de funcionarios de la UFRO (Universidad de la Frontera). Tras haber ganado la primera copa, ¡nuestro equipo de hombres y mujeres lucha para mantener el trofeo en casa! Hasta ahora vamos liderando la serie 3 a 1. ¡Vamos UCTenis!',
-      date: '27 May, 2026'
-    });
-    
     newsList.push({
       badgeClass: 'badge-maint',
       badgeText: 'Mantención',
@@ -2050,16 +2051,79 @@ function closePendingChallengeModal() {
 }
 window.closePendingChallengeModal = closePendingChallengeModal;
 
+function parseDateStringRobust(val) {
+  if (!val) return null;
+  const str = String(val).trim();
+  if (!str) return null;
+
+  // Case 1: YYYY-MM-DD
+  let match = str.match(/(\d{4})-(\d{2})-(\d{2})/);
+  if (match) {
+    return {
+      year: parseInt(match[1], 10),
+      month: parseInt(match[2], 10),
+      day: parseInt(match[3], 10)
+    };
+  }
+
+  // Case 2: Thu May 28 2026 ... (Date.toString())
+  const monthsEng = {
+    jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6,
+    jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12
+  };
+  match = str.match(/[A-Za-z]{3}\s+([A-Za-z]{3})\s+(\d{1,2})\s+(\d{4})/);
+  if (match) {
+    const mStr = match[1].toLowerCase();
+    const month = monthsEng[mStr];
+    if (month) {
+      return {
+        year: parseInt(match[3], 10),
+        month: month,
+        day: parseInt(match[2], 10)
+      };
+    }
+  }
+
+  // Case 3: standard date parsing fallback
+  const parsed = new Date(str);
+  if (!isNaN(parsed.getTime())) {
+    return {
+      year: parsed.getFullYear(),
+      month: parsed.getMonth() + 1,
+      day: parsed.getDate()
+    };
+  }
+
+  return null;
+}
+
+function formatSlotRobust(val) {
+  if (!val) return '';
+  const str = String(val).trim();
+  if (!str) return '';
+
+  if (str.includes('1899') || str.includes('GMT') || /^[A-Za-z]{3}\s[A-Za-z]{3}/.test(str)) {
+    const parsed = new Date(str);
+    if (!isNaN(parsed.getTime())) {
+      const hh = String(parsed.getHours()).padStart(2, '0');
+      const mm = String(parsed.getMinutes()).padStart(2, '0');
+      return `${hh}:${mm}`;
+    }
+  }
+
+  const match = str.match(/\b(\d{1,2}):(\d{2}):\d{2}\b/) || str.match(/\b(\d{1,2}):(\d{2})\b/);
+  if (match) {
+    return `${match[1].padStart(2, '0')}:${match[2]}`;
+  }
+
+  return str;
+}
+
 function formatDateShortHome(iso) {
-  if (!iso || typeof iso !== 'string') return '';
-  const datePart = iso.split('T')[0];
-  const parts = datePart.split('-');
-  if (parts.length < 3) return '';
-  const m = parseInt(parts[1], 10);
-  const d = parseInt(parts[2], 10);
-  if (!Number.isFinite(d) || !Number.isFinite(m)) return '';
+  const parsed = parseDateStringRobust(iso);
+  if (!parsed || parsed.year === 1899) return '';
   const months = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-  return `${d} ${months[m-1]}`;
+  return `${parsed.day} ${months[parsed.month-1]}`;
 }
 
 function renderPendingChalModal(challenge, total) {
@@ -2069,7 +2133,8 @@ function renderPendingChalModal(challenge, total) {
   const retadorName = challenge.retadorNombre || 'Jugador';
   const fecha = formatDateShortHome(challenge.fecha) || challenge.fecha || '—';
   const cancha = challenge.cancha || 'Cancha por confirmar';
-  const slot = challenge.slot ? ` · ${challenge.slot}` : '';
+  const cleanSlot = challenge.slot ? formatSlotRobust(challenge.slot) : '';
+  const slot = cleanSlot ? ` · ${cleanSlot}` : '';
   const counterHtml = total > 1
     ? `<p class="pending-chal-counter">Desafío ${(window._pendingChalCurrentIdx||0)+1} de ${total}</p>`
     : '';
@@ -2129,6 +2194,8 @@ async function homeRespondChallenge(challengeId, accept) {
       // Publish challenge_accepted news
       try {
         const isFriendly = challenge.tipo === 'amistoso';
+        const cleanSlot = challenge.slot ? formatSlotRobust(challenge.slot) : '';
+        const slotText = cleanSlot ? ' a las ' + cleanSlot : '';
         const newsItem = {
           id: `challenge-accepted-${challengeId}`,
           category: 'challenge_accepted',
@@ -2136,14 +2203,14 @@ async function homeRespondChallenge(challengeId, accept) {
             ? `🤝 Amistoso confirmado: ${challenge.retadorNombre||'Jugador'} vs ${challenge.retadoNombre||'Jugador'}`
             : `⚔️ ¡Challenge Accepted! ${challenge.retadorNombre||'Jugador'} vs ${challenge.retadoNombre||'Jugador'}`,
           body: isFriendly
-            ? `${challenge.retadoNombre||'Jugador'} aceptó el amistoso con ${challenge.retadorNombre||'Jugador'}. El partido será el ${formatDateShortHome(challenge.fecha)} en ${challenge.cancha||'la cancha'}${challenge.slot ? ' a las '+challenge.slot : ''}.`
-            : `${challenge.retadoNombre||'Jugador'} aceptó el desafío de ${challenge.retadorNombre||'Jugador'}. El duelo será el ${formatDateShortHome(challenge.fecha)} en ${challenge.cancha||'la cancha'}${challenge.slot ? ' a las '+challenge.slot : ''}. ¡Que gane el mejor!`,
+            ? `${challenge.retadoNombre||'Jugador'} aceptó el amistoso con ${challenge.retadorNombre||'Jugador'}. El partido se jugará en ${challenge.cancha||'la cancha'} el ${formatDateShortHome(challenge.fecha)}${slotText}.`
+            : `${challenge.retadoNombre||'Jugador'} aceptó el desafío de ${challenge.retadorNombre||'Jugador'}. El duelo se jugará en ${challenge.cancha||'la cancha'} el ${formatDateShortHome(challenge.fecha)}${slotText}. ¡Que gane el mejor!`,
           date: new Date().toISOString().split('T')[0],
           creado: new Date().toISOString(),
           actualizado: new Date().toISOString(),
           challengeId, retadorNombre: challenge.retadorNombre||'',
           retadoNombre: challenge.retadoNombre||'',
-          fechaPartido: challenge.fecha||'', cancha: challenge.cancha||'', slot: challenge.slot||'',
+          fechaPartido: challenge.fecha||'', cancha: challenge.cancha||'', slot: cleanSlot,
           tipo: challenge.tipo || 'ranking'
         };
         if (DB.isCloudConfigured()) await DB.saveNewsCloud(newsItem);

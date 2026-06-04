@@ -947,6 +947,20 @@ const DB = {
     if (!c || !c.id || c.id === 'ID') return false;
     if (c.status === 'eliminado') return false;
     if (!c.creado || String(c.creado).trim() === '') return false;
+
+    // Ignorar duelos con rob roco o su correo (por solicitud del usuario)
+    const retadorNameLower = String(c.retadorNombre || '').toLowerCase();
+    const retadoNameLower = String(c.retadoNombre || '').toLowerCase();
+    const retadorEmailLower = String(c.retadorEmail || '').toLowerCase();
+    const retadoEmailLower = String(c.retadoEmail || '').toLowerCase();
+    const retadorIdLower = String(c.retadorId || '').toLowerCase();
+    const retadoIdLower = String(c.retadoId || '').toLowerCase();
+    if (retadorNameLower.includes('rob roco') || retadoNameLower.includes('rob roco') ||
+        retadorEmailLower.includes('dsilvaroco') || retadoEmailLower.includes('dsilvaroco') ||
+        retadorIdLower.includes('dsilvaroco') || retadoIdLower.includes('dsilvaroco')) {
+      return false;
+    }
+
     // Debe tener IDs (registros modernos) o al menos nombres de ambos jugadores (registros viejos)
     const hasIds = c.retadorId && c.retadoId;
     const hasNames = c.retadorNombre && c.retadoNombre &&
@@ -1207,15 +1221,6 @@ const DB = {
 
   seedNewsLocal() {
     const defaultNews = [
-      {
-        id: 'default-interclub',
-        category: 'torneo',
-        title: 'Gran Campeonato de Vuelta: UCTenis vs Club de Tenis de Funcionarios UFRO',
-        body: 'Este lunes comenzó la serie de vuelta del tradicional campeonato interclub entre los clubes UCTenis y el Club de Tenis de funcionarios de la UFRO (Universidad de la Frontera). Tras haber ganado la primera copa, ¡nuestro equipo de hombres y mujeres lucha para mantener el trofeo en casa! Hasta ahora vamos liderando la serie 3 a 1. ¡Vamos UCTenis!',
-        date: '2026-05-27',
-        creado: new Date('2026-05-27T12:00:00Z').toISOString(),
-        actualizado: new Date('2026-05-27T12:00:00Z').toISOString()
-      },
       {
         id: 'default-maint',
         category: 'maint',
