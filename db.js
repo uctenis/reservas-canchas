@@ -2,7 +2,7 @@
 
 if (typeof window.CONFIG === 'undefined') {
   window.CONFIG = {
-    API_URL: "https://script.google.com/macros/s/AKfycbwqJvsuGrhqf61LXRyzK4TN7VEOZRE9rclQLrgdm89sLLvVTyZRiedNsQy3opbwgGM/exec"
+    API_URL: "https://script.google.com/macros/s/AKfycbxxdlWgNakuIttTXiy-Rs6OLlex4da4grOmIYLXHhyx_IbTKkVUjnyNQXHy-jA6Bs2S/exec"
   };
 }
 
