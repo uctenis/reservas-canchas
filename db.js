@@ -51,6 +51,44 @@ function normalizeEmailForDb(email) {
   return String(email || '').trim().toLowerCase();
 }
 
+const DB_STATIC_ACCESS_PLAYERS = [
+  { id: 'm001', nombre: 'David Silva', email: 'dsilva@uct.cl', genero: 'M', categoria: '3ra', foto: 'fotos/m001.png' },
+  { id: 'm002', nombre: 'Ismael Devia', email: 'idevia@uct.cl', genero: 'M', categoria: '3ra', foto: 'fotos/m002.png' },
+  { id: 'm005', nombre: 'Miguel Escalona', email: 'mescalon@uct.cl', genero: 'M', categoria: '4ta', foto: 'fotos/m005.png' },
+  { id: 'm004', nombre: 'Luis Otth', email: 'lotth@uct.cl', genero: 'M', categoria: '4ta', foto: 'fotos/m004.png' },
+  { id: 'm009', nombre: 'Gustavo Curaqueo', email: 'gcuraqueo@uct.cl', genero: 'M', categoria: 'Principiante', foto: 'fotos/m009.png' },
+  { id: 'm011', nombre: 'Jaime Castillo', email: 'jcastill@uct.cl', genero: 'M', categoria: '4ta', foto: 'fotos/m011.png' },
+  { id: 'm007', nombre: 'Matias Caceres', email: 'mcaceres@uct.cl', genero: 'M', categoria: '4ta', foto: 'fotos/m007.png' },
+  { id: 'm006', nombre: 'Rodrigo Castro', email: 'rcastro@uct.cl', genero: 'M', categoria: '4ta', foto: 'fotos/m006.png' },
+  { id: 'm017', nombre: 'Klaus Hennicke', email: 'khennicke@uct.cl', genero: 'M', categoria: '4ta', foto: 'fotos/m017.png' },
+  { id: 'm016', nombre: 'Jose Melgarejo', email: 'jmelgarejo@uct.cl', genero: 'M', categoria: '3ra', foto: 'fotos/m016.png' },
+  { id: 'm008', nombre: 'Juan Maripillan', email: 'jmaripillan@uct.cl', genero: 'M', categoria: '', foto: 'fotos/m008.png' },
+  { id: 'm010', nombre: 'Cristian Rebolledo', email: 'crebolledo@uct.cl', genero: 'M', categoria: 'Principiante', foto: 'fotos/m010.png' },
+  { id: 'm003', nombre: 'Francisco Encina', email: 'fencina@uct.cl', genero: 'M', categoria: '4ta', foto: 'fotos/m003.png' },
+  { id: 'm012', nombre: 'Cristian Farias', email: 'cristian.farias@uct.cl', genero: 'M', categoria: '4ta', foto: 'fotos/m012.png' },
+  { id: 'm015', nombre: 'Miguel Angulo', email: 'miguel.angulo@uct.cl', genero: 'M', categoria: '3ra', foto: 'fotos/m015.png' },
+  { id: 'm018', nombre: 'Roberto Bermudez', email: 'profesorbermudez@gmail.com', genero: 'M', categoria: '1ra', foto: 'fotos/m018.png' },
+  { id: 'm013', nombre: 'Francisco Munoz', email: 'francisco.munoz@uct.cl', genero: 'M', categoria: '', foto: 'fotos/m013.png' },
+  { id: 'm014', nombre: 'Pablo Lagos', email: 'pablo.lagos@uct.cl', genero: 'M', categoria: '4ta', foto: 'fotos/m014.png' },
+  { id: 'm031', nombre: 'Paulo Garrido', email: 'pgarrido@uct.cl', genero: 'M', categoria: '4ta', foto: 'fotos/m031.png' },
+  { id: 'f002', nombre: 'Violeta Moreno', email: 'vmoreno@uct.cl', genero: 'F', categoria: 'Principiante', foto: 'fotos/f002.png' },
+  { id: 'f001', nombre: 'Sofia Silva', email: 'ssilvacastillo08@gmail.com', genero: 'F', categoria: 'Principiante', foto: 'fotos/f001.png' },
+  { id: 'f006', nombre: 'Rocio Hernandez', email: 'rocio.hernandez@uct.cl', genero: 'F', categoria: 'Principiante', foto: 'fotos/f006.png' },
+  { id: 'f003', nombre: 'Fernanda Silva', email: 'ferniwendy@gmail.com', genero: 'F', categoria: 'Principiante', foto: 'fotos/f003.png' },
+  { id: 'f005', nombre: 'Baleria Schatter', email: 'vschatter@uct.cl', genero: 'F', categoria: 'Principiante', foto: 'fotos/f005.png' },
+  { id: 'f004', nombre: 'Sandra Arenas', email: 'sarenas@uct.cl', genero: 'F', categoria: '', foto: 'fotos/f004.png' },
+  { id: 'f008', nombre: 'Carolina Cardenas', email: 'ccardeneas@uct.cl', genero: 'F', categoria: 'Principiante', foto: 'fotos/f008.png' },
+  { id: 'f011', nombre: 'Carla Iglesias', email: 'ciglesias@uct.cl', genero: 'F', categoria: 'Principiante', foto: 'fotos/f011.png' }
+];
+
+function isAccessPlayerActive(player) {
+  if (!player) return false;
+  return player.activo !== false &&
+    player.activo !== 'false' &&
+    player.participaRanking !== false &&
+    player.participaRanking !== 'false';
+}
+
 function cleanFirestoreData(data) {
   const out = {};
   Object.entries(data || {}).forEach(([key, value]) => {
@@ -283,32 +321,71 @@ const DB = {
     return DB_PURE_ADMIN_EMAILS.some(adm => normalizeEmailForDb(adm) === normalized);
   },
 
+  findStaticAccessPlayerByEmail(email) {
+    const normalized = normalizeEmailForDb(email);
+    if (!normalized) return null;
+
+    const official = [];
+    if (typeof OFFICIAL_STATIC_RANKING !== 'undefined') {
+      official.push(...(OFFICIAL_STATIC_RANKING.M || []), ...(OFFICIAL_STATIC_RANKING.F || []));
+    }
+
+    return [...official, ...DB_STATIC_ACCESS_PLAYERS]
+      .find(player => normalizeEmailForDb(player.email) === normalized && isAccessPlayerActive(player)) || null;
+  },
+
+  async validateMemberBackend(email) {
+    if (!window.CONFIG?.API_URL || !email) return null;
+
+    try {
+      const params = new URLSearchParams({ action: 'validate_member', email });
+      const response = await fetch(`${window.CONFIG.API_URL}?${params.toString()}`);
+      const data = await response.json().catch(() => null);
+      if (data && data.ok) return data;
+    } catch (error) {
+      console.warn('No se pudo validar correo contra Apps Script:', error);
+    }
+
+    return null;
+  },
+
   async validateMemberAPI(email) {
     if (!email) return { ok: false, msg: 'Correo no proporcionado.' };
     if (this.isAllowedAccessEmail(email)) return { ok: true, source: 'domain' };
 
-    // 1. FUENTE DE VERDAD: Firebase Firestore (jugadores activos con correo registrado)
+    // 1. Fuente principal: Firebase Firestore.
     if (this.isCloudConfigured()) {
       const cloudPlayer = await this.findPlayerByEmailCloud(email);
       if (cloudPlayer) return { ok: true, source: 'firebase', player: cloudPlayer };
-      // Firebase está configurado pero el correo no está registrado o el jugador está inactivo
-      return { ok: false, msg: 'Acceso restringido a jugadores UCTenis registrados en Firebase.' };
     }
 
-    // 2. FALLBACK solo si Firebase NO está disponible: buscar en ranking estático o usuarios locales
-    if (typeof OFFICIAL_STATIC_RANKING !== 'undefined') {
-      const emailLower = email.toLowerCase().trim();
-      const foundStatic = [
-        ...(OFFICIAL_STATIC_RANKING.M || []),
-        ...(OFFICIAL_STATIC_RANKING.F || [])
-      ].find(p => p.email && p.email.toLowerCase().trim() === emailLower);
-      if (foundStatic) {
-        return { ok: true, source: 'static', player: foundStatic };
-      }
+    // 2. Respaldo de servidor: Sheets/Firebase desde Apps Script.
+    const backendValidation = await this.validateMemberBackend(email);
+    if (backendValidation?.ok && backendValidation.player) {
+      return {
+        ok: true,
+        source: backendValidation.source || 'backend',
+        player: backendValidation.player,
+        isAdmin: backendValidation.isAdmin === true
+      };
+    }
+
+    // 3. Respaldo local oficial para documentos antiguos sin emailLower.
+    const staticPlayer = this.findStaticAccessPlayerByEmail(email);
+    if (staticPlayer) {
+      return { ok: true, source: 'static', player: staticPlayer };
+    }
+
+    if (backendValidation?.ok) {
+      return {
+        ok: true,
+        source: backendValidation.source || 'backend',
+        isAdmin: backendValidation.isAdmin === true
+      };
     }
 
     const localUser = this.getUsers().find(user => normalizeEmailForDb(user.email) === normalizeEmailForDb(email));
-    if (localUser) return { ok: true, source: 'local' };
+    if (localUser && isAccessPlayerActive(localUser)) return { ok: true, source: 'local', player: localUser };
 
     return { ok: false, msg: 'Acceso restringido a jugadores UCTenis registrados en Firebase.' };
   },
@@ -533,17 +610,35 @@ const DB = {
     if (!normalized || !this.isCloudConfigured()) return null;
 
     try {
-      // ✅ OPTIMIZACIÓN: Una sola query buscando por emailLower
-      // Asegúrate de que todos los documentos tengan emailLower guardado
-      const snapshot = await firebaseDb
-        .collection(FIREBASE_COLLECTIONS.players)
-        .where('emailLower', '==', normalized)
-        .limit(1)
-        .get();
-      
-      if (!snapshot.empty) {
-        const doc = snapshot.docs[0];
-        return { id: doc.id, ...doc.data() };
+      const collection = firebaseDb.collection(FIREBASE_COLLECTIONS.players);
+      const queries = [
+        { field: 'emailLower', value: normalized },
+        { field: 'email', value: String(email || '').trim() },
+        { field: 'email', value: normalized }
+      ].filter((query, index, list) =>
+        query.value && list.findIndex(item => item.field === query.field && item.value === query.value) === index
+      );
+
+      for (const query of queries) {
+        const snapshot = await collection
+          .where(query.field, '==', query.value)
+          .limit(1)
+          .get();
+
+        if (!snapshot.empty) {
+          const doc = snapshot.docs[0];
+          const player = { id: doc.id, ...doc.data() };
+          if (isAccessPlayerActive(player)) return player;
+        }
+      }
+
+      const players = await this.getPlayersCloud();
+      const byEmail = players.find(player =>
+        normalizeEmailForDb(player.email) === normalized &&
+        isAccessPlayerActive(player)
+      );
+      if (byEmail) {
+        return byEmail;
       }
     } catch (error) {
       console.warn('No se pudo buscar jugador por correo en Firebase:', error);

@@ -975,6 +975,7 @@ function renderNewsGrid(topMoverCard, latestMatchCard, nextMatchCard, birthdaysC
   // 0. Challenge Accepted cards (highest priority — always shown first)
   const challengeAcceptedNews = (customNews || []).filter(item => item.category === 'challenge_accepted');
   challengeAcceptedNews.forEach(item => {
+    const isFriendlyAccepted = item.tipo === 'amistoso';
     const dateStr = formatDateShort(item.date) || item.date || '';
     const calLink = item.fechaPartido ? (() => {
       try {
@@ -984,7 +985,7 @@ function renderNewsGrid(topMoverCard, latestMatchCard, nextMatchCard, birthdaysC
         let eh = hh+1, em = mm+30; if (em>=60){eh++;em-=60;}
         const pad = n => String(n).padStart(2,'0');
         const t = encodeURIComponent(`🎾 UCTenis: ${item.retadorNombre} vs ${item.retadoNombre}`);
-        const det = encodeURIComponent(`Desafío UCTenis aceptado.\nPartido: ${item.retadorNombre} vs ${item.retadoNombre}`);
+        const det = encodeURIComponent(`${isFriendlyAccepted ? 'Amistoso UCTenis confirmado.' : 'Desafío UCTenis aceptado.'}\nPartido: ${item.retadorNombre} vs ${item.retadoNombre}`);
         const loc = encodeURIComponent(item.cancha || 'UCTenis');
         return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${t}&dates=${y}${pad(m)}${pad(d)}T${pad(hh)}${pad(mm)}00/${y}${pad(m)}${pad(d)}T${pad(eh)}${pad(em)}00&details=${det}&location=${loc}`;
       } catch(e) { return null; }
@@ -995,12 +996,15 @@ function renderNewsGrid(topMoverCard, latestMatchCard, nextMatchCard, birthdaysC
       challengeAcceptedData: item,
       calLink,
       badgeClass: 'badge-challenge-accepted',
-      badgeText: '⚔️ Challenge Accepted!!',
-      title: `¡${escapeHTML(item.retadoNombre || 'Jugador')} aceptó el desafío!`,
+      badgeText: isFriendlyAccepted ? '🤝 Amistoso Confirmado' : '⚔️ Challenge Accepted!!',
+      title: isFriendlyAccepted
+        ? `¡${escapeHTML(item.retadoNombre || 'Jugador')} aceptó el amistoso!`
+        : `¡${escapeHTML(item.retadoNombre || 'Jugador')} aceptó el desafío!`,
       body: escapeHTML(item.body || ''),
       date: dateStr,
       retadorNombre: item.retadorNombre || '',
       retadoNombre: item.retadoNombre || '',
+      tipo: item.tipo || '',
     });
   });
 
@@ -1091,7 +1095,7 @@ function renderNewsGrid(topMoverCard, latestMatchCard, nextMatchCard, birthdaysC
             <img src="${photoRetador}" class="chal-accepted-player-avatar" alt="${escapeHTML(item.retadorNombre)}" onerror="this.src='fotos/default_avatar_h.png'">
             <div class="chal-accepted-player-name">${escapeHTML((item.retadorNombre||'').split(' ')[0])}</div>
           </div>
-          <div class="chal-accepted-vs-divider">⚔️</div>
+          <div class="chal-accepted-vs-divider">${item.tipo === 'amistoso' ? '🤝' : '⚔️'}</div>
           <div style="flex:1;text-align:center">
             <img src="${photoRetado}" class="chal-accepted-player-avatar" alt="${escapeHTML(item.retadoNombre)}" onerror="this.src='fotos/default_avatar_h.png'">
             <div class="chal-accepted-player-name">${escapeHTML((item.retadoNombre||'').split(' ')[0])}</div>
@@ -1360,7 +1364,17 @@ async function loadLiveData() {
     }
   }
 
-  // Note: Google Sheets source removed — Firebase is the single source of truth.
+  if (window.CONFIG?.API_URL) {
+    try {
+      const res = await fetch(`${window.CONFIG.API_URL}?action=get_challenges`);
+      const data = await res.json().catch(() => null);
+      if (data && data.ok && Array.isArray(data.challenges)) {
+        sources.push(data.challenges);
+      }
+    } catch (e) {
+      console.warn("Google Sheets offline para desafíos:", e);
+    }
+  }
 
   if (sources.length) {
     challenges = homeMergeChallengeSources(sources);
@@ -1724,13 +1738,16 @@ async function loadLiveData() {
       if (!c.retadorId && !c.retadorNombre && !c.retadoId && !c.retadoNombre) return ''; // skip corrupt records
       
       const isMyChallengeActive = isMyChallenge(c);
-      const myMatchLabel = isMyChallengeActive ? `<div class="my-match-label">Tu Desafío</div>` : '';
       const isFriendly = c.tipo === 'amistoso';
       const isCampeonato = c.tipo === 'campeonato';
+      const myMatchLabel = isMyChallengeActive ? `<div class="my-match-label">${isFriendly ? 'Tu Amistoso' : 'Tu Desafío'}</div>` : '';
       const typeClass = isCampeonato ? 'is-campeonato' : (isFriendly ? 'is-friendly' : 'is-challenge-official');
       const cardClass = `match-card ${typeClass} ${isMyChallengeActive ? 'is-my-match' : ''}`;
       const badgeTypeClass = isCampeonato ? 'is-campeonato' : (isFriendly ? 'is-friendly' : 'is-official');
       const badgeText = isCampeonato ? '🏆 Campeonato' : (isFriendly ? '🤝 Amistoso' : '⚔️ Desafío');
+      if (isFriendly && c.status === 'pendiente') {
+        statusText = 'Por confirmar';
+      }
       
       return `<div class="${cardClass}">
         ${myMatchLabel}
@@ -1797,9 +1814,9 @@ async function loadLiveData() {
       }
       
       const isMyChallengeResult = isMyChallenge(c);
-      const myMatchLabel = isMyChallengeResult ? `<div class="my-match-label">Tu Desafío</div>` : '';
       const isFriendly = c.tipo === 'amistoso';
       const isCampeonato = c.tipo === 'campeonato';
+      const myMatchLabel = isMyChallengeResult ? `<div class="my-match-label">${isFriendly ? 'Tu Amistoso' : 'Tu Desafío'}</div>` : '';
       const typeClass = isCampeonato ? 'is-campeonato' : (isFriendly ? 'is-friendly' : 'is-challenge-official');
       const cardClass = `match-card ${typeClass} ${isMyChallengeResult ? 'is-my-match' : ''}`;
       const badgeTypeClass = isCampeonato ? 'is-campeonato' : (isFriendly ? 'is-friendly' : 'is-official');
@@ -1859,17 +1876,28 @@ function highlightPendingChallengesHome(challenges) {
   });
 
   if (pending.length > 0) {
+    const friendlyCount = pending.filter(c => c.tipo === 'amistoso').length;
+    const challengeCount = pending.length - friendlyCount;
+    const title = friendlyCount && !challengeCount
+      ? '¡Tienes un amistoso pendiente!'
+      : (friendlyCount && challengeCount ? '¡Tienes invitaciones pendientes!' : '¡Tienes un desafío pendiente!');
+    const body = friendlyCount && !challengeCount
+      ? `Tienes ${friendlyCount} amistoso${friendlyCount > 1 ? 's' : ''} esperando tu respuesta.`
+      : (friendlyCount && challengeCount
+        ? `Tienes ${challengeCount} desafío${challengeCount > 1 ? 's' : ''} y ${friendlyCount} amistoso${friendlyCount > 1 ? 's' : ''} por responder.`
+        : `Tienes ${challengeCount} reto${challengeCount > 1 ? 's' : ''} en el ranking esperando tu respuesta.`);
+    const buttonLabel = friendlyCount && !challengeCount ? 'Ver Amistoso' : 'Ver Desafío';
     alertContainer.style.display = 'block';
     alertContainer.innerHTML = `
       <div class="top-challenge-banner" style="background: linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, rgba(239, 68, 68, 0.05) 100%); border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 20px; padding: 18px 24px; margin-bottom: 30px; display: flex; align-items: center; justify-content: space-between; gap: 20px; box-shadow: 0 8px 32px rgba(239,68,68,0.15); animation: pulseAlert 2.5s infinite alternate;">
         <div style="display:flex; align-items:center; gap:16px;">
-          <span style="font-size:2.2rem; filter:drop-shadow(0 2px 4px rgba(0,0,0,0.3));">⚔️</span>
+          <span style="font-size:2.2rem; filter:drop-shadow(0 2px 4px rgba(0,0,0,0.3));">${friendlyCount && !challengeCount ? '🤝' : '⚔️'}</span>
           <div>
-            <strong style="font-size:1.15rem; color:#fca5a5; display:block; margin-bottom:4px;">¡Tienes un desafío pendiente!</strong>
-            <p style="font-size:0.9rem; color:var(--text-primary); margin:0;">Tienes ${pending.length} reto${pending.length > 1 ? 's' : ''} en el ranking esperando tu respuesta.</p>
+            <strong style="font-size:1.15rem; color:#fca5a5; display:block; margin-bottom:4px;">${title}</strong>
+            <p style="font-size:0.9rem; color:var(--text-primary); margin:0;">${body}</p>
           </div>
         </div>
-        <button onclick="openPendingChallengeModal()" style="background:var(--accent-tennis); color:#0f172a; font-weight:800; font-size:0.92rem; padding:12px 24px; border-radius:50px; border:none; cursor:pointer; white-space:nowrap; transition:all 0.3s; box-shadow:0 4px 15px rgba(198,211,0,0.35);" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(198,211,0,0.5)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 15px rgba(198,211,0,0.35)';">Ver Desafío</button>
+        <button onclick="openPendingChallengeModal()" style="background:var(--accent-tennis); color:#0f172a; font-weight:800; font-size:0.92rem; padding:12px 24px; border-radius:50px; border:none; cursor:pointer; white-space:nowrap; transition:all 0.3s; box-shadow:0 4px 15px rgba(198,211,0,0.35);" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(198,211,0,0.5)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 15px rgba(198,211,0,0.35)';">${buttonLabel}</button>
       </div>
       <style>
         @keyframes pulseAlert {
@@ -1906,11 +1934,19 @@ function checkPendingChallengesAlert(challenges) {
   });
 
   if (pending.length > 0) {
-    showFloatingAlert(pending.length);
+    showFloatingAlert(pending);
   }
 }
 
-function showFloatingAlert(count) {
+function showFloatingAlert(pendingItems) {
+  const items = Array.isArray(pendingItems) ? pendingItems : [];
+  const count = items.length || Number(pendingItems) || 0;
+  const friendlyCount = items.filter(c => c.tipo === 'amistoso').length;
+  const onlyFriendly = count > 0 && friendlyCount === count;
+  const label = onlyFriendly ? 'amistoso' : 'desafío';
+  const pendingLabel = onlyFriendly
+    ? `amistoso${count > 1 ? 's' : ''}`
+    : `invitación${count > 1 ? 'es' : ''}`;
   const alertDiv = document.createElement('div');
   alertDiv.id = 'floating-challenge-alert';
   alertDiv.style.position = 'fixed';
@@ -1931,11 +1967,11 @@ function showFloatingAlert(count) {
 
   alertDiv.innerHTML = `
     <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-      <span style="font-size:1.1rem; font-weight:800; color:var(--accent-tennis);">⚔️ ¡Tienes un desafío!</span>
+      <span style="font-size:1.1rem; font-weight:800; color:var(--accent-tennis);">${onlyFriendly ? '🤝' : '⚔️'} ¡Tienes un ${label}!</span>
       <button onclick="closeFloatingAlert()" style="background:none; border:none; color:var(--text-secondary); cursor:pointer; font-size:1.1rem; padding:0 4px;">✕</button>
     </div>
-    <p style="font-size:0.85rem; color:var(--text-primary); margin:0;">Tienes <strong>${count}</strong> desafío${count > 1 ? 's' : ''} pendiente${count > 1 ? 's' : ''} por responder.</p>
-    <button onclick="openPendingChallengeModal(); closeFloatingAlert();" style="display:block; text-align:center; background:var(--accent-tennis); color:#000; font-weight:900; font-size:0.8rem; padding:8px 12px; border-radius:8px; border:none; cursor:pointer; transition:transform 0.2s;" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">Responder Desafío</button>
+    <p style="font-size:0.85rem; color:var(--text-primary); margin:0;">Tienes <strong>${count}</strong> ${pendingLabel} pendiente${count > 1 ? 's' : ''} por responder.</p>
+    <button onclick="openPendingChallengeModal(); closeFloatingAlert();" style="display:block; text-align:center; background:var(--accent-tennis); color:#000; font-weight:900; font-size:0.8rem; padding:8px 12px; border-radius:8px; border:none; cursor:pointer; transition:transform 0.2s;" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">Responder ${onlyFriendly ? 'Amistoso' : 'Desafío'}</button>
     <a href="ranking.html" style="display:block; text-align:center; font-size:0.75rem; color:var(--text-secondary); text-decoration:none;">Ver en Ranking →</a>
   `;
 
@@ -2029,6 +2065,7 @@ function formatDateShortHome(iso) {
 function renderPendingChalModal(challenge, total) {
   const box = document.getElementById('pendingChalBoxContent');
   if (!box || !challenge) return;
+  const isFriendly = challenge.tipo === 'amistoso';
   const retadorName = challenge.retadorNombre || 'Jugador';
   const fecha = formatDateShortHome(challenge.fecha) || challenge.fecha || '—';
   const cancha = challenge.cancha || 'Cancha por confirmar';
@@ -2039,10 +2076,10 @@ function renderPendingChalModal(challenge, total) {
   box.innerHTML = `
     <button onclick="closePendingChallengeModal()" style="position:absolute; top:16px; right:20px; background:none; border:none; color:rgba(255,255,255,0.4); cursor:pointer; font-size:1.4rem; padding:0 4px; transition:color 0.2s;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='rgba(255,255,255,0.4)'" aria-label="Cerrar">✕</button>
     <div class="pending-chal-header">
-      <span class="pending-chal-icon">⚔️</span>
-      <div class="pending-chal-kicker">Desafío Recibido</div>
-      <div class="pending-chal-title">¡Te han retado!</div>
-      <div class="pending-chal-from">${escapeHTML(retadorName)} quiere medirse contigo</div>
+      <span class="pending-chal-icon">${isFriendly ? '🤝' : '⚔️'}</span>
+      <div class="pending-chal-kicker">${isFriendly ? 'Amistoso Recibido' : 'Desafío Recibido'}</div>
+      <div class="pending-chal-title">${isFriendly ? '¡Te invitaron a jugar!' : '¡Te han retado!'}</div>
+      <div class="pending-chal-from">${escapeHTML(retadorName)} ${isFriendly ? 'reservó un amistoso contigo' : 'quiere medirse contigo'}</div>
     </div>
     <div class="pending-chal-details">
       <span>📅 ${escapeHTML(fecha)}${slot ? ' · ' + escapeHTML(slot) : ''}</span>
@@ -2051,7 +2088,7 @@ function renderPendingChalModal(challenge, total) {
     </div>
     <div class="pending-chal-actions">
       <button class="btn-accept-challenge" onclick="homeRespondChallenge('${challenge.id}', true)" id="btnHomeChalAccept">
-        ✅ Aceptar Desafío
+        ✅ Aceptar ${isFriendly ? 'Amistoso' : 'Desafío'}
       </button>
       <button class="btn-reject-challenge" onclick="homeRespondChallenge('${challenge.id}', false)" id="btnHomeChalReject">
         ❌ Rechazar
@@ -2091,17 +2128,23 @@ async function homeRespondChallenge(challengeId, accept) {
     if (accept && challenge) {
       // Publish challenge_accepted news
       try {
+        const isFriendly = challenge.tipo === 'amistoso';
         const newsItem = {
           id: `challenge-accepted-${challengeId}`,
           category: 'challenge_accepted',
-          title: `⚔️ ¡Challenge Accepted! ${challenge.retadorNombre||'Jugador'} vs ${challenge.retadoNombre||'Jugador'}`,
-          body: `${challenge.retadoNombre||'Jugador'} aceptó el desafío de ${challenge.retadorNombre||'Jugador'}. El duelo será el ${formatDateShortHome(challenge.fecha)} en ${challenge.cancha||'la cancha'}${challenge.slot ? ' a las '+challenge.slot : ''}. ¡Que gane el mejor!`,
+          title: isFriendly
+            ? `🤝 Amistoso confirmado: ${challenge.retadorNombre||'Jugador'} vs ${challenge.retadoNombre||'Jugador'}`
+            : `⚔️ ¡Challenge Accepted! ${challenge.retadorNombre||'Jugador'} vs ${challenge.retadoNombre||'Jugador'}`,
+          body: isFriendly
+            ? `${challenge.retadoNombre||'Jugador'} aceptó el amistoso con ${challenge.retadorNombre||'Jugador'}. El partido será el ${formatDateShortHome(challenge.fecha)} en ${challenge.cancha||'la cancha'}${challenge.slot ? ' a las '+challenge.slot : ''}.`
+            : `${challenge.retadoNombre||'Jugador'} aceptó el desafío de ${challenge.retadorNombre||'Jugador'}. El duelo será el ${formatDateShortHome(challenge.fecha)} en ${challenge.cancha||'la cancha'}${challenge.slot ? ' a las '+challenge.slot : ''}. ¡Que gane el mejor!`,
           date: new Date().toISOString().split('T')[0],
           creado: new Date().toISOString(),
           actualizado: new Date().toISOString(),
           challengeId, retadorNombre: challenge.retadorNombre||'',
           retadoNombre: challenge.retadoNombre||'',
-          fechaPartido: challenge.fecha||'', cancha: challenge.cancha||'', slot: challenge.slot||''
+          fechaPartido: challenge.fecha||'', cancha: challenge.cancha||'', slot: challenge.slot||'',
+          tipo: challenge.tipo || 'ranking'
         };
         if (DB.isCloudConfigured()) await DB.saveNewsCloud(newsItem);
         const ln = DB.getNews();
@@ -2121,7 +2164,7 @@ async function homeRespondChallenge(challengeId, accept) {
       // Show success toast
       const toast = document.createElement('div');
       toast.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:linear-gradient(135deg,#10b981,#059669);color:#fff;font-weight:800;font-size:0.95rem;padding:14px 28px;border-radius:50px;box-shadow:0 8px 30px rgba(16,185,129,0.4);animation:slideInUp 0.4s cubic-bezier(0.16,1,0.3,1)';
-      toast.textContent = '⚔️ ¡Challenge Accepted! El desafío fue aceptado.';
+      toast.textContent = challenge?.tipo === 'amistoso' ? '🤝 Amistoso aceptado.' : '⚔️ ¡Challenge Accepted! El desafío fue aceptado.';
       document.body.appendChild(toast);
       setTimeout(() => { toast.style.opacity='0'; toast.style.transition='opacity 0.4s'; setTimeout(()=>toast.remove(),400); }, 3500);
     }
