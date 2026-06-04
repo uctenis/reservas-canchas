@@ -197,6 +197,9 @@ function handleRequest(data) {
       case "admin_free_special_slots":
         response = adminFreeSpecialSlots(data);
         break;
+      case "debug_firebase":
+        response = debugFirebaseConnection(data.email || 'gcuraqueo@uct.cl');
+        break;
     }
 
     return ContentService.createTextOutput(JSON.stringify(response))
@@ -1224,6 +1227,19 @@ function publicChallenge(challenge) {
 // 👥 FUNCIONES DE MIEMBROS (Validación desde Google Sheets)
 // =======================================================
 
+// Lista de correos de jugadores activos conocidos (fallback cuando Firebase no está disponible)
+// Se actualiza manualmente al mismo tiempo que Firebase.
+const KNOWN_PLAYER_EMAILS = [
+  // Masculino
+  'dsilva@uct.cl', 'idevia@uct.cl', 'mescalon@uct.cl', 'lotth@uct.cl', 'gcuraqueo@uct.cl',
+  'jcastill@uct.cl', 'mcaceres@uct.cl', 'rcastro@uct.cl', 'khennicke@uct.cl', 'jmelgarejo@uct.cl',
+  'jmaripillan@uct.cl', 'crebolledo@uct.cl', 'fencina@uct.cl', 'cristian.farias@uct.cl',
+  'miguel.angulo@uct.cl', 'profesorbermudez@gmail.com', 'jmelgarejo@uct.cl',
+  // Femenino
+  'vmoreno@uct.cl', 'ssilvacastillo08@gmail.com', 'rocio.hernandez@uct.cl', 'ferniwendy@gmail.com',
+  'vschatter@uct.cl', 'sarenas@uct.cl', 'ccardeneas@uct.cl', 'ciglesias@uct.cl'
+];
+
 function validateMember(email) {
   if (!email) return { ok: false, msg: "Correo no proporcionado." };
   const needle = email.toLowerCase().trim();
@@ -1250,12 +1266,62 @@ function validateMember(email) {
     };
   }
 
-  // Diferenciar entre error de conexión y correo no registrado
+  // Si Firebase falló por problema de conexión, usar lista de respaldo
   if (result && result.connectionError) {
+    if (KNOWN_PLAYER_EMAILS.indexOf(needle) !== -1) {
+      console.warn('Firebase no disponible, validando por lista de respaldo: ' + needle);
+      return {
+        ok: true,
+        msg: "Miembro validado (modo respaldo - Firebase no disponible).",
+        source: "fallback"
+      };
+    }
     return { ok: false, msg: "Error temporal al verificar acceso. Por favor intenta nuevamente en unos segundos." };
   }
 
   return { ok: false, msg: "El correo no se encuentra registrado en Firebase." };
+}
+
+function debugFirebaseConnection(testEmail) {
+  const needle = (testEmail || '').toLowerCase().trim();
+  try {
+    const firestoreUrl = 'https://firestore.googleapis.com/v1/projects/'
+      + encodeURIComponent(CONFIG.FIREBASE_PROJECT_ID)
+      + '/databases/(default)/documents:runQuery?key='
+      + encodeURIComponent(CONFIG.FIREBASE_API_KEY);
+    const queryPayload = {
+      structuredQuery: {
+        from: [{ collectionId: 'ranking_players' }],
+        where: {
+          fieldFilter: {
+            field: { fieldPath: 'emailLower' },
+            op: 'EQUAL',
+            value: { stringValue: needle }
+          }
+        },
+        limit: 1
+      }
+    };
+    const response = UrlFetchApp.fetch(firestoreUrl, {
+      method: 'post',
+      contentType: 'application/json',
+      payload: JSON.stringify(queryPayload),
+      muteHttpExceptions: true
+    });
+    const code = response.getResponseCode();
+    const body = response.getContentText().substring(0, 500);
+    const parsed = JSON.parse(response.getContentText());
+    const hasDoc = parsed && parsed[0] && parsed[0].document;
+    return {
+      ok: true,
+      httpCode: code,
+      email: needle,
+      documentFound: hasDoc,
+      preview: body
+    };
+  } catch (err) {
+    return { ok: false, error: String(err), email: needle };
+  }
 }
 
 function updateChallengeInFirebase(challengeId, fields) {

@@ -2,7 +2,7 @@
 
 if (typeof window.CONFIG === 'undefined') {
   window.CONFIG = {
-    API_URL: "https://script.google.com/macros/s/AKfycby5DSHQ4sagpZmXsmnHuuMEVt3z_utLsm5K2FU5Qw7weiAxamdhon1g9Z8EyqNlAYLi/exec"
+    API_URL: "https://script.google.com/macros/s/AKfycbwqJvsuGrhqf61LXRyzK4TN7VEOZRE9rclQLrgdm89sLLvVTyZRiedNsQy3opbwgGM/exec"
   };
 }
 
@@ -219,8 +219,43 @@ const DB = {
   registerUser(data) {
     const users = this.getUsers();
     if (users.find(u => u.email === data.email)) return { ok: false, msg: 'El correo ya está registrado.' };
+
+    let targetId = data.id;
+    if (!targetId) {
+      const prefix = String(data.genero || '').trim().toUpperCase() === 'F' ? 'f' : 'm';
+      let max = 0;
+
+      // 1. Buscar en cachedPlayers (si están cargados)
+      if (typeof cachedPlayers !== 'undefined' && Array.isArray(cachedPlayers)) {
+        cachedPlayers.forEach(p => {
+          const match = String(p.id || '').match(new RegExp('^' + prefix + '(\\d+)$', 'i'));
+          if (match) max = Math.max(max, Number(match[1]));
+        });
+      }
+
+      // 2. Buscar en los usuarios locales
+      users.forEach(p => {
+        const match = String(p.id || '').match(new RegExp('^' + prefix + '(\\d+)$', 'i'));
+        if (match) max = Math.max(max, Number(match[1]));
+      });
+
+      // 3. Buscar en el ranking estático oficial
+      if (typeof OFFICIAL_STATIC_RANKING !== 'undefined') {
+        const list = [
+          ...(OFFICIAL_STATIC_RANKING.M || []),
+          ...(OFFICIAL_STATIC_RANKING.F || [])
+        ];
+        list.forEach(p => {
+          const match = String(p.id || '').match(new RegExp('^' + prefix + '(\\d+)$', 'i'));
+          if (match) max = Math.max(max, Number(match[1]));
+        });
+      }
+
+      targetId = prefix + String(max + 1).padStart(3, '0');
+    }
+
     const user = {
-      id: Date.now().toString(),
+      id: targetId,
       nombre: data.nombre,
       email: data.email,
       password: data.password || 'google-auth-no-pass',
