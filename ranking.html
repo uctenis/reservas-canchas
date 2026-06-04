@@ -4477,11 +4477,6 @@ async function submitOwnProfile(event) {
     Object.assign(payload, await readPhotoAttachment('ownPhotoFile'));
     if (payload.photoDataUrl) payload.foto = payload.photoDataUrl;
     const saved = await DB.savePlayerCloud(payload, actorPayload(session));
-    try {
-      await syncOwnPlayerToSheets(saved, session);
-    } catch (sheetErr) {
-      console.warn('No se pudo sincronizar la ficha propia con Google Sheets:', sheetErr);
-    }
     upsertLocalUser(profileToSessionUser(saved, session));
     closeModal('profileModal');
     await refreshRankingPage();
@@ -4829,7 +4824,27 @@ async function submitAdminPlayer(event) {
 
   let playerId = document.getElementById('adminPlayerId').value.trim();
   if (!playerId) {
-    playerId = `rank_${genero}_${slugify(email || nombre || Date.now())}`;
+    // Generar ID en formato m020 / f012 buscando el mayor número existente en Firebase
+    const prefix = genero === 'M' ? 'm' : 'f';
+    try {
+      let allPlayers = [];
+      if (DB.isCloudConfigured()) {
+        allPlayers = await DB.getPlayersCloud();
+      } else {
+        allPlayers = DB.getUsers();
+      }
+      // Obtener todos los IDs del mismo género con el formato correcto (m001, f012, etc.)
+      const maxNum = allPlayers
+        .map(p => String(p.id || ''))
+        .filter(id => id.startsWith(prefix) && /^[mf]\d+$/.test(id))
+        .map(id => parseInt(id.slice(1), 10))
+        .filter(n => !isNaN(n))
+        .reduce((max, n) => Math.max(max, n), 0);
+      playerId = `${prefix}${String(maxNum + 1).padStart(3, '0')}`;
+    } catch (idErr) {
+      // Fallback si falla la consulta
+      playerId = `${prefix}${Date.now().toString().slice(-4)}`;
+    }
   }
 
   const adminRutBody = document.getElementById('adminRut').value.trim();
@@ -4882,18 +4897,10 @@ async function submitAdminPlayer(event) {
       : player;
 
     try {
-      let playerForSheetSync = savedPlayer;
       if (reorderedPlayers) {
         await DB.savePlayersCloud(reorderedPlayers, adminPayload(session));
       } else {
-        playerForSheetSync = await DB.savePlayerCloud(player, adminPayload(session));
-      }
-      let sheetsSynced = false;
-      try {
-        await syncPlayerToSheets(playerForSheetSync, session);
-        sheetsSynced = true;
-      } catch (sheetErr) {
-        console.warn('No se pudo sincronizar el jugador con Google Sheets:', sheetErr);
+        await DB.savePlayerCloud(player, adminPayload(session));
       }
       // Always persist the full reordered ladder locally so moves are visible immediately.
       savePlayerEditsLocally(reorderedPlayers || savedPlayer);
@@ -4913,8 +4920,8 @@ async function submitAdminPlayer(event) {
         });
       });
       successMsg.textContent = player.activo
-        ? (sheetsSynced ? 'Cambios guardados en Firebase y Google Sheets.' : 'Cambios guardados en Firebase. Google Sheets no respondió.')
-        : (sheetsSynced ? 'Jugador guardado como inactivo en Firebase y Google Sheets.' : 'Jugador guardado como inactivo en Firebase. Google Sheets no respondió.');
+        ? 'Cambios guardados en Firebase.'
+        : 'Jugador guardado como inactivo en Firebase.';
       if (reorderedPlayers) {
         rankingState.lists[genero] = renumberRankingList(reorderedPlayers, genero);
         renderAll();
@@ -5576,52 +5583,8 @@ function adminPayload(session = DB.getSession()) {
   };
 }
 
-async function syncPlayerToSheets(player, session = DB.getSession()) {
-  if (!window.CONFIG?.API_URL || !player) return null;
-  const payload = {
-    action: 'admin_save_player',
-    ...player,
-    posicion: player.posicion || player.pos || '',
-    genero: player.genero || player.gender || '',
-    adminEmail: session?.email || '',
-    adminName: session?.nombre || '',
-    actorEmail: session?.email || '',
-    actorName: session?.nombre || ''
-  };
-  const response = await fetch(window.CONFIG.API_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify(payload)
-  });
-  const data = await response.json().catch(() => null);
-  if (!response.ok || data?.ok === false) {
-    throw new Error(data?.msg || 'No se pudo sincronizar el jugador con Google Sheets.');
-  }
-  return data;
-}
-
-async function syncOwnPlayerToSheets(player, session = DB.getSession()) {
-  if (!window.CONFIG?.API_URL || !player) return null;
-  const payload = {
-    action: 'update_own_profile',
-    ...player,
-    posicion: player.posicion || player.pos || '',
-    genero: player.genero || player.gender || '',
-    actorId: player.id || session?.id || '',
-    actorName: player.nombre || session?.nombre || '',
-    actorEmail: session?.email || player.email || ''
-  };
-  const response = await fetch(window.CONFIG.API_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify(payload)
-  });
-  const data = await response.json().catch(() => null);
-  if (!response.ok || data?.ok === false) {
-    throw new Error(data?.msg || 'No se pudo sincronizar tu ficha con Google Sheets.');
-  }
-  return data;
-}
+// syncPlayerToSheets y syncOwnPlayerToSheets eliminadas.
+// Firebase es la única fuente de verdad para jugadores.
 
 function profileToSessionUser(player, current = DB.getSession()) {
   return {
@@ -6732,32 +6695,7 @@ window.saveAdminSpecialDate = async function(event) {
   });
   saveSpecialDates(list);
 
-  // 2. Sincronizar con backend Google Sheets
-  try {
-    if (window.CONFIG && window.CONFIG.API_URL) {
-      const res = await fetch(window.CONFIG.API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({
-          action: 'admin_free_special_slots',
-          fecha,
-          courts: selectedCourts,
-          type,
-          desc,
-          adminEmail: session.email
-        })
-      });
-      const data = await res.json().catch(() => null);
-      if (!data || !data.ok) throw new Error(data?.msg || 'Error en backend');
-    }
-  } catch(e) {
-    console.warn('Backend save failed, using local only:', e);
-    showAdminScheduleAlert('✅ Guardado localmente (el servidor no pudo sincronizar, pero funcionará en este dispositivo).', 'warn');
-    btn.disabled = false;
-    btn.textContent = '💾 Guardar Fecha Especial';
-    renderAdminSpecialDatesList();
-    return;
-  }
+  // 2. Guardado completo en localStorage (Firebase no almacena horarios especiales)
 
   showAdminScheduleAlert(`✅ Fecha especial guardada para ${selectedCourts.length} cancha(s) el ${fecha}.`);
   btn.disabled = false;

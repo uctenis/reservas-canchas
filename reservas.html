@@ -1266,21 +1266,7 @@ async function finalConfirmNormal(s, btn) {
       }
     }
 
-    // Save in Google Sheets background
-    if (window.CONFIG?.API_URL) {
-      try {
-        await fetch(window.CONFIG.API_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify({
-            action: 'create_challenge',
-            ...challenge
-          })
-        });
-      } catch (sheetErr) {
-        console.warn('No se pudo registrar el amistoso en Google Sheets:', sheetErr);
-      }
-    }
+
   } else if (sel.isCampeonato && sel.retadoId) {
     challenge = DB.createChallenge(s.id, sel.retadoId, s.genero || 'M', sel.date, sel.court.label);
     Object.assign(challenge, {
@@ -1309,21 +1295,7 @@ async function finalConfirmNormal(s, btn) {
       }
     }
 
-    // Save in Google Sheets background
-    if (window.CONFIG?.API_URL) {
-      try {
-        await fetch(window.CONFIG.API_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify({
-            action: 'create_challenge',
-            ...challenge
-          })
-        });
-      } catch (sheetErr) {
-        console.warn('No se pudo registrar el partido de campeonato en Google Sheets:', sheetErr);
-      }
-    }
+
   }
 
   // Update success modal and show it immediately
