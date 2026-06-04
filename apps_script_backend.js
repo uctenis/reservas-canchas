@@ -1230,14 +1230,14 @@ function validateMember(email) {
 
   const isAdmin = isAdminRequest({ actorEmail: needle });
 
-  const firebasePlayer = findFirebasePlayerByEmail(needle);
-  if (firebasePlayer) {
+  const result = findFirebasePlayerByEmail(needle);
+  if (result && result.player) {
     return {
       ok: true,
       msg: "Miembro validado.",
       source: "firebase",
-      player: firebasePlayer,
-      isAdmin: isAdmin || isAdminRequest({ actorEmail: needle, actorName: firebasePlayer.nombre })
+      player: result.player,
+      isAdmin: isAdmin || isAdminRequest({ actorEmail: needle, actorName: result.player.nombre })
     };
   }
 
@@ -1248,6 +1248,11 @@ function validateMember(email) {
       source: "admin",
       isAdmin: true
     };
+  }
+
+  // Diferenciar entre error de conexión y correo no registrado
+  if (result && result.connectionError) {
+    return { ok: false, msg: "Error temporal al verificar acceso. Por favor intenta nuevamente en unos segundos." };
   }
 
   return { ok: false, msg: "El correo no se encuentra registrado en Firebase." };
@@ -1296,10 +1301,22 @@ function findFirebasePlayerByEmail(email) {
   if (!needle || !CONFIG.FIREBASE_PROJECT_ID || !CONFIG.FIREBASE_API_KEY) return null;
 
   const fieldsToTry = ['emailLower', 'email'];
-  for (let i = 0; i < fieldsToTry.length; i++) {
-    const player = queryFirebasePlayerByEmailField(fieldsToTry[i], needle);
-    if (player) return player;
+  let lastConnectionError = false;
+
+  // Intentar hasta 2 veces en caso de fallo temporal de red
+  for (let attempt = 0; attempt < 2; attempt++) {
+    lastConnectionError = false;
+    for (let i = 0; i < fieldsToTry.length; i++) {
+      const result = queryFirebasePlayerByEmailField(fieldsToTry[i], needle);
+      if (result && result.player) return result;
+      if (result && result.connectionError) lastConnectionError = true;
+    }
+    if (!lastConnectionError) break;
+    // Pequeña pausa antes de reintentar (solo si fue error de red)
+    if (attempt < 1) Utilities.sleep(1500);
   }
+
+  if (lastConnectionError) return { player: null, connectionError: true };
   return null;
 }
 
@@ -1316,7 +1333,7 @@ function queryFirebasePlayerByEmailField(fieldPath, email) {
           fieldFilter: {
             field: { fieldPath: fieldPath },
             op: 'EQUAL',
-            value: { stringValue: fieldPath === 'emailLower' ? email : email }
+            value: { stringValue: email }
           }
         },
         limit: 1
@@ -1330,8 +1347,8 @@ function queryFirebasePlayerByEmailField(fieldPath, email) {
     });
 
     if (response.getResponseCode() !== 200) {
-      console.warn('Respuesta no exitosa de Firestore: ' + response.getResponseCode() + ' - ' + response.getContentText());
-      return null;
+      console.warn('Respuesta no exitosa de Firestore (' + response.getResponseCode() + ') buscando por ' + fieldPath + ': ' + response.getContentText());
+      return { player: null, connectionError: true };
     }
 
     const results = JSON.parse(response.getContentText());
@@ -1339,13 +1356,14 @@ function queryFirebasePlayerByEmailField(fieldPath, email) {
       if (!results[i].document) continue;
       const player = firebasePlayerFromDocument(results[i].document);
       if (player && player.email && text(player.email).toLowerCase() === email && isFirebasePlayerActive(player)) {
-        return player;
+        return { player: player };
       }
     }
+    return null;
   } catch (fbError) {
-    console.warn('Error al consultar Firebase Firestore en validateMember:', fbError);
+    console.warn('Error de red al consultar Firebase Firestore por ' + fieldPath + ':', fbError);
+    return { player: null, connectionError: true };
   }
-  return null;
 }
 
 function firebasePlayerFromDocument(doc) {

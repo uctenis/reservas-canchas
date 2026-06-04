@@ -252,7 +252,15 @@ const DB = {
     if (!email) return { ok: false, msg: 'Correo no proporcionado.' };
     if (this.isAllowedAccessEmail(email)) return { ok: true, source: 'domain' };
 
-    // 1. Buscar en el ranking estático oficial si está disponible
+    // 1. FUENTE DE VERDAD: Firebase Firestore (jugadores activos con correo registrado)
+    if (this.isCloudConfigured()) {
+      const cloudPlayer = await this.findPlayerByEmailCloud(email);
+      if (cloudPlayer) return { ok: true, source: 'firebase', player: cloudPlayer };
+      // Firebase está configurado pero el correo no está registrado o el jugador está inactivo
+      return { ok: false, msg: 'Acceso restringido a jugadores UCTenis registrados en Firebase.' };
+    }
+
+    // 2. FALLBACK solo si Firebase NO está disponible: buscar en ranking estático o usuarios locales
     if (typeof OFFICIAL_STATIC_RANKING !== 'undefined') {
       const emailLower = email.toLowerCase().trim();
       const foundStatic = [
@@ -264,15 +272,8 @@ const DB = {
       }
     }
 
-    // 2. Buscar en jugadores de Firebase (si está configurado)
-    if (this.isCloudConfigured()) {
-      const cloudPlayer = await this.findPlayerByEmailCloud(email);
-      if (cloudPlayer) return { ok: true, source: 'firebase', player: cloudPlayer };
-    } else {
-      // Si no hay Firebase (modo local/desarrollo), permitir buscar en usuarios locales
-      const localUser = this.getUsers().find(user => normalizeEmailForDb(user.email) === normalizeEmailForDb(email));
-      if (localUser) return { ok: true, source: 'local' };
-    }
+    const localUser = this.getUsers().find(user => normalizeEmailForDb(user.email) === normalizeEmailForDb(email));
+    if (localUser) return { ok: true, source: 'local' };
 
     return { ok: false, msg: 'Acceso restringido a jugadores UCTenis registrados en Firebase.' };
   },
