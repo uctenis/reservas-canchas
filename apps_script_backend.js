@@ -221,6 +221,7 @@ function notifyChallenge(data) {
   const cancha = text(data.cancha) || 'cancha por definir';
   const slot = text(data.slot) || '';
   const retadoTelefono = text(data.retadoTelefono);
+  const isFriendly = text(data.tipo) === 'amistoso';
 
   if (!retadoEmail) return { ok: false, msg: 'Correo del jugador retado no proporcionado.' };
 
@@ -238,6 +239,14 @@ function notifyChallenge(data) {
   });
 
   const rankingUrl = 'https://uctenis.github.io/reservas-canchas/ranking.html';
+  const headline = isFriendly ? '¡Tienes una invitación a un amistoso!' : '¡Tienes un nuevo desafío!';
+  const introLine = isFriendly
+    ? '<strong>' + retadorNombre + '</strong> reservó un partido amistoso contigo en UCTenis.'
+    : '<strong>' + retadorNombre + '</strong> te ha retado en el ranking UCTenis.';
+  const ctaLabel = isFriendly ? 'Aceptar o Rechazar amistoso' : 'Aceptar o Rechazar desafío';
+  const subjectLabel = isFriendly
+    ? '🎾 Invitación amistoso UCTenis: ' + retadorNombre + ' vs ' + retadoNombre
+    : '🎾 ¡Te desafían en UCTenis! ' + retadorNombre + ' te reta';
   const slotLine = slot ? '<tr><td style="padding:6px 12px;color:#555;">Hora</td><td style="padding:6px 12px;font-weight:600;">' + slot + '</td></tr>' : '';
   const calendarLine = calendarResult.ok
     ? '<p style="color:#27ae60;margin:0 0 8px;">✅ También se envió una invitación de Google Calendar.</p>'
@@ -247,11 +256,11 @@ function notifyChallenge(data) {
     '<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;border:1px solid #e0e0e0;border-radius:10px;overflow:hidden;">',
     '  <div style="background:#1a6b3a;padding:24px;text-align:center;">',
     '    <h1 style="color:#fff;margin:0;font-size:22px;">🎾 UCTenis</h1>',
-    '    <p style="color:#c8e6c9;margin:6px 0 0;">¡Tienes un nuevo desafío!</p>',
+    '    <p style="color:#c8e6c9;margin:6px 0 0;">' + headline + '</p>',
     '  </div>',
     '  <div style="padding:24px;">',
     '    <p style="font-size:16px;margin:0 0 16px;">Hola <strong>' + retadoNombre + '</strong>,</p>',
-    '    <p style="margin:0 0 16px;"><strong>' + retadorNombre + '</strong> te ha retado en el ranking UCTenis.</p>',
+    '    <p style="margin:0 0 16px;">' + introLine + '</p>',
     '    <table style="width:100%;border-collapse:collapse;margin-bottom:20px;">',
     '      <tr style="background:#f5f5f5;"><td style="padding:6px 12px;color:#555;">Fecha</td><td style="padding:6px 12px;font-weight:600;">' + fechaLabel + '</td></tr>',
     '      <tr><td style="padding:6px 12px;color:#555;">Cancha</td><td style="padding:6px 12px;font-weight:600;">' + cancha + '</td></tr>',
@@ -259,7 +268,7 @@ function notifyChallenge(data) {
     '    </table>',
     calendarLine,
     '    <div style="text-align:center;margin:20px 0;">',
-    '      <a href="' + rankingUrl + '" style="background:#1a6b3a;color:#fff;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px;">Aceptar o Rechazar desafío</a>',
+    '      <a href="' + rankingUrl + '" style="background:#1a6b3a;color:#fff;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px;">' + ctaLabel + '</a>',
     '    </div>',
     '    <p style="color:#888;font-size:12px;margin:16px 0 0;">UCTenis — Plataforma de ranking universitario</p>',
     '  </div>',
@@ -270,14 +279,16 @@ function notifyChallenge(data) {
   MailApp.sendEmail({
     to: retadoEmail,
     cc: retadorEmail || '',
-    subject: '🎾 ¡Te desafían en UCTenis! ' + retadorNombre + ' te reta',
+    subject: subjectLabel,
     htmlBody: htmlBody,
     name: 'UCTenis Club',
     replyTo: (CONFIG.ADMINS.emails || [])[0] || ''
   });
   */
 
-  const waText = '🎾 ¡Hola ' + retadoNombre + '! ' + retadorNombre + ' te ha retado en UCTenis. Fecha: ' + fechaLabel + (slot ? ', ' + slot : '') + ' en ' + cancha + '. Acepta o rechaza en: ' + rankingUrl;
+  const waText = isFriendly
+    ? '🎾 ¡Hola ' + retadoNombre + '! ' + retadorNombre + ' reservó un amistoso contigo en UCTenis. Fecha: ' + fechaLabel + (slot ? ', ' + slot : '') + ' en ' + cancha + '. Acepta o rechaza en: ' + rankingUrl
+    : '🎾 ¡Hola ' + retadoNombre + '! ' + retadorNombre + ' te ha retado en UCTenis. Fecha: ' + fechaLabel + (slot ? ', ' + slot : '') + ' en ' + cancha + '. Acepta o rechaza en: ' + rankingUrl;
   const cleanPhone = retadoTelefono.replace(/[^0-9]/g, '');
   const whatsappUrl = cleanPhone ? 'https://wa.me/' + cleanPhone + '?text=' + encodeURIComponent(waText) : '';
 
@@ -1234,7 +1245,8 @@ const KNOWN_PLAYER_EMAILS = [
   'dsilva@uct.cl', 'idevia@uct.cl', 'mescalon@uct.cl', 'lotth@uct.cl', 'gcuraqueo@uct.cl',
   'jcastill@uct.cl', 'mcaceres@uct.cl', 'rcastro@uct.cl', 'khennicke@uct.cl', 'jmelgarejo@uct.cl',
   'jmaripillan@uct.cl', 'crebolledo@uct.cl', 'fencina@uct.cl', 'cristian.farias@uct.cl',
-  'miguel.angulo@uct.cl', 'profesorbermudez@gmail.com', 'jmelgarejo@uct.cl',
+  'miguel.angulo@uct.cl', 'profesorbermudez@gmail.com', 'francisco.munoz@uct.cl',
+  'pablo.lagos@uct.cl', 'pgarrido@uct.cl',
   // Femenino
   'vmoreno@uct.cl', 'ssilvacastillo08@gmail.com', 'rocio.hernandez@uct.cl', 'ferniwendy@gmail.com',
   'vschatter@uct.cl', 'sarenas@uct.cl', 'ccardeneas@uct.cl', 'ciglesias@uct.cl'
@@ -1257,12 +1269,32 @@ function validateMember(email) {
     };
   }
 
+  const sheetPlayer = findSheetPlayerByEmail(needle);
+  if (sheetPlayer) {
+    return {
+      ok: true,
+      msg: "Miembro validado.",
+      source: "sheet",
+      player: publicPlayer(sheetPlayer),
+      isAdmin: isAdmin || isAdminRequest({ actorEmail: needle, actorName: sheetPlayer.nombre })
+    };
+  }
+
   if (isAdmin) {
     return {
       ok: true,
       msg: "Administrador validado.",
       source: "admin",
       isAdmin: true
+    };
+  }
+
+  if (KNOWN_PLAYER_EMAILS.indexOf(needle) !== -1) {
+    console.warn('Validando por lista oficial de respaldo: ' + needle);
+    return {
+      ok: true,
+      msg: "Miembro validado (lista oficial de respaldo).",
+      source: "known"
     };
   }
 
@@ -1280,6 +1312,19 @@ function validateMember(email) {
   }
 
   return { ok: false, msg: "El correo no se encuentra registrado en Firebase." };
+}
+
+function findSheetPlayerByEmail(email) {
+  const needle = text(email).toLowerCase();
+  if (!needle) return null;
+
+  try {
+    const index = getPlayersIndex(getSpreadsheet());
+    return index.byEmail[needle] || null;
+  } catch (err) {
+    console.warn('No se pudo validar contra la hoja jugadores:', err);
+    return null;
+  }
 }
 
 function debugFirebaseConnection(testEmail) {

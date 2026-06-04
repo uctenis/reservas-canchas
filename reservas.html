@@ -355,7 +355,7 @@
 <script>
 // ── STATE ──
 // isChallenge: boolean, retadoId: string|null, retadoNombre: string|null
-let sel = { court: null, date: null, slot: null, isChallenge: false, isFriendly: false, retadoId: null, retadoNombre: null, retadoEmail: null, retadoTelefono: null };
+let sel = { court: null, date: null, slot: null, isChallenge: false, isFriendly: false, isCampeonato: false, retadoId: null, retadoNombre: null, retadoEmail: null, retadoTelefono: null };
 let currentStep = 1;
 
 // ── HELPERS ──
@@ -1215,7 +1215,7 @@ function buildConfirmCard() {
 async function finalConfirm() {
   const btn = document.getElementById('btnFinalConfirm');
   btn.disabled = true;
-  btn.innerHTML = sel.isChallenge ? 'Enviando desafío... ⌛' : 'Agendando cita en Google Calendar... ⌛';
+  btn.innerHTML = sel.isChallenge ? 'Enviando desafío... ⌛' : (sel.isFriendly ? 'Agendando amistoso... ⌛' : 'Agendando cita en Google Calendar... ⌛');
 
   const s = DB.getSession();
   
@@ -1223,6 +1223,114 @@ async function finalConfirm() {
     await finalConfirmChallenge(s, btn);
   } else {
     await finalConfirmNormal(s, btn);
+  }
+}
+
+function upsertReservationChallenge(challenge) {
+  const list = DB.getChallenges();
+  const idx = list.findIndex(item => item.id === challenge.id);
+  if (idx >= 0) list[idx] = { ...list[idx], ...challenge };
+  else list.push(challenge);
+  DB.saveChallenges(list);
+}
+
+function formatMatchDateLong(dateStr) {
+  try {
+    const wd = dayOfWeekFromISO(dateStr);
+    const [y, m, d] = dateStr.split('-');
+    return `${DAYS_LONG[wd]}, ${parseInt(d)} de ${MONTHS_LONG[parseInt(m) - 1]} ${y}`;
+  } catch (e) {
+    return dateStr || '';
+  }
+}
+
+function buildMatchWhatsappUrl(challenge) {
+  const cleanPhone = String(challenge.retadoTelefono || '').replace(/[^0-9]/g, '');
+  if (!cleanPhone) return '';
+
+  const isFriendly = challenge.tipo === 'amistoso';
+  const rankingUrl = window.location.origin + window.location.pathname.replace('reservas.html', 'ranking.html');
+  const dateLabel = formatMatchDateLong(challenge.fecha);
+  const text = isFriendly
+    ? `🎾 ¡Hola ${challenge.retadoNombre || ''}! ${challenge.retadorNombre || 'Un jugador'} reservó un amistoso contigo en UCTenis.\n\n📅 Fecha: ${dateLabel} · Hora: ${challenge.slot || ''}\n🏟️ Cancha: ${challenge.courtLabel || challenge.cancha || ''}\n\nAcepta o rechaza la invitación en:\n${rankingUrl}`
+    : `🎾 ¡Hola ${challenge.retadoNombre || ''}! ${challenge.retadorNombre || 'Un jugador'} te ha desafiado en UCTenis.\n\n📅 Fecha: ${dateLabel} · Hora: ${challenge.slot || ''}\n🏟️ Cancha: ${challenge.courtLabel || challenge.cancha || ''}\n\nAcepta o rechaza el desafío en:\n${rankingUrl}`;
+  return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`;
+}
+
+async function persistReservationMatch(challenge) {
+  upsertReservationChallenge(challenge);
+  let saved = challenge;
+
+  if (DB.isCloudConfigured()) {
+    try {
+      saved = await DB.saveChallengeCloud(saved);
+      upsertReservationChallenge(saved);
+    } catch (cloudErr) {
+      console.warn('No se pudo guardar el partido en Firebase:', cloudErr);
+    }
+  }
+
+  if (window.CONFIG?.API_URL) {
+    try {
+      const res = await fetch(window.CONFIG.API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          action: 'create_challenge',
+          ...saved,
+          cancha: saved.courtLabel || saved.cancha,
+          bookingId: saved.bookingId || '',
+          tipo: saved.tipo || 'amistoso'
+        })
+      });
+      const data = await res.json().catch(() => null);
+      if (data && data.ok && data.challenge) {
+        saved = { ...saved, ...data.challenge };
+        upsertReservationChallenge(saved);
+        if (DB.isCloudConfigured()) {
+          DB.saveChallengeCloud(saved).catch(err => {
+            console.warn('No se pudo reflejar el partido de Sheets en Firebase:', err);
+          });
+        }
+      } else if (data && data.ok === false) {
+        console.warn('Apps Script rechazó el partido:', data.msg);
+      }
+    } catch (sheetErr) {
+      console.warn('No se pudo sincronizar el partido con Apps Script:', sheetErr);
+    }
+  }
+
+  await publishReservationMatchNews(saved);
+  return saved;
+}
+
+async function publishReservationMatchNews(challenge) {
+  if (!challenge || challenge.tipo !== 'amistoso') return;
+
+  const newsItem = {
+    id: `friendly-created-${challenge.id}`,
+    category: 'app',
+    title: `Amistoso por confirmar: ${challenge.retadorNombre || 'Jugador'} vs ${challenge.retadoNombre || 'Jugador'}`,
+    body: `Se reservó un partido amistoso para el ${formatMatchDateLong(challenge.fecha)}${challenge.slot ? ' a las ' + challenge.slot : ''} en ${challenge.courtLabel || challenge.cancha || 'UCTenis'}. Queda pendiente la confirmación del rival.`,
+    date: new Date().toISOString().split('T')[0],
+    creado: new Date().toISOString(),
+    actualizado: new Date().toISOString(),
+    challengeId: challenge.id,
+    retadorNombre: challenge.retadorNombre || '',
+    retadoNombre: challenge.retadoNombre || ''
+  };
+
+  try {
+    if (DB.isCloudConfigured()) {
+      await DB.saveNewsCloud(newsItem);
+    }
+    const localNews = DB.getNews();
+    const idx = localNews.findIndex(item => item.id === newsItem.id);
+    if (idx >= 0) localNews[idx] = newsItem;
+    else localNews.unshift(newsItem);
+    DB.saveNews(localNews);
+  } catch (newsErr) {
+    console.warn('No se pudo publicar el amistoso en novedades:', newsErr);
   }
 }
 
@@ -1238,6 +1346,7 @@ async function finalConfirmNormal(s, btn) {
 
   // If friendly match or campeonato with opponent, create the challenge locally
   let challenge = null;
+  let whatsappUrl = '';
   if (sel.isFriendly && sel.retadoId) {
     challenge = DB.createChallenge(s.id, sel.retadoId, s.genero || 'M', sel.date, sel.court.label);
     Object.assign(challenge, {
@@ -1253,20 +1362,8 @@ async function finalConfirmNormal(s, btn) {
       tipo: 'amistoso',
       bookingId: r.booking.id
     });
-    
-    // Save locally
-    DB.saveChallenges(DB.getChallenges().map(item => item.id === challenge.id ? { ...item, ...challenge } : item));
-
-    // Save in Firebase background
-    if (DB.isCloudConfigured()) {
-      try {
-        await DB.saveChallengeCloud(challenge);
-      } catch (cloudErr) {
-        console.warn('No se pudo guardar el amistoso en Firebase:', cloudErr);
-      }
-    }
-
-
+    challenge = await persistReservationMatch(challenge);
+    whatsappUrl = buildMatchWhatsappUrl(challenge);
   } else if (sel.isCampeonato && sel.retadoId) {
     challenge = DB.createChallenge(s.id, sel.retadoId, s.genero || 'M', sel.date, sel.court.label);
     Object.assign(challenge, {
@@ -1301,11 +1398,18 @@ async function finalConfirmNormal(s, btn) {
   // Update success modal and show it immediately
   const wd = dayOfWeekFromISO(sel.date);
   const [y, m, d] = sel.date.split('-');
-  document.getElementById('successIcon').textContent = '🎉'; // 🎉
-  document.getElementById('successTitle').textContent = '¡Reserva confirmada!';
-  document.getElementById('successMsg').textContent =
-    `${sel.court.label} · ${DAYS_LONG[wd]}, ${parseInt(d)} de ${MONTHS_LONG[parseInt(m) - 1]} ${y} · ${sel.slot}`;
-  document.getElementById('whatsappLinkContainer').style.display = 'none';
+  const isFriendlyWithOpponent = Boolean(challenge && challenge.tipo === 'amistoso');
+  document.getElementById('successIcon').textContent = isFriendlyWithOpponent ? '🤝' : '🎉';
+  document.getElementById('successTitle').textContent = isFriendlyWithOpponent ? '¡Amistoso enviado!' : '¡Reserva confirmada!';
+  document.getElementById('successMsg').textContent = isFriendlyWithOpponent
+    ? `Invitaste a ${challenge.retadoNombre} · ${DAYS_LONG[wd]}, ${parseInt(d)} de ${MONTHS_LONG[parseInt(m) - 1]} ${y} · ${sel.slot} · ${sel.court.label}`
+    : `${sel.court.label} · ${DAYS_LONG[wd]}, ${parseInt(d)} de ${MONTHS_LONG[parseInt(m) - 1]} ${y} · ${sel.slot}`;
+  if (whatsappUrl) {
+    document.getElementById('whatsappLink').href = whatsappUrl;
+    document.getElementById('whatsappLinkContainer').style.display = 'block';
+  } else {
+    document.getElementById('whatsappLinkContainer').style.display = 'none';
+  }
   document.getElementById('successModal').classList.add('visible');
 
   renderMyBookings();

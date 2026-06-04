@@ -3391,11 +3391,16 @@ async function respondChallenge(id, accept) {
 // Publica una novedad tipo 'challenge_accepted' en Firestore para el feed del home
 async function publishChallengeAcceptedNews(challenge) {
   try {
+    const isFriendly = challenge.tipo === 'amistoso';
     const newsItem = {
       id: `challenge-accepted-${challenge.id}`,
       category: 'challenge_accepted',
-      title: `⚔️ ¡Challenge Accepted! ${challenge.retadorNombre || 'Jugador'} vs ${challenge.retadoNombre || 'Jugador'}`,
-      body: `${challenge.retadoNombre || 'Jugador'} aceptó el desafío de ${challenge.retadorNombre || 'Jugador'}. El duelo será el ${formatShortDate(challenge.fecha)} en ${challenge.cancha || 'la cancha'}${challenge.slot ? ' a las ' + challenge.slot : ''}. ¡Que gane el mejor!`,
+      title: isFriendly
+        ? `🤝 Amistoso confirmado: ${challenge.retadorNombre || 'Jugador'} vs ${challenge.retadoNombre || 'Jugador'}`
+        : `⚔️ ¡Challenge Accepted! ${challenge.retadorNombre || 'Jugador'} vs ${challenge.retadoNombre || 'Jugador'}`,
+      body: isFriendly
+        ? `${challenge.retadoNombre || 'Jugador'} aceptó el amistoso con ${challenge.retadorNombre || 'Jugador'}. El partido será el ${formatShortDate(challenge.fecha)} en ${challenge.cancha || 'la cancha'}${challenge.slot ? ' a las ' + challenge.slot : ''}.`
+        : `${challenge.retadoNombre || 'Jugador'} aceptó el desafío de ${challenge.retadorNombre || 'Jugador'}. El duelo será el ${formatShortDate(challenge.fecha)} en ${challenge.cancha || 'la cancha'}${challenge.slot ? ' a las ' + challenge.slot : ''}. ¡Que gane el mejor!`,
       date: new Date().toISOString().split('T')[0],
       creado: new Date().toISOString(),
       actualizado: new Date().toISOString(),
@@ -3406,7 +3411,8 @@ async function publishChallengeAcceptedNews(challenge) {
       retadoId: challenge.retadoId || '',
       fechaPartido: challenge.fecha || '',
       cancha: challenge.cancha || '',
-      slot: challenge.slot || ''
+      slot: challenge.slot || '',
+      tipo: challenge.tipo || 'ranking'
     };
 
     if (DB.isCloudConfigured()) {
