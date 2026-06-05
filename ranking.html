@@ -1379,23 +1379,7 @@ async function syncChallengesFromCloud() {
   try {
     const cloudChallenges = await withTimeout(DB.getChallengesCloud(), CLOUD_TIMEOUT_MS, 'Firebase desafíos');
     
-    // Auto-cleanup for Rob Roco challenge in the cloud if admin is logged in
-    const session = DB.getSession();
-    const isAdmin = session && ['uctenisclub@gmail.com', 'dsilva@uct.cl'].includes((session.email || '').toLowerCase().trim());
-    if (isAdmin) {
-      cloudChallenges.forEach(c => {
-        const retador = String(c.retadorNombre || '').toLowerCase();
-        const retado = String(c.retadoNombre || '').toLowerCase();
-        const retadorEmail = String(c.retadorEmail || '').toLowerCase();
-        const retadoEmail = String(c.retadoEmail || '').toLowerCase();
-        if (retador.includes('rob roco') || retado.includes('rob roco') ||
-            retadorEmail.includes('dsilvaroco') || retadoEmail.includes('dsilvaroco')) {
-          DB.deleteChallengeCloud(c.id).then(() => {
-            console.log(`Deleted Rob Roco challenge ${c.id} from Firestore cloud database.`);
-          }).catch(e => console.warn('Could not delete Rob Roco challenge from cloud:', e));
-        }
-      });
-    }
+
 
     // Reemplazar localStorage con lo que viene de Firebase (fuente autoritativa)
     DB.saveChallenges(cloudChallenges);
@@ -3414,6 +3398,7 @@ async function respondChallenge(id, accept) {
 // Publica una novedad tipo 'challenge_accepted' en Firestore para el feed del home
 async function publishChallengeAcceptedNews(challenge) {
   try {
+    const isFriendly = challenge.tipo === 'amistoso';
     const cleanSlot = challenge.slot ? formatSlotRobust(challenge.slot) : '';
     const slotText = cleanSlot ? ' a las ' + cleanSlot : '';
     const newsItem = {
