@@ -1704,6 +1704,14 @@ async function loadLiveData() {
   // Latest results (completado)
   const results = challenges
     .filter(c => c.status === 'completado' && c.ganadorId)
+    .filter(c => {
+      const retador = String(c.retadorNombre || '').toLowerCase();
+      const retado = String(c.retadoNombre || '').toLowerCase();
+      const retadorEmail = String(c.retadorEmail || '').toLowerCase();
+      const retadoEmail = String(c.retadoEmail || '').toLowerCase();
+      return !retador.includes('rob roco') && !retado.includes('rob roco') &&
+             !retadorEmail.includes('dsilvaroco') && !retadoEmail.includes('dsilvaroco');
+    })
     .sort((a, b) => {
       const myA = isMyChallenge(a) ? 1 : 0;
       const myB = isMyChallenge(b) ? 1 : 0;

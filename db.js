@@ -948,18 +948,7 @@ const DB = {
     if (c.status === 'eliminado') return false;
     if (!c.creado || String(c.creado).trim() === '') return false;
 
-    // Ignorar duelos con rob roco o su correo (por solicitud del usuario)
-    const retadorNameLower = String(c.retadorNombre || '').toLowerCase();
-    const retadoNameLower = String(c.retadoNombre || '').toLowerCase();
-    const retadorEmailLower = String(c.retadorEmail || '').toLowerCase();
-    const retadoEmailLower = String(c.retadoEmail || '').toLowerCase();
-    const retadorIdLower = String(c.retadorId || '').toLowerCase();
-    const retadoIdLower = String(c.retadoId || '').toLowerCase();
-    if (retadorNameLower.includes('rob roco') || retadoNameLower.includes('rob roco') ||
-        retadorEmailLower.includes('dsilvaroco') || retadoEmailLower.includes('dsilvaroco') ||
-        retadorIdLower.includes('dsilvaroco') || retadoIdLower.includes('dsilvaroco')) {
-      return false;
-    }
+
 
     // Debe tener IDs (registros modernos) o al menos nombres de ambos jugadores (registros viejos)
     const hasIds = c.retadorId && c.retadoId;
