@@ -966,6 +966,80 @@ function escapeHTML(str) {
     .replace(/'/g, '&#39;');
 }
 
+/**
+ * Returns true if the challenge/news item's scheduled date has already passed.
+ * Uses slot time if valid (between 06:00–22:00); otherwise expires at end of day.
+ * Always expires any event whose fecha is strictly before today.
+ */
+function isChallengeExpiredByDateTime(challenge) {
+  if (!challenge) return false;
+  const fecha = challenge.fechaPartido || challenge.fecha || '';
+  if (!fecha) return false;
+  // Extract just the date part (YYYY-MM-DD)
+  const datePart = String(fecha).split('T')[0];
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(datePart)) return false;
+
+  try {
+    const todayIso = new Date().toISOString().split('T')[0];
+
+    // If the date is before today → always expired, regardless of slot
+    if (datePart < todayIso) return true;
+
+    // If the date is in the future → not expired
+    if (datePart > todayIso) return false;
+
+    // Date is TODAY — check slot time
+    const slot = challenge.slot || '';
+    if (slot) {
+      const timeMatch = String(slot).match(/(\d{1,2}):(\d{2})/);
+      if (timeMatch) {
+        const h = parseInt(timeMatch[1], 10);
+        const m = parseInt(timeMatch[2], 10);
+        // Validate slot is a sensible tennis hour (06:00 – 22:00)
+        // Slots outside this range are likely corrupt Excel timestamps — ignore them
+        if (h >= 6 && h <= 22) {
+          // Add 90 min grace period after start time
+          let endH = h + 1;
+          let endM = m + 30;
+          if (endM >= 60) { endH++; endM -= 60; }
+          const now = new Date();
+          const endTime = new Date(`${datePart}T${String(endH).padStart(2,'0')}:${String(endM).padStart(2,'0')}:00`);
+          return endTime.getTime() < now.getTime();
+        }
+      }
+    }
+    // No valid slot: expire at end of day
+    const endOfDay = new Date(datePart + 'T23:59:59');
+    return endOfDay.getTime() < Date.now();
+  } catch(e) {
+    return false;
+  }
+}
+
+/**
+ * Returns true if the challenge/news item's date is today, in the future, or in the past but recent (within the last 7 days).
+ */
+function isChallengeRecentOrFuture(fecha) {
+  if (!fecha) return false;
+  const datePart = String(fecha).split('T')[0];
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(datePart)) return false;
+
+  try {
+    const todayIso = new Date().toISOString().split('T')[0];
+    if (datePart >= todayIso) return true; // Today or future
+
+    // Past: check if within the last 7 days
+    const matchDate = new Date(datePart + 'T23:59:59');
+    const now = new Date();
+    const diffTime = Math.abs(now.getTime() - matchDate.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays <= 7;
+  } catch(e) {
+    return false;
+  }
+}
+
+
 function renderNewsGrid(topMoverCard, latestMatchCard, nextMatchCard, birthdaysCard, customNews = []) {
   const newsGrid = document.getElementById('newsGrid');
   if (!newsGrid) return;
@@ -973,11 +1047,30 @@ function renderNewsGrid(topMoverCard, latestMatchCard, nextMatchCard, birthdaysC
   const newsList = [];
   
   // 0. Challenge Accepted cards (highest priority — always shown first)
-  const challengeAcceptedNews = (customNews || []).filter(item => item.category === 'challenge_accepted');
+  // Only show if the scheduled match is in the future or recent past (last 7 days)
+  const challengeAcceptedNews = (customNews || []).filter(item =>
+    item.category === 'challenge_accepted' && isChallengeRecentOrFuture(item.fechaPartido || item.date || '')
+  );
   challengeAcceptedNews.forEach(item => {
     const isFriendlyAccepted = item.tipo === 'amistoso';
     const dateStr = formatDateShort(item.date) || item.date || '';
-    const calLink = item.fechaPartido ? (() => {
+    // Check if the match date has already passed (to use past tense)
+    const matchDatePassed = isChallengeExpiredByDateTime({
+      fecha: item.fechaPartido || item.date || '',
+      slot: item.slot || ''
+    });
+    
+    // Look up challenge to see if result is registered
+    const challenge = item.challengeId 
+      ? (JSON.parse(localStorage.getItem('uctenis_challenges') || '[]')).find(c => c.id === item.challengeId)
+      : null;
+    const hasResult = challenge && (challenge.status === 'completado' || challenge.marcador || challenge.ganadorId);
+    const scoreText = hasResult ? challenge.marcador : '';
+    const winnerName = hasResult 
+      ? (challenge.ganadorId === challenge.retadorId ? challenge.retadorNombre : challenge.retadoNombre)
+      : '';
+
+    const calLink = item.fechaPartido && !matchDatePassed ? (() => {
       try {
         const [y, m, d] = item.fechaPartido.split('-');
         let hh = 9, mm = 0;
@@ -986,7 +1079,7 @@ function renderNewsGrid(topMoverCard, latestMatchCard, nextMatchCard, birthdaysC
         let eh = hh+1, em = mm+30; if (em>=60){eh++;em-=60;}
         const pad = n => String(n).padStart(2,'0');
         const t = encodeURIComponent(`🎾 UCTenis: ${item.retadorNombre} vs ${item.retadoNombre}`);
-        const det = encodeURIComponent(`${isFriendlyAccepted ? 'Amistoso UCTenis confirmado.' : 'Desafío UCTenis aceptado.'}\nPartido: ${item.retadorNombre} vs ${item.retadoNombre}`);
+        const det = encodeURIComponent(`${isFriendlyAccepted ? 'Amistoso UCTenis confirmed.' : 'Desafío UCTenis aceptado.'}\nPartido: ${item.retadorNombre} vs ${item.retadoNombre}`);
         const loc = encodeURIComponent(item.cancha || 'UCTenis');
         return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${t}&dates=${y}${pad(m)}${pad(d)}T${pad(hh)}${pad(mm)}00/${y}${pad(m)}${pad(d)}T${pad(eh)}${pad(em)}00&details=${det}&location=${loc}`;
       } catch(e) { return null; }
@@ -997,29 +1090,65 @@ function renderNewsGrid(topMoverCard, latestMatchCard, nextMatchCard, birthdaysC
       challengeAcceptedData: item,
       calLink,
       badgeClass: 'badge-challenge-accepted',
-      badgeText: isFriendlyAccepted ? '🤝 Amistoso Confirmado' : '⚔️ Challenge Accepted!!',
-      title: isFriendlyAccepted
-        ? `¡${escapeHTML(item.retadoNombre || 'Jugador')} aceptó el amistoso!`
-        : `¡${escapeHTML(item.retadoNombre || 'Jugador')} aceptó el desafío!`,
+      badgeText: (() => {
+        if (hasResult) {
+          return isFriendlyAccepted ? '🤝 Amistoso Terminado' : '🏆 Desafío Terminado';
+        }
+        return isFriendlyAccepted ? '🤝 Amistoso Confirmado' : '⚔️ Challenge Accepted!!';
+      })(),
+      title: (() => {
+        if (hasResult) {
+          return isFriendlyAccepted
+            ? `🤝 Amistoso Jugado: ${escapeHTML(winnerName)} gana`
+            : `🏆 Desafío Jugado: ${escapeHTML(winnerName)} gana`;
+        }
+        return isFriendlyAccepted
+          ? `¡${escapeHTML(item.retadoNombre || 'Jugador')} aceptó el amistoso!`
+          : `¡${escapeHTML(item.retadoNombre || 'Jugador')} aceptó el desafío!`;
+      })(),
       body: (() => {
         const cleanSlot = item.slot ? formatSlotRobust(item.slot) : '';
         const slotText = cleanSlot ? ' a las ' + cleanSlot : '';
         const dateValue = item.fechaPartido || item.date || '';
         const datePart = formatDateShortHome(dateValue) || dateValue || '';
+        if (hasResult) {
+          const loserName = winnerName === item.retadorNombre ? item.retadoNombre : item.retadorNombre;
+          if (isFriendlyAccepted) {
+            return `${escapeHTML(item.retadoNombre || 'Jugador')} y ${escapeHTML(item.retadorNombre || 'Jugador')} disputaron su amistoso en ${escapeHTML(item.cancha || 'la cancha')} el ${escapeHTML(datePart)}. Resultado: ${escapeHTML(scoreText)}.`;
+          }
+          return `¡Duelo completado! ${escapeHTML(winnerName)} venció a ${escapeHTML(loserName)} por ${escapeHTML(scoreText)} el ${escapeHTML(datePart)} en ${escapeHTML(item.cancha || 'la cancha')}.`;
+        }
+        if (matchDatePassed) {
+          // Past tense: event already happened
+          return isFriendlyAccepted
+            ? `${escapeHTML(item.retadoNombre || 'Jugador')} y ${escapeHTML(item.retadorNombre || 'Jugador')} se enfrentaron en ${escapeHTML(item.cancha || 'la cancha')} el ${escapeHTML(datePart)}. ¡Pendiente resultado!`
+            : `${escapeHTML(item.retadoNombre || 'Jugador')} y ${escapeHTML(item.retadorNombre || 'Jugador')} se enfrentaron en ${escapeHTML(item.cancha || 'la cancha')} el ${escapeHTML(datePart)}. ¡Pendiente resultado!`;
+        }
         return isFriendlyAccepted
           ? `${escapeHTML(item.retadoNombre || 'Jugador')} aceptó el amistoso con ${escapeHTML(item.retadorNombre || 'Jugador')}. El partido se jugará en ${escapeHTML(item.cancha || 'la cancha')} el ${escapeHTML(datePart)}${escapeHTML(slotText)}.`
           : `${escapeHTML(item.retadoNombre || 'Jugador')} aceptó el desafío de ${escapeHTML(item.retadorNombre || 'Jugador')}. El duelo se jugará en ${escapeHTML(item.cancha || 'la cancha')} el ${escapeHTML(datePart)}${escapeHTML(slotText)}. ¡Que gane el mejor!`;
       })(),
-      date: dateStr,
+      date: (() => {
+        const cleanSlot = item.slot ? formatSlotRobust(item.slot) : '';
+        const slotText = cleanSlot ? ' · ' + cleanSlot : '';
+        const dateValue = item.fechaPartido || item.date || '';
+        const datePart = formatDateShortHome(dateValue) || dateValue || '';
+        if (hasResult || matchDatePassed) {
+          return `Jugado: ${datePart}${slotText}`;
+        }
+        return `Programado: ${datePart}${slotText}`;
+      })(),
       retadorNombre: item.retadorNombre || '',
       retadoNombre: item.retadoNombre || '',
       tipo: item.tipo || '',
     });
   });
 
-  // 1. Add custom news from database/admin
+  // 1. Add custom news from database/admin (skip challenge_accepted — handled in section 0)
   if (customNews && customNews.length > 0) {
     customNews.forEach(item => {
+      // Skip challenge_accepted items — already rendered in section 0 above
+      if (item.category === 'challenge_accepted') return;
       const badgeClasses = {
         torneo: 'badge-torneo',
         maint: 'badge-maint',
@@ -1354,33 +1483,27 @@ function homeMergeChallengeSources(sources) {
 
 async function loadLiveData() {
   let challenges = [];
-  const sources = [];
   
-  // Try Firebase first
   if (DB.isCloudConfigured()) {
     try {
-      sources.push(await DB.getChallengesCloud());
+      const cloudChallenges = await DB.getChallengesCloud();
+      DB.saveChallenges(cloudChallenges);
+      challenges = DB.getChallenges();
     } catch(e) {
-      console.warn("Firebase offline para desafíos, intentando Google Sheets...", e);
+      console.warn("Firebase offline para desafíos, usando caché local...", e);
+      challenges = DB.getChallenges();
     }
-  }
-
-  if (window.CONFIG?.API_URL) {
+  } else if (window.CONFIG?.API_URL) {
     try {
       const res = await fetch(`${window.CONFIG.API_URL}?action=get_challenges`);
       const data = await res.json().catch(() => null);
       if (data && data.ok && Array.isArray(data.challenges)) {
-        sources.push(data.challenges);
+        DB.saveChallenges(data.challenges);
       }
     } catch (e) {
       console.warn("Google Sheets offline para desafíos:", e);
     }
-  }
-
-  if (sources.length) {
-    challenges = homeMergeChallengeSources(sources);
-    DB.saveChallenges(challenges); // sync to local
-    challenges = DB.getChallenges(); // reload to get filtered list
+    challenges = DB.getChallenges();
   } else {
     challenges = DB.getChallenges();
   }
@@ -1484,9 +1607,13 @@ async function loadLiveData() {
       };
     }
 
-    // 2. Next scheduled match (status aceptado, date >= today)
+    // 2. Next scheduled match (status aceptado, date+slot NOT yet passed)
     const todayIso = new Date().toISOString().split('T')[0];
-    const upcoming = challenges.filter(c => c.status === 'aceptado' && c.fecha >= todayIso);
+    const upcoming = challenges.filter(c =>
+      c.status === 'aceptado' &&
+      c.fecha >= todayIso &&
+      !isChallengeExpiredByDateTime(c)
+    );
     if (upcoming.length > 0) {
       upcoming.sort((a, b) => a.fecha.localeCompare(b.fecha));
       const nextMatch = upcoming[0];
@@ -1550,8 +1677,33 @@ async function loadLiveData() {
       .map(item => item.id)
   );
 
+  // IDs of challenges that are deleted/eliminated — their news cards must not appear
+  const activeChallengeIds = new Set();
+  const deletedChallengeIds = new Set();
+  try {
+    const allLocalChallenges = JSON.parse(localStorage.getItem('uctenis_challenges') || '[]');
+    allLocalChallenges.forEach(c => {
+      if (c.id) {
+        if (c.status === 'eliminado' || c.deleted) {
+          deletedChallengeIds.add(c.id);
+        } else {
+          activeChallengeIds.add(c.id);
+        }
+      }
+    });
+  } catch(e) {}
+
   const activeCustomNews = (customNews || []).filter(
-    item => !hiddenNewsIds.has(item.id) && item.category !== 'hidden' && !item.deleted && item.status !== 'hidden' && !String(item.id).startsWith('auto-')
+    item =>
+      !hiddenNewsIds.has(item.id) &&
+      item.category !== 'hidden' &&
+      !item.deleted &&
+      item.status !== 'hidden' &&
+      !String(item.id).startsWith('auto-') &&
+      // Keep only recent/future challenge_accepted items
+      !(item.category === 'challenge_accepted' && !isChallengeRecentOrFuture(item.fechaPartido || item.date || '')) &&
+      // Exclude challenge_accepted whose linked challenge was deleted or is missing entirely from active challenges
+      !(item.category === 'challenge_accepted' && item.challengeId && (!activeChallengeIds.has(item.challengeId) || deletedChallengeIds.has(item.challengeId)))
   );
 
   const applyOverride = (card, override) => {
@@ -1598,8 +1750,8 @@ async function loadLiveData() {
     ? applyOverride(birthdaysCard, overrideBirthdays)
     : null;
 
-  // Render the news section dynamically with all cards
-  renderNewsGrid(filteredTopMover, filteredLatestMatch, filteredNextMatch, filteredBirthdays, activeCustomNews);
+  // Render the news section AFTER getPlayerPhoto is defined (see below)
+  // This call is intentionally deferred — see renderNewsGrid call after window.getPlayerPhoto = getPlayerPhoto
 
   // Resolve session challenge IDs
   const session = DB.getSession();
@@ -1639,23 +1791,13 @@ async function loadLiveData() {
   // Resolve player photo based on Firestore or static fallbacks
   function getPlayerPhoto(playerName) {
     const nameKey = (playerName || '').toLowerCase().trim();
-    if (playersMap[nameKey]) {
-      const p = playersMap[nameKey];
-      if (p.foto && p.foto.trim() !== '') return p.foto;
-      const g = String(p.genero || p.gender || '').toUpperCase();
-      if (g === 'F' || g === 'FEMENINO' || g === 'MUJER' || g === 'MUJERES') {
-        return 'fotos/default_avatar_m.png';
-      }
-      return 'fotos/default_avatar_h.png';
+
+    // 1. If we have the player in playersMap and they have a custom photo, use it
+    if (playersMap[nameKey] && playersMap[nameKey].foto && playersMap[nameKey].foto.trim() !== '') {
+      return playersMap[nameKey].foto;
     }
-    
-    // Known female players
-    const femaleNames = ['carolina cardenas', 'carolina cárdenas', 'angelica encina', 'angélica encina', 'maria jose', 'maria josé', 'valeria schatter', 'violeta moreno'];
-    if (femaleNames.includes(nameKey)) {
-      return 'fotos/default_avatar_m.png';
-    }
-    
-    // Static files list mapping
+
+    // 2. Otherwise check static files list mapping (official files in 'fotos/')
     const staticAvatars = {
       'david silva': 'fotos/m001.png',
       'ismael devia': 'fotos/m002.png',
@@ -1663,12 +1805,12 @@ async function loadLiveData() {
       'luis otth': 'fotos/m004.png',
       'gustavo curaqueo': 'fotos/m009.png',
       'jaime castillo': 'fotos/m011.png',
-      'matías cáceres': 'fotos/m007.png',
       'matias caceres': 'fotos/m007.png',
+      'matías cáceres': 'fotos/m007.png',
       'rodrigo castro': 'fotos/m006.png',
       'klaus hennicke': 'fotos/m017.png',
-      'josé melgarejo': 'fotos/m016.png',
       'jose melgarejo': 'fotos/m016.png',
+      'josé melgarejo': 'fotos/m016.png',
       'juan maripillan': 'fotos/m008.png',
       'juan maripillán': 'fotos/m008.png',
       'cristian rebolledo': 'fotos/m010.png',
@@ -1677,22 +1819,63 @@ async function loadLiveData() {
       'miguel angulo': 'fotos/m015.png',
       'roberto bermudez': 'fotos/m018.png',
       'roberto bermúdez': 'fotos/m018.png',
-      'violeta moreno': 'fotos/f004.png',
-      'carolina cárdenas': 'fotos/f001.png',
-      'carolina cardenas': 'fotos/f001.png',
+      'francisco munoz': 'fotos/m013.png',
+      'francisco muñoz': 'fotos/m013.png',
+      'pablo lagos': 'fotos/m014.png',
+      'paulo garrido': 'fotos/m031.png',
+      'sofia silva': 'fotos/f001.png',
+      'sofía silva': 'fotos/f001.png',
+      'violeta moreno': 'fotos/f002.png',
+      'fernanda silva': 'fotos/f003.png',
+      'sandra arenas': 'fotos/f004.png',
+      'baleria schatter': 'fotos/f005.png',
+      'valeria schatter': 'fotos/f005.png',
+      'rocio hernandez': 'fotos/f006.png',
+      'rocío hernández': 'fotos/f006.png',
+      'carolina cardenas': 'fotos/f008.png',
+      'carolina cárdenas': 'fotos/f008.png',
+      'carla iglesias': 'fotos/f011.png',
       'angela encina': 'fotos/f002.png',
       'angelica encina': 'fotos/f002.png',
-      'maria jose': 'fotos/f003.png',
-      'valeria schatter': 'fotos/f005.png'
+      'maria jose': 'fotos/f003.png'
     };
     if (staticAvatars[nameKey]) return staticAvatars[nameKey];
+
+    // 3. Fallback to gender avatar
+    if (playersMap[nameKey]) {
+      const p = playersMap[nameKey];
+      const g = String(p.genero || p.gender || '').toUpperCase();
+      if (g === 'F' || g === 'FEMENINO' || g === 'MUJER' || g === 'MUJERES') {
+        return 'fotos/default_avatar_m.png';
+      }
+      return 'fotos/default_avatar_h.png';
+    }
+
+    // Known female players fallback
+    const femaleNames = [
+      'carolina cardenas', 'carolina cárdenas', 'angelica encina', 'angélica encina',
+      'maria jose', 'maria josé', 'valeria schatter', 'violeta moreno', 'sofia silva',
+      'sofía silva', 'rocio hernandez', 'rocío hernández', 'carla iglesias', 'sandra arenas',
+      'ferniwendy', 'fernanda silva'
+    ];
+    if (femaleNames.includes(nameKey)) {
+      return 'fotos/default_avatar_m.png';
+    }
+
     return 'fotos/default_avatar_h.png';
   }
   window.getPlayerPhoto = getPlayerPhoto;
 
+  // NOW render the news section — getPlayerPhoto is available so player photos will load correctly
+  renderNewsGrid(filteredTopMover, filteredLatestMatch, filteredNextMatch, filteredBirthdays, activeCustomNews);
+
   // Active challenges (pendiente, aceptado or terminado)
+  // Exclude any challenge whose scheduled date+slot has already passed
   const active = challenges
-    .filter(c => c.status === 'pendiente' || c.status === 'aceptado' || c.status === 'terminado')
+    .filter(c =>
+      (c.status === 'pendiente' || c.status === 'aceptado' || c.status === 'terminado') &&
+      !isChallengeExpiredByDateTime(c)
+    )
     .sort((a, b) => {
       const myA = isMyChallenge(a) ? 1 : 0;
       const myB = isMyChallenge(b) ? 1 : 0;
@@ -2022,6 +2205,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
   DB.seed();
   renderIndexUserBar();
+
+  // Listen to real-time events to reload UI
+  if (typeof DB !== 'undefined') {
+    DB.addEventListener('challenges-updated', () => {
+      console.log('🔄 Desafíos actualizados en Firestore, recargando Home...');
+      loadLiveData();
+    });
+    DB.addEventListener('news-updated', () => {
+      console.log('📰 Novedades actualizadas en Firestore, recargando Home...');
+      loadLiveData();
+    });
+  }
+
   const btnHomeGoogle = document.getElementById('btnHomeGoogleLogin');
   const btnHomeMock = document.getElementById('btnHomeMockLogin');
   if (btnHomeGoogle) btnHomeGoogle.addEventListener('click', handleHomeGoogleLogin);
@@ -2110,21 +2306,32 @@ function formatSlotRobust(val) {
   const str = String(val).trim();
   if (!str) return '';
 
+  let hh = '', mm = '';
+
   if (str.includes('1899') || str.includes('GMT') || /^[A-Za-z]{3}\s[A-Za-z]{3}/.test(str)) {
     const parsed = new Date(str);
     if (!isNaN(parsed.getTime())) {
-      const hh = String(parsed.getHours()).padStart(2, '0');
-      const mm = String(parsed.getMinutes()).padStart(2, '0');
-      return `${hh}:${mm}`;
+      hh = String(parsed.getHours()).padStart(2, '0');
+      mm = String(parsed.getMinutes()).padStart(2, '0');
     }
   }
 
-  const match = str.match(/\b(\d{1,2}):(\d{2}):\d{2}\b/) || str.match(/\b(\d{1,2}):(\d{2})\b/);
-  if (match) {
-    return `${match[1].padStart(2, '0')}:${match[2]}`;
+  if (!hh) {
+    const match = str.match(/\b(\d{1,2}):(\d{2}):\d{2}\b/) || str.match(/\b(\d{1,2}):(\d{2})\b/);
+    if (match) {
+      hh = match[1].padStart(2, '0');
+      mm = match[2];
+    }
   }
 
-  return str;
+  if (!hh) return str;
+
+  // Validate: tennis slots are between 06:00 and 22:00
+  // Hours outside this range are almost certainly corrupt Excel timestamps
+  const h = parseInt(hh, 10);
+  if (h < 6 || h > 22) return '';
+
+  return `${hh}:${mm}`;
 }
 
 function formatDateShortHome(iso) {
