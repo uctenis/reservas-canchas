@@ -748,6 +748,10 @@ const DB = {
           cachedChallenges = snapshot.docs
             .map(doc => normalizeChallengeRecord({ id: doc.id, ...doc.data() }))
             .sort((a, b) => (a.fecha || '').localeCompare(b.fecha || '') || (b.creado || '').localeCompare(a.creado || ''));
+          
+          // Guardar a localStorage para mantener sincronizado
+          this.saveChallenges(cachedChallenges);
+          
           this.dispatchEvent('challenges-updated', { count: cachedChallenges.length });
           console.log(`✅ ${cachedChallenges.length} desafíos actualizados en tiempo real`);
         },
@@ -822,6 +826,10 @@ const DB = {
           cachedNews = snapshot.docs
             .map(doc => ({ id: doc.id, ...doc.data() }))
             .sort((a, b) => (b.date || b.creado || '').localeCompare(a.date || a.creado || ''));
+          
+          // Guardar a localStorage para mantener sincronizado
+          this.saveNews(cachedNews);
+          
           this.dispatchEvent('news-updated', { count: cachedNews.length });
           console.log(`✅ ${cachedNews.length} noticias actualizadas en tiempo real`);
         },
@@ -1051,6 +1059,12 @@ const DB = {
   },
   createBooking(userId, courtId, fecha, slot) {
     const bookings = this.getBookings();
+    // Regla: Evitar reservar horario de clases (martes y miércoles de 18:00 a 19:30)
+    const [y, m, d] = fecha.split('-').map(Number);
+    const dayOfWeek = new Date(y, m - 1, d).getDay();
+    if ((dayOfWeek === 2 || dayOfWeek === 3) && slot === '18:00') {
+      return { ok: false, msg: 'Este horario está reservado para Clases UCTenis.' };
+    }
     // Regla: slot ya ocupado
     if (bookings.some(b => b.courtId === courtId && b.fecha === fecha && b.slot === slot && b.status !== 'cancelada'))
       return { ok: false, msg: 'Ese horario ya está reservado.' };
@@ -1088,6 +1102,13 @@ const DB = {
       }
     }
     if (!user) return { ok: false, msg: 'Usuario no encontrado' };
+
+    // Regla: Evitar reservar horario de clases (martes y miércoles de 18:00 a 19:30)
+    const [y, m, d] = fecha.split('-').map(Number);
+    const dayOfWeek = new Date(y, m - 1, d).getDay();
+    if ((dayOfWeek === 2 || dayOfWeek === 3) && slot === '18:00') {
+      return { ok: false, msg: 'Este horario está reservado para Clases UCTenis.' };
+    }
 
     // Regla: 1 reserva por día (excepto administradores)
     if (this.userBookedToday(user.id, fecha)) {
