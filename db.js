@@ -1059,10 +1059,10 @@ const DB = {
   },
   createBooking(userId, courtId, fecha, slot) {
     const bookings = this.getBookings();
-    // Regla: Evitar reservar horario de clases (martes y miércoles de 18:00 a 19:30)
+    // Regla: Evitar reservar horario de clases (martes y miércoles de 18:00 a 19:30 en CJP)
     const [y, m, d] = fecha.split('-').map(Number);
     const dayOfWeek = new Date(y, m - 1, d).getDay();
-    if ((dayOfWeek === 2 || dayOfWeek === 3) && slot === '18:00') {
+    if ((dayOfWeek === 2 || dayOfWeek === 3) && slot === '18:00' && courtId.startsWith('cjp')) {
       return { ok: false, msg: 'Este horario está reservado para Clases UCTenis.' };
     }
     // Regla: slot ya ocupado
@@ -1103,10 +1103,10 @@ const DB = {
     }
     if (!user) return { ok: false, msg: 'Usuario no encontrado' };
 
-    // Regla: Evitar reservar horario de clases (martes y miércoles de 18:00 a 19:30)
+    // Regla: Evitar reservar horario de clases (martes y miércoles de 18:00 a 19:30 en CJP)
     const [y, m, d] = fecha.split('-').map(Number);
     const dayOfWeek = new Date(y, m - 1, d).getDay();
-    if ((dayOfWeek === 2 || dayOfWeek === 3) && slot === '18:00') {
+    if ((dayOfWeek === 2 || dayOfWeek === 3) && slot === '18:00' && courtId.startsWith('cjp')) {
       return { ok: false, msg: 'Este horario está reservado para Clases UCTenis.' };
     }
 
