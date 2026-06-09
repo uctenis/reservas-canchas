@@ -720,8 +720,8 @@ function renderSlotsByCourt(apiData) {
     const dayOfWeek = dayOfWeekFromISO(sel.date); // 0=Dom, 1=Lun, etc.
     
     DB.COURTS.forEach(c => {
-      // Bloquear clases los martes (2) y miércoles (3) de 18:00 a 19:30 (slot '18:00')
-      if (dayOfWeek === 2 || dayOfWeek === 3) {
+      // Bloquear clases los martes (2) y miércoles (3) de 18:00 a 19:30 (slot '18:00') sólo en canchas CJP
+      if ((dayOfWeek === 2 || dayOfWeek === 3) && c.id.startsWith('cjp')) {
         syntheticCourts[c.id] = DB.SLOTS.filter(s => s !== '18:00');
         busyLabels[c.id] = { '18:00': 'Clases UCTenis' };
       } else {
@@ -775,9 +775,9 @@ function renderSlotsByCourt(apiData) {
         // Check if there is a matching challenge for this slot
         const matchChallenge = courtChallenges.find(c => c.slot === slot);
         
-        // Bloquear permanentemente el horario de clases en el frontend (martes y miércoles de 18:00 a 19:30)
+        // Bloquear permanentemente el horario de clases en el frontend (martes y miércoles de 18:00 a 19:30 en CJP)
         const dayOfWeek = dayOfWeekFromISO(sel.date);
-        const isSystemClass = (dayOfWeek === 2 || dayOfWeek === 3) && slot === '18:00';
+        const isSystemClass = (dayOfWeek === 2 || dayOfWeek === 3) && slot === '18:00' && court.id.startsWith('cjp');
         
         // It is busy if GCal says so OR it is a system class OR we have an active challenge in DB
         const isBusy = (!isFreeInGoogle || isSystemClass || !!matchChallenge) && !isMine;

@@ -1655,8 +1655,8 @@ function getAvailableSlots(dateStr) {
       let slotStart = makeLocalDate(dateStr, slot);
       let slotEnd   = new Date(slotStart.getTime() + 90 * 60000); // +1.5 horas
 
-      // Bloquear automáticamente clases los martes (2) y miércoles (3) de 18:00 a 19:30 (slot '18:00')
-      let isClassSlot = (dayOfWeek === 2 || dayOfWeek === 3) && slot === '18:00' && !specialCourts[courtKey];
+      // Bloquear automáticamente clases los martes (2) y miércoles (3) de 18:00 a 19:30 (slot '18:00') sólo en canchas CJP
+      let isClassSlot = (dayOfWeek === 2 || dayOfWeek === 3) && slot === '18:00' && courtKey.startsWith('cjp') && !specialCourts[courtKey];
 
       // Comprobar si el bloque se superpone con algun evento (cualquier evento bloquea)
       let busyMatch = busyTimes.find(b => {
@@ -1685,10 +1685,10 @@ function createBooking(data) {
   let memberCheck = validateMember(data.email);
   if (!memberCheck.ok) return memberCheck;
 
-  // Evitar reservas en horario de clases (martes y miércoles de 18:00 a 19:30)
+  // Evitar reservas en horario de clases (martes y miércoles de 18:00 a 19:30 en CJP)
   var noonUTC = new Date(data.date + 'T12:00:00Z');
   var dayOfWeek = parseInt(Utilities.formatDate(noonUTC, 'America/Santiago', 'u'), 10) % 7;
-  if ((dayOfWeek === 2 || dayOfWeek === 3) && data.slot === '18:00') {
+  if ((dayOfWeek === 2 || dayOfWeek === 3) && data.slot === '18:00' && data.courtId.startsWith('cjp')) {
     return { ok: false, msg: "Este horario está reservado para Clases UCTenis." };
   }
   
