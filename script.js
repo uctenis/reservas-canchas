@@ -307,10 +307,12 @@ function renderTable(gender, list) {
         return;
     }
 
-    tbody.innerHTML = '';
+    // Usar DocumentFragment para un solo reflow al final
+    const fragment = document.createDocumentFragment();
+
     list.forEach(p => {
-        const tr = tbody.insertRow();
-        tr.addEventListener('click', () => showPlayerProfile(p.nombre));
+        const tr = document.createElement('tr');
+        tr.dataset.nombre = p.nombre; // para delegación de eventos
 
         const posActual = parseInt(p.posicion);
         const posAnterior = parseInt(p.posicionAnterior);
@@ -328,7 +330,19 @@ function renderTable(gender, list) {
         }
 
         tr.innerHTML = `<td>${p.posicion}</td><td>${p.nombre}</td><td>${evolHtml}</td>`;
+        fragment.appendChild(tr);
     });
+
+    // Delegación de eventos en tbody (un solo listener para todas las filas)
+    tbody.innerHTML = '';
+    if (!tbody._listenerAttached) {
+        tbody._listenerAttached = true;
+        tbody.addEventListener('click', (e) => {
+            const tr = e.target.closest('tr');
+            if (tr && tr.dataset.nombre) showPlayerProfile(tr.dataset.nombre);
+        });
+    }
+    tbody.appendChild(fragment);
 
     loading.style.display = 'none';
     table.style.display = 'table';
@@ -404,12 +418,16 @@ document.addEventListener('DOMContentLoaded', () => {
     setDate();
 
     // ✅ Inicializar listeners de Firestore en tiempo real
-    if (typeof DB !== 'undefined' && DB.isCloudConfigured && DB.isCloudConfigured()) {
+    // NOTA: ranking.html gestiona sus propios listeners y renderizado.
+    // Aquí solo los inicializamos para páginas que no tienen lógica propia (ej. reservas.html)
+    const isRankingPage = !!document.getElementById('rankBody');
+    const isIndexPage = !!document.getElementById('liveSection');
+    if (typeof DB !== 'undefined' && DB.isCloudConfigured && DB.isCloudConfigured() && !isRankingPage && !isIndexPage) {
       DB.initPlayersListener();
       DB.initChallengesListener();
       DB.initNewsListener();
-      console.log('✅ Listeners de Firestore inicializados - Datos en tiempo real activado');
-      
+      console.log('✅ Listeners de Firestore inicializados desde script.js');
+
       // Listener para actualizar ranking cuando cambien los desafíos
       DB.addEventListener('challenges-updated', (data) => {
         console.log('📊 Desafíos actualizados, recalculando ranking...');
@@ -422,7 +440,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Check which page we are on
     if (document.getElementById('forecast') || document.getElementById('selectedWeatherBox')) {
         fetchWeather();
-        setInterval(fetchWeather, 60 * 60 * 1000);
+        // Limpiar intervalo anterior si existe (evita acumulación)
+        if (window._weatherIntervalId) clearInterval(window._weatherIntervalId);
+        window._weatherIntervalId = setInterval(fetchWeather, 60 * 60 * 1000);
     }
 
     if (document.getElementById('tableM')) {

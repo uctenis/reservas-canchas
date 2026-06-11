@@ -806,6 +806,39 @@ const rankingState = {
 let rankingEditMode = false;
 let initialRankingOrder = [];
 
+// ── Debounce util para evitar renders múltiples ──
+function debounce(fn, delay) {
+  let timer;
+  return function(...args) {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn.apply(this, args), delay);
+  };
+}
+
+const debouncedRenderAll = debounce(() => {
+  applyLocalChallengesToRanking();
+  renderAll();
+  checkPendingChallengesAlert();
+}, 300);
+
+const debouncedRefreshRanking = debounce(() => {
+  // Solo actualizar listas desde caché (no re-fetch Firebase)
+  if (rankingState.source === 'firebase') {
+    const players = typeof cachedPlayers !== 'undefined' && cachedPlayers.length > 0
+      ? cachedPlayers
+      : null;
+    if (players) {
+      const split = splitPlayersByStatus(players);
+      rankingState.lists = split.active;
+      rankingState.inactive = split.inactive;
+      finalizeRankingLoad();
+      renderAll();
+      return;
+    }
+  }
+  refreshRankingPage();
+}, 400);
+
 document.addEventListener('DOMContentLoaded', () => {
   DB.seed();
   setupEvents();
@@ -818,17 +851,15 @@ document.addEventListener('DOMContentLoaded', () => {
     DB.initPlayersListener();
     DB.initChallengesListener();
     DB.initNewsListener();
-    
+
     DB.addEventListener('challenges-updated', () => {
-      console.log('🔄 Desafíos actualizados en Firestore, recargando Ranking...');
-      applyLocalChallengesToRanking();
-      renderAll();
-      checkPendingChallengesAlert();
+      console.log('🔄 Desafíos actualizados, recalculando ranking...');
+      debouncedRenderAll();
     });
-    
+
     DB.addEventListener('players-updated', () => {
-      console.log('🔄 Jugadores actualizados en Firestore, recargando Ranking...');
-      refreshRankingPage();
+      console.log('🔄 Jugadores actualizados, refrescando ranking...');
+      debouncedRefreshRanking();
     });
   }
 
