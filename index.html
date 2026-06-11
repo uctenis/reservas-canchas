@@ -118,8 +118,9 @@
       border: var(--glass-border);
       border-radius: 20px;
       padding: 16px;
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      transform: translateZ(0);
     }
     .compact-match-grid {
       display: grid;
@@ -432,9 +433,10 @@
       border: var(--glass-border);
       border-radius: 20px;
       padding: 16px;
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
       height: 100%;
+      transform: translateZ(0);
     }
     .sidebar-news-list {
       display: flex;
@@ -2194,6 +2196,16 @@ function closeFloatingAlert() {
 }
 window.closeFloatingAlert = closeFloatingAlert;
 
+// ── Debounce util para index.html ──
+(function() {
+  let _liveDataTimer = null;
+  const _origLoadLiveData = loadLiveData;
+  window.loadLiveData = function() {
+    clearTimeout(_liveDataTimer);
+    _liveDataTimer = setTimeout(() => _origLoadLiveData(), 500);
+  };
+})();
+
 document.addEventListener('DOMContentLoaded', () => {
   // Redirect to ranking.html if ?accept is in URL
   const urlParams = new URLSearchParams(window.location.search);
@@ -2209,11 +2221,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // Listen to real-time events to reload UI
   if (typeof DB !== 'undefined') {
     DB.addEventListener('challenges-updated', () => {
-      console.log('🔄 Desafíos actualizados en Firestore, recargando Home...');
+      console.log('🔄 Desafíos actualizados, recargando Home...');
       loadLiveData();
     });
     DB.addEventListener('news-updated', () => {
-      console.log('📰 Novedades actualizadas en Firestore, recargando Home...');
+      console.log('📰 Novedades actualizadas, recargando Home...');
       loadLiveData();
     });
   }
