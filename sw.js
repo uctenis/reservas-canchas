@@ -1,5 +1,22 @@
-const CACHE_NAME = 'tenis-uct-cache-v22';
-const urlsToCache = ['./', 'index.html', 'normas.html', 'reservas.html', 'ranking.html', 'cec.jpg', 'cjp.jpg', 'logo_uctenis_v03.png', 'fotos/leader_badge.png'];
+const CACHE_NAME = 'tenis-uct-cache-v23';
+const urlsToCache = [
+  './',
+  'index.html',
+  'normas.html',
+  'reservas.html',
+  'ranking.html',
+  'db.js',
+  'script.js',
+  'style.css',
+  'ranking.css',
+  'reservas.css',
+  'manifest.json',
+  'favicon.ico',
+  'cec.jpg',
+  'cjp.jpg',
+  'logo_uctenis_v03.png',
+  'fotos/leader_badge.png'
+];
 
 self.addEventListener('install', event => {
   self.skipWaiting();
@@ -16,6 +33,6 @@ self.addEventListener('activate', event => {
 // Network-first: siempre busca en red, cache solo como fallback
 self.addEventListener('fetch', event => {
   event.respondWith(
-    fetch(event.request).catch(() => caches.match(event.request))
+    fetch(event.request).catch(() => caches.match(event.request, { ignoreSearch: true }))
   );
 });
