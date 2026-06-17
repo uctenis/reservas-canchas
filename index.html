@@ -772,6 +772,141 @@
       text-align: center; font-size: 0.78rem; color: rgba(255,255,255,0.5);
       margin-top: 12px;
     }
+
+    /* ── Birthday Banner ── */
+    #birthdayBanner {
+      display: none;
+      position: relative;
+      overflow: hidden;
+      margin-bottom: 24px;
+      border-radius: 24px;
+      padding: 0;
+      background: linear-gradient(135deg, #1a0533 0%, #2d0a52 40%, #0f1a3a 100%);
+      border: 1.5px solid rgba(200, 100, 255, 0.35);
+      box-shadow: 0 8px 40px rgba(140, 60, 220, 0.25), 0 0 0 1px rgba(255,255,255,0.04);
+      animation: bdaySlideIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+    }
+    @keyframes bdaySlideIn {
+      from { opacity: 0; transform: translateY(-18px) scale(0.97); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .bday-confetti-layer {
+      position: absolute; inset: 0; pointer-events: none; overflow: hidden; border-radius: 24px;
+    }
+    .bday-confetti-dot {
+      position: absolute;
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      opacity: 0.7;
+      animation: bdayFloat linear infinite;
+    }
+    @keyframes bdayFloat {
+      0%   { transform: translateY(110%) rotate(0deg); opacity: 0; }
+      10%  { opacity: 0.7; }
+      90%  { opacity: 0.7; }
+      100% { transform: translateY(-30px) rotate(720deg); opacity: 0; }
+    }
+    .bday-inner {
+      position: relative; z-index: 2;
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      padding: 20px 24px;
+    }
+    .bday-photo-wrap {
+      position: relative;
+      flex-shrink: 0;
+    }
+    .bday-photo {
+      width: 80px; height: 80px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 3px solid rgba(200, 130, 255, 0.6);
+      box-shadow: 0 0 0 4px rgba(180, 80, 255, 0.15), 0 4px 20px rgba(0,0,0,0.4);
+      animation: bdayPulsePhoto 2.5s ease-in-out infinite;
+    }
+    @keyframes bdayPulsePhoto {
+      0%, 100% { box-shadow: 0 0 0 4px rgba(180,80,255,0.15), 0 4px 20px rgba(0,0,0,0.4); }
+      50%  { box-shadow: 0 0 0 8px rgba(180,80,255,0.28), 0 4px 30px rgba(0,0,0,0.5); }
+    }
+    .bday-cake-badge {
+      position: absolute;
+      bottom: -2px; right: -2px;
+      background: linear-gradient(135deg, #f59e0b, #ef4444);
+      border-radius: 50%;
+      width: 26px; height: 26px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px;
+      border: 2px solid #1a0533;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      animation: bdayCakeBounce 1.2s ease-in-out infinite;
+    }
+    @keyframes bdayCakeBounce {
+      0%, 100% { transform: scale(1) rotate(-5deg); }
+      50%       { transform: scale(1.15) rotate(5deg); }
+    }
+    .bday-text-col {
+      flex: 1;
+      min-width: 0;
+    }
+    .bday-kicker {
+      font-size: 0.65rem;
+      font-weight: 900;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #c084fc;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .bday-kicker::before {
+      content: '';
+      display: inline-block;
+      width: 16px; height: 2px;
+      background: #c084fc;
+      border-radius: 2px;
+    }
+    .bday-title {
+      font-size: 1.18rem;
+      font-weight: 900;
+      color: #fff;
+      margin: 0 0 5px;
+      line-height: 1.2;
+    }
+    .bday-title span {
+      background: linear-gradient(90deg, #e879f9, #c084fc, #818cf8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .bday-subtitle {
+      font-size: 0.82rem;
+      color: rgba(255,255,255,0.6);
+      line-height: 1.4;
+    }
+    .bday-glow-orb {
+      position: absolute;
+      border-radius: 50%;
+      pointer-events: none;
+      filter: blur(40px);
+      opacity: 0.18;
+    }
+    .bday-glow-1 {
+      width: 180px; height: 180px;
+      background: #a855f7;
+      top: -40px; left: -20px;
+    }
+    .bday-glow-2 {
+      width: 140px; height: 140px;
+      background: #3b82f6;
+      bottom: -30px; right: 20px;
+    }
+    @media (max-width: 600px) {
+      .bday-photo { width: 62px; height: 62px; }
+      .bday-title { font-size: 1rem; }
+      .bday-inner { padding: 16px; gap: 14px; }
+    }
   </style>
 </head>
 <body>
@@ -789,6 +924,24 @@
   <main>
     <!-- ── TOP PENDING CHALLENGE ALERT ── -->
     <div id="topChallengeAlert" class="top-challenge-alert" style="display:none;"></div>
+
+    <!-- ── BIRTHDAY BANNER (shown only on the player's exact birthday) ── -->
+    <div id="birthdayBanner" role="banner" aria-label="Saludo de cumpleaños">
+      <div class="bday-glow-orb bday-glow-1"></div>
+      <div class="bday-glow-orb bday-glow-2"></div>
+      <div class="bday-confetti-layer" id="bdayConfettiLayer"></div>
+      <div class="bday-inner">
+        <div class="bday-photo-wrap">
+          <img id="bdayPhoto" src="fotos/default_avatar_h.png" alt="Foto de cumpleañero" class="bday-photo" onerror="this.src='fotos/default_avatar_h.png'">
+          <div class="bday-cake-badge">🎂</div>
+        </div>
+        <div class="bday-text-col">
+          <div class="bday-kicker">Cumpleaños UCTenis</div>
+          <p class="bday-title">¡Feliz Cumpleaños, <span id="bdayPlayerName">Jugador</span>! 🎉</p>
+          <p class="bday-subtitle" id="bdaySubtitle">Desde todo el club te deseamos un excelente día. ¡Que lo celebres con una buena partida en las canchas! 🎾</p>
+        </div>
+      </div>
+    </div>
 
     <!-- ── ACTIONS HERO GRID (Reservar Cancha + Ver Ranking) ── -->
     <div class="actions-hero-grid">
@@ -957,6 +1110,92 @@
 <script>
 // Admin emails (must match db.js)
 const ADMIN_EMAILS = ['uctenisclub@gmail.com', 'dsilva@uct.cl'];
+
+// ── Birthday Banner Logic ──────────────────────────────────────────────────
+function showBirthdayBanner(birthdayPlayers, playersMap) {
+  const banner = document.getElementById('birthdayBanner');
+  if (!banner) return;
+
+  if (!birthdayPlayers || birthdayPlayers.length === 0) {
+    banner.style.display = 'none';
+    return;
+  }
+
+  // Build confetti particles
+  const confettiLayer = document.getElementById('bdayConfettiLayer');
+  if (confettiLayer && confettiLayer.childElementCount === 0) {
+    const colors = ['#e879f9','#c084fc','#818cf8','#fbbf24','#34d399','#f472b6','#60a5fa','#fb923c'];
+    const shapes = ['50%', '2px', '0%']; // circle, rectangle, square
+    for (let i = 0; i < 22; i++) {
+      const dot = document.createElement('div');
+      dot.className = 'bday-confetti-dot';
+      const color = colors[i % colors.length];
+      const size = 5 + Math.random() * 7;
+      const borderRadius = shapes[i % shapes.length];
+      dot.style.cssText = `
+        left: ${Math.random() * 100}%;
+        bottom: 0;
+        width: ${size}px;
+        height: ${size}px;
+        background: ${color};
+        border-radius: ${borderRadius};
+        animation-duration: ${2.5 + Math.random() * 3}s;
+        animation-delay: ${Math.random() * 3}s;
+      `;
+      confettiLayer.appendChild(dot);
+    }
+  }
+
+  // If multiple players share the birthday today, rotate every 4 seconds
+  let currentIdx = 0;
+
+  function displayPlayer(player) {
+    const nameEl     = document.getElementById('bdayPlayerName');
+    const photoEl    = document.getElementById('bdayPhoto');
+    const subtitleEl = document.getElementById('bdaySubtitle');
+    if (!nameEl || !photoEl) return;
+
+    const firstName = (player.nombre || 'Jugador').trim().split(/\s+/)[0];
+    const lastName  = (player.nombre || '').trim().split(/\s+/).slice(1).join(' ');
+    nameEl.textContent = player.nombre || 'Jugador';
+
+    // Resolve photo from the player record or from playersMap lookup
+    const resolved = playersMap
+      ? (playersMap[(player.nombre || '').toLowerCase().trim()] || playersMap[(player.id || '').toLowerCase().trim()] || player)
+      : player;
+    const photoSrc = resolved.foto || player.foto || '';
+    const defaultAvatar = (player.genero === 'F' || resolved.genero === 'F')
+      ? 'fotos/default_avatar_f.png'
+      : 'fotos/default_avatar_h.png';
+    photoEl.src = photoSrc || defaultAvatar;
+    photoEl.onerror = () => { photoEl.src = defaultAvatar; };
+    photoEl.alt = `Foto de ${player.nombre}`;
+
+    // Dynamic subtitle based on category
+    const cat = resolved.categoria || player.categoria || '';
+    const catText = cat ? ` (Categoría ${cat})` : '';
+    if (subtitleEl) {
+      if (birthdayPlayers.length > 1) {
+        subtitleEl.textContent = `¡Hoy ${birthdayPlayers.length} socios están de cumpleaños! El club UCTenis saluda muy afectuosamente a ${player.nombre}${catText} y a todos los cumpleañeros del día. 🎾🎊`;
+      } else {
+        subtitleEl.textContent = `Desde todo el club UCTenis te deseamos un excelente día${catText}. ¡Que lo celebres con una buena partida en las canchas! 🎾`;
+      }
+    }
+  }
+
+  displayPlayer(birthdayPlayers[0]);
+  banner.style.display = 'block';
+
+  // If there are multiple birthday players, cycle through them
+  if (birthdayPlayers.length > 1) {
+    setInterval(() => {
+      currentIdx = (currentIdx + 1) % birthdayPlayers.length;
+      displayPlayer(birthdayPlayers[currentIdx]);
+    }, 4000);
+  }
+}
+window.showBirthdayBanner = showBirthdayBanner;
+// ──────────────────────────────────────────────────────────────────────────
 
 function escapeHTML(str) {
   if (!str) return '';
@@ -1642,30 +1881,60 @@ async function loadLiveData() {
       };
     }
 
-    // 3. Birthdays of the Month
-    const currentMonth = new Date().getMonth() + 1; // 1-12
-    const bdays = playersList.filter(p => {
-      if (!p.fechaNacimiento || p.activo === false || p.participaRanking === false) return false;
-      let month = 0;
-      if (p.fechaNacimiento.includes('-')) {
-        month = Number(p.fechaNacimiento.split('-')[1]);
-      } else if (p.fechaNacimiento.includes('/')) {
-        month = Number(p.fechaNacimiento.split('/')[1]);
+    // 3. Birthdays: detect today's birthday AND month birthdays
+    const now       = new Date();
+    const todayDay   = now.getDate();
+    const todayMonth = now.getMonth() + 1; // 1-12
+
+    // Helper: parse DD and MM from a fechaNacimiento string (YYYY-MM-DD or DD/MM/YYYY)
+    function parseBdayParts(fechaNacimiento) {
+      if (!fechaNacimiento) return null;
+      const str = String(fechaNacimiento).trim();
+      if (str.includes('-')) {
+        // ISO: YYYY-MM-DD
+        const parts = str.split('-');
+        return parts.length >= 3 ? { day: Number(parts[2]), month: Number(parts[1]) } : null;
+      } else if (str.includes('/')) {
+        // DD/MM/YYYY
+        const parts = str.split('/');
+        return parts.length >= 3 ? { day: Number(parts[0]), month: Number(parts[1]) } : null;
       }
-      return month === currentMonth;
+      return null;
+    }
+
+    // Find players with birthday TODAY
+    const todayBirthdays = playersList.filter(p => {
+      if (!p.fechaNacimiento || p.activo === false || p.participaRanking === false) return false;
+      const parts = parseBdayParts(p.fechaNacimiento);
+      return parts && parts.day === todayDay && parts.month === todayMonth;
     });
 
-    if (bdays.length > 0) {
+    // Find players with birthday THIS MONTH (for the sidebar card)
+    const monthBirthdays = playersList.filter(p => {
+      if (!p.fechaNacimiento || p.activo === false || p.participaRanking === false) return false;
+      const parts = parseBdayParts(p.fechaNacimiento);
+      return parts && parts.month === todayMonth;
+    });
+
+    // Show the special hero birthday banner for TODAY's birthday players
+    showBirthdayBanner(todayBirthdays, playersMap);
+
+    if (monthBirthdays.length > 0) {
       const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-      const namesStr = bdays.map(p => p.nombre).join(', ');
-      
+      const todayNames   = todayBirthdays.map(p => p.nombre);
+      const monthOnlyNames = monthBirthdays.filter(p => !todayNames.includes(p.nombre)).map(p => p.nombre);
+      const allNames = [
+        ...todayNames.map(n => `🎂 ${n} (¡hoy!)`),
+        ...monthOnlyNames
+      ];
+      const namesStr = allNames.join(', ');
       birthdaysCard = {
-        id: `auto-birthdays-${currentMonth}`,
+        id: `auto-birthdays-${todayMonth}`,
         badgeClass: 'badge-app',
-        badgeText: 'Cumpleaños',
-        title: `¡Feliz cumpleaños en ${monthNames[currentMonth - 1]}!`,
-        body: `Saludamos afectuosamente en su mes de cumpleaños a nuestros jugadores: ${namesStr}. ¡Que tengan un excelente año y nos vemos en las canchas! 🎂🎈`,
-        date: `1 ${monthNames[currentMonth - 1].slice(0, 3)}`
+        badgeText: '🎂 Cumpleaños',
+        title: `¡Cumpleaños en ${monthNames[todayMonth - 1]}!`,
+        body: `Saludamos afectuosamente a nuestros socios en su mes de cumpleaños: ${namesStr}. ¡Que lo celebren con una buena partida en las canchas! 🎾`,
+        date: `${todayDay} ${monthNames[todayMonth - 1].slice(0, 3)}`
       };
     }
   } catch (err) {
