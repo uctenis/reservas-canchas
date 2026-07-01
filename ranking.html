@@ -4572,6 +4572,34 @@ function findChallengePlayerIndex(list, playerId, playerEmail, playerNombre) {
   return -1;
 }
 
+function reverseScoreString(marcador) {
+  if (!marcador) return '';
+  return marcador.split(',').map(setStr => {
+    setStr = setStr.trim();
+    const match = setStr.match(/^(\d+)-(\d+)(?:\((\d+)-(\d+)\))?$/);
+    if (match) {
+      const s1 = match[1];
+      const s2 = match[2];
+      const tb1 = match[3];
+      const tb2 = match[4];
+      if (tb1 !== undefined && tb2 !== undefined) {
+        return `${s2}-${s1}(${tb2}-${tb1})`;
+      }
+      return `${s2}-${s1}`;
+    }
+    return setStr;
+  }).join(', ');
+}
+
+function formatScoreForPlayer(c, player) {
+  if (!c || !c.marcador) return '';
+  const isRetador = playerMatchesChallengeRef(player, c.retadorId);
+  if (isRetador) {
+    return c.marcador;
+  }
+  return reverseScoreString(c.marcador);
+}
+
 function playerMatchesChallengeRef(player, ref) {
   const raw = normalizeKey(ref);
   return Boolean(player && ref && (
@@ -4651,7 +4679,7 @@ function showPlayerProfile(playerKey) {
                   <span style="color:var(--text-primary); font-weight:600;">${typeIcon} vs ${escapeHTML(oppName)}</span>
                   <span style="color:var(--text-secondary); font-size:0.72rem;">${typeLabel} · ${escapeHTML(dateStr || '')}</span>
                 </span>
-                <strong style="color:${won ? '#4ade80' : '#f87171'}; font-variant-numeric:tabular-nums; white-space:nowrap;">${won ? '✓ ' : '✗ '}${escapeHTML(c.marcador || (c.status === 'wo_retador' || c.status === 'wo_retado' ? 'W.O.' : '-'))}</strong>
+                <strong style="color:${won ? '#4ade80' : '#f87171'}; font-variant-numeric:tabular-nums; white-space:nowrap;">${won ? '✓ ' : '✗ '}${escapeHTML(formatScoreForPlayer(c, player) || (c.status === 'wo_retador' || c.status === 'wo_retado' ? 'W.O.' : '-'))}</strong>
               </li>
             `;
           }).join('')}

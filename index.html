@@ -1306,7 +1306,7 @@ function renderNewsGrid(topMoverCard, latestMatchCard, nextMatchCard, birthdaysC
       ? (JSON.parse(localStorage.getItem('uctenis_challenges') || '[]')).find(c => c.id === item.challengeId)
       : null;
     const hasResult = challenge && (challenge.status === 'completado' || challenge.marcador || challenge.ganadorId);
-    const scoreText = hasResult ? challenge.marcador : '';
+    const scoreText = hasResult ? formatScoreForWinner(challenge) : '';
     const winnerName = hasResult 
       ? (challenge.ganadorId === challenge.retadorId ? challenge.retadorNombre : challenge.retadoNombre)
       : '';
@@ -1830,6 +1830,7 @@ async function loadLiveData() {
       const isFriendly = latestMatch.tipo === 'amistoso';
       const isCampeonato = latestMatch.tipo === 'campeonato';
       
+      const displayScore = formatScoreForWinner(latestMatch);
       latestMatchCard = {
         id: `auto-latest-match-${latestMatch.id}`,
         badgeClass: isCampeonato ? 'badge-torneo' : (isFriendly ? 'badge-app' : 'badge-torneo'),
@@ -1840,10 +1841,10 @@ async function loadLiveData() {
             ? `¡Partido Amistoso: ${winnerName} vence a ${loserName}!` 
             : `¡Gran Desafío: ${winnerName} vence a ${loserName}!`),
         body: isCampeonato
-          ? `En un emocionante encuentro por el Campeonato jugado en ${latestMatch.cancha || 'UCTenis'} el ${formatDateShort(latestMatch.fecha)}, ${winnerName} superó a ${loserName} por un marcador de ${latestMatch.marcador}. ¡Felicidades!`
+          ? `En un emocionante encuentro por el Campeonato jugado en ${latestMatch.cancha || 'UCTenis'} el ${formatDateShort(latestMatch.fecha)}, ${winnerName} superó a ${loserName} por un marcador de ${displayScore}. ¡Felicidades!`
           : (isFriendly
-            ? `En el encuentro amistoso jugado en ${latestMatch.cancha || 'UCTenis'} el ${formatDateShort(latestMatch.fecha)}, ${winnerName} superó a ${loserName} por un marcador de ${latestMatch.marcador}. ¡Buen juego!`
-            : `En el duelo oficial del ranking ${genderText} jugado en ${latestMatch.cancha || 'UCTenis'} el ${formatDateShort(latestMatch.fecha)}, ${winnerName} superó a ${loserName} por un marcador de ${latestMatch.marcador}, escalando posiciones en la escalerilla. ¡Felicitaciones a ambos!`),
+            ? `En el encuentro amistoso jugado en ${latestMatch.cancha || 'UCTenis'} el ${formatDateShort(latestMatch.fecha)}, ${winnerName} superó a ${loserName} por un marcador de ${displayScore}. ¡Buen juego!`
+            : `En el duelo oficial del ranking ${genderText} jugado en ${latestMatch.cancha || 'UCTenis'} el ${formatDateShort(latestMatch.fecha)}, ${winnerName} superó a ${loserName} por un marcador de ${displayScore}, escalando posiciones en la escalerilla. ¡Felicitaciones a ambos!`),
         date: formatDateShort(latestMatch.actualizado || latestMatch.creado || latestMatch.fecha)
       };
     }
@@ -2250,7 +2251,7 @@ async function loadLiveData() {
       
       const courtStr = (c.courtLabel || c.cancha || '').trim() || 'Cancha';
       const dateStr = formatDateShort(c.fecha) || '';
-      const scoreStr = c.marcador || 'v/d';
+      const scoreStr = formatScoreForWinner(c);
       if (!c.retadorId && !c.retadorNombre && !c.retadoId && !c.retadoNombre) return ''; // skip corrupt records
       
       // Comments rendering (chat bubbles only, no emojis inside comments)
@@ -2750,6 +2751,34 @@ async function homeRespondChallenge(challengeId, accept) {
   }
 }
 window.homeRespondChallenge = homeRespondChallenge;
+
+function reverseScoreString(marcador) {
+  if (!marcador) return '';
+  return marcador.split(',').map(setStr => {
+    setStr = setStr.trim();
+    const match = setStr.match(/^(\d+)-(\d+)(?:\((\d+)-(\d+)\))?$/);
+    if (match) {
+      const s1 = match[1];
+      const s2 = match[2];
+      const tb1 = match[3];
+      const tb2 = match[4];
+      if (tb1 !== undefined && tb2 !== undefined) {
+        return `${s2}-${s1}(${tb2}-${tb1})`;
+      }
+      return `${s2}-${s1}`;
+    }
+    return setStr;
+  }).join(', ');
+}
+
+function formatScoreForWinner(c) {
+  if (!c || !c.marcador) return 'v/d';
+  const isWinnerRetador = c.ganadorId === c.retadorId;
+  if (isWinnerRetador) {
+    return c.marcador;
+  }
+  return reverseScoreString(c.marcador);
+}
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
