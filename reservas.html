@@ -1,0 +1,1836 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reservar Cancha – UCTenis</title>
+  <link rel="icon" href="logo_uctenis_v03.png" type="image/png">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="reservas.css">
+</head>
+<body>
+  <div id="debug-error-console" style="background:#ef4444; color:#fff; padding:15px; font-family:monospace; font-size:13px; display:none; position:fixed; top:0; left:0; width:100%; z-index:999999; box-shadow:0 4px 12px rgba(0,0,0,0.3);">
+    <h3 style="margin:0 0 8px 0; font-size:14px; font-weight:800;">🚨 Error de JavaScript Detectado:</h3>
+    <pre id="debug-error-text" style="margin:0; white-space:pre-wrap; word-break:break-all;"></pre>
+    <button onclick="this.parentElement.style.display='none'" style="margin-top:10px; background:#fff; color:#ef4444; border:none; padding:4px 8px; border-radius:4px; font-weight:bold; cursor:pointer;">Cerrar</button>
+  </div>
+  <script>
+    window.addEventListener('error', function(e) {
+      document.getElementById('debug-error-console').style.display = 'block';
+      document.getElementById('debug-error-text').textContent += e.message + '\n  en ' + e.filename + ':' + e.lineno + ':' + e.colno + '\n\n';
+    });
+    window.addEventListener('unhandledrejection', function(e) {
+      document.getElementById('debug-error-console').style.display = 'block';
+      document.getElementById('debug-error-text').textContent += 'Rechazo de Promesa: ' + (e.reason ? (e.reason.stack || e.reason.message || e.reason) : e) + '\n\n';
+    });
+  </script>
+<div class="main-container">
+
+  <header>
+    <a href="index.html"><img src="logo_uctenis_v03.png" alt="UCTenis" class="club-logo" style="width:80px;margin-bottom:10px"></a>
+    <h1>Reservar Cancha</h1>
+    <div id="userBar" class="res-user-bar"></div>
+  </header>
+
+  <div class="step-indicator">
+    <div class="step active" id="si1" style="cursor:pointer;" onclick="tryGoStep(1)"><span>1</span> Fecha</div>
+    <div class="step-line"></div>
+    <div class="step" id="si2" style="cursor:pointer;" onclick="tryGoStep(2)"><span>2</span> Horario</div>
+    <div class="step-line"></div>
+    <div class="step" id="si3" style="cursor:pointer;" onclick="tryGoStep(3)"><span>3</span> Confirmar</div>
+  </div>
+
+  <!-- PASO 1: DATE STRIP -->
+  <section id="stepDate" class="step-section">
+    <h2 class="step-title">¿Qué día quieres jugar?</h2>
+    <div class="date-strip" id="dateStrip"></div>
+    <p class="rule-note">🚫 No hay reservas los domingos</p>
+
+    <!-- ── WEATHER DETAIL FOR SELECTED DAY ── -->
+    <div class="weather-detail-box" id="selectedWeatherBox" style="margin-top: 24px; padding: 20px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 20px; display: none;">
+      <h3 style="font-size: 1rem; display: flex; align-items: center; gap: 10px; color: var(--text-primary); margin-top: 0; margin-bottom: 14px;">
+        <span id="weatherDetailIcon" style="font-size: 1.6rem; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.25));">🌤️</span>
+        <span id="weatherDetailTitle" style="font-weight: 800;">Pronóstico del tiempo</span>
+      </h3>
+      <div style="display: flex; gap: 24px; align-items: center; flex-wrap: wrap;">
+        <div style="flex: 0 0 auto; min-width: 140px;">
+          <div style="font-size: 1.8rem; font-weight: 800; color: var(--text-primary); letter-spacing: -0.02em;" id="weatherDetailTemps">--°C / --°C</div>
+          <div style="font-size: 0.82rem; color: var(--text-secondary); margin-top: 4px; display: flex; align-items: center; gap: 4px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="color: #60a5fa;"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>
+            <span id="weatherDetailRain">Probabilidad: --%</span>
+          </div>
+        </div>
+        <div style="flex: 1; min-width: 220px; padding-left: 20px; border-left: 1.5px solid rgba(255,255,255,0.08)" id="weatherDetailRecommendationCol">
+          <p class="smart-suggestion" id="weatherDetailSuggestion" style="font-size: 0.88rem; line-height: 1.45; color: var(--accent-tennis); margin: 0; font-weight: 600;">Selecciona un día para ver la recomendación climática.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PASO 2: COURTS & SLOTS -->
+  <section id="stepSlot" class="step-section hidden">
+    <h2 class="step-title">Elige tu cancha y horario</h2>
+    <p class="step-sub" id="slotSubtitle"></p>
+
+    <!-- ── WEATHER DETAIL FOR SELECTED DAY (HOURLY) ── -->
+    <div class="weather-detail-box weather-step2-box" id="step2WeatherBox" style="margin: 0 auto 24px auto; max-width: 800px; padding: 20px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 20px; display: none;">
+      <div class="weather-step2-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 12px; flex-wrap: wrap; gap: 10px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span id="step2WeatherIcon" style="font-size: 1.6rem; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.25));">🌤️</span>
+          <h3 style="font-size: 1rem; color: var(--text-primary); margin: 0; font-weight: 800; display: flex; align-items: center; gap: 6px;">Detalle del clima</h3>
+        </div>
+        <div style="font-weight: 700; color: var(--accent-tennis); font-size: 0.9rem;" id="step2WeatherSummaryText">--</div>
+      </div>
+      
+      <div class="weather-step2-body">
+        <div style="display: flex; gap: 24px; align-items: center; flex-wrap: wrap; margin-bottom: 16px;">
+          <div style="flex: 0 0 auto; min-width: 140px;">
+            <div style="font-size: 1.8rem; font-weight: 800; color: var(--text-primary); letter-spacing: -0.02em;" id="step2WeatherTemps">--°C / --°C</div>
+            <div style="font-size: 0.82rem; color: var(--text-secondary); margin-top: 4px; display: flex; align-items: center; gap: 4px;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="color: #60a5fa;"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>
+              <span id="step2WeatherRain">Probabilidad: --%</span>
+            </div>
+          </div>
+          <div style="flex: 1; min-width: 220px; padding-left: 20px; border-left: 1.5px solid rgba(255,255,255,0.08)" id="step2WeatherRecommendationCol">
+            <p class="smart-suggestion" id="step2WeatherSuggestion" style="font-size: 0.88rem; line-height: 1.45; color: var(--accent-tennis); margin: 0; font-weight: 600;">Cargando sugerencia...</p>
+          </div>
+        </div>
+        
+        <div style="border-top: 1px solid rgba(255,255,255,0.06); padding-top: 16px;">
+          <h4 style="font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); margin: 0 0 12px 0; font-weight: 700; display: flex; align-items: center; gap: 6px;">
+            ⏰ Pronóstico por Horas
+          </h4>
+          <div class="hourly-weather-timeline" id="step2HourlyTimeline">
+            <!-- Horas -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="legend-row">
+      <span class="leg leg-free">Disponible</span>
+      <span class="leg leg-busy">Ocupado</span>
+      <span class="leg leg-clases">Clases UCTenis</span>
+      <span class="leg leg-desafio">Desafío</span>
+      <span class="leg leg-amistoso">Amistoso</span>
+      <span class="leg leg-mine">Mi reserva</span>
+      <span class="leg leg-sel">Seleccionado</span>
+    </div>
+    
+    <div id="courtsSlotsContainer"></div>
+    
+    <p class="rule-note">⏱ Cada bloque = 1.5 horas · Máx. 1 reserva por día</p>
+    
+    <div id="selectedSlotInfo" style="text-align: center; margin-top: 20px; margin-bottom: 12px; min-height: 24px; color: var(--accent-tennis); font-weight: 600; font-size: 1.05rem;">
+      ⚠️ Ningún horario seleccionado
+    </div>
+
+    <div class="confirm-actions" style="margin-top: 16px; display: flex; gap: 12px; justify-content: center;">
+      <button class="btn-back" onclick="goStep(1)">← Cambiar Fecha</button>
+      <button class="btn-next" id="btnConfirmSlot" style="margin: 0; padding: 12px 36px; font-size: 1.05rem;" disabled>Continuar →</button>
+    </div>
+  </section>
+
+  <!-- PASO 3: CONFIRM -->
+  <section id="stepConfirm" class="step-section hidden">
+    <div class="confirm-card glass-card">
+      <div class="confirm-icon" id="confirmIcon">🎾</div>
+      <h2 id="confirmTitle">Confirma tu reserva</h2>
+      <div class="confirm-details" id="confirmDetails"></div>
+      <div class="confirm-actions">
+        <button class="btn-back" onclick="goStep(2)">← Cambiar Horario</button>
+        <button class="btn-confirm" id="btnFinalConfirm">✅ Confirmar reserva</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- MIS RESERVAS -->
+  <section class="glass-card my-bookings-section" id="myBookingsSection" style="display:none">
+    <h2 class="section-title">📋 Mis Reservas</h2>
+    <div id="myBookingsList"></div>
+  </section>
+
+  <div style="text-align:center;margin-top:30px">
+    <a href="index.html" class="btn-pill">← Volver al inicio</a>
+  </div>
+</div>
+
+<!-- AUTH MODAL -->
+<div class="modal-overlay" id="authModal">
+  <div class="modal-content auth-mc" style="max-width:420px; border-radius:24px; overflow:hidden;">
+    <button class="modal-close-btn" onclick="closeAuth()">×</button>
+    
+    <div id="authMainView" style="padding: 10px 5px;">
+      <div style="font-size:3.5rem; text-align:center; margin-bottom:12px;">🔑</div>
+      <h3 style="margin-bottom:8px;font-size:1.4rem;text-align:center;color:var(--text-primary);">Ingresar a UCTenis</h3>
+      <p style="color:var(--text-secondary);font-size:0.9rem;text-align:center;margin-bottom:24px;">Identifícate con tu cuenta de Google para continuar.</p>
+      
+      <div id="googleBtnContainer" style="margin-bottom: 12px;">
+        <button onclick="handleGoogleLogin()" class="btn-primary" style="display:flex;align-items:center;justify-content:center;gap:12px;background:#ffffff;color:#1f2937;font-weight:600;border:1px solid #e5e7eb;box-shadow:0 2px 4px rgba(0,0,0,0.05);transition:all 0.2s;width:100%;padding:12px;border-radius:12px;">
+          <svg width="20" height="20" viewBox="0 0 24 24"><path fill="#EA4335" d="M12 5.04c1.66 0 3.2.57 4.38 1.69l3.27-3.27C17.68 1.54 14.98 1 12 1 7.35 1 3.37 3.67 1.39 7.56l3.89 3.02C6.21 7.62 8.87 5.04 12 5.04z"/><path fill="#4285F4" d="M23.49 12.27c0-.81-.07-1.59-.2-2.34H12v4.44h6.44c-.28 1.48-1.12 2.73-2.38 3.58l3.69 2.87c2.16-1.99 3.74-4.92 3.74-8.55z"/><path fill="#FBBC05" d="M5.28 14.42c-.22-.66-.35-1.37-.35-2.1s.13-1.44.35-2.1L1.39 7.2C.5 8.98 0 10.94 0 13s.5 4.02 1.39 5.8l3.89-3.02z"/><path fill="#34A853" d="M12 23c3.24 0 5.97-1.07 7.96-2.91l-3.69-2.87c-1.12.75-2.54 1.21-4.27 1.21-3.13 0-5.79-2.58-6.73-5.54L1.39 15.9C3.37 19.8 7.35 23 12 23z"/></svg>
+          Ingresar con Google
+        </button>
+      </div>
+
+      <div id="mockLoginContainer" style="margin-top: 15px; padding: 15px; border-radius: 16px; background: rgba(251,191,36,0.06); border: 1px dashed rgba(251,191,36,0.25);">
+        <p style="color:#fbbf24; font-size:0.82rem; line-height:1.4; margin:0 0 12px 0; text-align:center;">
+          ⚠️ <strong>Modo Simulación Activo</strong><br>Firebase no configurado en `db.js`
+        </p>
+        <div class="form-group" style="margin-bottom: 10px;">
+          <label style="font-size:0.75rem; color:var(--text-secondary); margin-bottom:4px; display:block;">Simular Correo Electrónico</label>
+          <input type="email" id="mockEmail" placeholder="socio@gmail.com" style="padding:8px 12px; font-size:0.85rem; width:100%; border-radius:8px;" value="lotth@uct.cl">
+        </div>
+        <div class="form-group" style="margin-bottom: 12px;">
+          <label style="font-size:0.75rem; color:var(--text-secondary); margin-bottom:4px; display:block;">Simular Nombre</label>
+          <input type="text" id="mockNombre" placeholder="Nombre completo" style="padding:8px 12px; font-size:0.85rem; width:100%; border-radius:8px;" value="Luis Otth">
+        </div>
+        <button onclick="handleMockLogin()" class="btn-primary" style="padding:10px; font-size:0.85rem; background:var(--accent-tennis); color:#0f172a; width:100%; border-radius:8px; font-weight:700;">
+          ⚡ Simular Ingreso con Google
+        </button>
+      </div>
+
+      <p class="auth-err" id="authErr" style="margin-top: 15px; text-align: center; color: #f87171; font-size: 0.88rem;"></p>
+    </div>
+
+    <!-- VISTA COMPLETAR PERFIL (NUEVO USUARIO) -->
+    <div id="authCompleteProfileView" style="display:none; padding: 10px 5px;">
+      <div style="font-size:3.5rem; text-align:center; margin-bottom:12px;">📝</div>
+      <h3 style="margin-bottom:8px;font-size:1.4rem;text-align:center;color:var(--text-primary);">Completa tu Perfil</h3>
+      <p style="color:var(--text-secondary);font-size:0.9rem;text-align:center;margin-bottom:20px;">Es tu primera vez en UCTenis. Ingresa tus datos de juego para registrarte en el ranking.</p>
+      
+      <form id="fCompleteProfile" onsubmit="handleCompleteProfile(event)">
+        <input type="hidden" id="cpEmail">
+        <input type="hidden" id="cpFoto">
+        
+        <div class="form-group" style="margin-bottom:12px;">
+          <label style="font-size:0.8rem; margin-bottom:4px; display:block;">Nombre Completo</label>
+          <input type="text" id="cpNombre" style="width:100%; padding:10px; border-radius:8px;" required>
+        </div>
+        
+        <div class="form-row2" style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
+          <div class="form-group" style="margin-bottom:0;">
+            <label style="font-size:0.8rem; margin-bottom:4px; display:block;">Género</label>
+            <select id="cpGenero" style="width:100%; padding:10px; border-radius:8px;" required>
+              <option value="">--</option>
+              <option value="M">Masculino</option>
+              <option value="F">Femenino</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin-bottom:0;">
+            <label style="font-size:0.8rem; margin-bottom:4px; display:block;">Categoría</label>
+            <select id="cpCat" style="width:100%; padding:10px; border-radius:8px;" required>
+              <option value="">-- Selecciona --</option>
+              <option value="Primera">Primera</option>
+              <option value="Segunda">Segunda</option>
+              <option value="Tercera">Tercera</option>
+              <option value="Cuarta">Cuarta</option>
+              <option value="Principiante">Principiante</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row2" style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:18px;">
+          <div class="form-group" style="margin-bottom:0;">
+            <label style="font-size:0.8rem; margin-bottom:4px; display:block;">Mano hábil</label>
+            <select id="cpMano" style="width:100%; padding:10px; border-radius:8px;">
+              <option value="Derecha">Derecha</option>
+              <option value="Izquierda">Izquierda</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin-bottom:0;">
+            <label style="font-size:0.8rem; margin-bottom:4px; display:block;">Revés</label>
+            <select id="cpReves" style="width:100%; padding:10px; border-radius:8px;">
+              <option value="Dos manos">Dos manos</option>
+              <option value="Una mano">Una mano</option>
+            </select>
+          </div>
+        </div>
+
+        <p class="auth-err" id="cpErr" style="text-align: center; color: #f87171; font-size: 0.88rem; margin-bottom:12px;"></p>
+        <button type="submit" class="btn-primary" style="background:var(--accent-tennis); color:#0f172a; font-weight:700; width:100%; padding:12px; border-radius:12px;">Finalizar Registro</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- CHALLENGE MODAL -->
+<div class="modal-overlay" id="challengeModal">
+  <div class="modal-content" style="max-width:480px; border-radius:24px; padding:0; overflow:hidden;">
+    <div class="challenge-modal-header">
+      <div class="challenge-modal-icon">⚔️</div>
+      <h3>¿Es un Desafío de Ranking?</h3>
+      <p>Selecciona el tipo de reserva para esta hora</p>
+    </div>
+    <div class="challenge-modal-body">
+      <!-- Tipo de reserva -->
+      <div class="challenge-type-options">
+        <label class="challenge-type-option" id="optNormal">
+          <input type="radio" name="challengeType" value="normal" checked onchange="onChallengeTypeChange()">
+          <div class="challenge-type-card">
+            <span class="challenge-type-icon">🎾</span>
+            <div>
+              <strong>Reserva Normal</strong>
+              <p>Entreno, práctica libre o partido amistoso</p>
+            </div>
+          </div>
+        </label>
+        <label class="challenge-type-option" id="optChallenge">
+          <input type="radio" name="challengeType" value="challenge" onchange="onChallengeTypeChange()">
+          <div class="challenge-type-card">
+            <span class="challenge-type-icon">⚔️</span>
+            <div>
+              <strong>Desafío de Ranking</strong>
+              <p>Reta a un jugador para subir en la escalerilla</p>
+            </div>
+          </div>
+        </label>
+        <label class="challenge-type-option" id="optCampeonato" style="display:none;">
+          <input type="radio" name="challengeType" value="campeonato" onchange="onChallengeTypeChange()">
+          <div class="challenge-type-card">
+            <span class="challenge-type-icon">🏆</span>
+            <div>
+              <strong>Partido de Campeonato</strong>
+              <p>Partido oficial de torneo / campeonato</p>
+            </div>
+          </div>
+        </label>
+      </div>
+
+      <!-- Opción Amistoso (solo visible si es Reserva Normal) -->
+      <div id="friendlySection" style="margin-top: 15px; padding: 15px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 16px;">
+        <label id="friendlyMatchLabel" style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; font-size: 0.95rem; color: var(--text-primary);">
+          <input type="checkbox" id="chkFriendlyMatch" onchange="onFriendlyMatchChange()" style="width: 16px; height: 16px; accent-color: var(--accent-tennis);">
+          ¿Es un Partido Amistoso?
+        </label>
+        <div id="friendlyOpponentGroup" style="display: none; margin-top: 12px;">
+          <label for="friendlyOpponent" style="display: block; font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 6px;">Selecciona tu oponente (opcional)</label>
+          <select id="friendlyOpponent" style="width: 100%; padding: 8px 12px; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: #fff; outline: none; font-size: 0.9rem;">
+            <option value="">-- Sin oponente / Práctica libre --</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Selector jugador retado (solo visible si es desafío) -->
+      <div id="challengeeSection" style="display:none; margin-top:20px;">
+        <div class="challengee-header">
+          <span>⚡</span>
+          <div>
+            <strong>Selecciona al jugador retado</strong>
+            <p id="challengeeHint">Puedes retar a los 2 jugadores inmediatamente superiores en el ranking</p>
+          </div>
+        </div>
+        <div id="challengeeList" class="challengee-list"></div>
+        <p id="challengeeError" class="challengee-error" style="display:none;"></p>
+      </div>
+
+      <div class="challenge-modal-actions">
+        <button class="btn-back" onclick="closeChallengeModal()">← Volver</button>
+        <button class="btn-confirm" id="btnChallengeConfirm" onclick="proceedFromChallengeModal()">Continuar →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SUCCESS MODAL -->
+<div class="modal-overlay" id="successModal">
+  <div class="modal-content" style="text-align:center;padding:40px">
+    <div style="font-size:4rem;margin-bottom:16px" id="successIcon">🎉</div>
+    <h2 style="margin-bottom:12px" id="successTitle">¡Reserva confirmada!</h2>
+    <p id="successMsg" style="color:var(--text-secondary);margin-bottom:16px"></p>
+    <div id="whatsappLinkContainer" style="margin-bottom:20px; display:none;">
+      <a id="whatsappLink" href="#" target="_blank" class="btn-whatsapp">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg>
+        Notificar por WhatsApp
+      </a>
+    </div>
+    <button class="btn-primary" style="max-width: 200px; margin: 0 auto;" onclick="closeSuccess()">Perfecto</button>
+  </div>
+</div>
+
+<!-- Firebase SDK Compat -->
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
+<script src="db.js?v=20260602_v2"></script>
+<script src="script.js?v=20260602_v2"></script>
+<script>
+// ── STATE ──
+// isChallenge: boolean, retadoId: string|null, retadoNombre: string|null
+let sel = { court: null, date: null, slot: null, isChallenge: false, isFriendly: false, isCampeonato: false, retadoId: null, retadoNombre: null, retadoEmail: null, retadoTelefono: null };
+let currentStep = 1;
+
+// ── HELPERS ──
+// FIX: Genera ISO local (sin conversión UTC que provoca desfase de 1 día en Chile UTC-4)
+function localISO(d) {
+  const y = d.getFullYear();
+  const mo = String(d.getMonth() + 1).padStart(2, '0');
+  const dy = String(d.getDate()).padStart(2, '0');
+  return `${y}-${mo}-${dy}`;
+}
+
+const DAYS_LONG  = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+const DAYS_SHORT = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+const MONTHS_LONG  = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+const MONTHS_SHORT = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+
+// Dado un ISO yyyy-mm-dd, retorna el día de semana correcto en hora local
+function dayOfWeekFromISO(iso) {
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(y, m - 1, d).getDay(); // hora local, sin UTC shift
+}
+
+// ── INIT ──
+window.onWeatherLoaded = function(daily) {
+  renderDateStrip();
+  // Default to showing today's weather or selected date
+  const selectedOrToday = sel.date || localISO(new Date());
+  updateSelectedDayWeather(selectedOrToday);
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+  DB.seed();
+  renderUserBar();
+  renderDateStrip();
+  renderMyBookings();
+  document.getElementById('authModal').addEventListener('click', e => { if (e.target.id === 'authModal') closeAuth(); });
+  document.getElementById('successModal').addEventListener('click', e => { if (e.target.id === 'successModal') closeSuccess(); });
+  document.getElementById('challengeModal').addEventListener('click', e => { if (e.target.id === 'challengeModal') closeChallengeModal(); });
+  document.getElementById('btnFinalConfirm').addEventListener('click', finalConfirm);
+});
+
+// ── STEPS ──
+function goStep(n) {
+  currentStep = n;
+  ['stepDate','stepSlot','stepConfirm'].forEach((id,i) => {
+    document.getElementById(id).classList.toggle('hidden', i + 1 !== n);
+  });
+  document.querySelectorAll('.step').forEach((el,i) => {
+    el.classList.toggle('active', i + 1 === n);
+    el.classList.toggle('done',  i + 1 < n);
+  });
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function tryGoStep(n) {
+  if (n === 1) {
+    goStep(1);
+  } else if (n === 2) {
+    if (sel.date) goStep(2);
+  } else if (n === 3) {
+    if (sel.date && sel.slot && sel.court) {
+      document.getElementById('btnConfirmSlot').click();
+    }
+  }
+}
+
+// ── STEP 1: DATE STRIP ──
+function renderDateStrip() {
+  const strip = document.getElementById('dateStrip');
+  strip.innerHTML = '';
+  const today = new Date();
+
+  for (let i = 0; i < 14; i++) {
+    const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() + i);
+    const isSun = d.getDay() === 0;
+    const isToday = i === 0;
+    const iso = localISO(d); // ✅ FIX: usa fecha local, no UTC
+
+    const btn = document.createElement('button');
+    btn.className = 'date-btn' + (isSun ? ' date-disabled' : '') + (isToday ? ' date-today' : '');
+    btn.disabled = isSun;
+    btn.dataset.iso = iso;
+
+    // Check if weather is available for this date
+    let weatherHtml = '';
+    if (window.weatherData && window.weatherData.daily) {
+      const idx = window.weatherData.daily.time.indexOf(iso);
+      if (idx >= 0) {
+        const wCode = window.weatherData.daily.weathercode[idx];
+        const maxTemp = Math.round(window.weatherData.daily.temperature_2m_max[idx]);
+        const rainProb = window.weatherData.daily.precipitation_probability_max[idx];
+        const icon = window.getWeatherIcon ? window.getWeatherIcon(wCode) : "🌤️";
+        
+        weatherHtml = `
+          <div class="date-btn-weather" style="margin-top: 6px; display: flex; flex-direction: column; align-items: center; gap: 2px; line-height: 1;">
+            <span class="date-w-icon" style="font-size: 1.15rem;" title="${rainProb}% lluvia">${icon}</span>
+            <span class="date-w-temp" style="font-size: 0.68rem; font-weight: 700; opacity: 0.95;">${maxTemp}°C</span>
+          </div>
+        `;
+      }
+    }
+
+    btn.innerHTML = `
+      <span class="date-dow">${isToday ? 'HOY' : DAYS_SHORT[d.getDay()]}</span>
+      <span class="date-num">${d.getDate()}</span>
+      <span class="date-mon">${MONTHS_SHORT[d.getMonth()]}</span>
+      ${weatherHtml}
+    `;
+
+    btn.onclick = () => {
+      document.querySelectorAll('.date-btn').forEach(b => b.classList.remove('date-active'));
+      btn.classList.add('date-active');
+      selectDate(iso);
+    };
+    strip.appendChild(btn);
+  }
+}
+
+function getWeatherDesc(wmoCode) {
+  const desc = {
+    0: "Despejado",
+    1: "Mayormente despejado",
+    2: "Parcialmente nublado",
+    3: "Nublado",
+    45: "Niebla",
+    48: "Niebla escarchada",
+    51: "Llovizna ligera",
+    53: "Llovizna moderada",
+    55: "Llovizna densa",
+    61: "Lluvia ligera",
+    63: "Lluvia moderada",
+    65: "Lluvia fuerte",
+    71: "Nieve ligera",
+    73: "Nieve moderada",
+    75: "Nieve fuerte",
+    77: "Granizo",
+    80: "Chubascos ligeros",
+    81: "Chubascos moderados",
+    82: "Chubascos violentos",
+    95: "Tormenta",
+    96: "Tormenta con granizo ligero",
+    99: "Tormenta con granizo fuerte"
+  };
+  return desc[wmoCode] || "Clima variable";
+}
+
+function updateSelectedDayWeather(iso) {
+  const box1 = document.getElementById('selectedWeatherBox');
+  const box2 = document.getElementById('step2WeatherBox');
+  
+  if (!iso || !window.weatherData || !window.weatherData.daily) {
+    if (box1) box1.style.display = 'none';
+    if (box2) box2.style.display = 'none';
+    return;
+  }
+  
+  const daily = window.weatherData.daily;
+  const idx = daily.time.indexOf(iso);
+  if (idx < 0) {
+    if (box1) box1.style.display = 'none';
+    if (box2) box2.style.display = 'none';
+    return;
+  }
+  
+  const wCode = daily.weathercode[idx];
+  const maxTemp = Math.round(daily.temperature_2m_max[idx]);
+  const minTemp = Math.round(daily.temperature_2m_min[idx]);
+  const rainProb = daily.precipitation_probability_max[idx];
+  const icon = window.getWeatherIcon ? window.getWeatherIcon(wCode) : "🌤️";
+  const wDesc = getWeatherDesc(wCode);
+  
+  // Custom suggestion logic based on that day's weather
+  let maxPlayingRainProb = 0;
+  let hasHourlyData = false;
+  if (window.weatherData && window.weatherData.hourly) {
+    const hourly = window.weatherData.hourly;
+    for (let i = 0; i < hourly.time.length; i++) {
+      const timeStr = hourly.time[i];
+      if (timeStr.startsWith(iso)) {
+        const hourStr = timeStr.split('T')[1];
+        const hourNum = parseInt(hourStr.split(':')[0], 10);
+        // Horario de juego: 08:00 a 20:00
+        if (hourNum >= 8 && hourNum <= 20) {
+          hasHourlyData = true;
+          const hRain = hourly.precipitation_probability[i];
+          if (hRain > maxPlayingRainProb) {
+            maxPlayingRainProb = hRain;
+          }
+        }
+      }
+    }
+  }
+
+  let suggestion = '';
+  let suggestionColor = 'var(--accent-tennis)';
+  if (rainProb > 40) {
+    if (hasHourlyData && maxPlayingRainProb <= 30) {
+      suggestion = `🌧️ Lluvia en la madrugada/noche, pero el horario de juego (08:00 a 20:00) se ve despejado/seco. Ojo: las canchas de arcilla (CEC) podrían estar muy húmedas por la lluvia previa, pero las de asfalto (CJP) estarán jugables.`;
+      suggestionColor = '#fbbf24'; // Yellow
+    } else {
+      suggestion = `🌧️ Alta probabilidad de lluvia (${rainProb}%). Las canchas de arcilla (CEC) podrían no estar jugables. Te recomendamos preferir canchas de asfalto (CJP) o reagendar.`;
+      suggestionColor = '#f87171'; // Red
+    }
+  } else if (maxTemp > 28) {
+    suggestion = `☀️ ¡Día caluroso! Temperatura máxima de ${maxTemp}°C. Evita los horarios de mayor radiación solar, usa bloqueador e hidrátate constantemente.`;
+    suggestionColor = '#fbbf24'; // Yellow
+  } else if (maxTemp < 10) {
+    suggestion = `❄️ Día helado (${maxTemp}°C). Excelente para entrar en calor corriendo en la cancha. Recuerda hacer un buen calentamiento previo.`;
+    suggestionColor = '#60a5fa'; // Blue
+  } else {
+    suggestion = `🎾 Clima óptimo para jugar tenis. Temperatura agradable de ${maxTemp}°C y baja probabilidad de lluvia (${rainProb}%). ¡A disfrutar el juego!`;
+    suggestionColor = 'var(--accent-tennis)'; // Green
+  }
+
+  // 1. Update Paso 1 box
+  if (box1) {
+    box1.style.display = 'block';
+    const iconEl = document.getElementById('weatherDetailIcon');
+    const tempsEl = document.getElementById('weatherDetailTemps');
+    const rainEl = document.getElementById('weatherDetailRain');
+    const suggEl = document.getElementById('weatherDetailSuggestion');
+    if (iconEl) iconEl.textContent = icon;
+    if (tempsEl) tempsEl.textContent = `${maxTemp}°C / ${minTemp}°C`;
+    if (rainEl) rainEl.textContent = `Probabilidad: ${rainProb}%`;
+    if (suggEl) {
+      suggEl.textContent = suggestion;
+      suggEl.style.color = suggestionColor;
+    }
+  }
+  
+  // 2. Update Paso 2 box
+  if (box2) {
+    box2.style.display = 'block';
+    const iconEl2 = document.getElementById('step2WeatherIcon');
+    const tempsEl2 = document.getElementById('step2WeatherTemps');
+    const rainEl2 = document.getElementById('step2WeatherRain');
+    const suggEl2 = document.getElementById('step2WeatherSuggestion');
+    const summaryTextEl = document.getElementById('step2WeatherSummaryText');
+    const timelineEl = document.getElementById('step2HourlyTimeline');
+    
+    if (iconEl2) iconEl2.textContent = icon;
+    if (tempsEl2) tempsEl2.textContent = `${maxTemp}°C / ${minTemp}°C`;
+    if (rainEl2) rainEl2.textContent = `Probabilidad de lluvia: ${rainProb}%`;
+    if (suggEl2) {
+      suggEl2.textContent = suggestion;
+      suggEl2.style.color = suggestionColor;
+    }
+    if (summaryTextEl) {
+      summaryTextEl.textContent = `${wDesc} (${maxTemp}°C)`;
+    }
+    
+    // Build hourly timeline
+    if (timelineEl && window.weatherData.hourly) {
+      timelineEl.innerHTML = '';
+      const hourly = window.weatherData.hourly;
+      
+      for (let i = 0; i < hourly.time.length; i++) {
+        const timeStr = hourly.time[i]; // "YYYY-MM-DDTHH:MM"
+        if (timeStr.startsWith(iso)) {
+          const hourStr = timeStr.split('T')[1]; // "HH:MM"
+          const hourNum = parseInt(hourStr.split(':')[0], 10);
+          
+          // Include active tennis hours from 08:00 to 22:00
+          if (hourNum >= 8 && hourNum <= 22) {
+            const hTemp = Math.round(hourly.temperature_2m[i]);
+            const hRain = hourly.precipitation_probability[i];
+            const hCode = hourly.weathercode[i];
+            const hIcon = window.getWeatherIcon ? window.getWeatherIcon(hCode) : "🌤️";
+            const hDesc = getWeatherDesc(hCode);
+            
+            const item = document.createElement('div');
+            item.className = 'hourly-item';
+            item.title = hDesc;
+            
+            item.innerHTML = `
+              <div class="hourly-time">${hourStr}</div>
+              <div class="hourly-icon">${hIcon}</div>
+              <div class="hourly-temp">${hTemp}°C</div>
+              <div class="hourly-rain" style="${hRain > 20 ? 'color: #60a5fa; font-weight: bold;' : 'opacity: 0.6;'}">
+                💧 ${hRain}%
+              </div>
+            `;
+            timelineEl.appendChild(item);
+          }
+        }
+      }
+    }
+  }
+}
+
+async function selectDate(iso) {
+  sel.date = iso;
+  const wd = dayOfWeekFromISO(iso);
+  const [y, m, d] = iso.split('-');
+  document.getElementById('slotSubtitle').textContent = `📅 ${DAYS_LONG[wd]} ${parseInt(d)} de ${MONTHS_LONG[parseInt(m) - 1]} ${y}`;
+  
+  // Update detailed weather card for this day
+  updateSelectedDayWeather(iso);
+  
+  const container = document.getElementById('courtsSlotsContainer');
+  container.innerHTML = '<div style="text-align:center; padding: 40px; color: var(--text-secondary);">Sincronizando con Google Calendar... ⌛</div>';
+  goStep(2);
+  
+  const apiDisponibilidad = await DB.getSlotsAPI(iso);
+  if (sel.date !== iso) return;
+  renderSlotsByCourt(apiDisponibilidad);
+}
+
+function getShortMatchLabel(c) {
+  if (!c) return 'Ocupado';
+  const getFirstName = (fullName) => {
+    if (!fullName) return '';
+    const parts = fullName.trim().split(/\s+/);
+    return parts[0];
+  };
+  const p1 = getFirstName(c.retadorNombre || 'Socio');
+  const p2 = getFirstName(c.retadoNombre || 'Socio');
+  if (c.tipo === 'amistoso') {
+    return `🤝 Amistoso: ${p1} vs ${p2}`;
+  } else if (c.tipo === 'campeonato') {
+    return `🏆 Torneo: ${p1} vs ${p2}`;
+  } else {
+    return `⚔️ Desafío: ${p1} vs ${p2}`;
+  }
+}
+
+// ── STEP 2: SLOTS BY COURT ──
+function renderSlotsByCourt(apiData) {
+  if (!sel.date) return;
+  const session = DB.getSession();
+  const alreadyHasBooking = session ? DB.userBookedToday(session.id, sel.date) : false;
+  const btnConfirm = document.getElementById('btnConfirmSlot');
+  sel.slot = null;
+  sel.court = null;
+  btnConfirm.disabled = true;
+  updateSelectedSlotInfo();
+
+  const challenges = typeof DB.getChallenges === 'function' ? DB.getChallenges() : [];
+
+  const container = document.getElementById('courtsSlotsContainer');
+  container.innerHTML = '';
+
+  let html = '';
+
+  if (alreadyHasBooking) {
+    html += `<div style="text-align:center;padding:12px 16px;margin-bottom:20px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:14px;color:#f87171;font-size:0.88rem;">
+      ⚠️ Ya tienes una reserva activa para este día. Cada jugador solo puede reservar un bloque diario (los administradores están exentos).
+    </div>`;
+  }
+
+  if (!apiData || !apiData.ok) {
+    // API unavailable (e.g. CORS on GitHub Pages): show slots in offline mode
+    html += `<div style="text-align:center;padding:12px 16px;margin-bottom:20px;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.25);border-radius:14px;color:#fbbf24;font-size:0.88rem;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:middle;margin-right:6px"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>
+      Modo sin conexi\u00f3n — disponibilidad en tiempo real no disponible. Los horarios mostrados son referenciales.
+    </div>`;
+    // Build a synthetic "all free" apiData so the grid renders
+    const syntheticCourts = {};
+    const busyLabels = {};
+    const dayOfWeek = dayOfWeekFromISO(sel.date); // 0=Dom, 1=Lun, etc.
+    
+    DB.COURTS.forEach(c => {
+      // Bloquear clases los martes (2) y miércoles (3) de 18:00 a 19:30 (slot '18:00') sólo en canchas CJP
+      if ((dayOfWeek === 2 || dayOfWeek === 3) && c.id.startsWith('cjp')) {
+        syntheticCourts[c.id] = DB.SLOTS.filter(s => s !== '18:00');
+        busyLabels[c.id] = { '18:00': 'Clases UCTenis' };
+      } else {
+        syntheticCourts[c.id] = [...DB.SLOTS];
+        busyLabels[c.id] = {};
+      }
+    });
+    apiData = { ok: true, courts: syntheticCourts, busyLabels: busyLabels };
+  }
+
+  const complejos = [
+    { name: 'Complejo CEC (Arcilla)', img: 'cec.jpg', courts: DB.COURTS.filter(c => c.id.startsWith('cec')) },
+    { name: 'Complejo CJP (Asfalto)', img: 'cjp.jpg', courts: DB.COURTS.filter(c => c.id.startsWith('cjp')) }
+  ];
+
+  complejos.forEach(comp => {
+    html += `
+      <div class="complejo-section" style="margin-bottom: 2rem;">
+        <div class="complejo-banner">
+          <img src="${comp.img}" alt="${comp.name}" class="complejo-img">
+          <div class="complejo-title">${comp.name}</div>
+        </div>
+        <div class="courts-grid">
+    `;
+
+    comp.courts.forEach(court => {
+      const booked = DB.getCourtBookings(court.id, sel.date);
+      const myBooked = session ? booked.find(b => b.userId === session.id) : null;
+      const courtData = apiData.courts[court.id];
+      const availableBlocks = Array.isArray(courtData) ? courtData : [];
+      const courtError = courtData && !Array.isArray(courtData) ? (courtData.error || 'Error de sincronización') : null;
+      const playableSlots = (apiData.playable && Array.isArray(apiData.playable[court.id])) ? apiData.playable[court.id] : DB.SLOTS;
+      
+      // Mapa de etiquetas de motivo para slots ocupados (ej: "Clases UCTenis")
+      const courtBusyLabels = (apiData.busyLabels && apiData.busyLabels[court.id]) ? apiData.busyLabels[court.id] : {};
+
+      // Filter challenges for this court on this date
+      const courtChallenges = challenges.filter(c => 
+        c.fecha === sel.date &&
+        (c.status === 'pendiente' || c.status === 'aceptado' || c.status === 'resultado_pendiente') &&
+        (
+          c.courtId === court.id ||
+          (c.cancha && (c.cancha === court.label || c.cancha.includes(court.label) || court.label.includes(c.cancha)))
+        )
+      );
+
+      let slotsHtml = playableSlots.map(slot => {
+        const isMine = myBooked && myBooked.slot === slot;
+        const isFreeInGoogle = availableBlocks.includes(slot);
+        
+        // Check if there is a matching challenge for this slot
+        const matchChallenge = courtChallenges.find(c => c.slot === slot);
+        
+        // Bloquear permanentemente el horario de clases en el frontend (martes y miércoles de 18:00 a 19:30 en CJP)
+        const dayOfWeek = dayOfWeekFromISO(sel.date);
+        const isSystemClass = (dayOfWeek === 2 || dayOfWeek === 3) && slot === '18:00' && court.id.startsWith('cjp');
+        
+        // It is busy if GCal says so OR it is a system class OR we have an active challenge in DB
+        const isBusy = (!isFreeInGoogle || isSystemClass || !!matchChallenge) && !isMine;
+        
+        // Determine busy label/type
+        let busyLabel = '';
+        if (isBusy) {
+          if (isSystemClass) {
+            busyLabel = 'Clases UCTenis';
+          } else if (matchChallenge) {
+            if (matchChallenge.tipo === 'amistoso') busyLabel = 'Amistoso';
+            else if (matchChallenge.tipo === 'campeonato') busyLabel = 'Campeonato';
+            else busyLabel = 'Desafío';
+          } else {
+            busyLabel = courtBusyLabels[slot] || '';
+          }
+        }
+        
+        const isClases = busyLabel === 'Clases UCTenis';
+        const isDesafio = busyLabel === 'Desafío';
+        const isAmistoso = busyLabel === 'Amistoso';
+        const isCampeonato = busyLabel === 'Campeonato';
+        
+        const now = new Date();
+        const [sh, sm] = slot.split(':').map(Number);
+        const [sy, smo, sd] = sel.date.split('-').map(Number);
+        const slotDate = new Date(sy, smo - 1, sd, sh, sm, 0);
+        const isPast = slotDate < now;
+        const fourHoursFromNow = new Date(now.getTime() + 4 * 60 * 60 * 1000);
+        const isTooClose = slotDate < fourHoursFromNow;
+
+        let cls = 'slot-card';
+        let endH = sh + 1, endM = sm + 30;
+        if (endM >= 60) { endH++; endM -= 60; }
+        const endStr = `${String(endH).padStart(2,'0')}:${String(endM).padStart(2,'0')}`;
+
+        if (isTooClose) cls += ' slot-past';
+        else if (isMine) cls += ' slot-mine';
+        else if (isClases) cls += ' slot-busy slot-clases';
+        else if (isDesafio) cls += ' slot-busy slot-desafio';
+        else if (isAmistoso) cls += ' slot-busy slot-amistoso';
+        else if (isCampeonato) cls += ' slot-busy slot-campeonato';
+        else if (isBusy) cls += ' slot-busy';
+        else if (alreadyHasBooking) cls += ' slot-past';
+        else cls += ' slot-free';
+
+        const clickable = !isTooClose && !isBusy && !!session && !courtError && !alreadyHasBooking;
+        const statusText = courtError ? courtError
+          : isMine ? 'Tu reserva'
+          : isClases ? '🎾 Clases UCTenis'
+          : isDesafio ? getShortMatchLabel(matchChallenge)
+          : isAmistoso ? getShortMatchLabel(matchChallenge)
+          : isCampeonato ? getShortMatchLabel(matchChallenge)
+          : isBusy ? 'Ocupado'
+          : isPast ? 'Pasado'
+          : isTooClose ? 'Límite 4h'
+          : alreadyHasBooking ? 'Límite diario'
+          : 'Disponible';
+        return `<div class="${cls}" ${clickable ? `onclick="selectSlot('${court.id}', '${slot}', this)"` : ''}>
+          <div class="slot-time">${slot}</div>
+          <div class="slot-end">hasta ${endStr}</div>
+          <div class="slot-status">${statusText}</div>
+        </div>`;
+      }).join('');
+
+      if (playableSlots.length === 0) {
+        slotsHtml = `<div style="grid-column: 1/-1; color: var(--text-secondary); text-align: center; padding: 10px; font-size: 0.9rem;">🚫 Cancha no disponible para hoy</div>`;
+      }
+
+      html += `
+        <div class="court-row" style="background: var(--bg-card); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color);">
+          <h3 style="margin-top:0; margin-bottom: 0.5rem; color: var(--text-primary); font-size: 1rem;">${court.label}</h3>
+          <div class="slots-grid">${slotsHtml}</div>
+          ${courtError ? `<div style="margin-top:0.75rem;color:#b45309;font-size:0.92rem;">⚠️ ${courtError}</div>` : ''}
+        </div>
+      `;
+    });
+    
+    html += `</div></div>`;
+  });
+
+  container.innerHTML = html;
+
+  if (!session) {
+    container.insertAdjacentHTML('afterend', '<p class="login-prompt">🔑 <a onclick="openAuth()" style="color:var(--accent-tennis);cursor:pointer;font-weight:600">Inicia sesión</a> para reservar un horario.</p>');
+  }
+}
+
+function selectSlot(courtId, slot, el) {
+  const isSelected = el.classList.contains('slot-selected');
+  document.querySelectorAll('.slot-card').forEach(c => c.classList.remove('slot-selected'));
+  
+  if (isSelected) {
+    sel.court = null;
+    sel.slot = null;
+    document.getElementById('btnConfirmSlot').disabled = true;
+  } else {
+    el.classList.add('slot-selected');
+    sel.court = DB.COURTS.find(c => c.id === courtId);
+    sel.slot = slot;
+    document.getElementById('btnConfirmSlot').disabled = false;
+    
+    // Scroll immediately to continue button
+    setTimeout(() => {
+      document.getElementById('btnConfirmSlot').scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }, 100);
+  }
+  updateSelectedSlotInfo();
+}
+
+function updateSelectedSlotInfo() {
+  const info = document.getElementById('selectedSlotInfo');
+  if (!info) return;
+  if (sel.slot && sel.court && sel.date) {
+    const wd = dayOfWeekFromISO(sel.date);
+    const [y, m, d] = sel.date.split('-');
+    const [sh, sm] = sel.slot.split(':').map(Number);
+    let eh = sh + 1, em = sm + 30; if (em >= 60) { eh++; em -= 60; }
+    const endStr = `${String(eh).padStart(2,'0')}:${String(em).padStart(2,'0')}`;
+    info.innerHTML = `📍 Cancha: <strong>${sel.court.label}</strong> · Horario: <strong>${sel.slot} – ${endStr} hs</strong> · <strong>${DAYS_LONG[wd]} ${parseInt(d)} de ${MONTHS_LONG[parseInt(m) - 1]}</strong>`;
+  } else {
+    info.innerHTML = `⚠️ Ningún horario seleccionado`;
+  }
+}
+
+async function refreshSlotAvailability() {
+  const dateToRefresh = sel.date;
+  if (!dateToRefresh) return;
+  const apiDisponibilidad = await DB.getSlotsAPI(dateToRefresh);
+  if (sel.date !== dateToRefresh) return;
+  renderSlotsByCourt(apiDisponibilidad);
+}
+
+// ── "Continuar" desde paso 2 → abrir modal de desafío ──
+document.getElementById('btnConfirmSlot').addEventListener('click', () => {
+  if (!sel.slot || !sel.court) return;
+  openChallengeModal();
+});
+
+// ── CHALLENGE MODAL ──
+function openChallengeModal() {
+  // reset state
+  sel.isChallenge = false;
+  sel.isFriendly = false;
+  sel.isCampeonato = false;
+  sel.retadoId = null;
+  sel.retadoNombre = null;
+  sel.retadoEmail = null;
+  sel.retadoTelefono = null;
+  document.querySelector('input[name="challengeType"][value="normal"]').checked = true;
+  document.getElementById('chkFriendlyMatch').checked = false;
+  document.getElementById('friendlyOpponentGroup').style.display = 'none';
+  document.getElementById('friendlySection').style.display = 'block';
+  
+  const friendlyMatchLabel = document.getElementById('friendlyMatchLabel');
+  if (friendlyMatchLabel) friendlyMatchLabel.style.display = 'flex';
+  
+  const opLabel = document.querySelector('#friendlyOpponentGroup label');
+  if (opLabel) opLabel.textContent = 'Selecciona tu oponente (opcional)';
+
+  document.getElementById('challengeeSection').style.display = 'none';
+  document.getElementById('challengeeError').style.display = 'none';
+  document.getElementById('challengeeList').innerHTML = '';
+
+  // Show campeonato options (hidden until launch)
+  const session = DB.getSession();
+  const isAdmin = session && (session.isAdmin || ['uctenisclub@gmail.com', 'dsilva@uct.cl'].includes((session.email || '').toLowerCase()));
+  const optCampeonato = document.getElementById('optCampeonato');
+  if (optCampeonato) {
+    optCampeonato.style.display = 'none';
+  }
+
+  loadFriendlyOpponents();
+  document.getElementById('challengeModal').classList.add('visible');
+}
+
+function closeChallengeModal() {
+  document.getElementById('challengeModal').classList.remove('visible');
+}
+
+function onFriendlyMatchChange() {
+  const isFriendly = document.getElementById('chkFriendlyMatch').checked;
+  document.getElementById('friendlyOpponentGroup').style.display = isFriendly ? 'block' : 'none';
+  if (!isFriendly) {
+    document.getElementById('friendlyOpponent').value = '';
+  }
+}
+
+async function loadFriendlyOpponents() {
+  const session = DB.getSession();
+  if (!session) return;
+  const select = document.getElementById('friendlyOpponent');
+  select.innerHTML = '<option value="">-- Sin oponente / Práctica libre --</option>';
+  
+  try {
+    let allPlayers = [];
+    if (DB.isCloudConfigured()) {
+      try {
+        const cloudPlayers = await DB.getPlayersCloud();
+        allPlayers = cloudPlayers.map(p => ({
+          ...p,
+          gender: p.genero || p.gender
+        }));
+      } catch (cloudErr) {
+        console.warn('No se pudo cargar jugadores desde Firebase en reservas.html. Usando copia local.', cloudErr);
+      }
+    }
+
+    if (!allPlayers.length) {
+      allPlayers = DB.getUsers().map((u, i) => ({ ...u, gender: u.genero }));
+    }
+
+    const meEmail = session.email?.toLowerCase();
+    const meNombre = session.nombre?.toLowerCase();
+    
+    const sortedPlayers = allPlayers
+      .filter(p => {
+        const isMe = (p.email && p.email.toLowerCase() === meEmail) || (p.nombre && p.nombre.toLowerCase() === meNombre) || p.id === session.id;
+        const isActive = p.activo !== false && p.participaRanking !== false;
+        return !isMe && isActive;
+      })
+      .sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '', 'es'));
+
+    const escapeAttr = str => String(str || '').replace(/"/g, '&quot;');
+    const escapeHTML = str => String(str || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+
+    sortedPlayers.forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p.id;
+      opt.textContent = p.nombre;
+      opt.dataset.nombre = p.nombre;
+      opt.dataset.email = p.email || '';
+      opt.dataset.telefono = p.telefono || '';
+      select.appendChild(opt);
+    });
+  } catch(e) {
+    console.error('Error cargando oponentes amistosos:', e);
+  }
+}
+
+function onChallengeTypeChange() {
+  const type = document.querySelector('input[name="challengeType"]:checked').value;
+  const isChallenge = type === 'challenge';
+  const isCampeonato = type === 'campeonato';
+  
+  document.getElementById('challengeeSection').style.display = isChallenge ? 'block' : 'none';
+  document.getElementById('friendlySection').style.display = isChallenge ? 'none' : 'block';
+  document.getElementById('challengeeError').style.display = 'none';
+  
+  sel.retadoId = null;
+  sel.retadoNombre = null;
+  sel.retadoEmail = null;
+  sel.retadoTelefono = null;
+
+  const friendlyMatchLabel = document.getElementById('friendlyMatchLabel');
+  const opLabel = document.querySelector('#friendlyOpponentGroup label');
+
+  if (isChallenge) {
+    document.getElementById('chkFriendlyMatch').checked = false;
+    document.getElementById('friendlyOpponentGroup').style.display = 'none';
+    loadChallengeablePlayers();
+  } else {
+    if (isCampeonato) {
+      document.getElementById('chkFriendlyMatch').checked = false;
+      if (friendlyMatchLabel) friendlyMatchLabel.style.display = 'none';
+      document.getElementById('friendlyOpponentGroup').style.display = 'block';
+      if (opLabel) opLabel.textContent = 'Selecciona al contrincante del campeonato (opcional)';
+    } else {
+      if (friendlyMatchLabel) friendlyMatchLabel.style.display = 'flex';
+      document.getElementById('chkFriendlyMatch').checked = false;
+      document.getElementById('friendlyOpponentGroup').style.display = 'none';
+      if (opLabel) opLabel.textContent = 'Selecciona tu oponente (opcional)';
+    }
+    loadFriendlyOpponents();
+  }
+}
+
+async function loadChallengeablePlayers() {
+  const session = DB.getSession();
+  if (!session) return;
+  const list = document.getElementById('challengeeList');
+  list.innerHTML = '<div style="color:var(--text-secondary);font-size:0.88rem;text-align:center;padding:12px">Cargando jugadores...</div>';
+
+  try {
+    let allPlayers = [];
+    if (DB.isCloudConfigured()) {
+      try {
+        const cloudPlayers = await DB.getPlayersCloud();
+        allPlayers = cloudPlayers.map(p => ({
+          ...p,
+          gender: p.genero || p.gender,
+          pos: parseInt(p.pos || p.posicion)
+        }));
+      } catch (cloudErr) {
+        console.warn('No se pudo cargar jugadores desde Firebase en reservas.html. Usando copia local.', cloudErr);
+      }
+    }
+
+    if (!allPlayers.length) {
+      allPlayers = DB.getUsers().map((u, i) => ({ ...u, pos: i + 1, gender: u.genero }));
+    }
+
+    // Filter out pure admins
+    const pureAdminEmails = ['uctenisclub@gmail.com'];
+    allPlayers = allPlayers.filter(p => !pureAdminEmails.some(adm => adm.toLowerCase() === (p.email || '').toLowerCase().trim()));
+
+    // Encontrar al jugador actual (por email o nombre) en la lista de todos los jugadores
+    const meRaw = allPlayers.find(p =>
+      (p.email && p.email.toLowerCase() === session.email?.toLowerCase()) ||
+      (p.nombre && p.nombre.toLowerCase() === session.nombre?.toLowerCase())
+    );
+
+    if (!meRaw) {
+      list.innerHTML = '<div style="color:#fbbf24;font-size:0.88rem;text-align:center;padding:12px">⚠️ No estás en el ranking activo aún o no tienes una ficha creada. Habla con el administrador.</div>';
+      return;
+    }
+
+    const myGender = meRaw.genero || meRaw.gender || 'M';
+
+    // Obtener los jugadores activos del mismo género
+    let genderPlayers = allPlayers.filter(p => {
+      const g = p.genero || p.gender || 'M';
+      const active = p.activo ?? p.participaRanking;
+      return g === myGender && (active === undefined || active !== false);
+    });
+
+    // Ordenar jugadores por posicion (pos o posicion)
+    genderPlayers.sort((a, b) => {
+      const posA = parseInt(a.pos || a.posicion || 9999);
+      const posB = parseInt(b.pos || b.posicion || 9999);
+      return posA - posB || (a.nombre || '').localeCompare(b.nombre || '', 'es');
+    });
+
+    // Renumerar para evitar inconsistencias o vacíos en la numeración
+    genderPlayers = genderPlayers.map((p, index) => ({
+      ...p,
+      pos: index + 1
+    }));
+
+    // Buscar la ficha de "me" en el ranking del género
+    const me = genderPlayers.find(p =>
+      (p.email && p.email.toLowerCase() === session.email?.toLowerCase()) ||
+      (p.nombre && p.nombre.toLowerCase() === session.nombre?.toLowerCase())
+    );
+
+    if (!me) {
+      list.innerHTML = '<div style="color:#fbbf24;font-size:0.88rem;text-align:center;padding:12px">⚠️ No estás activo en la lista de ranking del género seleccionado.</div>';
+      return;
+    }
+
+    const myPos = me.pos;
+
+    if (myPos === 1) {
+      list.innerHTML = `<div style="color:var(--text-secondary);font-size:0.88rem;text-align:center;padding:12px">👑 <strong>Eres el número 1 del ranking.</strong><br><small>No puedes realizar desafíos a posiciones superiores; debes esperar a que otros jugadores te desafíen.</small></div>`;
+      document.getElementById('challengeeHint').textContent = '';
+      return;
+    }
+
+    // Candidatos: mismo género, hasta 3 posiciones superiores (pos < myPos y myPos - pos <= 3)
+    const candidates = genderPlayers.filter(p => p.pos < myPos && myPos - p.pos <= 3);
+
+    if (!candidates.length) {
+      list.innerHTML = `<div style="color:var(--text-secondary);font-size:0.88rem;text-align:center;padding:12px">No hay jugadores disponibles para retar en este momento.<br><small>Debes estar en el ranking y haber jugadores en las 3 posiciones superiores (tu pos: #${myPos}).</small></div>`;
+      return;
+    }
+
+    document.getElementById('challengeeHint').textContent = `Puedes retar a estos ${candidates.length} jugador${candidates.length > 1 ? 'es' : ''} (hasta 3 posiciones superiores a la tuya – pos. ${myPos})`;
+
+    list.innerHTML = candidates.map(p => {
+      const pPos = p.pos || p.posicion || '?';
+      const foto = p.foto ? p.foto : (myGender === 'F' ? 'fotos/default_avatar_m.png' : 'fotos/default_avatar_h.png');
+      const safeId = String(p.id || '').replace(/'/g, "\\'");
+      const safeName = String(p.nombre || '').replace(/'/g, "\\'");
+      const safeEmail = String(p.email || '').replace(/'/g, "\\'");
+      const safePhone = String(p.telefono || '').replace(/'/g, "\\'");
+      return `<div class="challengee-card" id="challengee_${p.id || p.nombre}" onclick="selectChallengee('${safeId}', '${safeName}', this, '${safeEmail}', '${safePhone}')">
+        <div class="challengee-avatar">
+          <img src="${foto}" onerror="this.src='fotos/default_avatar_h.png'" alt="${p.nombre}">
+          <span class="challengee-rank">#${pPos}</span>
+        </div>
+        <div class="challengee-info">
+          <strong>${p.nombre}</strong>
+          <span>${p.categoria || ''}</span>
+        </div>
+        <div class="challengee-check" id="check_${p.id || p.nombre}">✓</div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    console.error('Error cargando retadores en reservas.html:', e);
+    list.innerHTML = `<div style="color:#f87171;font-size:0.88rem;text-align:center;padding:12px">Error: ${e.message}</div>`;
+  }
+}
+
+function selectChallengee(id, nombre, el, email = '', telefono = '') {
+  document.querySelectorAll('.challengee-card').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  sel.retadoId = id;
+  sel.retadoNombre = nombre;
+  sel.retadoEmail = email;
+  sel.retadoTelefono = telefono;
+  document.getElementById('challengeeError').style.display = 'none';
+}
+
+function proceedFromChallengeModal() {
+  const type = document.querySelector('input[name="challengeType"]:checked').value;
+  sel.isChallenge = type === 'challenge';
+  sel.isCampeonato = type === 'campeonato';
+
+  if (sel.isChallenge) {
+    if (!sel.retadoId && !sel.retadoNombre) {
+      const err = document.getElementById('challengeeError');
+      err.textContent = '⚠️ Selecciona un jugador para retar.';
+      err.style.display = 'block';
+      return;
+    }
+    sel.isFriendly = false;
+  } else {
+    const isFriendly = type === 'normal' && document.getElementById('chkFriendlyMatch').checked;
+    sel.isFriendly = isFriendly;
+    
+    const hasOpponent = (type === 'normal' && isFriendly) || type === 'campeonato';
+    if (hasOpponent) {
+      const select = document.getElementById('friendlyOpponent');
+      const selectedOpt = select.options[select.selectedIndex];
+      if (select.value) {
+        sel.retadoId = select.value;
+        sel.retadoNombre = selectedOpt.dataset.nombre;
+        sel.retadoEmail = selectedOpt.dataset.email;
+        sel.retadoTelefono = selectedOpt.dataset.telefono;
+      } else {
+        sel.retadoId = null;
+        sel.retadoNombre = null;
+        sel.retadoEmail = null;
+        sel.retadoTelefono = null;
+      }
+    } else {
+      sel.retadoId = null;
+      sel.retadoNombre = null;
+      sel.retadoEmail = null;
+      sel.retadoTelefono = null;
+    }
+  }
+
+  closeChallengeModal();
+  buildConfirmCard();
+  goStep(3);
+}
+
+// ── STEP 3: BUILD CONFIRM CARD ──
+function buildConfirmCard() {
+  const wd = dayOfWeekFromISO(sel.date);
+  const [y, m, d] = sel.date.split('-');
+  const [sh, sm] = sel.slot.split(':').map(Number);
+  let endH = sh + 1, endM = sm + 30; if (endM >= 60) { endH++; endM -= 60; }
+  const endStr = `${String(endH).padStart(2,'0')}:${String(endM).padStart(2,'0')}`;
+
+  const fechaLabel = `${DAYS_LONG[wd]}, ${parseInt(d)} de ${MONTHS_LONG[parseInt(m) - 1]} ${y}`;
+
+  if (sel.isChallenge) {
+    document.getElementById('confirmIcon').textContent = '⚔️';
+    document.getElementById('confirmTitle').textContent = 'Confirma tu Desafío';
+    document.getElementById('confirmDetails').innerHTML = `
+      <div class="cd-row cd-challenge-badge"><span>⚔️ Tipo</span><strong class="badge-challenge">Desafío de Ranking</strong></div>
+      <div class="cd-row"><span>🎯 Retado</span><strong>${sel.retadoNombre}</strong></div>
+      <div class="cd-row"><span>🎾 Cancha</span><strong>${sel.court.label}</strong></div>
+      <div class="cd-row"><span>🏗️ Superficie</span><strong>${sel.court.surface}</strong></div>
+      <div class="cd-row"><span>📅 Fecha</span><strong>${fechaLabel}</strong></div>
+      <div class="cd-row"><span>⏰ Horario</span><strong>${sel.slot} – ${endStr}</strong></div>
+      <div class="cd-row"><span>⏱ Duración</span><strong>1 hora 30 min</strong></div>`;
+  } else if (sel.isFriendly && sel.retadoNombre) {
+    document.getElementById('confirmIcon').textContent = '🤝';
+    document.getElementById('confirmTitle').textContent = 'Confirma tu Partido Amistoso';
+    document.getElementById('confirmDetails').innerHTML = `
+      <div class="cd-row cd-challenge-badge"><span>🤝 Tipo</span><strong class="badge-friendly" style="background:rgba(99,102,241,0.15); border:1px solid rgba(99,102,241,0.3); color:#a5b4fc; padding:2px 6px; border-radius:4px; font-size:0.72rem; font-weight:900; text-transform:uppercase;">Partido Amistoso</strong></div>
+      <div class="cd-row"><span>👥 Contra</span><strong>${sel.retadoNombre}</strong></div>
+      <div class="cd-row"><span>🎾 Cancha</span><strong>${sel.court.label}</strong></div>
+      <div class="cd-row"><span>🏗️ Superficie</span><strong>${sel.court.surface}</strong></div>
+      <div class="cd-row"><span>📅 Fecha</span><strong>${fechaLabel}</strong></div>
+      <div class="cd-row"><span>⏰ Horario</span><strong>${sel.slot} – ${endStr}</strong></div>
+      <div class="cd-row"><span>⏱ Duración</span><strong>1 hora 30 min</strong></div>`;
+  } else if (sel.isCampeonato) {
+    const contraRow = sel.retadoNombre ? `<div class="cd-row"><span>👥 Contra</span><strong>${sel.retadoNombre}</strong></div>` : '';
+    document.getElementById('confirmIcon').textContent = '🏆';
+    document.getElementById('confirmTitle').textContent = 'Confirma tu Partido de Campeonato';
+    document.getElementById('confirmDetails').innerHTML = `
+      <div class="cd-row cd-challenge-badge"><span>🏆 Tipo</span><strong class="badge-torneo" style="padding:2px 6px; border-radius:4px; font-size:0.72rem; font-weight:900; text-transform:uppercase;">Partido de Campeonato</strong></div>
+      ${contraRow}
+      <div class="cd-row"><span>🎾 Cancha</span><strong>${sel.court.label}</strong></div>
+      <div class="cd-row"><span>🏗️ Superficie</span><strong>${sel.court.surface}</strong></div>
+      <div class="cd-row"><span>📅 Fecha</span><strong>${fechaLabel}</strong></div>
+      <div class="cd-row"><span>⏰ Horario</span><strong>${sel.slot} – ${endStr}</strong></div>
+      <div class="cd-row"><span>⏱ Duración</span><strong>1 hora 30 min</strong></div>`;
+  } else {
+    document.getElementById('confirmIcon').textContent = '🎾';
+    document.getElementById('confirmTitle').textContent = 'Confirma tu reserva';
+    document.getElementById('confirmDetails').innerHTML = `
+      <div class="cd-row"><span>🎾 Cancha</span><strong>${sel.court.label}</strong></div>
+      <div class="cd-row"><span>🏗️ Superficie</span><strong>${sel.court.surface}</strong></div>
+      <div class="cd-row"><span>📅 Fecha</span><strong>${fechaLabel}</strong></div>
+      <div class="cd-row"><span>⏰ Horario</span><strong>${sel.slot} – ${endStr}</strong></div>
+      <div class="cd-row"><span>⏱ Duración</span><strong>1 hora 30 min</strong></div>`;
+  }
+}
+
+// ── STEP 3: CONFIRM (Normal o Desafío) ──
+async function finalConfirm() {
+  const btn = document.getElementById('btnFinalConfirm');
+  btn.disabled = true;
+  btn.innerHTML = sel.isChallenge ? 'Enviando desafío... ⌛' : (sel.isFriendly ? 'Agendando amistoso... ⌛' : 'Agendando cita en Google Calendar... ⌛');
+
+  const s = DB.getSession();
+  
+  if (sel.isChallenge) {
+    await finalConfirmChallenge(s, btn);
+  } else {
+    await finalConfirmNormal(s, btn);
+  }
+}
+
+function upsertReservationChallenge(challenge) {
+  const list = DB.getChallenges();
+  const idx = list.findIndex(item => item.id === challenge.id);
+  if (idx >= 0) list[idx] = { ...list[idx], ...challenge };
+  else list.push(challenge);
+  DB.saveChallenges(list);
+}
+
+function formatMatchDateLong(dateStr) {
+  try {
+    const wd = dayOfWeekFromISO(dateStr);
+    const [y, m, d] = dateStr.split('-');
+    return `${DAYS_LONG[wd]}, ${parseInt(d)} de ${MONTHS_LONG[parseInt(m) - 1]} ${y}`;
+  } catch (e) {
+    return dateStr || '';
+  }
+}
+
+function buildMatchWhatsappUrl(challenge) {
+  const cleanPhone = String(challenge.retadoTelefono || '').replace(/[^0-9]/g, '');
+  if (!cleanPhone) return '';
+
+  const isFriendly = challenge.tipo === 'amistoso';
+  const rankingUrl = window.location.origin + window.location.pathname.replace('reservas.html', 'ranking.html');
+  const dateLabel = formatMatchDateLong(challenge.fecha);
+  const text = isFriendly
+    ? `🎾 ¡Hola ${challenge.retadoNombre || ''}! ${challenge.retadorNombre || 'Un jugador'} reservó un amistoso contigo en UCTenis.\n\n📅 Fecha: ${dateLabel} · Hora: ${challenge.slot || ''}\n🏟️ Cancha: ${challenge.courtLabel || challenge.cancha || ''}\n\nAcepta o rechaza la invitación en:\n${rankingUrl}`
+    : `🎾 ¡Hola ${challenge.retadoNombre || ''}! ${challenge.retadorNombre || 'Un jugador'} te ha desafiado en UCTenis.\n\n📅 Fecha: ${dateLabel} · Hora: ${challenge.slot || ''}\n🏟️ Cancha: ${challenge.courtLabel || challenge.cancha || ''}\n\nAcepta o rechaza el desafío en:\n${rankingUrl}`;
+  return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`;
+}
+
+async function persistReservationMatch(challenge) {
+  upsertReservationChallenge(challenge);
+  let saved = challenge;
+
+  if (DB.isCloudConfigured()) {
+    try {
+      saved = await DB.saveChallengeCloud(saved);
+      upsertReservationChallenge(saved);
+    } catch (cloudErr) {
+      console.warn('No se pudo guardar el partido en Firebase:', cloudErr);
+    }
+  }
+
+  if (window.CONFIG?.API_URL) {
+    try {
+      const res = await fetch(window.CONFIG.API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          action: 'create_challenge',
+          ...saved,
+          cancha: saved.courtLabel || saved.cancha,
+          bookingId: saved.bookingId || '',
+          tipo: saved.tipo || 'amistoso'
+        })
+      });
+      const data = await res.json().catch(() => null);
+      if (data && data.ok && data.challenge) {
+        saved = { ...saved, ...data.challenge };
+        upsertReservationChallenge(saved);
+        if (DB.isCloudConfigured()) {
+          DB.saveChallengeCloud(saved).catch(err => {
+            console.warn('No se pudo reflejar el partido de Sheets en Firebase:', err);
+          });
+        }
+      } else if (data && data.ok === false) {
+        console.warn('Apps Script rechazó el partido:', data.msg);
+      }
+    } catch (sheetErr) {
+      console.warn('No se pudo sincronizar el partido con Apps Script:', sheetErr);
+    }
+  }
+
+  await publishReservationMatchNews(saved);
+  return saved;
+}
+
+async function publishReservationMatchNews(challenge) {
+  if (!challenge || challenge.tipo !== 'amistoso') return;
+
+  const newsItem = {
+    id: `friendly-created-${challenge.id}`,
+    category: 'app',
+    title: `Amistoso por confirmar: ${challenge.retadorNombre || 'Jugador'} vs ${challenge.retadoNombre || 'Jugador'}`,
+    body: `Se reservó un partido amistoso para el ${formatMatchDateLong(challenge.fecha)}${challenge.slot ? ' a las ' + challenge.slot : ''} en ${challenge.courtLabel || challenge.cancha || 'UCTenis'}. Queda pendiente la confirmación del rival.`,
+    date: new Date().toISOString().split('T')[0],
+    creado: new Date().toISOString(),
+    actualizado: new Date().toISOString(),
+    challengeId: challenge.id,
+    retadorNombre: challenge.retadorNombre || '',
+    retadoNombre: challenge.retadoNombre || ''
+  };
+
+  try {
+    if (DB.isCloudConfigured()) {
+      await DB.saveNewsCloud(newsItem);
+    }
+    const localNews = DB.getNews();
+    const idx = localNews.findIndex(item => item.id === newsItem.id);
+    if (idx >= 0) localNews[idx] = newsItem;
+    else localNews.unshift(newsItem);
+    DB.saveNews(localNews);
+  } catch (newsErr) {
+    console.warn('No se pudo publicar el amistoso en novedades:', newsErr);
+  }
+}
+
+async function finalConfirmNormal(s, btn) {
+  const r = await DB.createBookingAPI(s.id, sel.court.id, sel.date, sel.slot);
+  
+  if (!r.ok) {
+    alert(`Tu reserva falló: ${r.msg}`);
+    btn.disabled = false;
+    btn.innerHTML = '✅ Confirmar reserva';
+    return;
+  }
+
+  // If friendly match or campeonato with opponent, create the challenge locally
+  let challenge = null;
+  let whatsappUrl = '';
+  if (sel.isFriendly && sel.retadoId) {
+    challenge = DB.createChallenge(s.id, sel.retadoId, s.genero || 'M', sel.date, sel.court.label);
+    Object.assign(challenge, {
+      retadorNombre: s.nombre,
+      retadorEmail: s.email || '',
+      retadoNombre: sel.retadoNombre,
+      retadoEmail: sel.retadoEmail || '',
+      retadoTelefono: sel.retadoTelefono || '',
+      slot: sel.slot,
+      courtId: sel.court.id,
+      courtLabel: sel.court.label,
+      status: 'pendiente', // Reservado inicialmente como pendiente
+      tipo: 'amistoso',
+      bookingId: r.booking.id
+    });
+    challenge = await persistReservationMatch(challenge);
+    whatsappUrl = buildMatchWhatsappUrl(challenge);
+  } else if (sel.isCampeonato && sel.retadoId) {
+    challenge = DB.createChallenge(s.id, sel.retadoId, s.genero || 'M', sel.date, sel.court.label);
+    Object.assign(challenge, {
+      retadorNombre: s.nombre,
+      retadorEmail: s.email || '',
+      retadoNombre: sel.retadoNombre,
+      retadoEmail: sel.retadoEmail || '',
+      retadoTelefono: sel.retadoTelefono || '',
+      slot: sel.slot,
+      courtId: sel.court.id,
+      courtLabel: sel.court.label,
+      status: 'aceptado', // Reservado e inmediatamente aceptado
+      tipo: 'campeonato',
+      bookingId: r.booking.id
+    });
+
+    // Save locally
+    DB.saveChallenges(DB.getChallenges().map(item => item.id === challenge.id ? { ...item, ...challenge } : item));
+
+    // Save in Firebase background
+    if (DB.isCloudConfigured()) {
+      try {
+        await DB.saveChallengeCloud(challenge);
+      } catch (cloudErr) {
+        console.warn('No se pudo guardar el partido de campeonato en Firebase:', cloudErr);
+      }
+    }
+
+
+  }
+
+  // Update success modal and show it immediately
+  const wd = dayOfWeekFromISO(sel.date);
+  const [y, m, d] = sel.date.split('-');
+  const isFriendlyWithOpponent = Boolean(challenge && challenge.tipo === 'amistoso');
+  document.getElementById('successIcon').textContent = isFriendlyWithOpponent ? '🤝' : '🎉';
+  document.getElementById('successTitle').textContent = isFriendlyWithOpponent ? '¡Amistoso enviado!' : '¡Reserva confirmada!';
+  document.getElementById('successMsg').textContent = isFriendlyWithOpponent
+    ? `Invitaste a ${challenge.retadoNombre} · ${DAYS_LONG[wd]}, ${parseInt(d)} de ${MONTHS_LONG[parseInt(m) - 1]} ${y} · ${sel.slot} · ${sel.court.label}`
+    : `${sel.court.label} · ${DAYS_LONG[wd]}, ${parseInt(d)} de ${MONTHS_LONG[parseInt(m) - 1]} ${y} · ${sel.slot}`;
+  if (whatsappUrl) {
+    document.getElementById('whatsappLink').href = whatsappUrl;
+    document.getElementById('whatsappLinkContainer').style.display = 'block';
+  } else {
+    document.getElementById('whatsappLinkContainer').style.display = 'none';
+  }
+  document.getElementById('successModal').classList.add('visible');
+
+  renderMyBookings();
+  refreshSlotAvailability();
+
+  // Reset selection and close form
+  sel = { court: null, date: null, slot: null, isChallenge: false, isFriendly: false, isCampeonato: false, retadoId: null, retadoNombre: null, retadoEmail: null, retadoTelefono: null };
+  btn.disabled = false;
+  btn.innerHTML = '✅ Confirmar reserva';
+  setTimeout(() => goStep(1), 200);
+}
+
+async function finalConfirmChallenge(s, btn) {
+  // 1. Create booking in Google Calendar API first to ensure slot is available
+  const r = await DB.createBookingAPI(s.id, sel.court.id, sel.date, sel.slot);
+  
+  if (!r.ok) {
+    alert(`Tu desafío falló: ${r.msg}`);
+    btn.disabled = false;
+    btn.innerHTML = '✅ Confirmar reserva';
+    return;
+  }
+
+  // 2. Create and save challenge locally
+  const challenge = DB.createChallenge(s.id, sel.retadoId, s.genero || 'M', sel.date, sel.court.label);
+  Object.assign(challenge, {
+    retadorNombre: s.nombre,
+    retadorEmail: s.email,
+    retadoNombre: sel.retadoNombre,
+    retadoEmail: sel.retadoEmail || '',
+    retadoTelefono: sel.retadoTelefono || '',
+    slot: sel.slot,
+    courtId: sel.court.id,
+    courtLabel: sel.court.label,
+    bookingId: r.booking.id
+  });
+  
+  // Save challenge locally
+  DB.saveChallenges(DB.getChallenges().map(item => item.id === challenge.id ? { ...item, ...challenge } : item));
+
+  // 3. Save challenge to Firebase (Cloud source of truth)
+  if (DB.isCloudConfigured()) {
+    try {
+      await DB.saveChallengeCloud(challenge);
+    } catch(e) {
+      console.warn('Error saving challenge to Firebase:', e);
+    }
+  }
+
+  // 4. Generate WhatsApp URL
+  let whatsappUrl = null;
+  const cleanPhone = String(sel.retadoTelefono || '').replace(/[^0-9]/g, '');
+  if (cleanPhone) {
+    const parts = sel.date.split('-');
+    const dateFormatted = parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : sel.date;
+    const currentUrl = window.location.origin + window.location.pathname.replace('reservas.html', 'ranking.html');
+    const text = `🎾 ¡Hola! Te he desafiado en UCTenis.
+
+📅 Fecha: ${dateFormatted} · Hora: ${sel.slot}
+🏟️ Cancha: ${sel.court.label}
+
+Por favor, ingresa a la página para aceptar o rechazar el desafío:
+${currentUrl}
+
+¡Nos vemos en la cancha! 🏆`;
+    whatsappUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`;
+  }
+
+  // 5. Notify opponent via Apps Script in background (e-mail notification)
+  const wd = dayOfWeekFromISO(sel.date);
+  const [y, m, d] = sel.date.split('-');
+  if (window.CONFIG?.API_URL) {
+    fetch(window.CONFIG.API_URL, {
+      method: 'POST',
+      body: JSON.stringify({
+        action: 'notify_challenge',
+        challengeId: challenge.id,
+        retadorNombre: s.nombre,
+        retadorEmail: s.email,
+        retadoNombre: challenge.retadoNombre,
+        retadoEmail: challenge.retadoEmail || '',
+        retadoId: challenge.retadoId,
+        retadoTelefono: challenge.retadoTelefono || '',
+        fecha: challenge.fecha,
+        fechaLabel: `${DAYS_LONG[wd]}, ${parseInt(d)} de ${MONTHS_LONG[parseInt(m)-1]} ${y}`,
+        slot: challenge.slot,
+        cancha: challenge.courtLabel,
+        courtId: challenge.courtId
+      })
+    }).catch(e => console.warn('Error notify challenge in background:', e));
+  }
+
+  // 6. Update success modal and show it
+  document.getElementById('successIcon').textContent = '⚔️'; // ⚔️
+  document.getElementById('successTitle').textContent = '¡Desafío enviado!';
+  document.getElementById('successMsg').textContent =
+    `Has retado a ${sel.retadoNombre} · ${DAYS_LONG[wd]}, ${parseInt(d)} de ${MONTHS_LONG[parseInt(m)-1]} ${y} · ${sel.slot} · ${sel.court.label}`;
+
+  if (whatsappUrl) {
+    document.getElementById('whatsappLink').href = whatsappUrl;
+    document.getElementById('whatsappLinkContainer').style.display = 'block';
+  } else {
+    document.getElementById('whatsappLinkContainer').style.display = 'none';
+  }
+
+  document.getElementById('successModal').classList.add('visible');
+  renderMyBookings();
+  refreshSlotAvailability();
+  
+  // Reset selection and close form
+  sel = { court: null, date: null, slot: null, isChallenge: false, isFriendly: false, isCampeonato: false, retadoId: null, retadoNombre: null, retadoEmail: null, retadoTelefono: null };
+  btn.disabled = false;
+  btn.innerHTML = '✅ Confirmar reserva';
+  setTimeout(() => goStep(1), 200);
+}
+
+function closeSuccess() {
+  document.getElementById('successModal').classList.remove('visible');
+}
+
+// ── MY BOOKINGS ──
+let isSyncingBookings = false;
+
+function renderMyBookings() {
+  const session = DB.getSession();
+  const sec = document.getElementById('myBookingsSection');
+  if (!session) { sec.style.display = 'none'; return; }
+  sec.style.display = 'block';
+
+  if (DB.isFirebaseConfigured() && !isSyncingBookings) {
+    isSyncingBookings = true;
+    DB.syncUserBookingsAPI(session.id).then(() => {
+      isSyncingBookings = false;
+      const list = DB.getUserBookings(session.id);
+      renderMyBookingsUI(list);
+    }).catch(e => {
+      isSyncingBookings = false;
+      console.error('Error en sync background:', e);
+    });
+  }
+
+  const list = DB.getUserBookings(session.id);
+  renderMyBookingsUI(list);
+}
+
+function renderMyBookingsUI(list) {
+  const div = document.getElementById('myBookingsList');
+  if (!list.length) {
+    div.innerHTML = '<p style="color:var(--text-secondary);text-align:center;padding:20px">Aún no tienes reservas.</p>';
+    return;
+  }
+  const courts = {};
+  DB.COURTS.forEach(c => courts[c.id] = c.label);
+  div.innerHTML = list.map(b => {
+    const wd = dayOfWeekFromISO(b.fecha);
+    const [y, mo, d] = b.fecha.split('-');
+    const [sh, sm] = b.slot.split(':').map(Number);
+    let eh = sh + 1, em = sm + 30; if (em >= 60) { eh++; em -= 60; }
+    const endStr = `${String(eh).padStart(2,'0')}:${String(em).padStart(2,'0')}`;
+    const [sy, smo, sd] = b.fecha.split('-').map(Number);
+    const isPast = new Date(sy, smo - 1, sd, sh, sm) < new Date();
+    return `<div class="mybooking-card${isPast ? ' past-booking' : ''}">
+      <div class="mb-date"><span class="mb-day">${parseInt(d)}</span><span class="mb-month">${MONTHS_SHORT[parseInt(mo)-1]}</span></div>
+      <div class="mb-info">
+        <strong>${courts[b.courtId] || b.courtId}</strong>
+        <span>${DAYS_SHORT[wd]} · ${b.slot} – ${endStr}</span>
+      </div>
+      <div class="mb-actions">
+        ${!isPast ? `<button class="btn-cancel-bk" onclick="cancelBooking('${b.id}')">Cancelar</button>` : '<span class="past-label">Finalizada</span>'}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function cancelBooking(id) {
+  if (!confirm('¿Cancelar esta reserva?')) return;
+  
+  const booking = DB.getBookings().find(b => b.id === id);
+  if (!booking) return;
+
+  if (DB.isFirebaseConfigured()) {
+    const loader = document.createElement('div');
+    loader.style = "position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);display:flex;flex-direction:column;justify-content:center;align-items:center;z-index:9999;color:white;font-weight:bold;font-size:1.2rem;gap:12px;";
+    loader.innerHTML = '🔄 <span style="font-family:sans-serif;">Cancelando reserva en Google Calendar...</span>';
+    document.body.appendChild(loader);
+
+    try {
+      const res = await DB.cancelBookingAPI(id, booking.courtId);
+      document.body.removeChild(loader);
+      if (!res.ok) {
+        alert('Error al cancelar en el servidor: ' + (res.msg || 'Intente nuevamente.'));
+        return;
+      }
+    } catch(err) {
+      if (document.body.contains(loader)) document.body.removeChild(loader);
+      alert('Error de conexión al intentar cancelar.');
+      return;
+    }
+  }
+  
+  DB.cancelBooking(id, DB.getSession().id);
+  renderMyBookings();
+  if (sel.date) await refreshSlotAvailability();
+  alert('Reserva cancelada y horario liberado con éxito.');
+}
+
+// ── USER BAR ──
+function renderUserBar() {
+  const s = DB.getSession();
+  const bar = document.getElementById('userBar');
+  if (s) {
+    bar.innerHTML = `<div class="user-pill-res">
+      <div class="av">${s.nombre.charAt(0)}</div>
+      <span>${s.nombre.split(' ')[0]}</span>
+      <button onclick="doLogout()">Salir</button>
+    </div>`;
+    document.getElementById('myBookingsSection').style.display = 'block';
+  } else {
+    bar.innerHTML = `<button class="btn-login-res" onclick="openAuth()">🔑 Iniciar sesión</button>`;
+  }
+}
+
+function doLogout() { DB.logout(); renderUserBar(); renderMyBookings(); if (sel.date) refreshSlotAvailability(); }
+
+// ── AUTH ──
+function openAuth() {
+  const isConfigured = DB.isFirebaseConfigured();
+  document.getElementById('googleBtnContainer').style.display = isConfigured ? 'block' : 'none';
+  document.getElementById('mockLoginContainer').style.display = isConfigured ? 'none' : 'block';
+  document.getElementById('authMainView').style.display = 'block';
+  document.getElementById('authCompleteProfileView').style.display = 'none';
+  document.getElementById('authErr').textContent = '';
+  document.getElementById('authModal').classList.add('visible');
+}
+
+function closeAuth() {
+  document.getElementById('authModal').classList.remove('visible');
+}
+
+async function handleGoogleLogin() {
+  document.getElementById('authErr').textContent = '';
+  const errEl = document.getElementById('authErr');
+  const btn = document.querySelector('#googleBtnContainer button');
+  const originalText = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '⌛ Iniciando sesión...';
+  const r = await DB.loginWithGoogle();
+  if (!r.ok) {
+    errEl.textContent = r.msg;
+    btn.disabled = false;
+    btn.innerHTML = originalText;
+    return;
+  }
+  await handleLoginResponse(r);
+  btn.disabled = false;
+  btn.innerHTML = originalText;
+}
+
+async function handleMockLogin() {
+  document.getElementById('authErr').textContent = '';
+  const email = document.getElementById('mockEmail').value.trim();
+  const nombre = document.getElementById('mockNombre').value.trim();
+  const btn = document.querySelector('#mockLoginContainer button');
+  const originalText = btn.innerHTML;
+  if (!email) {
+    document.getElementById('authErr').textContent = 'Ingresa un correo para simular.';
+    return;
+  }
+  btn.disabled = true;
+  btn.innerHTML = 'Sincronizando... ⌛';
+  const r = await DB.loginWithGoogleMock(email, nombre);
+  if (!r.ok) {
+    document.getElementById('authErr').textContent = r.msg;
+    btn.disabled = false;
+    btn.innerHTML = originalText;
+    return;
+  }
+  await handleLoginResponse(r);
+  btn.disabled = false;
+  btn.innerHTML = originalText;
+}
+
+async function handleLoginResponse(r) {
+  if (r.isNew) {
+    document.getElementById('authMainView').style.display = 'none';
+    document.getElementById('authCompleteProfileView').style.display = 'block';
+    document.getElementById('cpEmail').value = r.email;
+    document.getElementById('cpFoto').value = r.foto || '';
+    document.getElementById('cpNombre').value = r.nombre || '';
+    document.getElementById('cpErr').textContent = '';
+  } else {
+    closeAuth();
+    renderUserBar();
+    renderMyBookings();
+    if (sel.date) refreshSlotAvailability();
+  }
+}
+
+async function handleCompleteProfile(e) {
+  e.preventDefault();
+  document.getElementById('cpErr').textContent = '';
+  const data = {
+    email: document.getElementById('cpEmail').value,
+    foto: document.getElementById('cpFoto').value,
+    nombre: document.getElementById('cpNombre').value,
+    genero: document.getElementById('cpGenero').value,
+    categoria: document.getElementById('cpCat').value,
+    mano: document.getElementById('cpMano').value,
+    reves: document.getElementById('cpReves').value
+  };
+  if (!data.genero) {
+    document.getElementById('cpErr').textContent = 'Por favor selecciona tu género.';
+    return;
+  }
+  const r = DB.completeGoogleRegistration(data);
+  if (!r.ok) {
+    document.getElementById('cpErr').textContent = r.msg;
+    return;
+  }
+  if (DB.isCloudConfigured()) {
+    try {
+      const saved = await DB.savePlayerCloud({
+        ...r.user,
+        nombre: data.nombre,
+        email: data.email,
+        genero: data.genero,
+        categoria: data.categoria,
+        mano: data.mano,
+        reves: data.reves,
+        foto: data.foto || '',
+        activo: true,
+        participaRanking: true
+      }, { email: data.email });
+      const syncedUser = { ...r.user, ...saved, genero: saved.genero || data.genero };
+      DB.upsertUserLocal(syncedUser);
+      localStorage.setItem('uctenis_session', JSON.stringify(syncedUser));
+    } catch (cloudErr) {
+      console.warn('No se pudo guardar el perfil inicial en Firebase:', cloudErr);
+    }
+  }
+  closeAuth();
+  renderUserBar();
+  renderMyBookings();
+  if (sel.date) refreshSlotAvailability();
+}
+</script>
+</body>
+</html>

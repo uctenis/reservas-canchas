@@ -1,0 +1,1313 @@
+/* UCTenis - Base de datos local + Firebase */
+
+if (typeof window.CONFIG === 'undefined') {
+  window.CONFIG = {
+    API_URL: "https://script.google.com/macros/s/AKfycbxxdlWgNakuIttTXiy-Rs6OLlex4da4grOmIYLXHhyx_IbTKkVUjnyNQXHy-jA6Bs2S/exec"
+  };
+}
+
+// =========================================================================
+// ⚙️ CONFIGURACIÓN DE FIREBASE (Creado desde uctenisclub@gmail.com)
+// =========================================================================
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyDxNdwD8hHQmN2efhRwflL7RkpC-RFs3ow",
+  authDomain: "uctenis-club.firebaseapp.com",
+  projectId: "uctenis-club",
+  storageBucket: "uctenis-club.firebasestorage.app",
+  messagingSenderId: "223552986034",
+  appId: "1:223552986034:web:13b34a6a246fb254eca2ab",
+  measurementId: "G-2NKXS8BMNC"
+};
+
+let firebaseAuth = null;
+let firebaseDb = null;
+if (typeof firebase !== 'undefined') {
+  if (FIREBASE_CONFIG.apiKey !== "TU_API_KEY") {
+    try {
+      firebase.initializeApp(FIREBASE_CONFIG);
+      firebaseAuth = firebase.auth();
+      if (typeof firebase.firestore === 'function') {
+        firebaseDb = firebase.firestore();
+      }
+      console.log("Firebase Auth inicializado correctamente.");
+    } catch (e) {
+      console.error("Error al inicializar Firebase:", e);
+    }
+  } else {
+    console.warn("Firebase no configurado. El sistema funcionará en Modo Simulación/Demo para pruebas locales.");
+  }
+}
+
+const FIREBASE_COLLECTIONS = {
+  players: 'ranking_players',
+  challenges: 'ranking_challenges',
+  news: 'ranking_news'
+};
+
+const DB_FIREBASE_ADMIN_EMAILS = ['uctenisclub@gmail.com', 'dsilva@uct.cl'];
+const DB_PURE_ADMIN_EMAILS     = ['uctenisclub@gmail.com'];
+
+function normalizeEmailForDb(email) {
+  return String(email || '').trim().toLowerCase();
+}
+
+const DB_STATIC_ACCESS_PLAYERS = [
+  { id: 'm001', nombre: 'David Silva', email: 'dsilva@uct.cl', genero: 'M', categoria: '3ra', foto: 'fotos/m001.png' },
+  { id: 'm002', nombre: 'Ismael Devia', email: 'idevia@uct.cl', genero: 'M', categoria: '3ra', foto: 'fotos/m002.png' },
+  { id: 'm005', nombre: 'Miguel Escalona', email: 'mescalon@uct.cl', genero: 'M', categoria: '4ta', foto: 'fotos/m005.png' },
+  { id: 'm004', nombre: 'Luis Otth', email: 'lotth@uct.cl', genero: 'M', categoria: '4ta', foto: 'fotos/m004.png' },
+  { id: 'm009', nombre: 'Gustavo Curaqueo', email: 'gcuraqueo@uct.cl', genero: 'M', categoria: 'Principiante', foto: 'fotos/m009.png' },
+  { id: 'm011', nombre: 'Jaime Castillo', email: 'jcastill@uct.cl', genero: 'M', categoria: '4ta', foto: 'fotos/m011.png' },
+  { id: 'm007', nombre: 'Matias Caceres', email: 'mcaceres@uct.cl', genero: 'M', categoria: '4ta', foto: 'fotos/m007.png' },
+  { id: 'm006', nombre: 'Rodrigo Castro', email: 'rcastro@uct.cl', genero: 'M', categoria: '4ta', foto: 'fotos/m006.png' },
+  { id: 'm017', nombre: 'Klaus Hennicke', email: 'khennicke@uct.cl', genero: 'M', categoria: '4ta', foto: 'fotos/m017.png' },
+  { id: 'm016', nombre: 'Jose Melgarejo', email: 'jmelgarejo@uct.cl', genero: 'M', categoria: '3ra', foto: 'fotos/m016.png' },
+  { id: 'm008', nombre: 'Juan Maripillan', email: 'jmaripillan@uct.cl', genero: 'M', categoria: '', foto: 'fotos/m008.png' },
+  { id: 'm010', nombre: 'Cristian Rebolledo', email: 'crebolledo@uct.cl', genero: 'M', categoria: 'Principiante', foto: 'fotos/m010.png' },
+  { id: 'm003', nombre: 'Francisco Encina', email: 'fencina@uct.cl', genero: 'M', categoria: '4ta', foto: 'fotos/m003.png' },
+  { id: 'm012', nombre: 'Cristian Farias', email: 'cristian.farias@uct.cl', genero: 'M', categoria: '4ta', foto: 'fotos/m012.png' },
+  { id: 'm015', nombre: 'Miguel Angulo', email: 'miguel.angulo@uct.cl', genero: 'M', categoria: '3ra', foto: 'fotos/m015.png' },
+  { id: 'm018', nombre: 'Roberto Bermudez', email: 'profesorbermudez@gmail.com', genero: 'M', categoria: '1ra', foto: 'fotos/m018.png' },
+  { id: 'm013', nombre: 'Francisco Munoz', email: 'francisco.munoz@uct.cl', genero: 'M', categoria: '', foto: 'fotos/m013.png' },
+  { id: 'm014', nombre: 'Pablo Lagos', email: 'pablo.lagos@uct.cl', genero: 'M', categoria: '4ta', foto: 'fotos/m014.png' },
+  { id: 'm031', nombre: 'Paulo Garrido', email: 'pgarrido@uct.cl', genero: 'M', categoria: '4ta', foto: 'fotos/m031.png' },
+  { id: 'f002', nombre: 'Violeta Moreno', email: 'vmoreno@uct.cl', genero: 'F', categoria: 'Principiante', foto: 'fotos/f002.png' },
+  { id: 'f001', nombre: 'Sofia Silva', email: 'ssilvacastillo08@gmail.com', genero: 'F', categoria: 'Principiante', foto: 'fotos/f001.png' },
+  { id: 'f006', nombre: 'Rocio Hernandez', email: 'rocio.hernandez@uct.cl', genero: 'F', categoria: 'Principiante', foto: 'fotos/f006.png' },
+  { id: 'f003', nombre: 'Fernanda Silva', email: 'ferniwendy@gmail.com', genero: 'F', categoria: 'Principiante', foto: 'fotos/f003.png' },
+  { id: 'f005', nombre: 'Baleria Schatter', email: 'vschatter@uct.cl', genero: 'F', categoria: 'Principiante', foto: 'fotos/f005.png' },
+  { id: 'f004', nombre: 'Sandra Arenas', email: 'sarenas@uct.cl', genero: 'F', categoria: '', foto: 'fotos/f004.png' },
+  { id: 'f008', nombre: 'Carolina Cardenas', email: 'ccardeneas@uct.cl', genero: 'F', categoria: 'Principiante', foto: 'fotos/f008.png' },
+  { id: 'f011', nombre: 'Carla Iglesias', email: 'ciglesias@uct.cl', genero: 'F', categoria: 'Principiante', foto: 'fotos/f011.png' }
+];
+
+function isAccessPlayerActive(player) {
+  if (!player) return false;
+  return player.activo !== false &&
+    player.activo !== 'false' &&
+    player.participaRanking !== false &&
+    player.participaRanking !== 'false';
+}
+
+function cleanFirestoreData(data) {
+  const out = {};
+  Object.entries(data || {}).forEach(([key, value]) => {
+    if (value !== undefined) out[key] = value;
+  });
+  return out;
+}
+
+const CHALLENGE_RESPONSE_MS = 48 * 60 * 60 * 1000;
+const CHALLENGE_RESULT_CONFIRM_MS = 48 * 60 * 60 * 1000;
+const CHALLENGE_ACTIVE_STATUSES = ['pendiente', 'aceptado', 'resultado_pendiente'];
+const CHALLENGE_HISTORY_STATUSES = ['completado', 'wo_retador', 'wo_retado', 'vencido', 'rechazado'];
+const CHALLENGE_OFFICIAL_STATUSES = [
+  ...CHALLENGE_ACTIVE_STATUSES,
+  ...CHALLENGE_HISTORY_STATUSES
+];
+
+window.UCTENNIS_CHALLENGE_RULES = {
+  RESPONSE_MS: CHALLENGE_RESPONSE_MS,
+  RESULT_CONFIRM_MS: CHALLENGE_RESULT_CONFIRM_MS,
+  ACTIVE_STATUSES: CHALLENGE_ACTIVE_STATUSES,
+  HISTORY_STATUSES: CHALLENGE_HISTORY_STATUSES,
+  OFFICIAL_STATUSES: CHALLENGE_OFFICIAL_STATUSES
+};
+
+function hasRecordedChallengeResult(challenge) {
+  return Boolean(
+    String(challenge?.marcador || '').trim() ||
+    String(challenge?.ganadorId || '').trim()
+  );
+}
+
+function challengeTimestamp(value) {
+  const time = value ? new Date(value).getTime() : NaN;
+  return Number.isFinite(time) ? time : 0;
+}
+
+function isChallengeResultDisputed(challenge) {
+  return Boolean(
+    challenge?.resultadoReclamado === true ||
+    challenge?.resultadoReclamado === 'true' ||
+    String(challenge?.reclamoResultado || '').trim()
+  );
+}
+
+function normalizeChallengeRecord(challenge) {
+  const normalized = { ...(challenge || {}) };
+  const now = Date.now();
+
+  if (!normalized.status) {
+    normalized.status = hasRecordedChallengeResult(normalized) ? 'completado' : 'pendiente';
+  } else if (normalized.status === 'terminado') {
+    normalized.status = hasRecordedChallengeResult(normalized) ? 'completado' : 'aceptado';
+  }
+
+  if (!CHALLENGE_OFFICIAL_STATUSES.includes(normalized.status) && normalized.status !== 'eliminado') {
+    normalized.status = hasRecordedChallengeResult(normalized) ? 'completado' : 'pendiente';
+  }
+
+  if (hasRecordedChallengeResult(normalized) && !normalized.fechaResultado) {
+    normalized.fechaResultado = normalized.actualizado || normalized.updatedAt || normalized.creado || new Date().toISOString();
+  }
+
+  if (normalized.status === 'pendiente') {
+    const createdAt = challengeTimestamp(normalized.creado || normalized.createdAt || normalized.actualizado);
+    if (createdAt && now - createdAt >= CHALLENGE_RESPONSE_MS) {
+      normalized.status = 'vencido';
+      normalized.actualizado = normalized.actualizado || new Date().toISOString();
+    }
+  }
+
+  if (normalized.status === 'resultado_pendiente' && !isChallengeResultDisputed(normalized)) {
+    const resultAt = challengeTimestamp(normalized.fechaResultado || normalized.actualizado);
+    if (resultAt && now - resultAt >= CHALLENGE_RESULT_CONFIRM_MS) {
+      normalized.status = 'completado';
+      normalized.confirmadoAutomaticamente = true;
+      normalized.fechaConfirmacion = normalized.fechaConfirmacion || new Date().toISOString();
+      normalized.actualizado = normalized.fechaConfirmacion;
+    }
+  }
+
+  return normalized;
+}
+
+function makeFirebaseDocId(value, prefix = 'doc') {
+  const base = String(value || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+  return base || `${prefix}-${Date.now()}`;
+}
+
+function formatPhoneNumber(num) {
+  let cleaned = String(num || '').replace(/[^0-9]/g, '');
+  if (!cleaned) return '';
+  if (cleaned.startsWith('569')) {
+    return '+' + cleaned;
+  }
+  if (cleaned.length === 9 && cleaned.startsWith('9')) {
+    return '+56' + cleaned;
+  }
+  if (cleaned.length === 8) {
+    return '+569' + cleaned;
+  }
+  if (cleaned.startsWith('56')) {
+    return '+' + cleaned;
+  }
+  return '+569' + cleaned;
+}
+
+function playerToSessionUser(player, current = {}) {
+  return {
+    ...(current || {}),
+    id: player.id || current.id || '',
+    nombre: player.nombre || current.nombre || '',
+    email: player.email || current.email || '',
+    genero: player.genero || player.gender || current.genero || '',
+    categoria: normalizeCategoryForDb(player.categoria || current.categoria || 'Principiante'),
+    mano: player.mano || player.manoHabil || current.mano || 'Derecha',
+    reves: player.reves || current.reves || 'Dos manos',
+    foto: player.foto || current.foto || '',
+    telefono: player.telefono || current.telefono || '',
+    rut: player.rut || current.rut || '',
+    password: current.password || 'google-auth-no-pass'
+  };
+}
+
+function normalizeCategoryForDb(value) {
+  const raw = String(value || '').trim();
+  return raw.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') === 'abierta'
+    ? 'Principiante'
+    : raw;
+}
+
+// ──────────────── VARIABLES GLOBALES PARA LISTENERS ────────────────
+let playersListeners = [];
+let challengesListeners = [];
+let newsListeners = [];
+let cachedPlayers = [];
+let cachedChallenges = [];
+let cachedNews = [];
+
+const DB = {
+
+  // ──────────────── USUARIOS ────────────────
+  getUsers() {
+    return JSON.parse(localStorage.getItem('uctenis_users') || '[]')
+      .map(user => ({ ...user, categoria: normalizeCategoryForDb(user.categoria || 'Principiante') }));
+  },
+  saveUsers(users) {
+    localStorage.setItem('uctenis_users', JSON.stringify(users));
+  },
+  upsertUserLocal(user) {
+    const users = this.getUsers();
+    const email = normalizeEmailForDb(user.email);
+    const idx = users.findIndex(item =>
+      item.id === user.id ||
+      (email && normalizeEmailForDb(item.email) === email)
+    );
+    if (idx >= 0) users[idx] = { ...users[idx], ...user };
+    else users.push(user);
+    this.saveUsers(users);
+    return user;
+  },
+  registerUser(data) {
+    const users = this.getUsers();
+    if (users.find(u => u.email === data.email)) return { ok: false, msg: 'El correo ya está registrado.' };
+
+    let targetId = data.id;
+    if (!targetId) {
+      const prefix = String(data.genero || '').trim().toUpperCase() === 'F' ? 'f' : 'm';
+      let max = 0;
+
+      // 1. Buscar en cachedPlayers (si están cargados)
+      if (typeof cachedPlayers !== 'undefined' && Array.isArray(cachedPlayers)) {
+        cachedPlayers.forEach(p => {
+          const match = String(p.id || '').match(new RegExp('^' + prefix + '(\\d+)$', 'i'));
+          if (match) max = Math.max(max, Number(match[1]));
+        });
+      }
+
+      // 2. Buscar en los usuarios locales
+      users.forEach(p => {
+        const match = String(p.id || '').match(new RegExp('^' + prefix + '(\\d+)$', 'i'));
+        if (match) max = Math.max(max, Number(match[1]));
+      });
+
+      // 3. Buscar en el ranking estático oficial
+      if (typeof OFFICIAL_STATIC_RANKING !== 'undefined') {
+        const list = [
+          ...(OFFICIAL_STATIC_RANKING.M || []),
+          ...(OFFICIAL_STATIC_RANKING.F || [])
+        ];
+        list.forEach(p => {
+          const match = String(p.id || '').match(new RegExp('^' + prefix + '(\\d+)$', 'i'));
+          if (match) max = Math.max(max, Number(match[1]));
+        });
+      }
+
+      targetId = prefix + String(max + 1).padStart(3, '0');
+    }
+
+    const user = {
+      id: targetId,
+      nombre: data.nombre,
+      email: data.email,
+      password: data.password || 'google-auth-no-pass',
+      genero: data.genero, // 'M' o 'F'
+      categoria: normalizeCategoryForDb(data.categoria || 'Principiante'),
+      mano: data.mano || 'Derecha',
+      reves: data.reves || 'Dos manos',
+      foto: data.foto || '',
+      telefono: data.telefono || '',
+      rut: data.rut || '',
+      creado: new Date().toISOString()
+    };
+    users.push(user);
+    this.saveUsers(users);
+    return { ok: true, user };
+  },
+
+  // ──────────────── REGISTRO Y VALIDACIÓN CON FIREBASE ────────────────
+  isCloudConfigured() {
+    return firebaseDb !== null;
+  },
+
+  isAllowedAccessEmail(email) {
+    const normalized = normalizeEmailForDb(email);
+    return DB_PURE_ADMIN_EMAILS.some(adm => normalizeEmailForDb(adm) === normalized);
+  },
+
+  findStaticAccessPlayerByEmail(email) {
+    const normalized = normalizeEmailForDb(email);
+    if (!normalized) return null;
+
+    const official = [];
+    if (typeof OFFICIAL_STATIC_RANKING !== 'undefined') {
+      official.push(...(OFFICIAL_STATIC_RANKING.M || []), ...(OFFICIAL_STATIC_RANKING.F || []));
+    }
+
+    return [...official, ...DB_STATIC_ACCESS_PLAYERS]
+      .find(player => normalizeEmailForDb(player.email) === normalized && isAccessPlayerActive(player)) || null;
+  },
+
+  async validateMemberBackend(email) {
+    if (!window.CONFIG?.API_URL || !email) return null;
+
+    try {
+      const params = new URLSearchParams({ action: 'validate_member', email });
+      const response = await fetch(`${window.CONFIG.API_URL}?${params.toString()}`);
+      const data = await response.json().catch(() => null);
+      if (data && data.ok) return data;
+    } catch (error) {
+      console.warn('No se pudo validar correo contra Apps Script:', error);
+    }
+
+    return null;
+  },
+
+  async validateMemberAPI(email) {
+    if (!email) return { ok: false, msg: 'Correo no proporcionado.' };
+    if (this.isAllowedAccessEmail(email)) return { ok: true, source: 'domain' };
+
+    // 1. Fuente principal: Firebase Firestore.
+    if (this.isCloudConfigured()) {
+      const cloudPlayer = await this.findPlayerByEmailCloud(email);
+      if (cloudPlayer) return { ok: true, source: 'firebase', player: cloudPlayer };
+    }
+
+    // 2. Respaldo de servidor: Sheets/Firebase desde Apps Script.
+    const backendValidation = await this.validateMemberBackend(email);
+    if (backendValidation?.ok && backendValidation.player) {
+      return {
+        ok: true,
+        source: backendValidation.source || 'backend',
+        player: backendValidation.player,
+        isAdmin: backendValidation.isAdmin === true
+      };
+    }
+
+    // 3. Respaldo local oficial para documentos antiguos sin emailLower.
+    const staticPlayer = this.findStaticAccessPlayerByEmail(email);
+    if (staticPlayer) {
+      return { ok: true, source: 'static', player: staticPlayer };
+    }
+
+    if (backendValidation?.ok) {
+      return {
+        ok: true,
+        source: backendValidation.source || 'backend',
+        isAdmin: backendValidation.isAdmin === true
+      };
+    }
+
+    const localUser = this.getUsers().find(user => normalizeEmailForDb(user.email) === normalizeEmailForDb(email));
+    if (localUser && isAccessPlayerActive(localUser)) return { ok: true, source: 'local', player: localUser };
+
+    return { ok: false, msg: 'Acceso restringido a jugadores UCTenis registrados en Firebase.' };
+  },
+
+  async registerUserAPI(data) {
+    const validation = await this.validateMemberAPI(data.email);
+    if (!validation.ok) return validation;
+    return this.registerUser(data);
+  },
+
+  // ──────────────── INGRESO CON GOOGLE Y SESIONES ────────────────
+  isFirebaseConfigured() {
+    return firebaseAuth !== null;
+  },
+
+  async loginWithGoogle() {
+    if (!this.isFirebaseConfigured()) {
+      return { ok: false, demo: true, msg: 'Firebase no configurado. Abre la consola de desarrollo o edita db.js para conectar tu Firebase real.' };
+    }
+
+    try {
+      const provider = new firebase.auth.GoogleAuthProvider();
+      const result = await firebaseAuth.signInWithPopup(provider);
+      const user = result.user;
+
+      const isPureAdmin = DB_PURE_ADMIN_EMAILS.some(adm => normalizeEmailForDb(adm) === normalizeEmailForDb(user.email));
+      if (isPureAdmin) {
+        const adminUser = {
+          id: makeFirebaseDocId(user.email, 'admin'),
+          nombre: user.displayName || 'Administrador UCTenis',
+          email: user.email,
+          genero: 'M',
+          categoria: 'Primera',
+          foto: user.photoURL || '',
+          telefono: '',
+          isAdmin: true
+        };
+        this.upsertUserLocal(adminUser);
+        localStorage.setItem('uctenis_session', JSON.stringify(adminUser));
+        return { ok: true, user: adminUser, isNew: false };
+      }
+
+      const validation = await this.validateMemberAPI(user.email);
+      if (!validation.ok) {
+        await firebaseAuth.signOut();
+        return { ok: false, msg: validation.msg };
+      }
+
+      const localUsers = this.getUsers();
+      let localUser = localUsers.find(u => u.email.toLowerCase() === user.email.toLowerCase());
+
+      const cloudPlayer = validation.player || await this.findPlayerByEmailCloud(user.email);
+      if (cloudPlayer) {
+        localUser = playerToSessionUser(cloudPlayer, {
+          ...(localUser || {}),
+          email: user.email,
+          nombre: user.displayName || cloudPlayer.nombre || (localUser && localUser.nombre) || '',
+          foto: user.photoURL || cloudPlayer.foto || (localUser && localUser.foto) || ''
+        });
+        this.upsertUserLocal(localUser);
+        localStorage.setItem('uctenis_session', JSON.stringify(localUser));
+        return { ok: true, user: localUser, isNew: false };
+      }
+
+      if (localUser) {
+        localStorage.setItem('uctenis_session', JSON.stringify(localUser));
+        return { ok: true, user: localUser, isNew: false };
+      }
+
+      // Si fue validado por Sheets/Ranking pero no existe ficha en Firebase aún, permitir registro/vinculación
+      return {
+        ok: true,
+        isNew: true,
+        email: user.email,
+        nombre: user.displayName || '',
+        foto: user.photoURL || ''
+      };
+    } catch (error) {
+      console.error('Error en Google Sign-in:', error);
+      return { ok: false, msg: 'Error de autenticación con Google: ' + error.message };
+    }
+  },
+
+  async loginWithGoogleMock(email, nombre) {
+    const normalized = normalizeEmailForDb(email);
+    const isPureAdmin = DB_PURE_ADMIN_EMAILS.some(adm => normalizeEmailForDb(adm) === normalized);
+    if (isPureAdmin) {
+      const adminUser = {
+        id: makeFirebaseDocId(email, 'admin'),
+        nombre: nombre || 'Administrador UCTenis',
+        email: email,
+        genero: 'M',
+        categoria: 'Primera',
+        foto: '',
+        telefono: '',
+        isAdmin: true
+      };
+      this.upsertUserLocal(adminUser);
+      localStorage.setItem('uctenis_session', JSON.stringify(adminUser));
+      return { ok: true, user: adminUser, isNew: false };
+    }
+
+    const validation = await this.validateMemberAPI(email);
+    if (!validation.ok) {
+      return { ok: false, msg: validation.msg };
+    }
+
+    const localUsers = this.getUsers();
+    let localUser = localUsers.find(u => u.email.toLowerCase() === email.toLowerCase());
+
+    const cloudPlayer = validation.player || await this.findPlayerByEmailCloud(email);
+    if (cloudPlayer) {
+      localUser = playerToSessionUser(cloudPlayer, {
+        ...(localUser || {}),
+        email,
+        nombre: nombre || cloudPlayer.nombre || (localUser && localUser.nombre) || ''
+      });
+      this.upsertUserLocal(localUser);
+      localStorage.setItem('uctenis_session', JSON.stringify(localUser));
+      return { ok: true, user: localUser, isNew: false };
+    }
+
+    if (localUser) {
+      localStorage.setItem('uctenis_session', JSON.stringify(localUser));
+      return { ok: true, user: localUser, isNew: false };
+    }
+
+    return {
+      ok: true,
+      isNew: true,
+      email: email,
+      nombre: nombre || 'Usuario UCTenis',
+      foto: ''
+    };
+  },
+
+  completeGoogleRegistration(data) {
+    const result = this.registerUser({
+      nombre: data.nombre,
+      email: data.email,
+      password: 'google-auth-no-pass',
+      genero: data.genero,
+      categoria: normalizeCategoryForDb(data.categoria),
+      mano: data.mano || 'Derecha',
+      reves: data.reves || 'Dos manos',
+      foto: data.foto || '',
+      telefono: data.telefono || '',
+      rut: data.rut || ''
+    });
+    if (result.ok) {
+      localStorage.setItem('uctenis_session', JSON.stringify(result.user));
+    }
+    return result;
+  },
+
+  loginUser(email, password) {
+    const user = this.getUsers().find(u => u.email === email && u.password === password);
+    if (!user) return { ok: false, msg: 'Correo o contraseña incorrectos.' };
+    localStorage.setItem('uctenis_session', JSON.stringify(user));
+    return { ok: true, user };
+  },
+  getSession() {
+    return JSON.parse(localStorage.getItem('uctenis_session') || 'null');
+  },
+  logout() {
+    // ✅ Limpiar listeners en tiempo real
+    this.cleanupListeners();
+    localStorage.removeItem('uctenis_session');
+    if (this.isFirebaseConfigured()) {
+      firebaseAuth.signOut().catch(err => console.error("Error al cerrar sesión de Firebase:", err));
+    }
+  },
+  updateUser(updatedUser) {
+    const users = this.getUsers().map(u => u.id === updatedUser.id ? updatedUser : u);
+    this.saveUsers(users);
+    localStorage.setItem('uctenis_session', JSON.stringify(updatedUser));
+  },
+
+  // ──────────────── FIREBASE: JUGADORES ────────────────
+  async getPlayersCloud() {
+    // ✅ OPTIMIZACIÓN: Retorna caché en tiempo real si listener está activo
+    if (cachedPlayers.length > 0) {
+      return cachedPlayers;
+    }
+    if (!this.isCloudConfigured()) throw new Error('Firestore no está disponible.');
+    // Si no hay caché, hacer fetch manual
+    const snapshot = await firebaseDb.collection(FIREBASE_COLLECTIONS.players).get();
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  },
+
+  // ✅ NUEVO: Inicializar listener de jugadores en tiempo real
+  initPlayersListener() {
+    if (!this.isCloudConfigured()) return null;
+    
+    // Desuscribir listeners anteriores
+    playersListeners.forEach(unsubscribe => unsubscribe());
+    playersListeners = [];
+    
+    // Crear nuevo listener
+    const unsubscribe = firebaseDb
+      .collection(FIREBASE_COLLECTIONS.players)
+      .onSnapshot(
+        snapshot => {
+          cachedPlayers = snapshot.docs.map(doc => ({ 
+            id: doc.id, 
+            ...doc.data() 
+          }));
+          this.dispatchEvent('players-updated', { count: cachedPlayers.length });
+          console.log(`✅ ${cachedPlayers.length} jugadores actualizados en tiempo real`);
+        },
+        error => {
+          console.error('❌ Error en listener de jugadores:', error);
+        }
+      );
+    
+    playersListeners.push(unsubscribe);
+    return unsubscribe;
+  },
+
+  async findPlayerByEmailCloud(email) {
+    const normalized = normalizeEmailForDb(email);
+    if (!normalized || !this.isCloudConfigured()) return null;
+
+    try {
+      const collection = firebaseDb.collection(FIREBASE_COLLECTIONS.players);
+      const queries = [
+        { field: 'emailLower', value: normalized },
+        { field: 'email', value: String(email || '').trim() },
+        { field: 'email', value: normalized }
+      ].filter((query, index, list) =>
+        query.value && list.findIndex(item => item.field === query.field && item.value === query.value) === index
+      );
+
+      for (const query of queries) {
+        const snapshot = await collection
+          .where(query.field, '==', query.value)
+          .limit(1)
+          .get();
+
+        if (!snapshot.empty) {
+          const doc = snapshot.docs[0];
+          const player = { id: doc.id, ...doc.data() };
+          if (isAccessPlayerActive(player)) return player;
+        }
+      }
+
+      const players = await this.getPlayersCloud();
+      const byEmail = players.find(player =>
+        normalizeEmailForDb(player.email) === normalized &&
+        isAccessPlayerActive(player)
+      );
+      if (byEmail) {
+        return byEmail;
+      }
+    } catch (error) {
+      console.warn('No se pudo buscar jugador por correo en Firebase:', error);
+    }
+    return null;
+  },
+
+  async savePlayerCloud(player, actor = {}) {
+    if (!this.isCloudConfigured()) throw new Error('Firestore no está disponible.');
+    const id = player.id || makeFirebaseDocId(player.nombre || player.email, 'player');
+    const now = new Date().toISOString();
+    const emailLower = normalizeEmailForDb(player.email);
+    const activeValue = player.activo ?? player.participaRanking;
+    const data = cleanFirestoreData({
+      ...player,
+      id,
+      genero: player.genero || player.gender || '',
+      activo: activeValue === undefined ? true : activeValue !== false,
+      participaRanking: activeValue === undefined ? true : activeValue !== false,
+      telefono: formatPhoneNumber(player.telefono),
+      emailLower,
+      updatedAt: now,
+      updatedBy: actor.email || actor.adminEmail || actor.actorEmail || ''
+    });
+
+    await firebaseDb.collection(FIREBASE_COLLECTIONS.players).doc(id).set(data, { merge: true });
+    return data;
+  },
+
+  async savePlayersCloud(players, actor = {}) {
+    if (!this.isCloudConfigured()) throw new Error('Firestore no está disponible.');
+    const batch = firebaseDb.batch();
+    const now = new Date().toISOString();
+    const saved = [];
+
+    players.forEach(player => {
+      const id = player.id || makeFirebaseDocId(player.nombre || player.email, 'player');
+      const activeValue = player.activo ?? player.participaRanking;
+      const data = cleanFirestoreData({
+        ...player,
+        id,
+        genero: player.genero || player.gender || '',
+        activo: activeValue === undefined ? true : activeValue !== false,
+        participaRanking: activeValue === undefined ? true : activeValue !== false,
+        telefono: formatPhoneNumber(player.telefono),
+        emailLower: normalizeEmailForDb(player.email),
+        updatedAt: now,
+        updatedBy: actor.email || actor.adminEmail || actor.actorEmail || ''
+      });
+      const ref = firebaseDb.collection(FIREBASE_COLLECTIONS.players).doc(id);
+      batch.set(ref, data, { merge: true });
+      saved.push(data);
+    });
+
+    if (saved.length) await batch.commit();
+    return saved;
+  },
+
+  async setPlayerActiveCloud(player, active, actor = {}) {
+    const id = typeof player === 'string' ? player : player?.id;
+    if (!id) throw new Error('Jugador sin ID.');
+    const patch = {
+      ...(typeof player === 'string' ? {} : player),
+      id,
+      activo: Boolean(active),
+      participaRanking: Boolean(active),
+      updatedAt: new Date().toISOString(),
+      updatedBy: actor.email || actor.adminEmail || actor.actorEmail || ''
+    };
+    if (!active) patch.posicion = '';
+    return this.savePlayerCloud(patch, actor);
+  },
+
+  async deletePlayerCloud(id) {
+    if (!this.isCloudConfigured()) throw new Error('Firestore no está disponible.');
+    if (!id) throw new Error('Se requiere el ID del jugador para eliminarlo.');
+    await firebaseDb.collection(FIREBASE_COLLECTIONS.players).doc(id).delete();
+  },
+
+  // ──────────────── FIREBASE: DESAFÍOS ────────────────
+  async getChallengesCloud() {
+    // ✅ OPTIMIZACIÓN: Retorna caché en tiempo real si listener está activo
+    if (cachedChallenges.length > 0) {
+      return cachedChallenges;
+    }
+    if (!this.isCloudConfigured()) throw new Error('Firestore no está disponible.');
+    // Si no hay caché, hacer fetch manual
+    const snapshot = await firebaseDb.collection(FIREBASE_COLLECTIONS.challenges).get();
+    return snapshot.docs
+      .map(doc => normalizeChallengeRecord({ id: doc.id, ...doc.data() }))
+      .sort((a, b) => (a.fecha || '').localeCompare(b.fecha || '') || (b.creado || '').localeCompare(a.creado || ''));
+  },
+
+  // ✅ NUEVO: Inicializar listener de desafíos en tiempo real
+  initChallengesListener() {
+    if (!this.isCloudConfigured()) return null;
+    
+    // Desuscribir listeners anteriores
+    challengesListeners.forEach(unsubscribe => unsubscribe());
+    challengesListeners = [];
+    
+    // Crear nuevo listener
+    const unsubscribe = firebaseDb
+      .collection(FIREBASE_COLLECTIONS.challenges)
+      .onSnapshot(
+        snapshot => {
+          cachedChallenges = snapshot.docs
+            .map(doc => normalizeChallengeRecord({ id: doc.id, ...doc.data() }))
+            .sort((a, b) => (a.fecha || '').localeCompare(b.fecha || '') || (b.creado || '').localeCompare(a.creado || ''));
+          
+          // Guardar a localStorage para mantener sincronizado
+          this.saveChallenges(cachedChallenges);
+          
+          this.dispatchEvent('challenges-updated', { count: cachedChallenges.length });
+          console.log(`✅ ${cachedChallenges.length} desafíos actualizados en tiempo real`);
+        },
+        error => {
+          console.error('❌ Error en listener de desafíos:', error);
+        }
+      );
+    
+    challengesListeners.push(unsubscribe);
+    return unsubscribe;
+  },
+
+  async saveChallengeCloud(challenge) {
+    if (!this.isCloudConfigured()) throw new Error('Firestore no está disponible.');
+    const id = challenge.id || makeFirebaseDocId(`challenge-${Date.now()}`, 'challenge');
+    const now = new Date().toISOString();
+    const data = cleanFirestoreData(normalizeChallengeRecord({
+      ...challenge,
+      id,
+      status: challenge.status || 'pendiente',
+      creado: challenge.creado || now,
+      actualizado: now
+    }));
+    await firebaseDb.collection(FIREBASE_COLLECTIONS.challenges).doc(id).set(data, { merge: true });
+    return data;
+  },
+
+  async updateChallengeCloud(id, patch) {
+    const current = this.getChallenges().find(challenge => challenge.id === id) || {};
+    return this.saveChallengeCloud({ ...current, ...patch, id });
+  },
+
+  async deleteChallengeCloud(id) {
+    if (!this.isCloudConfigured()) throw new Error('Firestore no está disponible.');
+    if (!id) throw new Error('Se requiere el ID del desafío para eliminarlo.');
+    await firebaseDb.collection(FIREBASE_COLLECTIONS.challenges).doc(id).delete();
+  },
+
+  // ──────────────── FIREBASE: NOVEDADES ────────────────
+  getNews() {
+    return JSON.parse(localStorage.getItem('uctenis_news') || '[]');
+  },
+  saveNews(list) {
+    localStorage.setItem('uctenis_news', JSON.stringify(list || []));
+  },
+  async getNewsCloud() {
+    // ✅ OPTIMIZACIÓN: Retorna caché en tiempo real si listener está activo
+    if (cachedNews.length > 0) {
+      return cachedNews;
+    }
+    if (!this.isCloudConfigured()) throw new Error('Firestore no está disponible.');
+    // Si no hay caché, hacer fetch manual
+    const snapshot = await firebaseDb.collection(FIREBASE_COLLECTIONS.news).get();
+    return snapshot.docs
+      .map(doc => ({ id: doc.id, ...doc.data() }))
+      .sort((a, b) => (b.date || b.creado || '').localeCompare(a.date || a.creado || ''));
+  },
+
+  // ✅ NUEVO: Inicializar listener de noticias en tiempo real
+  initNewsListener() {
+    if (!this.isCloudConfigured()) return null;
+    
+    // Desuscribir listeners anteriores
+    newsListeners.forEach(unsubscribe => unsubscribe());
+    newsListeners = [];
+    
+    // Crear nuevo listener
+    const unsubscribe = firebaseDb
+      .collection(FIREBASE_COLLECTIONS.news)
+      .onSnapshot(
+        snapshot => {
+          cachedNews = snapshot.docs
+            .map(doc => ({ id: doc.id, ...doc.data() }))
+            .sort((a, b) => (b.date || b.creado || '').localeCompare(a.date || a.creado || ''));
+          
+          // Guardar a localStorage para mantener sincronizado
+          this.saveNews(cachedNews);
+          
+          this.dispatchEvent('news-updated', { count: cachedNews.length });
+          console.log(`✅ ${cachedNews.length} noticias actualizadas en tiempo real`);
+        },
+        error => {
+          console.error('❌ Error en listener de noticias:', error);
+        }
+      );
+    
+    newsListeners.push(unsubscribe);
+    return unsubscribe;
+  },
+  async saveNewsCloud(newsItem, actor = {}) {
+    if (!this.isCloudConfigured()) throw new Error('Firestore no está disponible.');
+    const id = newsItem.id || makeFirebaseDocId(newsItem.title || `news-${Date.now()}`, 'news');
+    const now = new Date().toISOString();
+    const data = cleanFirestoreData({
+      ...newsItem,
+      id,
+      creado: newsItem.creado || now,
+      actualizado: now,
+      updatedBy: actor.email || actor.adminEmail || actor.actorEmail || ''
+    });
+    await firebaseDb.collection(FIREBASE_COLLECTIONS.news).doc(id).set(data, { merge: true });
+    return data;
+  },
+  async deleteNewsCloud(id) {
+    if (!this.isCloudConfigured()) throw new Error('Firestore no está disponible.');
+    if (!id) throw new Error('Se requiere el ID de la novedad para eliminarla.');
+    await firebaseDb.collection(FIREBASE_COLLECTIONS.news).doc(id).delete();
+  },
+
+  // ✅ UTILIDAD: Disparar eventos personalizados
+  dispatchEvent(eventName, data) {
+    const event = new CustomEvent(eventName, { detail: data });
+    window.dispatchEvent(event);
+  },
+
+  // ✅ UTILIDAD: Escuchar eventos de actualización en tiempo real
+  addEventListener(eventName, callback) {
+    window.addEventListener(eventName, (e) => callback(e.detail));
+  },
+
+  // ✅ UTILIDAD: Limpiar todos los listeners (para logout)
+  cleanupListeners() {
+    playersListeners.forEach(unsubscribe => unsubscribe());
+    challengesListeners.forEach(unsubscribe => unsubscribe());
+    newsListeners.forEach(unsubscribe => unsubscribe());
+    playersListeners = [];
+    challengesListeners = [];
+    newsListeners = [];
+    cachedPlayers = [];
+    cachedChallenges = [];
+    cachedNews = [];
+    console.log('✅ Listeners limpios');
+  },
+
+  // ──────────────── RANKING ────────────────
+  getRanking(genero) {
+    const key = genero === 'M' ? 'uctenis_ranking_m' : 'uctenis_ranking_f';
+    return JSON.parse(localStorage.getItem(key) || '[]');
+  },
+  saveRanking(genero, list) {
+    const key = genero === 'M' ? 'uctenis_ranking_m' : 'uctenis_ranking_f';
+    localStorage.setItem(key, JSON.stringify(list));
+  },
+  recalcRanking(genero) {
+    const users = this.getUsers().filter(u => u.genero === genero);
+    const challenges = this.getChallenges().filter(c =>
+      ['completado', 'wo_retado'].includes(c.status) &&
+      c.genero === genero &&
+      c.tipo !== 'amistoso' &&
+      c.tipo !== 'campeonato'
+    );
+
+    // Build ladder baseline from users. If a user has an explicit position (pos or posicion), respect it.
+    const ranking = users.map((user, index) => {
+      const explicitPos = Number.isFinite(user.pos) && user.pos > 0
+        ? Number(user.pos)
+        : (Number.isFinite(user.posicion) && user.posicion > 0 ? Number(user.posicion) : null);
+      return { id: user.id, nombre: user.nombre, pos: explicitPos ?? (index + 1) };
+    });
+
+    // If any explicit positions were provided, sort by them to establish the baseline order.
+    const hasExplicit = ranking.some(r => Number.isFinite(r.pos) && r.pos > 0 && users.some(u => Number.isFinite(u.pos) || Number.isFinite(u.posicion)));
+    if (hasExplicit) {
+      ranking.sort((a, b) => (a.pos || 9999) - (b.pos || 9999) || String(a.id).localeCompare(String(b.id)));
+    }
+    const findIndex = id => ranking.findIndex(item => item.id === id);
+
+    const sortedChallenges = [...challenges].sort((a, b) => {
+      const getTime = challenge => {
+        const dateValue = challenge.actualizado || challenge.creado;
+        const parsed = dateValue ? new Date(dateValue).getTime() : NaN;
+        return Number.isFinite(parsed) ? parsed : 0;
+      };
+      const timeA = getTime(a);
+      const timeB = getTime(b);
+      return timeA - timeB || String(a.id).localeCompare(String(b.id));
+    });
+
+    sortedChallenges.forEach(challenge => {
+      if (challenge.status === 'wo_retador') return;
+      const winnerId = challenge.ganadorId;
+      const loserId = winnerId === challenge.retadorId ? challenge.retadoId : challenge.retadorId;
+      const winnerIndex = findIndex(winnerId);
+      const loserIndex = findIndex(loserId);
+      if (winnerIndex < 0 || loserIndex < 0) return;
+      if (winnerIndex > loserIndex) {
+        const moved = ranking.splice(winnerIndex, 1)[0];
+        ranking.splice(loserIndex, 0, moved);
+      }
+    });
+
+    const ranked = ranking.map((player, index) => ({ ...player, pos: index + 1 }));
+    this.saveRanking(genero, ranked);
+    return ranked;
+  },
+
+  // ──────────────── DESAFÍOS ────────────────
+  // Un desafío válido debe tener: id, status, creado, y al menos retadorId + retadoId
+  // (o en registros muy viejos, al menos los nombres de ambos jugadores)
+  isValidChallenge(c) {
+    if (!c || !c.id || c.id === 'ID') return false;
+    if (c.status === 'eliminado') return false;
+    if (!c.creado || String(c.creado).trim() === '') return false;
+
+
+
+    // Debe tener IDs (registros modernos) o al menos nombres de ambos jugadores (registros viejos)
+    const hasIds = c.retadorId && c.retadoId;
+    const hasNames = c.retadorNombre && c.retadoNombre &&
+                     c.retadorNombre !== 'RETADOR' && c.retadoNombre !== 'RETADO' &&
+                     c.retadorNombre !== 'ID' && c.retadoNombre !== 'ID';
+    return Boolean(hasIds || hasNames);
+  },
+  getChallenges() {
+    const list = JSON.parse(localStorage.getItem('uctenis_challenges') || '[]');
+    return list
+      .map(normalizeChallengeRecord)
+      .filter(c => this.isValidChallenge(c));
+  },
+  saveChallenges(list) {
+    const filtered = list
+      .map(normalizeChallengeRecord)
+      .filter(c => this.isValidChallenge(c));
+    localStorage.setItem('uctenis_challenges', JSON.stringify(filtered));
+  },
+  createChallenge(retadorId, retadoId, genero, fecha, cancha) {
+    const challenges = this.getChallenges();
+    const nuevo = {
+      id: Date.now().toString(),
+      retadorId, retadoId, genero,
+      fecha, cancha,
+      status: 'pendiente',
+      marcador: null,
+      ganadorId: null,
+      tipo: 'ranking',
+      creado: new Date().toISOString()
+    };
+    challenges.push(nuevo);
+    this.saveChallenges(challenges);
+    return nuevo;
+  },
+  respondChallenge(id, accept) {
+    const list = this.getChallenges().map(c => {
+      if (c.id === id) return { ...c, status: accept ? 'aceptado' : 'rechazado' };
+      return c;
+    });
+    this.saveChallenges(list);
+  },
+  submitResult(id, marcador, ganadorId, tipo) {
+    const now = new Date().toISOString();
+    const list = this.getChallenges().map(c => {
+      if (c.id === id) {
+        return {
+          ...c,
+          status: 'resultado_pendiente',
+          marcador,
+          ganadorId,
+          tipo: tipo || c.tipo || 'ranking',
+          fechaResultado: now,
+          resultadoReclamado: false,
+          reclamoResultado: '',
+          actualizado: now
+        };
+      }
+      return c;
+    });
+    this.saveChallenges(list);
+  },
+  getUserChallenges(userId) {
+    return this.getChallenges().filter(c => c.retadorId === userId || c.retadoId === userId);
+  },
+
+  // ──────────────── RESERVAS DE CANCHA ────────────────
+  COURTS: [
+    { id: 'cec1', label: 'CEC – Cancha 1', surface: 'Arcilla', img: 'cec.jpg',
+      gcal: 'https://calendar.app.google/kGKzcmXMWJv7vs9h7' },
+    { id: 'cec2', label: 'CEC – Cancha 2', surface: 'Arcilla', img: 'cec.jpg',
+      gcal: 'https://calendar.app.google/QGrkHxRgwacJ3ApU6' },
+    { id: 'cjp1', label: 'CJP – Cancha 1', surface: 'Asfalto',  img: 'cjp.jpg',
+      gcal: 'https://calendar.app.google/tqq8PkCJzmHaBvGS7' },
+    { id: 'cjp2', label: 'CJP – Cancha 2', surface: 'Asfalto',  img: 'cjp.jpg',
+      gcal: 'https://calendar.app.google/FAcvAqn4TCJDEjwP9' },
+  ],
+  // Slots: 09:00–22:30, bloques de 1.5 h
+  SLOTS: ['09:00','10:30','12:00','13:30','15:00','16:30','18:00','19:30','21:00'],
+
+  getBookings() {
+    return JSON.parse(localStorage.getItem('uctenis_bookings') || '[]');
+  },
+  saveBookings(list) {
+    localStorage.setItem('uctenis_bookings', JSON.stringify(list));
+  },
+  // Reservas de una cancha en una fecha
+  getCourtBookings(courtId, fecha) {
+    return this.getBookings().filter(b => b.courtId === courtId && b.fecha === fecha && b.status !== 'cancelada');
+  },
+  // Si el usuario ya reservó HOY (regla: 1 por día, excepto administradores)
+  userBookedToday(userId, fecha) {
+    const session = this.getSession();
+    const user = (session && session.id === userId) ? session : this.getUsers().find(u => u.id === userId);
+    if (user && (user.isAdmin || ['uctenisclub@gmail.com', 'dsilva@uct.cl'].includes((user.email || '').toLowerCase()))) {
+      return false;
+    }
+    return this.getBookings().some(b => b.userId === userId && b.fecha === fecha && b.status !== 'cancelada');
+  },
+  createBooking(userId, courtId, fecha, slot) {
+    const bookings = this.getBookings();
+    // Regla: Evitar reservar horario de clases (martes y miércoles de 18:00 a 19:30 en CJP)
+    const [y, m, d] = fecha.split('-').map(Number);
+    const dayOfWeek = new Date(y, m - 1, d).getDay();
+    if ((dayOfWeek === 2 || dayOfWeek === 3) && slot === '18:00' && courtId.startsWith('cjp')) {
+      return { ok: false, msg: 'Este horario está reservado para Clases UCTenis.' };
+    }
+    // Regla: slot ya ocupado
+    if (bookings.some(b => b.courtId === courtId && b.fecha === fecha && b.slot === slot && b.status !== 'cancelada'))
+      return { ok: false, msg: 'Ese horario ya está reservado.' };
+    // Regla: 1 reserva por día
+    if (this.userBookedToday(userId, fecha))
+      return { ok: false, msg: 'Solo se permite una reserva por día.' };
+    const b = { id: Date.now().toString(), userId, courtId, fecha, slot, status: 'confirmada', creado: new Date().toISOString() };
+    bookings.push(b);
+    this.saveBookings(bookings);
+    return { ok: true, booking: b };
+  },
+  
+  // ──────────────── CONEXIÓN AL BACKEND (Google Calendar y Miembros) ────────────────
+  // Consultar disponibilidad real de las 4 canchas en Google Calendar
+  async getSlotsAPI(fechaStr) {
+    try {
+      const params = new URLSearchParams({ action: 'get_available_slots', date: fechaStr });
+      const res = await fetch(`${window.CONFIG.API_URL}?${params.toString()}`);
+      const data = await res.json();
+      return data; // { ok: true, courts: { cec1: ["09:00", ...], cec2: [...] } }
+    } catch (e) {
+      console.error('Error obteniendo disponibilidad:', e);
+      return { ok: false };
+    }
+  },
+
+  // Nota: Para usar la versión real que agenda en Google Calendar, se llama a esta función
+  async createBookingAPI(userId, courtId, fecha, slot) {
+    // Buscar usuario en localStorage; si no existe, intentar desde sesión activa
+    let user = this.getUsers().find(u => u.id === userId);
+    if (!user) {
+      const session = this.getSession();
+      if (session && (session.id === userId || !userId)) {
+        user = session;
+      }
+    }
+    if (!user) return { ok: false, msg: 'Usuario no encontrado' };
+
+    // Regla: Evitar reservar horario de clases (martes y miércoles de 18:00 a 19:30 en CJP)
+    const [y, m, d] = fecha.split('-').map(Number);
+    const dayOfWeek = new Date(y, m - 1, d).getDay();
+    if ((dayOfWeek === 2 || dayOfWeek === 3) && slot === '18:00' && courtId.startsWith('cjp')) {
+      return { ok: false, msg: 'Este horario está reservado para Clases UCTenis.' };
+    }
+
+    // Regla: 1 reserva por día (excepto administradores)
+    if (this.userBookedToday(user.id, fecha)) {
+      return { ok: false, msg: 'Solo se permite una reserva por día.' };
+    }
+
+    try {
+      // Usar la URL que está en script.js (CONFIG.API_URL)
+      const params = new URLSearchParams({
+        action: 'create_booking',
+        email: user.email,
+        name: user.nombre,
+        rut: user.rut || '',
+        courtId: courtId,
+        date: fecha,
+        slot: slot
+      });
+      const res = await fetch(`${window.CONFIG.API_URL}?${params.toString()}`);
+      
+      const data = await res.json();
+      if (!data.ok) {
+        return { ok: false, msg: data.msg };
+      }
+
+      // Si fue exitoso en Google, lo guardamos localmente también
+      const bookings = this.getBookings();
+      const b = { id: data.eventId || Date.now().toString(), userId: user.id || userId, courtId, fecha, slot, status: 'confirmada', creado: new Date().toISOString() };
+      bookings.push(b);
+      this.saveBookings(bookings);
+      return { ok: true, booking: b };
+    } catch (e) {
+      console.error('Error conectando a Apps Script:', e);
+      return { ok: false, msg: 'No se pudo conectar al servidor de reservas. Intenta nuevamente.' };
+    }
+  },
+
+  async cancelBookingAPI(bookingId, courtId) {
+    try {
+      const params = new URLSearchParams({
+        action: 'cancel_booking',
+        courtId: courtId,
+        eventId: bookingId
+      });
+      const res = await fetch(`${window.CONFIG.API_URL}?${params.toString()}`);
+      const data = await res.json();
+      return data;
+    } catch (e) {
+      console.error('Error al cancelar en la API:', e);
+      return { ok: false, msg: 'No se pudo conectar con el servidor de Google Calendar.' };
+    }
+  },
+
+  cancelBooking(bookingId, userId) {
+    const list = this.getBookings().map(b => {
+      if (b.id === bookingId && b.userId === userId) return { ...b, status: 'cancelada' };
+      return b;
+    });
+    this.saveBookings(list);
+  },
+  getUserBookings(userId) {
+    return this.getBookings()
+      .filter(b => b.userId === userId && b.status !== 'cancelada')
+      .sort((a,b) => a.fecha.localeCompare(b.fecha) || a.slot.localeCompare(b.slot));
+  },
+  async syncUserBookingsAPI(userId) {
+    const user = this.getUsers().find(u => u.id === userId);
+    if (!user || !this.isFirebaseConfigured()) return;
+    
+    try {
+      const params = new URLSearchParams({
+        action: 'get_user_bookings',
+        email: user.email
+      });
+      const res = await fetch(`${window.CONFIG.API_URL}?${params.toString()}`);
+      const data = await res.json();
+      
+      if (data.ok && data.bookings) {
+        const localBookings = this.getBookings();
+        
+        // 1. Marcar las reservas locales futuras del usuario que NO están en Google Calendar como canceladas
+        const updated = localBookings.map(b => {
+          if (b.userId === userId && b.status !== 'cancelada') {
+            const isPast = new Date(b.fecha + 'T' + b.slot + ':00') < new Date();
+            if (isPast) return b;
+            
+            const existsInGoogle = data.bookings.some(gb => 
+              gb.id === b.id || (gb.courtId === b.courtId && gb.fecha === b.fecha && gb.slot === b.slot)
+            );
+            if (!existsInGoogle) {
+              return { ...b, status: 'cancelada' };
+            }
+          }
+          return b;
+        });
+        
+        // 2. Agregar a local cualquier reserva de Google que no tengamos registrada localmente
+        data.bookings.forEach(gb => {
+          const existsLocal = localBookings.some(b => 
+            b.id === gb.id || (b.courtId === gb.courtId && b.fecha === gb.fecha && b.slot === gb.slot && b.status !== 'cancelada')
+          );
+          if (!existsLocal) {
+            updated.push({
+              id: gb.id,
+              userId: userId,
+              courtId: gb.courtId,
+              fecha: gb.fecha,
+              slot: gb.slot,
+              status: 'confirmada',
+              creado: new Date().toISOString()
+            });
+          }
+        });
+        
+        this.saveBookings(updated);
+      }
+    } catch (e) {
+      console.error('Error sincronizando reservas con Google Calendar:', e);
+    }
+  },
+
+  seedNewsLocal() {
+    const defaultNews = [
+      {
+        id: 'default-maint',
+        category: 'maint',
+        title: 'Cuidado de las Canchas de Arcilla',
+        body: 'Recordatorio obligatorio para todos los socios: al terminar tu bloque en arcilla, debes pasar el escobillón, barrer las líneas y regar la cancha para el siguiente turno.',
+        date: '2026-05-24',
+        creado: new Date('2026-05-24T12:00:00Z').toISOString(),
+        actualizado: new Date('2026-05-24T12:00:00Z').toISOString()
+      },
+      {
+        id: 'default-app',
+        category: 'app',
+        title: 'Optimización para iPhone y Móviles',
+        body: 'Hemos actualizado la sección de ranking para dispositivos móviles. Ahora verás una barra de navegación fluida que separa la Escalera de tu Ficha personal.',
+        date: '2026-05-20',
+        creado: new Date('2026-05-20T12:00:00Z').toISOString(),
+        actualizado: new Date('2026-05-20T12:00:00Z').toISOString()
+      }
+    ];
+    this.saveNews(defaultNews);
+    return defaultNews;
+  },
+
+  // ──────────────── SEED DATA ────────────────
+  seed() {
+    // Migración de correos mock antiguos en localStorage
+    try {
+      let users = this.getUsers();
+      let migrated = false;
+      users = users.map(u => {
+        if (u.nombre === 'Ismael Devia' && (u.email === 'ismael@uct.cl' || u.id === 'ismael@uct.cl')) { u.email = 'idevia@uct.cl'; u.id = 'm002'; migrated = true; }
+        if (u.nombre === 'Luis Otth' && (u.email === 'luis@uct.cl' || u.id === 'luis@uct.cl')) { u.email = 'lotth@uct.cl'; u.id = 'm004'; migrated = true; }
+        if (u.nombre === 'Paulo Garrido' && (u.email === 'paulo@uct.cl' || u.id === 'paulo@uct.cl')) { u.email = 'pgarrido@uct.cl'; u.id = 'm031'; migrated = true; }
+        if (u.nombre === 'Carolina Cárdenas' && (u.email === 'ccardenas@uct.cl' || u.email === 'ccardeneas@uct.cl') && u.id !== 'f008') { u.email = 'ccardeneas@uct.cl'; u.id = 'f008'; migrated = true; }
+        return u;
+      });
+      if (migrated) {
+        this.saveUsers(users);
+        const session = this.getSession();
+        if (session) {
+          if (session.nombre === 'Ismael Devia') { session.email = 'idevia@uct.cl'; session.id = 'm002'; localStorage.setItem('uctenis_session', JSON.stringify(session)); }
+          if (session.nombre === 'Luis Otth') { session.email = 'lotth@uct.cl'; session.id = 'm004'; localStorage.setItem('uctenis_session', JSON.stringify(session)); }
+          if (session.nombre === 'Paulo Garrido') { session.email = 'pgarrido@uct.cl'; session.id = 'm031'; localStorage.setItem('uctenis_session', JSON.stringify(session)); }
+          if (session.nombre === 'Carolina Cárdenas') { session.email = 'ccardeneas@uct.cl'; session.id = 'f008'; localStorage.setItem('uctenis_session', JSON.stringify(session)); }
+        }
+      }
+    } catch (e) {
+      console.warn("Error migrating mock emails:", e);
+    }
+
+    if (this.getUsers().length === 0) {
+      const hombres = [
+        { nombre: 'Luis Otth', email: 'lotth@uct.cl', genero: 'M', categoria: 'Primera' },
+        { nombre: 'Ismael Devia', email: 'idevia@uct.cl', genero: 'M', categoria: 'Primera' },
+        { nombre: 'Paulo Garrido', email: 'pgarrido@uct.cl', genero: 'M', categoria: 'Segunda' },
+        { nombre: 'Roberto Bermudez', email: 'roberto@uct.cl', genero: 'M', categoria: 'Segunda' },
+        { nombre: 'Francisco Encina', email: 'fencina@uct.cl', genero: 'M', categoria: 'Principiante' },
+        { nombre: 'Gustavo Curaqueo', email: 'gcuraqueo@uct.cl', genero: 'M', categoria: 'Principiante' },
+        { nombre: 'Cristian Henriquez', email: 'chenriquez@uct.cl', genero: 'M', categoria: 'Primera' },
+        { nombre: 'Matías Cáceres', email: 'mcaceres@uct.cl', genero: 'M', categoria: 'Segunda' },
+      ];
+      const mujeres = [
+        { nombre: 'Carolina Cárdenas', email: 'ccardenas@uct.cl', genero: 'F', categoria: 'Primera' },
+        { nombre: 'Angélica Encina', email: 'aencina@uct.cl', genero: 'F', categoria: 'Primera' },
+        { nombre: 'Violeta Moreno', email: 'vmoreno@uct.cl', genero: 'F', categoria: 'Segunda' },
+        { nombre: 'Valeria Schatter', email: 'vschatter@uct.cl', genero: 'F', categoria: 'Principiante' },
+        { nombre: 'María José', email: 'mjose@uct.cl', genero: 'F', categoria: 'Segunda' },
+      ];
+      [...hombres, ...mujeres].forEach(u => {
+        this.registerUser({ ...u, password: '1234' });
+      });
+      this.recalcRanking('M');
+      this.recalcRanking('F');
+    }
+
+    if (this.getNews().length === 0) {
+      this.seedNewsLocal();
+    }
+  }
+};
