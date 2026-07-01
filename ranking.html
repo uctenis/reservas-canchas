@@ -2166,15 +2166,28 @@ function renderMyChallenges() {
   renderGroup('Partidos aceptados', acceptedChallenges, 'No tienes partidos aceptados.');
   renderGroup('Resultados esperando confirmación', resultPendingChallenges, 'No tienes resultados esperando confirmación.');
 
-  // Render Historial Group
+  // Historial separado: desafíos y amistosos
+  const historyOfficial = historyChallenges.filter(c => c.tipo !== 'amistoso');
+  const historyFriendly = historyChallenges.filter(c => c.tipo === 'amistoso');
+
   html += `<div class="my-challenges-group">`;
-  html += `<h4 class="my-challenges-subheading">Historial (${historyChallenges.length})</h4>`;
-  if (historyChallenges.length > 0) {
-    html += historyChallenges.map(challenge => challengeCard(challenge, users, session, true)).join('');
+  html += `<h4 class="my-challenges-subheading">Historial ⚔️ Desafíos (${historyOfficial.length})</h4>`;
+  if (historyOfficial.length > 0) {
+    html += historyOfficial.map(challenge => challengeCard(challenge, users, session, true)).join('');
   } else {
-    html += '<p class="empty-state" style="padding: 10px 0;">No tienes partidos en tu historial.</p>';
+    html += '<p class="empty-state" style="padding: 10px 0;">No tienes desafíos en tu historial.</p>';
   }
   html += `</div>`;
+
+  html += `<div class="my-challenges-group">`;
+  html += `<h4 class="my-challenges-subheading">Historial 🤝 Amistosos (${historyFriendly.length})</h4>`;
+  if (historyFriendly.length > 0) {
+    html += historyFriendly.map(challenge => challengeCard(challenge, users, session, true)).join('');
+  } else {
+    html += '<p class="empty-state" style="padding: 10px 0;">No tienes amistosos registrados.</p>';
+  }
+  html += `</div>`;
+
 
   div.innerHTML = html;
 }
@@ -3800,23 +3813,28 @@ function openScoreModal(challengeId) {
 
     if (isAdmin) {
       adminPlayerAGroup.style.display = 'block';
-      playerASelect.innerHTML = allActivePlayers.map(p => `<option value="${escapeAttr(p.id)}">${escapeHTML(p.nombre)}</option>`).join('');
 
-      // Set initial Jugador A
-      const initialPlayerA = me || allActivePlayers[0];
-      if (initialPlayerA) playerASelect.value = initialPlayerA.id;
+      // Admin: ambos selects independientes, empiezan en blanco
+      const blankOptA = `<option value="">— Selecciona Jugador A —</option>`;
+      const blankOptB = `<option value="">— Selecciona Jugador B —</option>`;
+      const playerOptions = allActivePlayers.map(p => `<option value="${escapeAttr(p.id)}">${escapeHTML(p.nombre)}</option>`).join('');
+
+      playerASelect.innerHTML = blankOptA + playerOptions;
+      playerASelect.value = '';
+      opponentSelect.innerHTML = blankOptB + playerOptions;
+      opponentSelect.value = '';
+
+      document.getElementById('scorePlayerA').textContent = '—';
+      document.getElementById('scorePlayerB').textContent = '—';
 
       const onPlayerAChange = () => {
         const selId = playerASelect.value;
-        const selPlayer = allActivePlayers.find(p => p.id === selId);
-        if (!selPlayer) return;
-        document.getElementById('scorePlayerA').textContent = selPlayer.nombre;
-        const gender = selPlayer.gender || selPlayer.genero || 'M';
-        populateOpponentForPlayerA(selId, gender);
+        const selPlayer = selId ? allActivePlayers.find(p => p.id === selId) : null;
+        document.getElementById('scorePlayerA').textContent = selPlayer ? selPlayer.nombre : '—';
         updateScoreMatchState();
       };
       playerASelect.onchange = onPlayerAChange;
-      onPlayerAChange(); // initialize
+
     } else {
       adminPlayerAGroup.style.display = 'none';
       // Normal user: fixed as Jugador A
@@ -3831,10 +3849,11 @@ function openScoreModal(challengeId) {
 
     opponentSelect.onchange = () => {
       const selId = opponentSelect.value;
-      const opp = getAllPlayers().find(p => p.id === selId);
-      document.getElementById('scorePlayerB').textContent = opp ? opp.nombre : 'Oponente';
+      const opp = selId ? getAllPlayers().find(p => p.id === selId) : null;
+      document.getElementById('scorePlayerB').textContent = opp ? opp.nombre : '—';
       updateScoreMatchState();
     };
+
 
     document.getElementById('scorePlayers').textContent = 'Registrar Partido Amistoso Directo';
 
@@ -4593,15 +4612,23 @@ function showPlayerProfile(playerKey) {
   );
 
   const finalPlayerChallenges = playerChallenges.filter(c => ['completado', 'wo_retador', 'wo_retado'].includes(c.status));
-  const wins = finalPlayerChallenges.filter(c => playerMatchesChallengeRef(player, c.ganadorId)).length;
-  const losses = finalPlayerChallenges.filter(c => c.ganadorId && !playerMatchesChallengeRef(player, c.ganadorId)).length;
+
+  // Separar desafíos y amistosos
+  const officialMatches = finalPlayerChallenges.filter(c => c.tipo !== 'amistoso');
+  const friendlyMatches = finalPlayerChallenges.filter(c => c.tipo === 'amistoso');
+
+  const chalWins   = officialMatches.filter(c => playerMatchesChallengeRef(player, c.ganadorId)).length;
+  const chalLosses = officialMatches.filter(c => c.ganadorId && !playerMatchesChallengeRef(player, c.ganadorId)).length;
+  const friendlyWins   = friendlyMatches.filter(c => playerMatchesChallengeRef(player, c.ganadorId)).length;
+  const friendlyLosses = friendlyMatches.filter(c => c.ganadorId && !playerMatchesChallengeRef(player, c.ganadorId)).length;
+
   const pending = playerChallenges.filter(c => isChallengeActiveStatus(c.status)).length;
 
   const users = DB.getUsers();
   const lastMatches = playerChallenges
     .filter(c => ['completado', 'wo_retador', 'wo_retado'].includes(c.status))
-    .sort((a,b) => (b.fecha || '').localeCompare(a.fecha || ''))
-    .slice(0, 3);
+    .sort((a,b) => (b.fechaResultado || b.fecha || '').localeCompare(a.fechaResultado || a.fecha || ''))
+    .slice(0, 5);
 
   let lastMatchesHtml = '';
   if (lastMatches.length > 0) {
@@ -4614,11 +4641,17 @@ function showPlayerProfile(playerKey) {
               ? (c.retadoNombre || users.find(u=>u.id===c.retadoId)?.nombre || 'Jugador')
               : (c.retadorNombre || users.find(u=>u.id===c.retadorId)?.nombre || 'Jugador');
             const won = playerMatchesChallengeRef(player, c.ganadorId);
-            const friendlyText = c.tipo === 'amistoso' ? ' (Amistoso)' : '';
+            const isFriendly = c.tipo === 'amistoso';
+            const typeIcon = isFriendly ? '🤝' : '⚔️';
+            const typeLabel = isFriendly ? 'Amistoso' : 'Desafío';
+            const dateStr = c.fechaResultado ? formatShortDate(c.fechaResultado.split('T')[0]) : formatShortDate(c.fecha);
             return `
-              <li style="display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.02); padding:6px 10px; border-radius:6px; border-left:3px solid ${won ? '#4ade80' : '#f87171'}; font-size:0.82rem;">
-                <span style="color:var(--text-primary);">vs ${escapeHTML(oppName)}${friendlyText}</span>
-                <strong style="color:var(--text-secondary); font-variant-numeric:tabular-nums;">${escapeHTML(c.marcador)}</strong>
+              <li style="display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.02); padding:7px 10px; border-radius:8px; border-left:3px solid ${won ? '#4ade80' : '#f87171'}; font-size:0.82rem; gap:8px;">
+                <span style="display:flex; flex-direction:column; gap:1px;">
+                  <span style="color:var(--text-primary); font-weight:600;">${typeIcon} vs ${escapeHTML(oppName)}</span>
+                  <span style="color:var(--text-secondary); font-size:0.72rem;">${typeLabel} · ${escapeHTML(dateStr || '')}</span>
+                </span>
+                <strong style="color:${won ? '#4ade80' : '#f87171'}; font-variant-numeric:tabular-nums; white-space:nowrap;">${won ? '✓ ' : '✗ '}${escapeHTML(c.marcador || (c.status === 'wo_retador' || c.status === 'wo_retado' ? 'W.O.' : '-'))}</strong>
               </li>
             `;
           }).join('')}
@@ -4627,23 +4660,50 @@ function showPlayerProfile(playerKey) {
     `;
   }
 
+  // Sección de stats con desafíos + amistosos separados
   const historyHtml = `
     <div class="modal-history" style="margin-top: 20px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.08);">
-      <h3 style="margin-top:0; margin-bottom:10px; font-size:1rem; color:var(--text-primary); font-weight:800;">Historial de Desafíos</h3>
-      <div style="display:flex; justify-content:space-around; background:rgba(255,255,255,0.03); padding:10px; border-radius:8px; border:1px solid rgba(255,255,255,0.05);">
-        <div style="text-align:center;">
-          <span style="display:block; font-size:0.7rem; color:#4ade80; font-weight:800; text-transform:uppercase;">Ganados</span>
-          <strong style="font-size:1.2rem; color:var(--text-primary);">${wins}</strong>
-        </div>
-        <div style="text-align:center;">
-          <span style="display:block; font-size:0.7rem; color:#f87171; font-weight:800; text-transform:uppercase;">Perdidos</span>
-          <strong style="font-size:1.2rem; color:var(--text-primary);">${losses}</strong>
-        </div>
-        <div style="text-align:center;">
-          <span style="display:block; font-size:0.7rem; color:#fbbf24; font-weight:800; text-transform:uppercase;">Pendientes</span>
-          <strong style="font-size:1.2rem; color:var(--text-primary);">${pending}</strong>
+      <h3 style="margin-top:0; margin-bottom:12px; font-size:1rem; color:var(--text-primary); font-weight:800;">Record de Partidos</h3>
+
+      <!-- Desafíos oficiales -->
+      <div style="margin-bottom:10px;">
+        <span style="font-size:0.72rem; color:var(--text-secondary); font-weight:800; text-transform:uppercase; letter-spacing:0.05em;">⚔️ Desafíos Oficiales</span>
+        <div style="display:flex; justify-content:space-around; background:rgba(255,255,255,0.03); padding:10px; border-radius:8px; border:1px solid rgba(255,255,255,0.05); margin-top:6px;">
+          <div style="text-align:center;">
+            <span style="display:block; font-size:0.7rem; color:#4ade80; font-weight:800; text-transform:uppercase;">Ganados</span>
+            <strong style="font-size:1.3rem; color:var(--text-primary);">${chalWins}</strong>
+          </div>
+          <div style="text-align:center;">
+            <span style="display:block; font-size:0.7rem; color:#f87171; font-weight:800; text-transform:uppercase;">Perdidos</span>
+            <strong style="font-size:1.3rem; color:var(--text-primary);">${chalLosses}</strong>
+          </div>
+          <div style="text-align:center;">
+            <span style="display:block; font-size:0.7rem; color:#94a3b8; font-weight:800; text-transform:uppercase;">Total</span>
+            <strong style="font-size:1.3rem; color:var(--text-primary);">${officialMatches.length}</strong>
+          </div>
         </div>
       </div>
+
+      <!-- Amistosos -->
+      <div style="margin-bottom:10px;">
+        <span style="font-size:0.72rem; color:var(--text-secondary); font-weight:800; text-transform:uppercase; letter-spacing:0.05em;">🤝 Amistosos</span>
+        <div style="display:flex; justify-content:space-around; background:rgba(99,102,241,0.05); padding:10px; border-radius:8px; border:1px solid rgba(99,102,241,0.15); margin-top:6px;">
+          <div style="text-align:center;">
+            <span style="display:block; font-size:0.7rem; color:#4ade80; font-weight:800; text-transform:uppercase;">Ganados</span>
+            <strong style="font-size:1.3rem; color:var(--text-primary);">${friendlyWins}</strong>
+          </div>
+          <div style="text-align:center;">
+            <span style="display:block; font-size:0.7rem; color:#f87171; font-weight:800; text-transform:uppercase;">Perdidos</span>
+            <strong style="font-size:1.3rem; color:var(--text-primary);">${friendlyLosses}</strong>
+          </div>
+          <div style="text-align:center;">
+            <span style="display:block; font-size:0.7rem; color:#94a3b8; font-weight:800; text-transform:uppercase;">Total</span>
+            <strong style="font-size:1.3rem; color:var(--text-primary);">${friendlyMatches.length}</strong>
+          </div>
+        </div>
+      </div>
+
+      ${pending > 0 ? `<div style="text-align:center; margin-top:4px; font-size:0.8rem; color:#fbbf24;">⏳ ${pending} partido${pending > 1 ? 's' : ''} en curso</div>` : ''}
       ${lastMatchesHtml}
     </div>
   `;
