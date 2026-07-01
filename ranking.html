@@ -1985,7 +1985,7 @@ function checkBtnDesafio() {
   const sessionPlayer = getSessionPlayer();
   const hasRivals = Boolean(sessionPlayer && (rankingState.lists[sessionPlayer.gender] || []).some(canChallengePlayer));
   document.getElementById('btnNuevoDesafio').style.display = hasRivals ? 'inline-flex' : 'none';
-  document.getElementById('btnNuevoAmistoso').style.display = sessionPlayer ? 'inline-flex' : 'none';
+  document.getElementById('btnNuevoAmistoso').style.display = (sessionPlayer || isAdminSession()) ? 'inline-flex' : 'none';
 }
 
 function renderMyProfile() {
