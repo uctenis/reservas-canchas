@@ -332,20 +332,20 @@
         <div class="score-board-header">
           <span></span>
           <span>Set 1</span>
-          <span>Set 2</span>
-          <span>Set 3</span>
+          <span id="scoreHeaderSet2">Set 2</span>
+          <span id="scoreHeaderSet3">Set 3</span>
         </div>
         <div class="score-board-row score-player-row">
           <span class="score-player-name" id="scorePlayerA"></span>
-          <input type="number" id="scoreSet1A" class="score-cell score-input" min="0" max="7" step="1" required>
-          <input type="number" id="scoreSet2A" class="score-cell score-input" min="0" max="7" step="1" required>
-          <input type="number" id="scoreSet3A" class="score-cell score-input" min="0" max="7" step="1">
+          <input type="number" id="scoreSet1A" class="score-cell score-input" min="0" max="9" step="1" required>
+          <input type="number" id="scoreSet2A" class="score-cell score-input" min="0" max="9" step="1">
+          <input type="number" id="scoreSet3A" class="score-cell score-input" min="0" max="9" step="1">
         </div>
         <div class="score-board-row score-player-row">
           <span class="score-player-name" id="scorePlayerB"></span>
-          <input type="number" id="scoreSet1B" class="score-cell score-input" min="0" max="7" step="1" required>
-          <input type="number" id="scoreSet2B" class="score-cell score-input" min="0" max="7" step="1" required>
-          <input type="number" id="scoreSet3B" class="score-cell score-input" min="0" max="7" step="1">
+          <input type="number" id="scoreSet1B" class="score-cell score-input" min="0" max="9" step="1" required>
+          <input type="number" id="scoreSet2B" class="score-cell score-input" min="0" max="9" step="1">
+          <input type="number" id="scoreSet3B" class="score-cell score-input" min="0" max="9" step="1">
         </div>
       </div>
       <div class="score-tiebreaks">
@@ -374,7 +374,7 @@
         </select>
       </div>
       <div class="score-summary">
-        <div class="score-summary-info">Ingresa el resultado de cada set. Si el set termina 7-6, completa el tie-break en el cuadro correspondiente.</div>
+        <div class="score-summary-info" id="scoreSummaryInfo">Ingresa el resultado de cada set. Si el set termina 7-6, completa el tie-break en el cuadro correspondiente.</div>
         <div id="scoreWinnerText" class="score-winner-text">Ganador: <strong>Sin resultado</strong></div>
       </div>
       <input type="hidden" id="scoreWinner" name="scoreWinner" value="">
@@ -946,6 +946,10 @@ function setupEvents() {
   document.getElementById('chal_cancha').addEventListener('change', updateChallengeAvailableSlots);
   document.getElementById('fScore').addEventListener('submit', submitScore);
   document.getElementById('scoreOpponent').addEventListener('change', updateScoreMatchState);
+  document.getElementById('scoreType').addEventListener('change', () => {
+    applyScoreModalMode(document.getElementById('scoreType').value === 'amistoso');
+    updateScoreMatchState();
+  });
   document.querySelectorAll('.score-input').forEach(input => {
     input.addEventListener('input', normalizeScoreEntry);
     input.addEventListener('input', updateScoreMatchState);
@@ -3848,6 +3852,7 @@ function openScoreModal(challengeId) {
     document.getElementById('scoreError').textContent = '';
     document.getElementById('scoreWinnerText').innerHTML = 'Ganador: <strong>Sin resultado</strong>';
 
+    applyScoreModalMode(true);
     updateScoreMatchState();
     openModal('scoreModal');
     return;
@@ -3901,6 +3906,7 @@ function openScoreModal(challengeId) {
     });
   }
 
+  applyScoreModalMode(challenge.tipo === 'amistoso');
   updateScoreMatchState();
   openModal('scoreModal');
 }
@@ -3982,6 +3988,62 @@ function getScoreValue(inputId) {
   return Number.isInteger(score) && score >= 0 ? score : null;
 }
 
+// Alterna la UI del modal de score entre modo amistoso y modo desafío oficial
+function applyScoreModalMode(isFriendly) {
+  const hdr2 = document.getElementById('scoreHeaderSet2');
+  const hdr3 = document.getElementById('scoreHeaderSet3');
+  const set2A = document.getElementById('scoreSet2A');
+  const set2B = document.getElementById('scoreSet2B');
+  const set3A = document.getElementById('scoreSet3A');
+  const set3B = document.getElementById('scoreSet3B');
+  const tieRow1 = document.getElementById('scoreTiebreakRow1');
+  const tieRow2 = document.getElementById('scoreTiebreakRow2');
+  const tieRow3 = document.getElementById('scoreTiebreakRow3');
+  const summaryInfo = document.getElementById('scoreSummaryInfo');
+
+  // Ajustar max de Set 1 según modo
+  const max1A = document.getElementById('scoreSet1A');
+  const max1B = document.getElementById('scoreSet1B');
+
+  if (isFriendly) {
+    // Amistoso: muestra solo Set 1 por defecto (pueden ser sets largos)
+    // Igual se muestran Set 2 y 3 como opcionales (visibles pero no required)
+    if (hdr2) hdr2.style.opacity = '0.55';
+    if (hdr3) hdr3.style.opacity = '0.55';
+    if (set2A) { set2A.required = false; set2A.style.opacity = '0.6'; }
+    if (set2B) { set2B.required = false; set2B.style.opacity = '0.6'; }
+    if (set3A) { set3A.required = false; set3A.style.opacity = '0.6'; }
+    if (set3B) { set3B.required = false; set3B.style.opacity = '0.6'; }
+    if (max1A) max1A.max = '99';
+    if (max1B) max1B.max = '99';
+    if (set2A) set2A.max = '99';
+    if (set2B) set2B.max = '99';
+    if (set3A) set3A.max = '99';
+    if (set3B) set3B.max = '99';
+    // Ocultar tiebreaks (no aplican en amistoso flexible)
+    if (tieRow1) tieRow1.classList.add('hidden');
+    if (tieRow2) tieRow2.classList.add('hidden');
+    if (tieRow3) tieRow3.classList.add('hidden');
+    if (summaryInfo) summaryInfo.innerHTML = '🤝 <strong>Amistoso:</strong> Ingresa el marcador del set jugado (ej: 9-7, 6-3). Sets 2 y 3 son opcionales si jugaron más.';
+  } else {
+    // Desafío oficial: todos los controles estrictos
+    if (hdr2) hdr2.style.opacity = '';
+    if (hdr3) hdr3.style.opacity = '';
+    if (set2A) { set2A.required = true; set2A.style.opacity = ''; }
+    if (set2B) { set2B.required = true; set2B.style.opacity = ''; }
+    if (set3A) { set3A.required = false; set3A.style.opacity = ''; }
+    if (set3B) { set3B.required = false; set3B.style.opacity = ''; }
+    if (max1A) max1A.max = '7';
+    if (max1B) max1B.max = '7';
+    if (set2A) set2A.max = '7';
+    if (set2B) set2B.max = '7';
+    if (set3A) set3A.max = '7';
+    if (set3B) set3B.max = '7';
+    if (summaryInfo) summaryInfo.textContent = 'Ingresa el resultado de cada set. Si el set termina 7-6, completa el tie-break en el cuadro correspondiente.';
+    // Tiebreak visibility is managed by updateTiebreakVisibility()
+  }
+}
+
 function isValidTennisSetScore(a, b) {
   if (a === null || b === null) return false;
   if (a === b) return false;
@@ -3990,6 +4052,13 @@ function isValidTennisSetScore(a, b) {
   if (winner <= 6) return winner === 6 && loser <= 4;
   if (winner === 7) return loser === 5 || loser === 6;
   return false;
+}
+
+// Para amistosos: cualquier resultado donde haya un ganador claro (incluyendo sets largos 9-X)
+function isValidFriendlySetScore(a, b) {
+  if (a === null || b === null) return false;
+  if (a === b) return false; // debe haber un ganador
+  return true; // cualquier resultado diferente es válido en amistoso
 }
 
 function isValidTiebreakScore(a, b) {
@@ -4002,6 +4071,10 @@ function isValidTiebreakScore(a, b) {
 }
 
 function updateTiebreakVisibility() {
+  // En modo amistoso no hay tiebreaks (se gestiona desde applyScoreModalMode)
+  const matchType = document.getElementById('scoreType').value;
+  if (matchType === 'amistoso') return;
+
   [1, 2, 3].forEach(setNumber => {
     const a = getScoreValue(`scoreSet${setNumber}A`);
     const b = getScoreValue(`scoreSet${setNumber}B`);
@@ -4025,11 +4098,24 @@ function updateTiebreakVisibility() {
 
 function buildScoreResult() {
   const challenge = DB.getChallenges().find(item => item.id === rankingState.currentChallengeId);
+  const matchType = document.getElementById('scoreType').value;
+  const isFriendlyMode = matchType === 'amistoso';
+
   const sets = [1, 2, 3].map(setNumber => {
     const a = getScoreValue(`scoreSet${setNumber}A`);
     const b = getScoreValue(`scoreSet${setNumber}B`);
     if (a === null && b === null) return null;
     if (a === null || b === null) return { valid: false, error: `Completa ambos puntajes en el set ${setNumber}.` };
+
+    if (isFriendlyMode) {
+      // Amistoso: cualquier marcador donde haya un claro ganador
+      if (!isValidFriendlySetScore(a, b)) return { valid: false, error: `El set ${setNumber} debe tener un ganador (los puntajes no pueden ser iguales).` };
+      const label = `${a}-${b}`;
+      const winnerId = challenge ? (a > b ? challenge.retadorId : challenge.retadoId) : (a > b ? 'A' : 'B');
+      return { a, b, winnerId, label };
+    }
+
+    // Desafío oficial: validación estricta de tenis
     if (!isValidTennisSetScore(a, b)) return { valid: false, error: `El resultado del set ${setNumber} no es válido. Usa 6-4, 7-5 o 7-6.` };
 
     let label = `${a}-${b}`;
@@ -4045,18 +4131,40 @@ function buildScoreResult() {
       label = `${a}-${b}(${tbA}-${tbB})`;
     }
 
-    // Map winner to actual player id to avoid A/B ambiguity
     const winnerId = challenge ? (a > b ? challenge.retadorId : challenge.retadoId) : (a > b ? 'A' : 'B');
     return { a, b, winnerId, label };
   });
 
   const completed = sets.filter(set => set && set.valid !== false);
-  if (completed.length < 2) {
-    return { valid: false, error: 'Ingresa al menos dos sets para definir el ganador.' };
-  }
 
   if (sets.some(set => set && set.valid === false)) {
     return { valid: false, error: sets.find(set => set && set.valid === false).error };
+  }
+
+  // Amistoso: con 1 solo set alcanza (puede ser set largo de 9 u otro formato)
+  if (isFriendlyMode) {
+    if (completed.length < 1) {
+      return { valid: false, error: 'Ingresa al menos el resultado de un set.' };
+    }
+    const results = completed.map(set => set.label);
+    const wins = completed.reduce((acc, set) => {
+      acc[set.winnerId] = (acc[set.winnerId] || 0) + 1;
+      return acc;
+    }, {});
+    const ids = Object.keys(wins);
+    // Con un set: ganador directo; con varios sets: quien gana más
+    const winsA = wins[ids[0]] || 0;
+    const winsB = wins[ids[1]] || 0;
+    if (completed.length > 1 && winsA === winsB) {
+      return { valid: false, error: 'El amistoso debe tener un ganador claro (no puede terminar en empate de sets).' };
+    }
+    const winnerId = winsA >= winsB ? ids[0] : ids[1];
+    return { valid: true, marcador: results.join(', '), winnerId, sets: completed, wins };
+  }
+
+  // Desafío oficial: requiere mínimo 2 sets
+  if (completed.length < 2) {
+    return { valid: false, error: 'Ingresa al menos dos sets para definir el ganador.' };
   }
 
   const results = completed.map(set => set.label);
