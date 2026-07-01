@@ -301,8 +301,13 @@
     <h3>Ingresar resultado</h3>
     <form id="fScore">
       <div id="scoreFriendlyFields" style="display:none; margin-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 15px;">
+        <!-- Admin: Selector de Jugador A -->
+        <div id="scoreAdminPlayerAGroup" class="form-group" style="display:none; margin-bottom: 15px; padding: 10px 12px; background: rgba(251,191,36,0.06); border: 1px solid rgba(251,191,36,0.2); border-radius: 8px;">
+          <label style="display:block; font-size:0.7rem; font-weight:900; letter-spacing:0.06em; text-transform:uppercase; color:#fbbf24; margin-bottom:6px;">🛡️ Admin – Jugador A</label>
+          <select id="scorePlayerASelect" style="width:100%; padding:8px 12px; background:rgba(0,0,0,0.2); border:1px solid rgba(251,191,36,0.2); border-radius:6px; color:#fff; outline:none; font-size:0.9rem;"></select>
+        </div>
         <div class="form-group" style="margin-bottom: 15px;">
-          <label for="scoreOpponent" style="display:block; font-weight:500; margin-bottom:5px; font-size:0.85rem; color:rgba(255,255,255,0.7);">Oponente</label>
+          <label for="scoreOpponent" style="display:block; font-weight:500; margin-bottom:5px; font-size:0.85rem; color:rgba(255,255,255,0.7);">Oponente (Jugador B)</label>
           <select id="scoreOpponent" style="width:100%; padding:8px 12px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); border-radius:6px; color:#fff; outline:none; font-size:0.9rem;"></select>
         </div>
         <div class="form-row" style="display:flex; gap:15px; margin-bottom:15px;">
@@ -2199,7 +2204,7 @@ function challengeCard(challenge, users, session, compact) {
   const isRetado = session && isUserRetadoInChallenge(session, challenge);
   const isAdmin = isAdminSession(session);
   const canRespond = isRetado && challenge.status === 'pendiente';
-  const canScore = (involved && challenge.status === 'aceptado') || (isAdmin && challenge.status === 'aceptado');
+  const canScore = (involved && challenge.status === 'aceptado') || (isAdmin && ['aceptado', 'pendiente'].includes(challenge.status));
   const canManage = (involved && ['pendiente', 'aceptado'].includes(challenge.status)) || isAdmin;
   const canReviewResult = challenge.status === 'resultado_pendiente' &&
     (isAdmin || (involved && !isSessionResultSubmitter(session, challenge)));
@@ -2215,11 +2220,17 @@ function challengeCard(challenge, users, session, compact) {
   if (isChallengeHistoryStatus(challenge.status)) {
     if (involved || isAdmin) {
       if (challenge.status === 'completado') {
-        actions += `
+        // Solo admin puede editar resultado de historial
+        if (isAdmin) {
+          actions += `
           <button class="btn-score" type="button" data-action="score-challenge" data-challenge-id="${escapeAttr(challenge.id)}">Editar resultado</button>`;
+        }
       }
-      actions += `
-        <button class="btn-delete" type="button" data-action="delete-challenge" data-challenge-id="${escapeAttr(challenge.id)}">Eliminar</button>`;
+      // Solo admin puede eliminar
+      if (isAdmin) {
+        actions += `
+        <button class="btn-delete" type="button" data-action="delete-challenge" data-challenge-id="${escapeAttr(challenge.id)}">🗑️ Eliminar</button>`;
+      }
     }
   } else if (challenge.status === 'resultado_pendiente') {
     if (canReviewResult && !isChallengeResultDisputed(challenge)) {
@@ -2251,8 +2262,12 @@ function challengeCard(challenge, users, session, compact) {
     }
     if (canManage) {
       actions += `
-        <button class="btn-edit" type="button" data-action="edit-challenge" data-challenge-id="${escapeAttr(challenge.id)}">Editar</button>
-        <button class="btn-delete" type="button" data-action="delete-challenge" data-challenge-id="${escapeAttr(challenge.id)}">Eliminar</button>`;
+        <button class="btn-edit" type="button" data-action="edit-challenge" data-challenge-id="${escapeAttr(challenge.id)}">Editar</button>`;
+      // Solo admin puede eliminar
+      if (isAdmin) {
+        actions += `
+        <button class="btn-delete" type="button" data-action="delete-challenge" data-challenge-id="${escapeAttr(challenge.id)}">🗑️ Eliminar</button>`;
+      }
     }
   }
 
@@ -2642,6 +2657,13 @@ async function saveChallengeComment(challengeId) {
 window.saveChallengeComment = saveChallengeComment;
 
 async function deleteChallenge(id) {
+  const session = DB.getSession();
+  // Solo el admin puede eliminar
+  if (!isAdminSession(session)) {
+    alert('Solo el administrador puede eliminar partidos y desafíos.');
+    return;
+  }
+
   const challenge = DB.getChallenges().find(c => c.id === id);
   if (!challenge) return;
   
@@ -3732,9 +3754,12 @@ function openScoreModal(challengeId) {
   }
 
   if (isDirectFriendly) {
-    if (!me) {
+    if (!me && !isAdmin) {
       alert('Debes iniciar sesión para registrar un partido amistoso.');
       return;
+    }
+    if (!me && isAdmin) {
+      // Admin puro (uctenisclub) que no es jugador del ranking
     }
     rankingState.currentChallengeId = null;
 
@@ -3751,28 +3776,63 @@ function openScoreModal(challengeId) {
       typeSelect.disabled = true;
     }
 
-    // Populate active opponents of the same gender
-    const myGender = me.gender || me.genero || 'M';
-    const activeOpponents = getAllPlayers()
-      .filter(p => (p.gender === myGender || p.genero === myGender) && p.id !== me.id && isPlayerActive(p))
+    // Admin: show Jugador A selector, populate with ALL active players
+    const adminPlayerAGroup = document.getElementById('scoreAdminPlayerAGroup');
+    const playerASelect = document.getElementById('scorePlayerASelect');
+    const opponentSelect = document.getElementById('scoreOpponent');
+
+    const allActivePlayers = getAllPlayers()
+      .filter(p => isPlayerActive(p))
       .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
 
-    const opponentSelect = document.getElementById('scoreOpponent');
-    opponentSelect.innerHTML = activeOpponents.map(p => `<option value="${escapeAttr(p.id)}">${escapeHTML(p.nombre)}</option>`).join('');
-
-    const updateOpponentName = () => {
-      const selectedId = opponentSelect.value;
-      const opp = activeOpponents.find(p => p.id === selectedId);
-      document.getElementById('scorePlayerB').textContent = opp ? opp.nombre : 'Oponente';
+    const populateOpponentForPlayerA = (playerAId, playerAGender) => {
+      const opponents = allActivePlayers
+        .filter(p => (p.gender === playerAGender || p.genero === playerAGender) && p.id !== playerAId)
+        .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+      opponentSelect.innerHTML = opponents.map(p => `<option value="${escapeAttr(p.id)}">${escapeHTML(p.nombre)}</option>`).join('');
+      const firstOpp = opponents[0];
+      document.getElementById('scorePlayerB').textContent = firstOpp ? firstOpp.nombre : 'Oponente';
     };
+
+    if (isAdmin) {
+      adminPlayerAGroup.style.display = 'block';
+      playerASelect.innerHTML = allActivePlayers.map(p => `<option value="${escapeAttr(p.id)}">${escapeHTML(p.nombre)}</option>`).join('');
+
+      // Set initial Jugador A
+      const initialPlayerA = me || allActivePlayers[0];
+      if (initialPlayerA) playerASelect.value = initialPlayerA.id;
+
+      const onPlayerAChange = () => {
+        const selId = playerASelect.value;
+        const selPlayer = allActivePlayers.find(p => p.id === selId);
+        if (!selPlayer) return;
+        document.getElementById('scorePlayerA').textContent = selPlayer.nombre;
+        const gender = selPlayer.gender || selPlayer.genero || 'M';
+        populateOpponentForPlayerA(selId, gender);
+        updateScoreMatchState();
+      };
+      playerASelect.onchange = onPlayerAChange;
+      onPlayerAChange(); // initialize
+    } else {
+      adminPlayerAGroup.style.display = 'none';
+      // Normal user: fixed as Jugador A
+      const myGender = me.gender || me.genero || 'M';
+      const activeOpponents = allActivePlayers
+        .filter(p => (p.gender === myGender || p.genero === myGender) && p.id !== me.id);
+      opponentSelect.innerHTML = activeOpponents.map(p => `<option value="${escapeAttr(p.id)}">${escapeHTML(p.nombre)}</option>`).join('');
+      document.getElementById('scorePlayerA').textContent = me.nombre || 'Yo';
+      const firstOpp = activeOpponents[0];
+      document.getElementById('scorePlayerB').textContent = firstOpp ? firstOpp.nombre : 'Oponente';
+    }
+
     opponentSelect.onchange = () => {
-      updateOpponentName();
+      const selId = opponentSelect.value;
+      const opp = getAllPlayers().find(p => p.id === selId);
+      document.getElementById('scorePlayerB').textContent = opp ? opp.nombre : 'Oponente';
       updateScoreMatchState();
     };
 
     document.getElementById('scorePlayers').textContent = 'Registrar Partido Amistoso Directo';
-    document.getElementById('scorePlayerA').textContent = me.nombre || 'Yo';
-    updateOpponentName();
 
     document.getElementById('scoreDate').value = new Date().toISOString().split('T')[0];
     document.getElementById('scoreCourt').value = 'cec1';
@@ -4057,17 +4117,24 @@ function updateScoreMatchState() {
   let winnerName = '';
 
   if (isDirectFriendly) {
-    const me = getSessionPlayer();
+    const adminPlayerAGroup = document.getElementById('scoreAdminPlayerAGroup');
+    const isAdminMode = adminPlayerAGroup && adminPlayerAGroup.style.display !== 'none';
+    let playerA;
+    if (isAdminMode) {
+      const playerAId = document.getElementById('scorePlayerASelect').value;
+      playerA = getAllPlayers().find(p => p.id === playerAId) || getSessionPlayer();
+    } else {
+      playerA = getSessionPlayer();
+    }
     const opponentSelect = document.getElementById('scoreOpponent');
     const selectedOpponentId = opponentSelect.value;
-    const activeOpponents = getAllPlayers();
-    const opponent = activeOpponents.find(p => p.id === selectedOpponentId);
+    const opponent = getAllPlayers().find(p => p.id === selectedOpponentId);
 
-    const nameA = me ? me.nombre : 'Jugador A';
+    const nameA = playerA ? playerA.nombre : 'Jugador A';
     const nameB = opponent ? opponent.nombre : 'Jugador B';
 
     winnerName = winnerId === 'A' ? nameA : (winnerId === 'B' ? nameB : '');
-    hiddenWinner.value = winnerId === 'A' ? (me?.id || '') : (opponent?.id || '');
+    hiddenWinner.value = winnerId === 'A' ? (playerA?.id || '') : (opponent?.id || '');
   } else {
     winnerName = winnerId === challenge.retadorId ? (challenge.retadorNombre || '') : (winnerId === challenge.retadoId ? (challenge.retadoNombre || '') : '');
     hiddenWinner.value = winnerId;
@@ -4100,9 +4167,18 @@ async function submitScore(event) {
   const matchType = document.getElementById('scoreType').value;
 
   if (isDirectFriendly) {
-    const me = getSessionPlayer();
-    if (!me) {
-      error.textContent = 'Usuario no autenticado.';
+    // Determine Jugador A: admin puede elegir cualquier socio, usuario normal = me
+    const adminPlayerAGroup = document.getElementById('scoreAdminPlayerAGroup');
+    const isAdminMode = adminPlayerAGroup && adminPlayerAGroup.style.display !== 'none';
+    let playerA;
+    if (isAdminMode) {
+      const playerAId = document.getElementById('scorePlayerASelect').value;
+      playerA = getAllPlayers().find(p => p.id === playerAId);
+    } else {
+      playerA = getSessionPlayer();
+    }
+    if (!playerA) {
+      error.textContent = isAdminMode ? 'Debes seleccionar al Jugador A.' : 'Usuario no autenticado.';
       return;
     }
     const opponentId = document.getElementById('scoreOpponent').value;
@@ -4117,25 +4193,30 @@ async function submitScore(event) {
     const courtLabel = courtSelect.options[courtSelect.selectedIndex]?.text || courtVal;
 
     const winnerOption = scoreResult.winnerId; // 'A' or 'B'
-    const ganadorId = winnerOption === 'A' ? me.id : opponent.id;
+    const ganadorId = winnerOption === 'A' ? playerA.id : opponent.id;
     const challengeId = Date.now().toString();
+
+    // If admin is registering on behalf of others, add adminEmail to payload
+    const session = DB.getSession();
+    const registradoPor = isAdminMode ? (session?.email || session?.nombre || 'Admin') : null;
 
     const payload = {
       id: challengeId,
-      retadorId: me.id,
-      retadorNombre: me.nombre,
-      retadorEmail: me.email || '',
+      retadorId: playerA.id,
+      retadorNombre: playerA.nombre,
+      retadorEmail: playerA.email || '',
       retadoId: opponent.id,
       retadoNombre: opponent.nombre,
       retadoEmail: opponent.email || '',
-      genero: me.gender || me.genero || 'M',
+      genero: playerA.gender || playerA.genero || 'M',
       fecha: dateVal,
       cancha: courtLabel,
       courtId: courtVal,
       status: 'completado',
-      tipo: 'amistoso',
+      tipo: matchType === 'amistoso' ? 'amistoso' : matchType,
       marcador,
-      ganadorId
+      ganadorId,
+      ...(registradoPor ? { registradoPor } : {})
     };
 
     // Optimistic UI updates
