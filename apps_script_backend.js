@@ -1225,12 +1225,19 @@ function validateMember(email) {
   const needle = text(email).toLowerCase();
   if (!needle) return { ok: false, msg: 'Correo no proporcionado.' };
 
+  // 1. Buscar en Socios (ranking_players)
   const result = findFirebasePlayerByEmail(needle);
   if (result && result.player) {
     return { ok: true, msg: 'Miembro validado.', player: result.player, source: 'firebase' };
   }
 
-  if (result && result.connectionError) {
+  // 2. Buscar en Funcionarios (uct_staff)
+  const staffResult = findFirebaseStaffByEmail(needle);
+  if (staffResult && staffResult.staff) {
+    return { ok: true, msg: 'Funcionario validado.', player: staffResult.staff, source: 'staff' };
+  }
+
+  if ((result && result.connectionError) || (staffResult && staffResult.connectionError)) {
     if (KNOWN_PLAYER_EMAILS.indexOf(needle) !== -1) {
       console.warn('Firebase no disponible, validando por lista de respaldo: ' + needle);
       return { ok: true, msg: 'Miembro validado (modo respaldo - Firebase no disponible).', source: 'fallback' };
@@ -1239,6 +1246,68 @@ function validateMember(email) {
   }
 
   return { ok: false, msg: 'El correo no se encuentra registrado en Firebase.' };
+}
+
+function findFirebaseStaffByEmail(email) {
+  const needle = text(email).toLowerCase();
+  if (!needle || !CONFIG.FIREBASE_PROJECT_ID || !CONFIG.FIREBASE_API_KEY) return null;
+
+  try {
+    const firestoreUrl = 'https://firestore.googleapis.com/v1/projects/'
+      + encodeURIComponent(CONFIG.FIREBASE_PROJECT_ID)
+      + '/databases/(default)/documents:runQuery?key='
+      + encodeURIComponent(CONFIG.FIREBASE_API_KEY);
+    const queryPayload = {
+      structuredQuery: {
+        from: [{ collectionId: 'uct_staff' }],
+        where: {
+          fieldFilter: {
+            field: { fieldPath: 'emailLower' },
+            op: 'EQUAL',
+            value: { stringValue: needle }
+          }
+        },
+        limit: 1
+      }
+    };
+    const response = UrlFetchApp.fetch(firestoreUrl, {
+      method: 'post', contentType: 'application/json',
+      payload: JSON.stringify(queryPayload), muteHttpExceptions: true
+    });
+    if (response.getResponseCode() !== 200) {
+      console.warn('Respuesta no exitosa de Firestore para staff (' + response.getResponseCode() + ')');
+      return { staff: null, connectionError: true };
+    }
+    const results = JSON.parse(response.getContentText());
+    for (let i = 0; i < results.length; i++) {
+      if (!results[i].document) continue;
+      const staff = firebaseStaffFromDocument(results[i].document);
+      if (staff && staff.email && text(staff.email).toLowerCase() === email && staff.activo !== false) {
+        return { staff: staff };
+      }
+    }
+  } catch (error) {
+    console.warn('Error al verificar staff en Firebase:', error.message);
+    return { staff: null, connectionError: true };
+  }
+  return null;
+}
+
+function firebaseStaffFromDocument(doc) {
+  const fields = doc.fields || {};
+  const id = text(firestoreField(fields, 'id')) || doc.name.split('/').pop();
+  return {
+    id: id,
+    nombre: text(firestoreField(fields, 'nombre')),
+    email: text(firestoreField(fields, 'email')),
+    genero: text(firestoreField(fields, 'genero') || firestoreField(fields, 'gender')),
+    foto: text(firestoreField(fields, 'foto')),
+    telefono: text(firestoreField(fields, 'telefono')),
+    rut: text(firestoreField(fields, 'rut')),
+    unidad: text(firestoreField(fields, 'unidad')),
+    userType: 'funcionario',
+    activo: firestoreBool(fields, 'activo', true)
+  };
 }
 
 function findSheetPlayerByEmail(email) {
