@@ -6188,7 +6188,7 @@ function resolvePhoto(rawPhoto, id, gender) {
     if (photo.startsWith('data:')) return photo;
     if (/\.(png|jpg|jpeg|webp)$/i.test(photo)) return `fotos/${photo}`;
   }
-  return id ? `fotos/${id}.png` : fallback;
+  return fallback;
 }
 
 function extractPhotoStem(photo) {

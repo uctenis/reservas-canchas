@@ -126,6 +126,37 @@
       <div class="form-group" id="staffUnidadGroup"><label>Unidad / Departamento</label><input type="text" id="staffUnidad" class="form-input" placeholder="Ej: RRHH"></div>
       <div class="form-group"><label>Teléfono</label><input type="tel" id="staffTelefono" class="form-input" placeholder="+56 9..."></div>
     </div>
+    
+    <!-- Campos para SOCIO (se muestran si staffUserType === 'socio') -->
+    <div id="staffSocioFields" style="display:none; margin-bottom:12px;">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Categoría</label>
+          <select id="staffCat" class="form-input">
+            <option value="Primera">Primera</option>
+            <option value="Segunda">Segunda</option>
+            <option value="Tercera">Tercera</option>
+            <option value="Cuarta">Cuarta</option>
+            <option value="Principiante">Principiante</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Mano hábil</label>
+          <select id="staffMano" class="form-input">
+            <option value="Derecha">Derecha</option>
+            <option value="Izquierda">Izquierda</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group" style="margin-top:12px;">
+        <label>Revés</label>
+        <select id="staffReves" class="form-input">
+          <option value="Dos manos">Dos manos</option>
+          <option value="Una mano">Una mano</option>
+        </select>
+      </div>
+    </div>
+
     <div class="form-group" id="staffActivoGroup" style="display:none;">
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
         <input type="checkbox" id="staffActivo" style="width:16px;height:16px;" checked> Activo (puede reservar canchas)
@@ -269,7 +300,8 @@ function renderSocios(list) {
       +'<td>'+(s.genero==='F'?'Femenino':s.genero==='M'?'Masculino':'-')+'</td>'
       +'<td>'+e(s.categoria||'-')+'</td>'
       +'<td><span class="badge '+(activo?'badge-activo':'badge-inactivo')+'">'+(activo?'Activo':'Inactivo')+'</span></td>'
-      +'<td><div style="display:flex;gap:6px;flex-wrap:wrap;"><button class="action-btn warning" onclick="openMigrateModal(\''+e(s.email)+'\',\''+e(s.nombre)+'\',\'socio\',\'funcionario\')">-> Funcionario</button>'
+      +'<td><div style="display:flex;gap:6px;flex-wrap:wrap;"><button class="action-btn" onclick="openEditUserModal(\''+s.id+'\')">Editar</button>'
+      +'<button class="action-btn warning" onclick="openMigrateModal(\''+e(s.email)+'\',\''+e(s.nombre)+'\',\'socio\',\'funcionario\')">-> Funcionario</button>'
       +'<button class="action-btn '+(activo?'danger':'success')+'" onclick="toggleSocioActive(\''+s.id+'\',\''+e(s.nombre)+'\','+(!activo)+')">'+( activo?'Desactivar':'Activar')+'</button></div></td>';
     tbody.appendChild(tr);
   });
@@ -288,7 +320,7 @@ function renderFuncionarios(list) {
       +'<td style="font-size:.85rem;color:var(--text-secondary);">'+e(s.unidad||'-')+'</td>'
       +'<td style="font-size:.85rem;color:var(--text-secondary);">'+e(s.telefono||'-')+'</td>'
       +'<td><span class="badge '+(activo?'badge-activo':'badge-inactivo')+'">'+(activo?'Activo':'Inactivo')+'</span></td>'
-      +'<td><div style="display:flex;gap:6px;flex-wrap:wrap;"><button class="action-btn" onclick="openEditStaffModal(\''+s.id+'\')" >Editar</button>'
+      +'<td><div style="display:flex;gap:6px;flex-wrap:wrap;"><button class="action-btn" onclick="openEditUserModal(\''+s.id+'\')" >Editar</button>'
       +'<button class="action-btn success" onclick="openMigrateModal(\''+e(s.email)+'\',\''+e(s.nombre)+'\',\'funcionario\',\'socio\')">-> Socio UCTenis</button>'
       +'<button class="action-btn '+(activo?'danger':'success')+'" onclick="toggleStaffActive(\''+s.id+'\',\''+e(s.nombre)+'\','+(!activo)+')">'+( activo?'Desactivar':'Activar')+'</button></div></td>';
     tbody.appendChild(tr);
@@ -308,7 +340,8 @@ function renderTodos() {
       +'<td><span class="badge '+(t==='socio'?'badge-socio':'badge-func')+'">'+(t==='socio'?'Socio UCTenis':'Funcionario UCT')+'</span></td>'
       +'<td style="font-size:.85rem;color:var(--text-secondary);">'+e(t==='socio'?(u.categoria||'-'):(u.unidad||'-'))+'</td>'
       +'<td><span class="badge '+(activo?'badge-activo':'badge-inactivo')+'">'+(activo?'Activo':'Inactivo')+'</span></td>'
-      +'<td><button class="action-btn warning" onclick="openMigrateModal(\''+e(u.email)+'\',\''+e(u.nombre)+'\',\''+t+'\',\''+( t==='socio'?'funcionario':'socio')+'\')">'+( t==='socio'?'-> Funcionario':'-> Socio UCTenis')+'</button></td>';
+      +'<td><div style="display:flex;gap:6px;flex-wrap:wrap;"><button class="action-btn" onclick="openEditUserModal(\''+u.id+'\')">Editar</button>'
+      +'<button class="action-btn warning" onclick="openMigrateModal(\''+e(u.email)+'\',\''+e(u.nombre)+'\',\''+t+'\',\''+( t==='socio'?'funcionario':'socio')+'\')">'+( t==='socio'?'-> Funcionario':'-> Socio UCTenis')+'</button></div></td>';
     tbody.appendChild(tr);
   });
 }
@@ -329,10 +362,13 @@ function filterTable(tid, q) {
 function toggleModalFields() {
   var userType = document.getElementById('staffUserType').value;
   var unidadGroup = document.getElementById('staffUnidadGroup');
+  var socioFields = document.getElementById('staffSocioFields');
   if (userType === 'socio') {
     unidadGroup.style.display = 'none';
+    socioFields.style.display = 'block';
   } else {
     unidadGroup.style.display = 'block';
+    socioFields.style.display = 'none';
   }
 }
 
@@ -351,24 +387,35 @@ function openNewStaffModal() {
   document.getElementById('modalStaff').classList.add('open');
 }
 
-function openEditStaffModal(sid) {
-  var s = allStaff.find(function(x){return x.id===sid;});
+function openEditUserModal(uid) {
+  var s = allStaff.find(function(x){return x.id===uid;}) || allSocios.find(function(x){return x.id===uid;});
   if (!s) return;
-  document.getElementById('modalStaffTitle').textContent = 'Editar Funcionario';
-  document.getElementById('modalStaffSub').textContent = 'Modifica los datos del funcionario.';
+  var userType = s.userType || (allStaff.some(function(x){return x.id===uid;}) ? 'funcionario' : 'socio');
+  
+  document.getElementById('modalStaffTitle').textContent = userType === 'socio' ? 'Editar Socio UCTenis' : 'Editar Funcionario';
+  document.getElementById('modalStaffSub').textContent = 'Modifica los datos del usuario.';
   document.getElementById('staffDocId').value = s.id;
   document.getElementById('staffUserTypeRow').style.display = 'none';
-  document.getElementById('staffUserType').value = 'funcionario';
+  document.getElementById('staffUserType').value = userType;
   document.getElementById('staffNombre').value = s.nombre||'';
   document.getElementById('staffEmail').value = s.email||'';
   document.getElementById('staffEmail').disabled = true;
   document.getElementById('staffGenero').value = s.genero||'';
-  document.getElementById('staffUnidad').value = s.unidad||'';
   document.getElementById('staffTelefono').value = s.telefono||'';
   document.getElementById('staffActivo').checked = s.activo!==false;
   document.getElementById('staffActivoGroup').style.display = 'block';
   document.getElementById('btnSaveStaff').textContent = 'Guardar Cambios';
   document.getElementById('modalMsg').innerHTML = '';
+  
+  if (userType === 'socio') {
+    document.getElementById('staffCat').value = s.categoria || 'Principiante';
+    document.getElementById('staffMano').value = s.mano || 'Derecha';
+    document.getElementById('staffReves').value = s.reves || 'Dos manos';
+    document.getElementById('staffUnidad').value = '';
+  } else {
+    document.getElementById('staffUnidad').value = s.unidad||'';
+  }
+  
   toggleModalFields();
   document.getElementById('modalStaff').classList.add('open');
 }
@@ -399,21 +446,22 @@ async function saveStaff() {
   
   try {
     if (userType === 'socio') {
+      var existing = sid ? allSocios.find(function(x){return x.id===sid;}) : null;
       var docId = sid || 'p_' + makeFirebaseDocId(nombre || email, 'player');
-      await DB.savePlayerCloud({
+      var payload = Object.assign({}, existing || {}, {
         id: docId,
         nombre: nombre,
         email: email,
-        genero: genero || 'M',
-        categoria: 'Principiante',
-        mano: 'Derecha',
-        reves: 'Dos manos',
-        foto: '',
+        genero: genero || (existing ? (existing.genero || existing.gender) : 'M'),
+        categoria: document.getElementById('staffCat').value,
+        mano: document.getElementById('staffMano').value,
+        reves: document.getElementById('staffReves').value,
         telefono: tel,
-        activo: true,
-        participaRanking: true,
+        activo: activo,
+        participaRanking: activo,
         userType: 'socio'
-      }, { email: currentAdmin && currentAdmin.email });
+      });
+      await DB.savePlayerCloud(payload, { email: currentAdmin && currentAdmin.email });
       showModalMsg('Socio UCTenis guardado con éxito.','success');
     } else {
       if (sid) {
