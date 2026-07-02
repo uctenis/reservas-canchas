@@ -2787,6 +2787,15 @@ if ('serviceWorker' in navigator) {
     }).catch(()=>{});
   });
 }
+
+// Enforce profile completeness on page load
+(function enforceProfileComplete() {
+  const session = DB.getSession();
+  if (session && !DB.isProfileComplete(session)) {
+    alert("Debes completar todos tus datos para poder ingresar al sistema.");
+    window.location.href = "reservas.html";
+  }
+})();
 </script>
 </body>
 </html>

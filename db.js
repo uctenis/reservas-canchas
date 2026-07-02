@@ -41,8 +41,17 @@ if (typeof firebase !== 'undefined') {
 const FIREBASE_COLLECTIONS = {
   players: 'ranking_players',
   challenges: 'ranking_challenges',
-  news: 'ranking_news'
+  news: 'ranking_news',
+  staff: 'uct_staff'            // Funcionarios UCT (solo reservas, sin ranking)
 };
+
+// ── Anticipación máxima de reserva por tipo de usuario ──────────────────────
+const MAX_ADVANCE_MS = {
+  admin:       7 * 24 * 60 * 60 * 1000,   // 7 días
+  socio:       7 * 24 * 60 * 60 * 1000,   // 7 días
+  funcionario: 48 * 60 * 60 * 1000        // 48 horas
+};
+window.MAX_ADVANCE_MS = MAX_ADVANCE_MS;
 
 const DB_FIREBASE_ADMIN_EMAILS = ['uctenisclub@gmail.com', 'dsilva@uct.cl'];
 const DB_PURE_ADMIN_EMAILS     = ['uctenisclub@gmail.com'];
@@ -213,6 +222,8 @@ function playerToSessionUser(player, current = {}) {
     foto: player.foto || current.foto || '',
     telefono: player.telefono || current.telefono || '',
     rut: player.rut || current.rut || '',
+    userType: player.userType || current.userType || 'socio',
+    unidad: player.unidad || current.unidad || '',
     password: current.password || 'google-auth-no-pass'
   };
 }
@@ -228,9 +239,11 @@ function normalizeCategoryForDb(value) {
 let playersListeners = [];
 let challengesListeners = [];
 let newsListeners = [];
+let staffListeners = [];
 let cachedPlayers = [];
 let cachedChallenges = [];
 let cachedNews = [];
+let cachedStaff = [];
 
 const DB = {
 
@@ -304,6 +317,8 @@ const DB = {
       foto: data.foto || '',
       telefono: data.telefono || '',
       rut: data.rut || '',
+      userType: data.userType || 'socio',
+      unidad: data.unidad || '',
       creado: new Date().toISOString()
     };
     users.push(user);
@@ -351,41 +366,26 @@ const DB = {
 
   async validateMemberAPI(email) {
     if (!email) return { ok: false, msg: 'Correo no proporcionado.' };
-    if (this.isAllowedAccessEmail(email)) return { ok: true, source: 'domain' };
-
-    // 1. Fuente principal: Firebase Firestore.
-    if (this.isCloudConfigured()) {
-      const cloudPlayer = await this.findPlayerByEmailCloud(email);
-      if (cloudPlayer) return { ok: true, source: 'firebase', player: cloudPlayer };
-    }
-
-    // 2. Respaldo de servidor: Sheets/Firebase desde Apps Script.
-    const backendValidation = await this.validateMemberBackend(email);
-    if (backendValidation?.ok && backendValidation.player) {
+    
+    // Usar getUserAccess para resolver el tipo de acceso y perfil
+    const access = await this.getUserAccess(email);
+    if (access.allowed) {
+      if (access.userType === 'admin') {
+        return { ok: true, source: 'admin', isAdmin: true };
+      }
       return {
         ok: true,
-        source: backendValidation.source || 'backend',
-        player: backendValidation.player,
-        isAdmin: backendValidation.isAdmin === true
-      };
-    }
-
-    // 3. Respaldo local oficial para documentos antiguos sin emailLower.
-    const staticPlayer = this.findStaticAccessPlayerByEmail(email);
-    if (staticPlayer) {
-      return { ok: true, source: 'static', player: staticPlayer };
-    }
-
-    if (backendValidation?.ok) {
-      return {
-        ok: true,
-        source: backendValidation.source || 'backend',
-        isAdmin: backendValidation.isAdmin === true
+        source: access.userType === 'socio' ? 'firebase' : 'staff',
+        player: access.profile,
+        userType: access.userType,
+        isAdmin: false
       };
     }
 
     const localUser = this.getUsers().find(user => normalizeEmailForDb(user.email) === normalizeEmailForDb(email));
-    if (localUser && isAccessPlayerActive(localUser)) return { ok: true, source: 'local', player: localUser };
+    if (localUser && isAccessPlayerActive(localUser)) {
+      return { ok: true, source: 'local', player: localUser, userType: localUser.userType || 'socio' };
+    }
 
     return { ok: false, msg: 'Acceso restringido a jugadores UCTenis registrados en Firebase.' };
   },
@@ -399,6 +399,33 @@ const DB = {
   // ──────────────── INGRESO CON GOOGLE Y SESIONES ────────────────
   isFirebaseConfigured() {
     return firebaseAuth !== null;
+  },
+
+  isProfileComplete(user) {
+    if (!user) return false;
+    if (user.isAdmin) return true; // El admin principal no requiere completar ranking
+    
+    // Campos comunes requeridos para todos (Socio y Funcionario)
+    if (!user.nombre || !user.email || !user.genero || !user.telefono || !user.rut) {
+      return false;
+    }
+    
+    // Limpieza de espacios
+    if (!String(user.nombre).trim() || !String(user.telefono).trim() || !String(user.rut).trim()) {
+      return false;
+    }
+
+    const userType = user.userType || 'socio';
+    if (userType === 'socio') {
+      if (!user.categoria || !user.mano || !user.reves) {
+        return false;
+      }
+    } else if (userType === 'funcionario') {
+      if (!user.unidad || !String(user.unidad).trim()) {
+        return false;
+      }
+    }
+    return true;
   },
 
   async loginWithGoogle() {
@@ -437,14 +464,19 @@ const DB = {
       const localUsers = this.getUsers();
       let localUser = localUsers.find(u => u.email.toLowerCase() === user.email.toLowerCase());
 
-      const cloudPlayer = validation.player || await this.findPlayerByEmailCloud(user.email);
+      const cloudPlayer = validation.player;
       if (cloudPlayer) {
+        const userType = cloudPlayer.userType || validation.userType || 'socio';
         localUser = playerToSessionUser(cloudPlayer, {
           ...(localUser || {}),
           email: user.email,
           nombre: user.displayName || cloudPlayer.nombre || (localUser && localUser.nombre) || '',
-          foto: user.photoURL || cloudPlayer.foto || (localUser && localUser.foto) || ''
+          foto: user.photoURL || cloudPlayer.foto || (localUser && localUser.foto) || '',
+          userType: userType
         });
+        if (userType === 'funcionario') {
+          localUser.unidad = cloudPlayer.unidad || '';
+        }
         this.upsertUserLocal(localUser);
         localStorage.setItem('uctenis_session', JSON.stringify(localUser));
         return { ok: true, user: localUser, isNew: false };
@@ -496,13 +528,18 @@ const DB = {
     const localUsers = this.getUsers();
     let localUser = localUsers.find(u => u.email.toLowerCase() === email.toLowerCase());
 
-    const cloudPlayer = validation.player || await this.findPlayerByEmailCloud(email);
+    const cloudPlayer = validation.player;
     if (cloudPlayer) {
+      const userType = cloudPlayer.userType || validation.userType || 'socio';
       localUser = playerToSessionUser(cloudPlayer, {
         ...(localUser || {}),
         email,
-        nombre: nombre || cloudPlayer.nombre || (localUser && localUser.nombre) || ''
+        nombre: nombre || cloudPlayer.nombre || (localUser && localUser.nombre) || '',
+        userType: userType
       });
+      if (userType === 'funcionario') {
+        localUser.unidad = cloudPlayer.unidad || '';
+      }
       this.upsertUserLocal(localUser);
       localStorage.setItem('uctenis_session', JSON.stringify(localUser));
       return { ok: true, user: localUser, isNew: false };
@@ -533,9 +570,13 @@ const DB = {
       reves: data.reves || 'Dos manos',
       foto: data.foto || '',
       telefono: data.telefono || '',
-      rut: data.rut || ''
+      rut: data.rut || '',
+      userType: data.userType || 'socio',
+      unidad: data.unidad || ''
     });
     if (result.ok) {
+      result.user.userType = data.userType || 'socio';
+      result.user.unidad = data.unidad || '';
       localStorage.setItem('uctenis_session', JSON.stringify(result.user));
     }
     return result;
@@ -718,6 +759,210 @@ const DB = {
     await firebaseDb.collection(FIREBASE_COLLECTIONS.players).doc(id).delete();
   },
 
+  // ──────────────── FIREBASE: FUNCIONARIOS UCT ────────────────
+
+  /**
+   * Determina el tipo de acceso de un email.
+   * Retorna: { allowed, userType: 'admin'|'socio'|'funcionario'|null, profile }
+   */
+  async getUserAccess(email) {
+    const normalized = normalizeEmailForDb(email);
+    if (!normalized) return { allowed: false, userType: null, profile: null };
+
+    // 1. ¿Es admin puro?
+    if (DB_PURE_ADMIN_EMAILS.some(a => normalizeEmailForDb(a) === normalized)) {
+      return { allowed: true, userType: 'admin', profile: null };
+    }
+    // 2. ¿Es admin secundario?
+    if (DB_FIREBASE_ADMIN_EMAILS.some(a => normalizeEmailForDb(a) === normalized)) {
+      return { allowed: true, userType: 'admin', profile: null };
+    }
+
+    if (this.isCloudConfigured()) {
+      // 3. ¿Es socio UCTenis? (ranking_players)
+      try {
+        const socioSnap = await firebaseDb
+          .collection(FIREBASE_COLLECTIONS.players)
+          .where('emailLower', '==', normalized)
+          .where('activo', '==', true)
+          .limit(1)
+          .get();
+        if (!socioSnap.empty) {
+          return { allowed: true, userType: 'socio', profile: { id: socioSnap.docs[0].id, ...socioSnap.docs[0].data() } };
+        }
+        // fallback: buscar sin emailLower
+        const socioSnap2 = await firebaseDb
+          .collection(FIREBASE_COLLECTIONS.players)
+          .where('email', '==', String(email).trim())
+          .limit(1)
+          .get();
+        if (!socioSnap2.empty) {
+          const p = { id: socioSnap2.docs[0].id, ...socioSnap2.docs[0].data() };
+          if (isAccessPlayerActive(p)) return { allowed: true, userType: 'socio', profile: p };
+        }
+      } catch (e) { console.warn('getUserAccess socio query error:', e); }
+
+      // 4. ¿Es funcionario UCT? (uct_staff)
+      try {
+        const staffSnap = await firebaseDb
+          .collection(FIREBASE_COLLECTIONS.staff)
+          .where('emailLower', '==', normalized)
+          .where('activo', '==', true)
+          .limit(1)
+          .get();
+        if (!staffSnap.empty) {
+          return { allowed: true, userType: 'funcionario', profile: { id: staffSnap.docs[0].id, ...staffSnap.docs[0].data() } };
+        }
+      } catch (e) { console.warn('getUserAccess staff query error:', e); }
+    }
+
+    // 5. Respaldo: listas estáticas (socios)
+    const staticPlayer = this.findStaticAccessPlayerByEmail(email);
+    if (staticPlayer) return { allowed: true, userType: 'socio', profile: staticPlayer };
+
+    return { allowed: false, userType: null, profile: null };
+  },
+
+  /** Crea o actualiza un funcionario en uct_staff (solo admin) */
+  async saveStaffCloud(staff, actor = {}) {
+    if (!this.isCloudConfigured()) throw new Error('Firestore no está disponible.');
+    const id = staff.id || 'stf_' + makeFirebaseDocId(staff.email || staff.nombre, 'staff');
+    const now = new Date().toISOString();
+    const emailLower = normalizeEmailForDb(staff.email);
+    const data = cleanFirestoreData({
+      ...staff,
+      id,
+      userType: 'funcionario',
+      emailLower,
+      activo: staff.activo !== false,
+      createdAt: staff.createdAt || now,
+      updatedAt: now,
+      creadoPor: staff.creadoPor || actor.email || '',
+      updatedBy: actor.email || ''
+    });
+    await firebaseDb.collection(FIREBASE_COLLECTIONS.staff).doc(id).set(data, { merge: true });
+    cachedStaff = cachedStaff.filter(s => s.id !== id);
+    cachedStaff.push(data);
+    return data;
+  },
+
+  /** Lista todos los funcionarios (admin) */
+  async getStaffCloud() {
+    if (cachedStaff.length > 0) return cachedStaff;
+    if (!this.isCloudConfigured()) throw new Error('Firestore no está disponible.');
+    const snap = await firebaseDb.collection(FIREBASE_COLLECTIONS.staff).orderBy('nombre').get();
+    cachedStaff = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    return cachedStaff;
+  },
+
+  /** Busca un funcionario por email */
+  async findStaffByEmailCloud(email) {
+    const normalized = normalizeEmailForDb(email);
+    if (!normalized || !this.isCloudConfigured()) return null;
+    try {
+      const snap = await firebaseDb
+        .collection(FIREBASE_COLLECTIONS.staff)
+        .where('emailLower', '==', normalized)
+        .limit(1).get();
+      if (!snap.empty) return { id: snap.docs[0].id, ...snap.docs[0].data() };
+    } catch (e) { console.warn('findStaffByEmailCloud error:', e); }
+    return null;
+  },
+
+  /** Activa/desactiva un funcionario */
+  async setStaffActiveCloud(staffId, active, actor = {}) {
+    if (!this.isCloudConfigured()) throw new Error('Firestore no está disponible.');
+    const patch = { activo: Boolean(active), updatedAt: new Date().toISOString(), updatedBy: actor.email || '' };
+    await firebaseDb.collection(FIREBASE_COLLECTIONS.staff).doc(staffId).update(patch);
+    cachedStaff = cachedStaff.map(s => s.id === staffId ? { ...s, ...patch } : s);
+    return patch;
+  },
+
+  /** Elimina un funcionario permanentemente */
+  async deleteStaffCloud(staffId) {
+    if (!this.isCloudConfigured()) throw new Error('Firestore no está disponible.');
+    await firebaseDb.collection(FIREBASE_COLLECTIONS.staff).doc(staffId).delete();
+    cachedStaff = cachedStaff.filter(s => s.id !== staffId);
+  },
+
+  /**
+   * Migra un usuario de tipo:
+   *   'socio'  → 'funcionario' (mueve de ranking_players a uct_staff)
+   *   'funcionario' → 'socio'  (mueve de uct_staff a ranking_players)
+   * Retorna { ok, msg }
+   */
+  async migrateUserType(email, fromType, toType, actor = {}) {
+    const normalized = normalizeEmailForDb(email);
+    if (!this.isCloudConfigured()) return { ok: false, msg: 'Firestore no disponible.' };
+    if (fromType === toType) return { ok: false, msg: 'El usuario ya es de ese tipo.' };
+
+    if (fromType === 'funcionario' && toType === 'socio') {
+      const staff = await this.findStaffByEmailCloud(normalized);
+      if (!staff) return { ok: false, msg: 'Funcionario no encontrado.' };
+      // Crear en ranking_players
+      await this.savePlayerCloud({
+        id: 'p_' + makeFirebaseDocId(staff.nombre || email, 'player'),
+        nombre: staff.nombre,
+        email: staff.email,
+        emailLower: normalized,
+        genero: staff.genero || '',
+        categoria: staff.categoria || 'Principiante',
+        telefono: staff.telefono || '',
+        foto: staff.foto || '',
+        activo: true,
+        participaRanking: false, // admin activa en ranking manualmente
+        userType: 'socio',
+        migratedFrom: 'funcionario',
+        migratedAt: new Date().toISOString()
+      }, actor);
+      // Eliminar de uct_staff
+      await this.deleteStaffCloud(staff.id);
+      return { ok: true, msg: `${staff.nombre} convertido a Socio UCTenis. Actívalo en el ranking cuando corresponda.` };
+    }
+
+    if (fromType === 'socio' && toType === 'funcionario') {
+      const player = await this.findPlayerByEmailCloud(normalized);
+      if (!player) return { ok: false, msg: 'Socio no encontrado.' };
+      // Crear en uct_staff
+      await this.saveStaffCloud({
+        nombre: player.nombre,
+        email: player.email,
+        emailLower: normalized,
+        genero: player.genero || '',
+        telefono: player.telefono || '',
+        foto: player.foto || '',
+        activo: true,
+        unidad: '',
+        migratedFrom: 'socio',
+        migratedAt: new Date().toISOString()
+      }, actor);
+      // Eliminar de ranking_players
+      await this.deletePlayerCloud(player.id);
+      return { ok: true, msg: `${player.nombre} convertido a Funcionario UCT. Ha perdido su posición en el ranking.` };
+    }
+
+    return { ok: false, msg: 'Conversión de tipo no soportada.' };
+  },
+
+  /** Listener en tiempo real para uct_staff */
+  initStaffListener() {
+    if (!this.isCloudConfigured()) return null;
+    staffListeners.forEach(u => u());
+    staffListeners = [];
+    const unsubscribe = firebaseDb
+      .collection(FIREBASE_COLLECTIONS.staff)
+      .orderBy('nombre')
+      .onSnapshot(
+        snap => {
+          cachedStaff = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          this.dispatchEvent('staff-updated', { count: cachedStaff.length });
+        },
+        err => console.error('❌ Error en listener de funcionarios:', err)
+      );
+    staffListeners.push(unsubscribe);
+    return unsubscribe;
+  },
+
   // ──────────────── FIREBASE: DESAFÍOS ────────────────
   async getChallengesCloud() {
     // ✅ OPTIMIZACIÓN: Retorna caché en tiempo real si listener está activo
@@ -877,12 +1122,15 @@ const DB = {
     playersListeners.forEach(unsubscribe => unsubscribe());
     challengesListeners.forEach(unsubscribe => unsubscribe());
     newsListeners.forEach(unsubscribe => unsubscribe());
+    staffListeners.forEach(unsubscribe => unsubscribe());
     playersListeners = [];
     challengesListeners = [];
     newsListeners = [];
+    staffListeners = [];
     cachedPlayers = [];
     cachedChallenges = [];
     cachedNews = [];
+    cachedStaff = [];
     console.log('✅ Listeners limpios');
   },
 

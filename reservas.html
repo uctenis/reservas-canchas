@@ -32,6 +32,11 @@
     <div id="userBar" class="res-user-bar"></div>
   </header>
 
+  <!-- Banner Modo Funcionario -->
+  <div id="funcionarioBanner" style="display:none; background:rgba(198,211,0,0.12); border:1px solid rgba(198,211,0,0.25); border-radius:12px; padding:12px 16px; margin: 15px 0; color:var(--accent-tennis); font-size:0.9rem; text-align:center;">
+    🏛️ <strong>Modo Funcionario UCT Activo:</strong> Solo puedes reservar canchas con un máximo de 48 horas de anticipación.
+  </div>
+
   <div class="step-indicator">
     <div class="step active" id="si1" style="cursor:pointer;" onclick="tryGoStep(1)"><span>1</span> Fecha</div>
     <div class="step-line"></div>
@@ -201,48 +206,69 @@
       <form id="fCompleteProfile" onsubmit="handleCompleteProfile(event)">
         <input type="hidden" id="cpEmail">
         <input type="hidden" id="cpFoto">
+        <input type="hidden" id="cpUserType" value="socio">
         
         <div class="form-group" style="margin-bottom:12px;">
-          <label style="font-size:0.8rem; margin-bottom:4px; display:block;">Nombre Completo</label>
+          <label style="font-size:0.8rem; margin-bottom:4px; display:block;">Nombre Completo *</label>
           <input type="text" id="cpNombre" style="width:100%; padding:10px; border-radius:8px;" required>
         </div>
-        
+
         <div class="form-row2" style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
           <div class="form-group" style="margin-bottom:0;">
-            <label style="font-size:0.8rem; margin-bottom:4px; display:block;">Género</label>
-            <select id="cpGenero" style="width:100%; padding:10px; border-radius:8px;" required>
-              <option value="">--</option>
-              <option value="M">Masculino</option>
-              <option value="F">Femenino</option>
-            </select>
+            <label style="font-size:0.8rem; margin-bottom:4px; display:block;">RUT *</label>
+            <input type="text" id="cpRut" placeholder="12.345.678-9" style="width:100%; padding:10px; border-radius:8px;" required>
           </div>
           <div class="form-group" style="margin-bottom:0;">
-            <label style="font-size:0.8rem; margin-bottom:4px; display:block;">Categoría</label>
-            <select id="cpCat" style="width:100%; padding:10px; border-radius:8px;" required>
-              <option value="">-- Selecciona --</option>
-              <option value="Primera">Primera</option>
-              <option value="Segunda">Segunda</option>
-              <option value="Tercera">Tercera</option>
-              <option value="Cuarta">Cuarta</option>
-              <option value="Principiante">Principiante</option>
-            </select>
+            <label style="font-size:0.8rem; margin-bottom:4px; display:block;">Teléfono *</label>
+            <input type="tel" id="cpTelefono" placeholder="+56 9..." style="width:100%; padding:10px; border-radius:8px;" required>
           </div>
         </div>
 
-        <div class="form-row2" style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:18px;">
-          <div class="form-group" style="margin-bottom:0;">
-            <label style="font-size:0.8rem; margin-bottom:4px; display:block;">Mano hábil</label>
-            <select id="cpMano" style="width:100%; padding:10px; border-radius:8px;">
-              <option value="Derecha">Derecha</option>
-              <option value="Izquierda">Izquierda</option>
-            </select>
+        <div class="form-group" style="margin-bottom:12px;">
+          <label style="font-size:0.8rem; margin-bottom:4px; display:block;">Género *</label>
+          <select id="cpGenero" style="width:100%; padding:10px; border-radius:8px;" required>
+            <option value="">-- Selecciona --</option>
+            <option value="M">Masculino</option>
+            <option value="F">Femenino</option>
+          </select>
+        </div>
+
+        <!-- Campos para SOCIOS -->
+        <div id="cpSocioFields" style="display:block;">
+          <div class="form-row2" style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
+            <div class="form-group" style="margin-bottom:0;">
+              <label style="font-size:0.8rem; margin-bottom:4px; display:block;">Categoría *</label>
+              <select id="cpCat" style="width:100%; padding:10px; border-radius:8px;">
+                <option value="">-- Selecciona --</option>
+                <option value="Primera">Primera</option>
+                <option value="Segunda">Segunda</option>
+                <option value="Tercera">Tercera</option>
+                <option value="Cuarta">Cuarta</option>
+                <option value="Principiante">Principiante</option>
+              </select>
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+              <label style="font-size:0.8rem; margin-bottom:4px; display:block;">Mano hábil</label>
+              <select id="cpMano" style="width:100%; padding:10px; border-radius:8px;">
+                <option value="Derecha">Derecha</option>
+                <option value="Izquierda">Izquierda</option>
+              </select>
+            </div>
           </div>
-          <div class="form-group" style="margin-bottom:0;">
+          <div class="form-group" style="margin-bottom:12px;">
             <label style="font-size:0.8rem; margin-bottom:4px; display:block;">Revés</label>
             <select id="cpReves" style="width:100%; padding:10px; border-radius:8px;">
               <option value="Dos manos">Dos manos</option>
               <option value="Una mano">Una mano</option>
             </select>
+          </div>
+        </div>
+
+        <!-- Campos para FUNCIONARIOS -->
+        <div id="cpFuncionarioFields" style="display:none; margin-bottom:12px;">
+          <div class="form-group">
+            <label style="font-size:0.8rem; margin-bottom:4px; display:block;">Unidad / Departamento *</label>
+            <input type="text" id="cpUnidad" placeholder="Ej: Facultad de Ingeniería" style="width:100%; padding:10px; border-radius:8px;">
           </div>
         </div>
 
@@ -397,6 +423,12 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('successModal').addEventListener('click', e => { if (e.target.id === 'successModal') closeSuccess(); });
   document.getElementById('challengeModal').addEventListener('click', e => { if (e.target.id === 'challengeModal') closeChallengeModal(); });
   document.getElementById('btnFinalConfirm').addEventListener('click', finalConfirm);
+
+  // Forzar completado de perfil si la sesión activa está incompleta
+  const s = DB.getSession();
+  if (s && !DB.isProfileComplete(s)) {
+    openAuthCompleteProfile(s);
+  }
 });
 
 // ── STEPS ──
@@ -430,15 +462,29 @@ function renderDateStrip() {
   strip.innerHTML = '';
   const today = new Date();
 
+  const session = DB.getSession();
+  const userType = (session && session.userType) ? session.userType : 'socio';
+  
+  // Regla de anticipación máxima visual
+  let maxDaysAllowed = 7;
+  if (userType === 'funcionario') {
+    maxDaysAllowed = 2; // Máximo 48 horas (hoy y mañana)
+  } else if (userType === 'admin') {
+    maxDaysAllowed = 14; // Dejar los 14 días para admins
+  }
+
   for (let i = 0; i < 14; i++) {
     const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() + i);
     const isSun = d.getDay() === 0;
     const isToday = i === 0;
-    const iso = localISO(d); // ✅ FIX: usa fecha local, no UTC
+    const iso = localISO(d);
+
+    const isOverLimit = i >= maxDaysAllowed;
+    const isDisabled = isSun || isOverLimit;
 
     const btn = document.createElement('button');
-    btn.className = 'date-btn' + (isSun ? ' date-disabled' : '') + (isToday ? ' date-today' : '');
-    btn.disabled = isSun;
+    btn.className = 'date-btn' + (isDisabled ? ' date-disabled' : '') + (isToday ? ' date-today' : '');
+    btn.disabled = isDisabled;
     btn.dataset.iso = iso;
 
     // Check if weather is available for this date
@@ -911,10 +957,24 @@ async function refreshSlotAvailability() {
   renderSlotsByCourt(apiDisponibilidad);
 }
 
-// ── "Continuar" desde paso 2 → abrir modal de desafío ──
+// ── "Continuar" desde paso 2 ──
 document.getElementById('btnConfirmSlot').addEventListener('click', () => {
   if (!sel.slot || !sel.court) return;
-  openChallengeModal();
+  const session = DB.getSession();
+  const isFunc = session && session.userType === 'funcionario';
+  if (isFunc) {
+    sel.isChallenge = false;
+    sel.isFriendly = false;
+    sel.isCampeonato = false;
+    sel.retadoId = null;
+    sel.retadoNombre = null;
+    sel.retadoEmail = null;
+    sel.retadoTelefono = null;
+    buildConfirmCard();
+    goStep(3);
+  } else {
+    openChallengeModal();
+  }
 });
 
 // ── CHALLENGE MODAL ──
@@ -1696,6 +1756,7 @@ async function cancelBooking(id) {
 function renderUserBar() {
   const s = DB.getSession();
   const bar = document.getElementById('userBar');
+  const banner = document.getElementById('funcionarioBanner');
   if (s) {
     bar.innerHTML = `<div class="user-pill-res">
       <div class="av">${s.nombre.charAt(0)}</div>
@@ -1703,9 +1764,16 @@ function renderUserBar() {
       <button onclick="doLogout()">Salir</button>
     </div>`;
     document.getElementById('myBookingsSection').style.display = 'block';
+    if (s.userType === 'funcionario') {
+      if (banner) banner.style.display = 'block';
+    } else {
+      if (banner) banner.style.display = 'none';
+    }
   } else {
     bar.innerHTML = `<button class="btn-login-res" onclick="openAuth()">🔑 Iniciar sesión</button>`;
+    if (banner) banner.style.display = 'none';
   }
+  renderDateStrip();
 }
 
 function doLogout() { DB.logout(); renderUserBar(); renderMyBookings(); if (sel.date) refreshSlotAvailability(); }
@@ -1722,6 +1790,11 @@ function openAuth() {
 }
 
 function closeAuth() {
+  const s = DB.getSession();
+  if (s && !DB.isProfileComplete(s)) {
+    alert("Debes completar todos tus datos para poder ingresar al sistema.");
+    doLogout();
+  }
   document.getElementById('authModal').classList.remove('visible');
 }
 
@@ -1768,14 +1841,64 @@ async function handleMockLogin() {
   btn.innerHTML = originalText;
 }
 
+function toggleProfileFormFields() {
+  const userType = document.getElementById('cpUserType').value || 'socio';
+  const socioFields = document.getElementById('cpSocioFields');
+  const funcFields = document.getElementById('cpFuncionarioFields');
+  if (userType === 'socio') {
+    socioFields.style.display = 'block';
+    funcFields.style.display = 'none';
+    document.getElementById('cpCat').setAttribute('required', 'required');
+    document.getElementById('cpUnidad').removeAttribute('required');
+  } else {
+    socioFields.style.display = 'none';
+    funcFields.style.display = 'block';
+    document.getElementById('cpCat').removeAttribute('required');
+    document.getElementById('cpUnidad').setAttribute('required', 'required');
+  }
+}
+
+async function openAuthCompleteProfile(user) {
+  document.getElementById('authMainView').style.display = 'none';
+  document.getElementById('authCompleteProfileView').style.display = 'block';
+  document.getElementById('cpEmail').value = user.email || '';
+  document.getElementById('cpFoto').value = user.foto || '';
+  document.getElementById('cpNombre').value = user.nombre || '';
+  document.getElementById('cpGenero').value = user.genero || '';
+  document.getElementById('cpRut').value = user.rut || '';
+  document.getElementById('cpTelefono').value = user.telefono || '';
+  
+  let userType = user.userType;
+  if (!userType) {
+    const access = await DB.getUserAccess(user.email);
+    userType = access.userType || 'socio';
+  }
+  document.getElementById('cpUserType').value = userType;
+  
+  if (userType === 'socio') {
+    document.getElementById('cpCat').value = user.categoria || '';
+    document.getElementById('cpMano').value = user.mano || 'Derecha';
+    document.getElementById('cpReves').value = user.reves || 'Dos manos';
+    document.getElementById('cpUnidad').value = '';
+  } else {
+    document.getElementById('cpCat').value = '';
+    document.getElementById('cpUnidad').value = user.unidad || '';
+  }
+  
+  toggleProfileFormFields();
+  document.getElementById('cpErr').textContent = '';
+  document.getElementById('authModal').classList.add('visible');
+}
+
 async function handleLoginResponse(r) {
-  if (r.isNew) {
-    document.getElementById('authMainView').style.display = 'none';
-    document.getElementById('authCompleteProfileView').style.display = 'block';
-    document.getElementById('cpEmail').value = r.email;
-    document.getElementById('cpFoto').value = r.foto || '';
-    document.getElementById('cpNombre').value = r.nombre || '';
-    document.getElementById('cpErr').textContent = '';
+  const isComplete = DB.isProfileComplete(r.user);
+  if (r.isNew || !isComplete) {
+    const userObj = r.user || {
+      email: r.email,
+      nombre: r.nombre,
+      foto: r.foto
+    };
+    await openAuthCompleteProfile(userObj);
   } else {
     closeAuth();
     renderUserBar();
@@ -1787,46 +1910,93 @@ async function handleLoginResponse(r) {
 async function handleCompleteProfile(e) {
   e.preventDefault();
   document.getElementById('cpErr').textContent = '';
-  const data = {
-    email: document.getElementById('cpEmail').value,
-    foto: document.getElementById('cpFoto').value,
-    nombre: document.getElementById('cpNombre').value,
-    genero: document.getElementById('cpGenero').value,
-    categoria: document.getElementById('cpCat').value,
-    mano: document.getElementById('cpMano').value,
-    reves: document.getElementById('cpReves').value
-  };
-  if (!data.genero) {
-    document.getElementById('cpErr').textContent = 'Por favor selecciona tu género.';
+  
+  const email = document.getElementById('cpEmail').value;
+  const foto = document.getElementById('cpFoto').value;
+  const nombre = document.getElementById('cpNombre').value.trim();
+  const genero = document.getElementById('cpGenero').value;
+  const rut = document.getElementById('cpRut').value.trim();
+  const telefono = document.getElementById('cpTelefono').value.trim();
+  const userType = document.getElementById('cpUserType').value || 'socio';
+  
+  if (!nombre || !genero || !rut || !telefono) {
+    document.getElementById('cpErr').textContent = 'Por favor completa todos los campos obligatorios (*).';
     return;
   }
+  
+  const data = {
+    email, foto, nombre, genero, rut, telefono, userType
+  };
+  
+  if (userType === 'socio') {
+    data.categoria = document.getElementById('cpCat').value;
+    data.mano = document.getElementById('cpMano').value;
+    data.reves = document.getElementById('cpReves').value;
+    if (!data.categoria) {
+      document.getElementById('cpErr').textContent = 'Por favor selecciona tu categoría.';
+      return;
+    }
+  } else {
+    data.unidad = document.getElementById('cpUnidad').value.trim();
+    if (!data.unidad) {
+      document.getElementById('cpErr').textContent = 'Por favor ingresa tu unidad / departamento.';
+      return;
+    }
+  }
+  
   const r = DB.completeGoogleRegistration(data);
   if (!r.ok) {
     document.getElementById('cpErr').textContent = r.msg;
     return;
   }
+  
   if (DB.isCloudConfigured()) {
     try {
-      const saved = await DB.savePlayerCloud({
-        ...r.user,
-        nombre: data.nombre,
-        email: data.email,
-        genero: data.genero,
-        categoria: data.categoria,
-        mano: data.mano,
-        reves: data.reves,
-        foto: data.foto || '',
-        activo: true,
-        participaRanking: true
-      }, { email: data.email });
-      const syncedUser = { ...r.user, ...saved, genero: saved.genero || data.genero };
-      DB.upsertUserLocal(syncedUser);
-      localStorage.setItem('uctenis_session', JSON.stringify(syncedUser));
+      if (userType === 'socio') {
+        const saved = await DB.savePlayerCloud({
+          ...r.user,
+          nombre: data.nombre,
+          email: data.email,
+          genero: data.genero,
+          categoria: data.categoria,
+          mano: data.mano,
+          reves: data.reves,
+          foto: data.foto || '',
+          telefono: data.telefono,
+          rut: data.rut,
+          activo: true,
+          participaRanking: true,
+          userType: 'socio'
+        }, { email: data.email });
+        const syncedUser = { ...r.user, ...saved, genero: saved.genero || data.genero };
+        DB.upsertUserLocal(syncedUser);
+        localStorage.setItem('uctenis_session', JSON.stringify(syncedUser));
+      } else {
+        const saved = await DB.saveStaffCloud({
+          ...r.user,
+          nombre: data.nombre,
+          email: data.email,
+          genero: data.genero,
+          foto: data.foto || '',
+          telefono: data.telefono,
+          rut: data.rut,
+          unidad: data.unidad,
+          activo: true,
+          userType: 'funcionario'
+        }, { email: data.email });
+        const syncedUser = { ...r.user, ...saved, genero: saved.genero || data.genero };
+        DB.upsertUserLocal(syncedUser);
+        localStorage.setItem('uctenis_session', JSON.stringify(syncedUser));
+      }
     } catch (cloudErr) {
       console.warn('No se pudo guardar el perfil inicial en Firebase:', cloudErr);
+      document.getElementById('cpErr').textContent = 'Error al guardar en Firebase: ' + cloudErr.message;
+      return;
     }
   }
-  closeAuth();
+  
+  // Quitar restricción al cerrar
+  document.getElementById('authModal').classList.remove('visible');
   renderUserBar();
   renderMyBookings();
   if (sel.date) refreshSlotAvailability();

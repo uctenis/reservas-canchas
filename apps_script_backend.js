@@ -137,6 +137,12 @@ function handleRequest(data) {
       case "update_own_profile":     response = updateOwnProfile(data); break;
       case "admin_free_special_slots": response = adminFreeSpecialSlots(data); break;
       case "debug_firebase":         response = debugFirebaseConnection(data.email || 'gcuraqueo@uct.cl'); break;
+      // ── Funcionarios UCT ──
+      case "admin_create_staff":     response = adminCreateStaff(data); break;
+      case "admin_list_staff":       response = adminListStaff(data); break;
+      case "admin_update_staff":     response = adminUpdateStaff(data); break;
+      case "admin_migrate_user":     response = adminMigrateUser(data); break;
+      case "update_own_staff_profile": response = updateOwnStaffProfile(data); break;
     }
 
     return ContentService.createTextOutput(JSON.stringify(response))
@@ -1525,7 +1531,37 @@ function getAvailableSlots(dateStr) {
 
 function createBooking(data) {
   let memberCheck = validateMember(data.email);
-  if (!memberCheck.ok) return memberCheck;
+
+  // Aceptar también funcionarios UCT (validados por Firebase en el frontend,
+  // aquí sólo verificamos que el correo esté en las hojas de cálculo o
+  // es un correo @uct.cl registrado en el sistema).
+  const isFuncionario = (data.userType === 'funcionario');
+  if (!memberCheck.ok && !isFuncionario) return memberCheck;
+  // Si es funcionario sin estar en Sheets, aceptamos igual (su validación
+  // primaria ya ocurrió via Firebase en el cliente).
+
+  // ── Regla: Máximo 1 reserva por día ─────────────────────────────
+  if (data.email && data.date) {
+    const existingToday = getUserBookingsForDate(data.email, data.date);
+    if (existingToday.length > 0) {
+      return { ok: false, msg: 'Ya tienes una reserva para este día. Solo se permite 1 reserva diaria por jugador.' };
+    }
+  }
+
+  // ── Regla: Anticipación máxima según tipo de usuario ─────────────
+  var MAX_ADVANCE_MS_BACKEND = {
+    admin:       7 * 24 * 60 * 60 * 1000,
+    socio:       7 * 24 * 60 * 60 * 1000,
+    funcionario: 48 * 60 * 60 * 1000
+  };
+  var userType = isFuncionario ? 'funcionario' : (data.userType || 'socio');
+  var maxAdvanceMs = MAX_ADVANCE_MS_BACKEND[userType] || MAX_ADVANCE_MS_BACKEND.socio;
+  var bookingDate = new Date(data.date + 'T12:00:00-04:00'); // mediodia hora Chile
+  var msUntilBooking = bookingDate.getTime() - Date.now();
+  if (msUntilBooking > maxAdvanceMs) {
+    var maxDias = userType === 'funcionario' ? '48 horas' : '7 días';
+    return { ok: false, msg: 'No puedes reservar con más de ' + maxDias + ' de anticipación.' };
+  }
 
   var noonUTC = new Date(data.date + 'T12:00:00Z');
   var dayOfWeek = parseInt(Utilities.formatDate(noonUTC, 'America/Santiago', 'u'), 10) % 7;
@@ -1546,11 +1582,12 @@ function createBooking(data) {
   }
 
   try {
+    var tipoLabel = isFuncionario ? 'Funcionario UCT' : 'Socio UCTenis';
     let event = calendar.createEvent(
       'Reserva UCTenis - ' + data.name,
       startTime, endTime,
       {
-        description: 'Reserva automática generada desde la plataforma web.\nUsuario: ' + data.name + '\nCorreo: ' + data.email + '\nRUT: ' + (data.rut || 'No registrado') + '\nCancha: ' + data.courtId.toUpperCase(),
+        description: 'Reserva automática generada desde la plataforma web.\nUsuario: ' + data.name + '\nCorreo: ' + data.email + '\nRUT: ' + (data.rut || 'No registrado') + '\nCancha: ' + data.courtId.toUpperCase() + '\nTipo: ' + tipoLabel,
         guests: data.email,
         sendInvites: true
       }
@@ -2662,4 +2699,258 @@ function sendWeekendCourtDigest() {
   } catch(e) {
     console.error('sendWeekendCourtDigest error al enviar: ' + e.message);
   }
+}
+
+// =======================================================
+// 👤 FUNCIONARIOS UCT
+// =======================================================
+
+/**
+ * Helper: retorna las reservas de un usuario en un día específico.
+ * Usado por createBooking para la regla de 1 reserva/día.
+ */
+function getUserBookingsForDate(email, dateStr) {
+  if (!email || !dateStr) return [];
+  const found = [];
+  const startOfDay = makeLocalDate(dateStr, '00:00');
+  const endOfDay   = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000);
+  for (const courtKey in CONFIG.CALENDARS) {
+    try {
+      const cal = CalendarApp.getCalendarById(CONFIG.CALENDARS[courtKey]);
+      if (!cal) continue;
+      const events = cal.getEvents(startOfDay, endOfDay);
+      events.forEach(ev => {
+        const desc = ev.getDescription() || '';
+        if (desc.toLowerCase().includes(email.toLowerCase())) {
+          found.push({ courtId: courtKey, eventId: ev.getId() });
+        }
+      });
+    } catch(e) {}
+  }
+  return found;
+}
+
+/**
+ * Admin: crea un nuevo funcionario UCT en Firebase y le envía email de bienvenida.
+ * Requiere: { adminEmail, adminPin, nombre, email, genero?, unidad?, telefono? }
+ */
+function adminCreateStaff(data) {
+  if (!checkAdminAccess(data)) return { ok: false, msg: 'Acceso restringido al administrador.' };
+  const nombre  = text(data.nombre);
+  const email   = text(data.email).toLowerCase().trim();
+  const genero  = text(data.genero) || '';
+  const unidad  = text(data.unidad) || '';
+  const telefono = text(data.telefono) || '';
+  if (!nombre) return { ok: false, msg: 'El nombre del funcionario es obligatorio.' };
+  if (!email)  return { ok: false, msg: 'El correo del funcionario es obligatorio.' };
+  if (!email.endsWith('@uct.cl')) return { ok: false, msg: 'El correo debe ser institucional (@uct.cl).' };
+
+  // Verificar que no exista ya en Firebase (via REST para Apps Script)
+  const fbResult = firebaseCreateStaff({
+    nombre, email, emailLower: email, genero, unidad, telefono,
+    activo: true, userType: 'funcionario',
+    creadoPor: text(data.adminEmail),
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  });
+
+  if (!fbResult.ok) return fbResult;
+
+  // Email de bienvenida al funcionario
+  try {
+    const appUrl = 'https://uctenis.github.io/reservas-canchas/reservas.html';
+    const htmlBody = [
+      '<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;border:1px solid #e0e0e0;border-radius:10px;overflow:hidden;">',
+      '<div style="background:#1a6b3a;padding:24px;text-align:center;">',
+      '<h1 style="color:#fff;margin:0;font-size:22px;">🎾 UCTenis</h1>',
+      '<p style="color:#c8e6c9;margin:6px 0 0;">Bienvenido/a al sistema de canchas UCT</p>',
+      '</div>',
+      '<div style="padding:24px;">',
+      '<p style="font-size:16px;margin:0 0 16px;">Hola <strong>' + nombre + '</strong>,</p>',
+      '<p style="margin:0 0 16px;">El administrador de UCTenis te ha habilitado para reservar canchas de tenis en la UCT.</p>',
+      '<table style="width:100%;border-collapse:collapse;margin-bottom:20px;">',
+      '<tr style="background:#f5f5f5;"><td style="padding:6px 12px;color:#555;">Tipo de acceso</td><td style="padding:6px 12px;font-weight:600;">Funcionario UCT</td></tr>',
+      '<tr><td style="padding:6px 12px;color:#555;">Correo registrado</td><td style="padding:6px 12px;font-weight:600;">' + email + '</td></tr>',
+      '<tr style="background:#f5f5f5;"><td style="padding:6px 12px;color:#555;">Anticipación máxima</td><td style="padding:6px 12px;font-weight:600;">48 horas</td></tr>',
+      '<tr><td style="padding:6px 12px;color:#555;">Límite diario</td><td style="padding:6px 12px;font-weight:600;">1 reserva por día</td></tr>',
+      '</table>',
+      '<p style="margin:0 0 16px;">Para reservar, ingresa con tu correo institucional UCT usando Google:</p>',
+      '<div style="text-align:center;margin:20px 0;"><a href="' + appUrl + '" style="background:#1a6b3a;color:#fff;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px;">Reservar Cancha</a></div>',
+      '<p style="color:#888;font-size:12px;margin:16px 0 0;">UCTenis — Sistema de reservas UCT</p>',
+      '</div></div>'
+    ].join('');
+    MailApp.sendEmail({
+      to: email,
+      subject: '🎾 UCTenis: Acceso habilitado para reservar canchas',
+      htmlBody: htmlBody,
+      name: 'UCTenis Club',
+      replyTo: (CONFIG.ADMINS.emails || [])[0] || ''
+    });
+  } catch(e) {
+    console.warn('adminCreateStaff: no se pudo enviar email de bienvenida:', e.message);
+  }
+
+  return { ok: true, msg: 'Funcionario creado y notificado por correo.', staff: fbResult.staff };
+}
+
+/**
+ * Admin: lista todos los funcionarios en Firestore.
+ */
+function adminListStaff(data) {
+  if (!checkAdminAccess(data)) return { ok: false, msg: 'Acceso restringido al administrador.' };
+  const fbResult = firebaseListStaff();
+  return fbResult;
+}
+
+/**
+ * Admin: actualiza datos de un funcionario.
+ * Puede activar/desactivar y cambiar nombre, unidad, teléfono, genero.
+ */
+function adminUpdateStaff(data) {
+  if (!checkAdminAccess(data)) return { ok: false, msg: 'Acceso restringido al administrador.' };
+  const staffId = text(data.staffId);
+  if (!staffId) return { ok: false, msg: 'ID del funcionario requerido.' };
+  const patch = {};
+  if (data.nombre   !== undefined) patch.nombre   = text(data.nombre);
+  if (data.unidad   !== undefined) patch.unidad   = text(data.unidad);
+  if (data.telefono !== undefined) patch.telefono = text(data.telefono);
+  if (data.genero   !== undefined) patch.genero   = text(data.genero);
+  if (data.activo   !== undefined) patch.activo   = Boolean(data.activo);
+  patch.updatedAt = new Date().toISOString();
+  patch.updatedBy = text(data.adminEmail);
+  const fbResult = firebasePatchStaff(staffId, patch);
+  return fbResult;
+}
+
+/**
+ * Admin: migra un usuario entre tipos (socio ↔ funcionario).
+ * Requiere: { adminEmail, adminPin, email, fromType, toType }
+ * ADVERTENCIA: fromType='socio' → toType='funcionario' es destructivo (se pierde posición ranking).
+ */
+function adminMigrateUser(data) {
+  if (!checkAdminAccess(data)) return { ok: false, msg: 'Acceso restringido al administrador.' };
+  const email    = text(data.email).toLowerCase().trim();
+  const fromType = text(data.fromType);
+  const toType   = text(data.toType);
+  if (!email)    return { ok: false, msg: 'Correo del usuario requerido.' };
+  if (!fromType || !toType) return { ok: false, msg: 'fromType y toType son requeridos.' };
+  if (fromType === toType)  return { ok: false, msg: 'El usuario ya es de ese tipo.' };
+
+  // La migración real en Firestore la ejecuta el cliente (db.migrateUserType).
+  // Este endpoint sólo valida el acceso de admin y envía notificación por email.
+  const nombreUsuario = text(data.nombre) || email;
+  const esAscenso = (fromType === 'funcionario' && toType === 'socio');
+  const tipoDestino = esAscenso ? 'Socio UCTenis' : 'Funcionario UCT';
+  const mensajeEmail = esAscenso
+    ? 'Ahora eres parte del Club UCTenis y tienes acceso al ranking y la escalerilla.'
+    : 'Tu perfil ha sido actualizado a Funcionario UCT. Puedes seguir reservando canchas.';
+
+  try {
+    MailApp.sendEmail({
+      to: email,
+      subject: '🎾 UCTenis: Tu perfil fue actualizado a ' + tipoDestino,
+      htmlBody: '<div style="font-family:Arial,sans-serif;max-width:520px;"><div style="background:#1a6b3a;padding:20px;text-align:center;"><h1 style="color:#fff;margin:0;">🎾 UCTenis</h1></div><div style="padding:20px;"><p>Hola <strong>' + nombreUsuario + '</strong>,</p><p>' + mensajeEmail + '</p><p style="color:#888;font-size:12px;">UCTenis — Sistema de reservas UCT</p></div></div>',
+      name: 'UCTenis Club'
+    });
+  } catch(e) { console.warn('adminMigrateUser email error:', e.message); }
+
+  return { ok: true, msg: nombreUsuario + ' migrado a ' + tipoDestino + '. Email de notificación enviado.', adminValidated: true };
+}
+
+/**
+ * Funcionario: actualiza sus propios datos opcionales (teléfono, unidad, foto).
+ * Requiere: { email, userType:'funcionario', ... campos editables }
+ */
+function updateOwnStaffProfile(data) {
+  const email = text(data.email).toLowerCase().trim();
+  if (!email) return { ok: false, msg: 'Correo requerido.' };
+  // La operación real ocurre en Firestore desde el cliente (DB.saveStaffCloud).
+  // Este endpoint sólo sirve como punto de registro y puede extenderse.
+  return { ok: true, msg: 'Perfil actualizado.' };
+}
+
+// ── Helpers Firebase REST para Apps Script (sin SDK) ──────────────────────
+
+function firebaseCreateStaff(staffData) {
+  try {
+    const projectId = CONFIG.FIREBASE_PROJECT_ID;
+    const apiKey    = CONFIG.FIREBASE_API_KEY;
+    const docId     = 'stf_' + staffData.emailLower.replace(/[^a-z0-9]/g, '_');
+    const url = 'https://firestore.googleapis.com/v1/projects/' + projectId +
+                '/databases/(default)/documents/uct_staff/' + docId + '?key=' + apiKey;
+    const fields = {};
+    Object.entries(staffData).forEach(([k, v]) => {
+      if (v === undefined) return;
+      if (typeof v === 'boolean') fields[k] = { booleanValue: v };
+      else fields[k] = { stringValue: String(v) };
+    });
+    const payload = JSON.stringify({ fields });
+    const response = UrlFetchApp.fetch(url, {
+      method: 'PATCH',
+      contentType: 'application/json',
+      payload,
+      muteHttpExceptions: true
+    });
+    if (response.getResponseCode() >= 400) {
+      return { ok: false, msg: 'Firebase error: ' + response.getContentText().substring(0, 200) };
+    }
+    return { ok: true, staff: { id: docId, ...staffData } };
+  } catch(e) {
+    return { ok: false, msg: 'Error al guardar en Firebase: ' + e.message };
+  }
+}
+
+function firebaseListStaff() {
+  try {
+    const projectId = CONFIG.FIREBASE_PROJECT_ID;
+    const apiKey    = CONFIG.FIREBASE_API_KEY;
+    const url = 'https://firestore.googleapis.com/v1/projects/' + projectId +
+                '/databases/(default)/documents/uct_staff?pageSize=200&key=' + apiKey;
+    const response = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+    if (response.getResponseCode() >= 400) return { ok: false, msg: 'Firebase error.' };
+    const raw = JSON.parse(response.getContentText());
+    const staff = (raw.documents || []).map(doc => {
+      const fields = doc.fields || {};
+      const out = { id: (doc.name || '').split('/').pop() };
+      Object.entries(fields).forEach(([k, v]) => {
+        out[k] = v.stringValue ?? v.booleanValue ?? v.integerValue ?? v.doubleValue ?? null;
+      });
+      return out;
+    });
+    return { ok: true, staff };
+  } catch(e) {
+    return { ok: false, msg: 'Error al leer funcionarios: ' + e.message };
+  }
+}
+
+function firebasePatchStaff(docId, patch) {
+  try {
+    const projectId = CONFIG.FIREBASE_PROJECT_ID;
+    const apiKey    = CONFIG.FIREBASE_API_KEY;
+    const fields = {};
+    Object.entries(patch).forEach(([k, v]) => {
+      if (v === undefined) return;
+      if (typeof v === 'boolean') fields[k] = { booleanValue: v };
+      else fields[k] = { stringValue: String(v) };
+    });
+    const updateMask = Object.keys(patch).map(k => 'updateMask.fieldPaths=' + k).join('&');
+    const url = 'https://firestore.googleapis.com/v1/projects/' + projectId +
+                '/databases/(default)/documents/uct_staff/' + docId + '?' + updateMask + '&key=' + apiKey;
+    const response = UrlFetchApp.fetch(url, {
+      method: 'PATCH', contentType: 'application/json',
+      payload: JSON.stringify({ fields }), muteHttpExceptions: true
+    });
+    if (response.getResponseCode() >= 400) return { ok: false, msg: 'Firebase patch error.' };
+    return { ok: true, msg: 'Funcionario actualizado.' };
+  } catch(e) {
+    return { ok: false, msg: 'Error al actualizar: ' + e.message };
+  }
+}
+
+/** Verifica que la petición venga de un admin válido */
+function checkAdminAccess(data) {
+  const adminEmail = text(data.adminEmail || data.email || '');
+  const adminEmails = CONFIG.ADMINS.emails || [];
+  if (!adminEmail) return false;
+  return adminEmails.some(e => e.toLowerCase() === adminEmail.toLowerCase());
 }

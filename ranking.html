@@ -2833,13 +2833,9 @@ async function handleMockLogin() {
 }
 
 async function handleLoginResponse(result) {
-  if (result.isNew) {
-    document.getElementById('authMainView').style.display = 'none';
-    document.getElementById('authCompleteProfileView').style.display = 'block';
-    document.getElementById('cpEmail').value = result.email;
-    document.getElementById('cpFoto').value = result.foto || '';
-    document.getElementById('cpNombre').value = result.nombre || '';
-    document.getElementById('cpErr').textContent = '';
+  if (result.isNew || !DB.isProfileComplete(result.user)) {
+    alert("Debes completar todos tus datos para poder ingresar al sistema.");
+    window.location.href = "reservas.html";
     return;
   }
 
@@ -7355,6 +7351,15 @@ window.renderAdminSpecialDatesList = function() {
     }
   } catch(e) {
     console.warn('Error en handleUrlChallengeAccept:', e);
+  }
+})();
+
+// Enforce profile completeness on page load
+(function enforceProfileComplete() {
+  const session = DB.getSession();
+  if (session && !DB.isProfileComplete(session)) {
+    alert("Debes completar todos tus datos para poder ingresar al sistema.");
+    window.location.href = "reservas.html";
   }
 })();
 </script>
