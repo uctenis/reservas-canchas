@@ -104,18 +104,27 @@
 
 <div class="modal-overlay" id="modalStaff">
   <div class="modal">
-    <h3 id="modalStaffTitle">Agregar Funcionario UCT</h3>
+    <h3 id="modalStaffTitle">Agregar Nuevo Usuario</h3>
     <p class="modal-sub" id="modalStaffSub"></p>
     <div id="modalMsg"></div>
     <input type="hidden" id="staffDocId">
+    
+    <div class="form-group" id="staffUserTypeRow">
+      <label>Tipo de Usuario *</label>
+      <select id="staffUserType" class="form-input" onchange="toggleModalFields()">
+        <option value="funcionario">Funcionario UCT</option>
+        <option value="socio">Socio UCTenis</option>
+      </select>
+    </div>
+
     <div class="form-row">
       <div class="form-group"><label>Nombre completo (opcional)</label><input type="text" id="staffNombre" class="form-input" placeholder="Ej: Maria Gonzalez"></div>
       <div class="form-group"><label>Género</label><select id="staffGenero" class="form-input"><option value="">Sin especificar</option><option value="M">Masculino</option><option value="F">Femenino</option></select></div>
     </div>
     <div class="form-group"><label>Correo institucional * (@uct.cl)</label><input type="email" id="staffEmail" class="form-input" placeholder="nombre@uct.cl"></div>
     <div class="form-row">
-      <div class="form-group"><label>Unidad / Departamento</label><input type="text" id="staffUnidad" class="form-input" placeholder="Ej: RRHH"></div>
-      <div class="form-group"><label>Telefono</label><input type="tel" id="staffTelefono" class="form-input" placeholder="+56 9..."></div>
+      <div class="form-group" id="staffUnidadGroup"><label>Unidad / Departamento</label><input type="text" id="staffUnidad" class="form-input" placeholder="Ej: RRHH"></div>
+      <div class="form-group"><label>Teléfono</label><input type="tel" id="staffTelefono" class="form-input" placeholder="+56 9..."></div>
     </div>
     <div class="form-group" id="staffActivoGroup" style="display:none;">
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
@@ -317,15 +326,28 @@ function filterTable(tid, q) {
   document.querySelectorAll('#'+tid+' tbody tr').forEach(function(tr){ tr.style.display = !q||(tr.dataset.search||'').includes(q)?'':'none'; });
 }
 
+function toggleModalFields() {
+  var userType = document.getElementById('staffUserType').value;
+  var unidadGroup = document.getElementById('staffUnidadGroup');
+  if (userType === 'socio') {
+    unidadGroup.style.display = 'none';
+  } else {
+    unidadGroup.style.display = 'block';
+  }
+}
+
 function openNewStaffModal() {
-  document.getElementById('modalStaffTitle').textContent = 'Agregar Funcionario UCT';
-  document.getElementById('modalStaffSub').textContent = 'El funcionario recibira un correo de bienvenida con el link de acceso.';
+  document.getElementById('modalStaffTitle').textContent = 'Agregar Nuevo Usuario';
+  document.getElementById('modalStaffSub').textContent = 'El usuario será registrado y completará su perfil al iniciar sesión.';
+  document.getElementById('staffUserTypeRow').style.display = 'block';
+  document.getElementById('staffUserType').value = 'funcionario';
   ['staffDocId','staffNombre','staffEmail','staffUnidad','staffTelefono'].forEach(function(id){document.getElementById(id).value='';});
   document.getElementById('staffEmail').disabled = false;
   document.getElementById('staffGenero').value = '';
   document.getElementById('staffActivoGroup').style.display = 'none';
   document.getElementById('btnSaveStaff').textContent = 'Crear y Notificar';
   document.getElementById('modalMsg').innerHTML = '';
+  toggleModalFields();
   document.getElementById('modalStaff').classList.add('open');
 }
 
@@ -335,6 +357,8 @@ function openEditStaffModal(sid) {
   document.getElementById('modalStaffTitle').textContent = 'Editar Funcionario';
   document.getElementById('modalStaffSub').textContent = 'Modifica los datos del funcionario.';
   document.getElementById('staffDocId').value = s.id;
+  document.getElementById('staffUserTypeRow').style.display = 'none';
+  document.getElementById('staffUserType').value = 'funcionario';
   document.getElementById('staffNombre').value = s.nombre||'';
   document.getElementById('staffEmail').value = s.email||'';
   document.getElementById('staffEmail').disabled = true;
@@ -345,6 +369,7 @@ function openEditStaffModal(sid) {
   document.getElementById('staffActivoGroup').style.display = 'block';
   document.getElementById('btnSaveStaff').textContent = 'Guardar Cambios';
   document.getElementById('modalMsg').innerHTML = '';
+  toggleModalFields();
   document.getElementById('modalStaff').classList.add('open');
 }
 
@@ -359,6 +384,8 @@ async function saveStaff() {
   var unidad = document.getElementById('staffUnidad').value.trim();
   var tel    = document.getElementById('staffTelefono').value.trim();
   var activo = document.getElementById('staffActivo').checked;
+  var userType = document.getElementById('staffUserType').value;
+  
   if (!email)  { showModalMsg('El correo es obligatorio.','error'); return; }
   if (!email.endsWith('@uct.cl')) { showModalMsg('El correo debe terminar en @uct.cl.','error'); return; }
   if (!nombre) {
@@ -366,19 +393,40 @@ async function saveStaff() {
     var parts = username.split('.');
     nombre = parts.map(function(p){ return p.charAt(0).toUpperCase() + p.slice(1); }).join(' ');
   }
+  
   btn.disabled = true; btn.textContent = 'Guardando...';
   document.getElementById('modalMsg').innerHTML = '';
+  
   try {
-    if (sid) {
-      await DB.saveStaffCloud({id:sid,nombre,genero,unidad,telefono:tel,activo},{email:currentAdmin&&currentAdmin.email});
-      showModalMsg('Funcionario actualizado.','success');
+    if (userType === 'socio') {
+      var docId = sid || 'p_' + makeFirebaseDocId(nombre || email, 'player');
+      await DB.savePlayerCloud({
+        id: docId,
+        nombre: nombre,
+        email: email,
+        genero: genero || 'M',
+        categoria: 'Principiante',
+        mano: 'Derecha',
+        reves: 'Dos manos',
+        foto: '',
+        telefono: tel,
+        activo: true,
+        participaRanking: true,
+        userType: 'socio'
+      }, { email: currentAdmin && currentAdmin.email });
+      showModalMsg('Socio UCTenis guardado con éxito.','success');
     } else {
-      var resp = await apiFetch('admin_create_staff',{adminEmail:currentAdmin&&currentAdmin.email,nombre,email,genero,unidad,telefono:tel});
-      if (!resp.ok) { showModalMsg(resp.msg,'error'); btn.disabled=false; btn.textContent='Crear y Notificar'; return; }
-      showModalMsg(resp.msg,'success');
+      if (sid) {
+        await DB.saveStaffCloud({id:sid,nombre,genero,unidad,telefono:tel,activo},{email:currentAdmin&&currentAdmin.email});
+        showModalMsg('Funcionario actualizado.','success');
+      } else {
+        var resp = await apiFetch('admin_create_staff',{adminEmail:currentAdmin&&currentAdmin.email,nombre,email,genero,unidad,telefono:tel});
+        if (!resp.ok) { showModalMsg(resp.msg,'error'); btn.disabled=false; btn.textContent='Crear y Notificar'; return; }
+        showModalMsg(resp.msg,'success');
+      }
     }
     btn.textContent = 'Guardado';
-    setTimeout(async function(){closeModal();await loadFuncionarios();updateStats();renderTodos();},1200);
+    setTimeout(async function(){closeModal();await loadAllData();},1200);
   } catch(err) { showModalMsg('Error: '+err.message,'error'); btn.disabled=false; btn.textContent='Reintentar'; }
 }
 
