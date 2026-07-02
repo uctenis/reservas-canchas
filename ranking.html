@@ -457,11 +457,11 @@
         <div class="form-row">
           <div class="form-group">
             <label for="adminNombre">Nombre completo</label>
-            <input type="text" id="adminNombre" required>
+            <input type="text" id="adminNombre">
           </div>
           <div class="form-group">
-            <label for="adminEmail">Correo</label>
-            <input type="email" id="adminEmail" placeholder="jugador@uct.cl">
+            <label for="adminEmail">Correo *</label>
+            <input type="email" id="adminEmail" placeholder="jugador@uct.cl" required>
           </div>
         </div>
         <div class="form-row">
@@ -5227,9 +5227,21 @@ async function submitAdminPlayer(event) {
     return;
   }
 
-  const nombre = document.getElementById('adminNombre').value.trim();
+  let nombre = document.getElementById('adminNombre').value.trim();
   const email = document.getElementById('adminEmail').value.trim();
   const genero = document.getElementById('adminGenero').value;
+
+  if (!email) {
+    error.textContent = 'El correo es obligatorio para agregar un jugador.';
+    return;
+  }
+
+  if (!nombre) {
+    // Si no se ingresa nombre, autogenerar desde el correo
+    const username = email.split('@')[0];
+    const parts = username.split('.');
+    nombre = parts.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
+  }
 
   let playerId = document.getElementById('adminPlayerId').value.trim();
   if (!playerId) {
@@ -5259,11 +5271,6 @@ async function submitAdminPlayer(event) {
   const adminRutBody = document.getElementById('adminRut').value.trim();
   const adminRutDv = document.getElementById('adminRutDv').value.trim();
   const adminRutFormatted = formatRut(adminRutBody, adminRutDv);
-
-  if (!nombre) {
-    error.textContent = 'Ingresa el nombre del jugador.';
-    return;
-  }
 
   try {
     submitBtn.disabled = true;

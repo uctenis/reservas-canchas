@@ -2736,14 +2736,19 @@ function getUserBookingsForDate(email, dateStr) {
  */
 function adminCreateStaff(data) {
   if (!checkAdminAccess(data)) return { ok: false, msg: 'Acceso restringido al administrador.' };
-  const nombre  = text(data.nombre);
+  let nombre  = text(data.nombre);
   const email   = text(data.email).toLowerCase().trim();
   const genero  = text(data.genero) || '';
   const unidad  = text(data.unidad) || '';
   const telefono = text(data.telefono) || '';
-  if (!nombre) return { ok: false, msg: 'El nombre del funcionario es obligatorio.' };
   if (!email)  return { ok: false, msg: 'El correo del funcionario es obligatorio.' };
   if (!email.endsWith('@uct.cl')) return { ok: false, msg: 'El correo debe ser institucional (@uct.cl).' };
+
+  if (!nombre) {
+    const username = email.split('@')[0];
+    const parts = username.split('.');
+    nombre = parts.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
+  }
 
   // Verificar que no exista ya en Firebase (via REST para Apps Script)
   const fbResult = firebaseCreateStaff({
