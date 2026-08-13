@@ -1316,6 +1316,226 @@ body {
   width: calc(100% - 44px);
 }
 
+/* =========================================================================
+   Ficha de jugador — tarjeta de perfil (modal .profile-modal)
+   ========================================================================= */
+.profile-modal {
+  width: min(94vw, 540px) !important;
+  padding: 0 !important;
+}
+
+.profile-hero {
+  position: relative;
+  text-align: center;
+  padding: 32px 24px 22px;
+  background: linear-gradient(180deg, rgba(198, 211, 0, 0.12), rgba(255, 255, 255, 0.02) 75%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.profile-hero-avatar {
+  position: relative;
+  display: inline-block;
+  margin-bottom: 14px;
+}
+
+.profile-hero-avatar img {
+  width: 104px;
+  height: 104px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid var(--accent-tennis);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.35);
+}
+
+.profile-hero-rank {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  background: var(--accent-tennis);
+  color: #0f172a;
+  font-weight: 900;
+  font-size: 0.85rem;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 6px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 3px solid #111c2c;
+}
+
+.profile-hero-rank.inactive {
+  background: rgba(255, 255, 255, 0.15);
+  color: var(--text-secondary);
+}
+
+.profile-hero h2 {
+  margin: 0;
+  font-size: 1.4rem;
+  color: var(--text-primary);
+}
+
+.profile-hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  padding: 5px 14px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.profile-info-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  background: rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.profile-info-chip {
+  background: #111c2c;
+  padding: 12px 8px;
+  text-align: center;
+}
+
+.profile-info-chip .label {
+  display: block;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.profile-info-chip .value {
+  display: block;
+  font-size: 0.98rem;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.profile-contact-row {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 16px 22px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.profile-contact-row .contact-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.85rem;
+}
+
+.profile-contact-row .contact-item .label {
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.profile-contact-row .contact-item .value {
+  color: var(--text-primary);
+  font-weight: 600;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.profile-record-section {
+  padding: 20px 22px 22px;
+}
+
+.profile-record-section h3 {
+  margin: 0 0 14px;
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.profile-record-group {
+  margin-bottom: 14px;
+}
+
+.profile-record-group:last-child {
+  margin-bottom: 0;
+}
+
+.profile-record-label {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+.profile-record-stats {
+  display: flex;
+  justify-content: space-around;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  padding: 10px;
+}
+
+.profile-record-group.friendly .profile-record-stats {
+  background: rgba(99, 102, 241, 0.05);
+  border-color: rgba(99, 102, 241, 0.15);
+}
+
+.profile-record-stats > div {
+  text-align: center;
+}
+
+.profile-record-stats .stat-label {
+  display: block;
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.profile-record-stats .stat-value {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.profile-matches-list {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.profile-match-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.02);
+  padding: 8px 12px;
+  border-radius: 8px;
+  border-left: 3px solid var(--match-color, #94a3b8);
+  font-size: 0.82rem;
+}
+
+@media (max-width: 480px) {
+  .profile-info-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
 .admin-modal {
   width: min(94vw, 720px) !important;
   max-width: 720px !important;

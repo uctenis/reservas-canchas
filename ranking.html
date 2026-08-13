@@ -4726,9 +4726,9 @@ function showPlayerProfile(playerKey) {
   let lastMatchesHtml = '';
   if (lastMatches.length > 0) {
     lastMatchesHtml = `
-      <div style="margin-top: 15px;">
-        <span style="font-size:0.8rem; color:var(--text-secondary); font-weight:800;">Últimos partidos:</span>
-        <ul style="list-style:none; padding:0; margin:5px 0 0; display:flex; flex-direction:column; gap:6px;">
+      <div style="margin-top: 16px;">
+        <span class="profile-record-label">Últimos Partidos</span>
+        <ul class="profile-matches-list">
           ${lastMatches.map(c => {
             const oppName = playerMatchesChallengeRef(player, c.retadorId)
               ? (c.retadoNombre || users.find(u=>u.id===c.retadoId)?.nombre || 'Jugador')
@@ -4739,7 +4739,7 @@ function showPlayerProfile(playerKey) {
             const typeLabel = isFriendly ? 'Amistoso' : 'Desafío';
             const dateStr = c.fechaResultado ? formatShortDate(c.fechaResultado.split('T')[0]) : formatShortDate(c.fecha);
             return `
-              <li style="display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.02); padding:7px 10px; border-radius:8px; border-left:3px solid ${won ? '#4ade80' : '#f87171'}; font-size:0.82rem; gap:8px;">
+              <li class="profile-match-item" style="--match-color:${won ? '#4ade80' : '#f87171'};">
                 <span style="display:flex; flex-direction:column; gap:1px;">
                   <span style="color:var(--text-primary); font-weight:600;">${typeIcon} vs ${escapeHTML(oppName)}</span>
                   <span style="color:var(--text-secondary); font-size:0.72rem;">${typeLabel} · ${escapeHTML(dateStr || '')}</span>
@@ -4755,44 +4755,26 @@ function showPlayerProfile(playerKey) {
 
   // Sección de stats con desafíos + amistosos separados
   const historyHtml = `
-    <div class="modal-history" style="margin-top: 20px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.08);">
-      <h3 style="margin-top:0; margin-bottom:12px; font-size:1rem; color:var(--text-primary); font-weight:800;">Record de Partidos</h3>
+    <div class="profile-record-section">
+      <h3>Récord de Partidos</h3>
 
       <!-- Desafíos oficiales -->
-      <div style="margin-bottom:10px;">
-        <span style="font-size:0.72rem; color:var(--text-secondary); font-weight:800; text-transform:uppercase; letter-spacing:0.05em;">⚔️ Desafíos Oficiales</span>
-        <div style="display:flex; justify-content:space-around; background:rgba(255,255,255,0.03); padding:10px; border-radius:8px; border:1px solid rgba(255,255,255,0.05); margin-top:6px;">
-          <div style="text-align:center;">
-            <span style="display:block; font-size:0.7rem; color:#4ade80; font-weight:800; text-transform:uppercase;">Ganados</span>
-            <strong style="font-size:1.3rem; color:var(--text-primary);">${chalWins}</strong>
-          </div>
-          <div style="text-align:center;">
-            <span style="display:block; font-size:0.7rem; color:#f87171; font-weight:800; text-transform:uppercase;">Perdidos</span>
-            <strong style="font-size:1.3rem; color:var(--text-primary);">${chalLosses}</strong>
-          </div>
-          <div style="text-align:center;">
-            <span style="display:block; font-size:0.7rem; color:#94a3b8; font-weight:800; text-transform:uppercase;">Total</span>
-            <strong style="font-size:1.3rem; color:var(--text-primary);">${officialMatches.length}</strong>
-          </div>
+      <div class="profile-record-group">
+        <span class="profile-record-label">⚔️ Desafíos Oficiales</span>
+        <div class="profile-record-stats">
+          <div><span class="stat-label" style="color:#4ade80;">Ganados</span><span class="stat-value">${chalWins}</span></div>
+          <div><span class="stat-label" style="color:#f87171;">Perdidos</span><span class="stat-value">${chalLosses}</span></div>
+          <div><span class="stat-label" style="color:#94a3b8;">Total</span><span class="stat-value">${officialMatches.length}</span></div>
         </div>
       </div>
 
       <!-- Amistosos -->
-      <div style="margin-bottom:10px;">
-        <span style="font-size:0.72rem; color:var(--text-secondary); font-weight:800; text-transform:uppercase; letter-spacing:0.05em;">🤝 Amistosos</span>
-        <div style="display:flex; justify-content:space-around; background:rgba(99,102,241,0.05); padding:10px; border-radius:8px; border:1px solid rgba(99,102,241,0.15); margin-top:6px;">
-          <div style="text-align:center;">
-            <span style="display:block; font-size:0.7rem; color:#4ade80; font-weight:800; text-transform:uppercase;">Ganados</span>
-            <strong style="font-size:1.3rem; color:var(--text-primary);">${friendlyWins}</strong>
-          </div>
-          <div style="text-align:center;">
-            <span style="display:block; font-size:0.7rem; color:#f87171; font-weight:800; text-transform:uppercase;">Perdidos</span>
-            <strong style="font-size:1.3rem; color:var(--text-primary);">${friendlyLosses}</strong>
-          </div>
-          <div style="text-align:center;">
-            <span style="display:block; font-size:0.7rem; color:#94a3b8; font-weight:800; text-transform:uppercase;">Total</span>
-            <strong style="font-size:1.3rem; color:var(--text-primary);">${friendlyMatches.length}</strong>
-          </div>
+      <div class="profile-record-group friendly">
+        <span class="profile-record-label">🤝 Amistosos</span>
+        <div class="profile-record-stats">
+          <div><span class="stat-label" style="color:#4ade80;">Ganados</span><span class="stat-value">${friendlyWins}</span></div>
+          <div><span class="stat-label" style="color:#f87171;">Perdidos</span><span class="stat-value">${friendlyLosses}</span></div>
+          <div><span class="stat-label" style="color:#94a3b8;">Total</span><span class="stat-value">${friendlyMatches.length}</span></div>
         </div>
       </div>
 
@@ -4801,30 +4783,39 @@ function showPlayerProfile(playerKey) {
     </div>
   `;
 
+  const rankBadge = active
+    ? `<span class="profile-hero-rank">${escapeHTML(String(player.pos))}</span>`
+    : `<span class="profile-hero-rank inactive">–</span>`;
+
   document.getElementById('profileContent').innerHTML = `
     <button class="modal-close-btn" type="button" data-close-modal="profileModal" aria-label="Cerrar">×</button>
-    <div class="modal-header">
-      <img src="${escapeAttr(player.foto)}" class="modal-photo" data-fallback="${escapeAttr(fallback)}" onerror="useFallbackAvatar(this)" alt="${escapeAttr(player.nombre)}" width="118" height="118" decoding="async">
-      <h2 class="modal-name">${escapeHTML(player.nombre)}</h2>
-      <p class="profile-rank">${active ? `${player.pos} · Ranking ${GENDERS[player.gender].label}` : `Inactivo · ${GENDERS[player.gender].label}`}</p>
+    <div class="profile-hero">
+      <div class="profile-hero-avatar">
+        <img src="${escapeAttr(player.foto)}" data-fallback="${escapeAttr(fallback)}" onerror="useFallbackAvatar(this)" alt="${escapeAttr(player.nombre)}" width="104" height="104" decoding="async">
+        ${rankBadge}
+      </div>
+      <h2>${escapeHTML(player.nombre)}</h2>
+      <span class="profile-hero-badge">${active ? `🏅 Ranking ${GENDERS[player.gender].label}` : `⏸️ Inactivo · ${GENDERS[player.gender].label}`}</span>
     </div>
-    <ul class="modal-stats">
-      <li><span class="label">Posición actual</span><span class="value">${active ? player.pos : 'Inactivo'}</span></li>
-      <li><span class="label">ID Jugador</span><span class="value">${escapeHTML(player.id || '-')}</span></li>
-      ${(canEdit || isPlayerAdminSession()) ? `<li><span class="label">RUT</span><span class="value">${escapeHTML(player.rut || '-')}</span></li>` : ''}
-      <li><span class="label">Posición anterior</span><span class="value">${player.prev || '-'}</span></li>
-      <li><span class="label">Categoría</span><span class="value">${escapeHTML(normalizeCategory(player.categoria) || '-')}</span></li>
-      <li><span class="label">Edad</span><span class="value">${escapeHTML(player.edad || '-')}</span></li>
-      <li><span class="label">Mano</span><span class="value">${escapeHTML(player.mano || '-')}</span></li>
-      <li><span class="label">Revés</span><span class="value">${escapeHTML(player.reves || '-')}</span></li>
-      <li><span class="label">Correo</span><span class="value">${escapeHTML(player.email || '-')}</span></li>
-      <li>
+
+    <div class="profile-info-grid">
+      <div class="profile-info-chip"><span class="label">Categoría</span><span class="value">${escapeHTML(normalizeCategory(player.categoria) || '-')}</span></div>
+      <div class="profile-info-chip"><span class="label">Edad</span><span class="value">${escapeHTML(player.edad || '-')}</span></div>
+      <div class="profile-info-chip"><span class="label">Mano</span><span class="value">${escapeHTML(player.mano || '-')}</span></div>
+      <div class="profile-info-chip"><span class="label">Revés</span><span class="value">${escapeHTML(player.reves || '-')}</span></div>
+      <div class="profile-info-chip"><span class="label">Pos. anterior</span><span class="value">${player.prev || '-'}</span></div>
+      <div class="profile-info-chip"><span class="label">ID</span><span class="value">${escapeHTML(player.id || '-')}</span></div>
+    </div>
+
+    <div class="profile-contact-row">
+      ${(canEdit || isPlayerAdminSession()) ? `<div class="contact-item"><span class="label">RUT</span><span class="value">${escapeHTML(player.rut || '-')}</span></div>` : ''}
+      <div class="contact-item"><span class="label">Correo</span><span class="value">${escapeHTML(player.email || '-')}</span></div>
+      <div class="contact-item">
         <span class="label">WhatsApp</span>
-        <span class="value">
-          ${player.telefono ? `<a href="https://wa.me/${player.telefono.replace(/[^0-9]/g, '')}" target="_blank" class="stats-link" style="color: var(--accent-green); text-decoration: underline;">${escapeHTML(player.telefono)}</a>` : '-'}
-        </span>
-      </li>
-    </ul>
+        <span class="value">${player.telefono ? `<a href="https://wa.me/${player.telefono.replace(/[^0-9]/g, '')}" target="_blank" class="stats-link" style="color: var(--accent-green); text-decoration: underline;">${escapeHTML(player.telefono)}</a>` : '-'}</span>
+      </div>
+    </div>
+
     ${historyHtml}
     ${editButton}`;
   openModal('profileModal');
