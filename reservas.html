@@ -329,10 +329,8 @@
           ¿Es un Partido Amistoso?
         </label>
         <div id="friendlyOpponentGroup" style="display: none; margin-top: 12px;">
-          <label for="friendlyOpponent" style="display: block; font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 6px;">Selecciona tu oponente (opcional)</label>
-          <select id="friendlyOpponent" style="width: 100%; padding: 8px 12px; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: #fff; outline: none; font-size: 0.9rem;">
-            <option value="">-- Sin oponente / Práctica libre --</option>
-          </select>
+          <label style="display: block; font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 6px;">Selecciona tu oponente (opcional)</label>
+          <div id="friendlyOpponentList" class="challengee-list" style="max-height: 200px;"></div>
         </div>
       </div>
 
@@ -1022,16 +1020,19 @@ function onFriendlyMatchChange() {
   const isFriendly = document.getElementById('chkFriendlyMatch').checked;
   document.getElementById('friendlyOpponentGroup').style.display = isFriendly ? 'block' : 'none';
   if (!isFriendly) {
-    document.getElementById('friendlyOpponent').value = '';
+    sel.retadoId = null;
+    sel.retadoNombre = null;
+    sel.retadoEmail = null;
+    sel.retadoTelefono = null;
   }
 }
 
 async function loadFriendlyOpponents() {
   const session = DB.getSession();
   if (!session) return;
-  const select = document.getElementById('friendlyOpponent');
-  select.innerHTML = '<option value="">-- Sin oponente / Práctica libre --</option>';
-  
+  const list = document.getElementById('friendlyOpponentList');
+  list.innerHTML = '<div style="color:var(--text-secondary);font-size:0.88rem;text-align:center;padding:12px">Cargando jugadores...</div>';
+
   try {
     let allPlayers = [];
     if (DB.isCloudConfigured()) {
@@ -1052,7 +1053,7 @@ async function loadFriendlyOpponents() {
 
     const meEmail = session.email?.toLowerCase();
     const meNombre = session.nombre?.toLowerCase();
-    
+
     const sortedPlayers = allPlayers
       .filter(p => {
         const isMe = (p.email && p.email.toLowerCase() === meEmail) || (p.nombre && p.nombre.toLowerCase() === meNombre) || p.id === session.id;
@@ -1069,18 +1070,41 @@ async function loadFriendlyOpponents() {
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#039;');
 
-    sortedPlayers.forEach(p => {
-      const opt = document.createElement('option');
-      opt.value = p.id;
-      opt.textContent = p.nombre;
-      opt.dataset.nombre = p.nombre;
-      opt.dataset.email = p.email || '';
-      opt.dataset.telefono = p.telefono || '';
-      select.appendChild(opt);
-    });
+    const noOpponentCard = `<div class="challengee-card selected" id="friendlyOpp_none" onclick="selectFriendlyOpponent(null, null, this)">
+      <div class="challengee-avatar" style="width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:center;font-size:1.3rem;">🎾</div>
+      <div class="challengee-info"><strong>Sin oponente</strong><span>Práctica libre</span></div>
+      <div class="challengee-check">✓</div>
+    </div>`;
+
+    const playerCards = sortedPlayers.map(p => {
+      const foto = p.foto ? p.foto : (p.gender === 'F' ? 'fotos/default_avatar_m.png' : 'fotos/default_avatar_h.png');
+      const safeId = String(p.id || '').replace(/'/g, "\\'");
+      const safeName = String(p.nombre || '').replace(/'/g, "\\'");
+      const safeEmail = String(p.email || '').replace(/'/g, "\\'");
+      const safePhone = String(p.telefono || '').replace(/'/g, "\\'");
+      return `<div class="challengee-card" id="friendlyOpp_${safeId}" onclick="selectFriendlyOpponent('${safeId}', '${safeName}', this, '${safeEmail}', '${safePhone}')">
+        <div class="challengee-avatar">
+          <img src="${escapeAttr(foto)}" onerror="this.src='fotos/default_avatar_h.png'" alt="${escapeAttr(p.nombre)}">
+        </div>
+        <div class="challengee-info"><strong>${escapeHTML(p.nombre)}</strong><span>${escapeHTML(p.categoria || '')}</span></div>
+        <div class="challengee-check">✓</div>
+      </div>`;
+    }).join('');
+
+    list.innerHTML = noOpponentCard + playerCards;
   } catch(e) {
     console.error('Error cargando oponentes amistosos:', e);
+    list.innerHTML = `<div style="color:#f87171;font-size:0.88rem;text-align:center;padding:12px">Error al cargar jugadores: ${e.message}</div>`;
   }
+}
+
+function selectFriendlyOpponent(id, nombre, el, email = '', telefono = '') {
+  document.querySelectorAll('#friendlyOpponentList .challengee-card').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  sel.retadoId = id;
+  sel.retadoNombre = nombre;
+  sel.retadoEmail = email || null;
+  sel.retadoTelefono = telefono || null;
 }
 
 function onChallengeTypeChange() {
@@ -1260,30 +1284,11 @@ function proceedFromChallengeModal() {
     }
     sel.isFriendly = false;
   } else {
-    const isFriendly = type === 'normal' && document.getElementById('chkFriendlyMatch').checked;
-    sel.isFriendly = isFriendly;
-    
-    const hasOpponent = (type === 'normal' && isFriendly) || type === 'campeonato';
-    if (hasOpponent) {
-      const select = document.getElementById('friendlyOpponent');
-      const selectedOpt = select.options[select.selectedIndex];
-      if (select.value) {
-        sel.retadoId = select.value;
-        sel.retadoNombre = selectedOpt.dataset.nombre;
-        sel.retadoEmail = selectedOpt.dataset.email;
-        sel.retadoTelefono = selectedOpt.dataset.telefono;
-      } else {
-        sel.retadoId = null;
-        sel.retadoNombre = null;
-        sel.retadoEmail = null;
-        sel.retadoTelefono = null;
-      }
-    } else {
-      sel.retadoId = null;
-      sel.retadoNombre = null;
-      sel.retadoEmail = null;
-      sel.retadoTelefono = null;
-    }
+    // sel.retadoId/Nombre/Email/Telefono ya se mantienen al día por los clicks
+    // en las tarjetas de #friendlyOpponentList (selectFriendlyOpponent) y se
+    // limpian en onChallengeTypeChange()/onFriendlyMatchChange() al cambiar
+    // de modo, así que no hace falta releerlos de un <select> aquí.
+    sel.isFriendly = type === 'normal' && document.getElementById('chkFriendlyMatch').checked;
   }
 
   closeChallengeModal();

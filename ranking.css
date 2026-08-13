@@ -1921,3 +1921,112 @@ tr.drag-over-bottom {
   0% { border-color: rgba(99,102,241,0.35); box-shadow: 0 4px 20px rgba(99,102,241,0.05); }
   100% { border-color: rgba(99,102,241,0.7); box-shadow: 0 4px 20px rgba(99,102,241,0.2); }
 }
+
+/* =========================================================================
+   Panel de Administración — página completa, no ventana modal flotante.
+   Reutiliza el mismo #adminModal (mismo JS de mostrar/ocultar vía la clase
+   .visible), pero visualmente se comporta como una página normal: fondo
+   sólido a todo el ancho, y pestañas como navegación de página en vez de
+   pastillas pequeñas apretadas en una esquina.
+   ========================================================================= */
+#adminModal.modal-overlay {
+  background: var(--bg-dark);
+  backdrop-filter: none;
+  align-items: flex-start;
+  padding: 0;
+  overflow-y: auto;
+}
+
+#adminModal .modal-content.admin-modal {
+  width: 100%;
+  max-width: 1200px;
+  max-height: none;
+  min-height: 100vh;
+  margin: 0 auto;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  background: var(--bg-dark);
+  padding: 0 0 60px;
+}
+
+.admin-page-header {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 24px;
+  background: rgba(15, 23, 42, 0.94);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  flex-wrap: wrap;
+}
+
+.admin-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 16px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.04);
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+.admin-back-btn:hover {
+  color: var(--text-primary);
+  border-color: rgba(255,255,255,0.25);
+  background: rgba(255,255,255,0.08);
+}
+
+.admin-tab-bar {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.admin-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 0.92rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.admin-tab-btn:hover {
+  color: var(--text-primary);
+  background: rgba(255,255,255,0.05);
+}
+.admin-tab-btn.active {
+  color: #0f172a;
+  background: var(--accent-tennis);
+}
+
+.admin-page-body {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px 24px 0;
+}
+
+@media (max-width: 700px) {
+  .admin-page-header { padding: 12px 16px; gap: 10px; }
+  .admin-tab-bar { order: 3; width: 100%; overflow-x: auto; flex-wrap: nowrap; padding-bottom: 2px; }
+  .admin-page-body { padding: 18px 14px 0; }
+}

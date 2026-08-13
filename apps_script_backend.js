@@ -136,6 +136,7 @@ function handleRequest(data) {
       case "admin_reorder_ranking":  response = adminReorderRanking(data); break;
       case "update_own_profile":     response = updateOwnProfile(data); break;
       case "admin_free_special_slots": response = adminFreeSpecialSlots(data); break;
+      case "admin_remove_special_slots": response = adminRemoveSpecialSlots(data); break;
       case "debug_firebase":         response = debugFirebaseConnection(data.email || 'gcuraqueo@uct.cl'); break;
       // ── Funcionarios UCT ──
       case "admin_create_staff":     response = adminCreateStaff(data); break;
@@ -455,11 +456,14 @@ function adminFreeSpecialSlots(data) {
     return { ok: false, msg: 'Debes proporcionar al menos una cancha.' };
   }
 
+  const tipo = text(data.type) === 'closed' ? 'closed' : 'all_day';
+  const desc = text(data.desc);
+
   const ss = SpreadsheetApp.openById(CONFIG.SHEET_MIEMBROS_ID);
   let sheet = ss.getSheetByName('horarios_especiales');
   if (!sheet) {
     sheet = ss.insertSheet('horarios_especiales');
-    sheet.getRange(1, 1, 1, 3).setValues([['fecha', 'courtId', 'tipo']]);
+    sheet.getRange(1, 1, 1, 4).setValues([['fecha', 'courtId', 'tipo', 'descripcion']]);
   }
 
   const existing = sheet.getDataRange().getValues();
@@ -476,14 +480,36 @@ function adminFreeSpecialSlots(data) {
       }
     }
     if (foundRow > 0) {
-      sheet.getRange(foundRow, 1, 1, 3).setValues([[fecha, courtIdStr, 'all_day']]);
+      sheet.getRange(foundRow, 1, 1, 4).setValues([[fecha, courtIdStr, tipo, desc]]);
     } else {
-      sheet.appendRow([fecha, courtIdStr, 'all_day']);
+      sheet.appendRow([fecha, courtIdStr, tipo, desc]);
     }
     saved++;
   });
 
   return { ok: true, saved: saved };
+}
+
+/** Elimina una fecha especial (una cancha en una fecha puntual). */
+function adminRemoveSpecialSlots(data) {
+  if (!isAdminRequest(data)) return { ok: false, msg: 'Acceso reservado al administrador.' };
+  const fecha = text(data.fecha);
+  const courtId = text(data.courtId);
+  if (!fecha || !courtId) return { ok: false, msg: 'Fecha y cancha son requeridas.' };
+
+  const ss = SpreadsheetApp.openById(CONFIG.SHEET_MIEMBROS_ID);
+  const sheet = ss.getSheetByName('horarios_especiales');
+  if (!sheet) return { ok: true, removed: 0 };
+
+  const values = sheet.getDataRange().getValues();
+  let removed = 0;
+  for (let i = values.length - 1; i >= 1; i--) {
+    if (text(values[i][0]) === fecha && text(values[i][1]) === courtId) {
+      sheet.deleteRow(i + 1);
+      removed++;
+    }
+  }
+  return { ok: true, removed: removed };
 }
 
 // =======================================================
@@ -1494,6 +1520,54 @@ function isFirebasePlayerActive(player) {
 }
 
 // =======================================================
+// ⚙️ CONFIGURACIÓN DINÁMICA DE HORARIOS (editable por el admin)
+// =======================================================
+
+/** Convierte un valor de documento REST de Firestore (stringValue/mapValue/
+ * arrayValue/...) a su equivalente JS plano, recursivamente. */
+function firestoreValueToJs(value) {
+  if (!value) return null;
+  if ('stringValue' in value) return value.stringValue;
+  if ('integerValue' in value) return Number(value.integerValue);
+  if ('doubleValue' in value) return Number(value.doubleValue);
+  if ('booleanValue' in value) return value.booleanValue;
+  if ('nullValue' in value) return null;
+  if ('arrayValue' in value) return (value.arrayValue.values || []).map(firestoreValueToJs);
+  if ('mapValue' in value) {
+    const out = {};
+    const fields = value.mapValue.fields || {};
+    Object.keys(fields).forEach(function(k) { out[k] = firestoreValueToJs(fields[k]); });
+    return out;
+  }
+  return null;
+}
+
+/**
+ * Lee uct_config/schedule desde Firestore (horarios regulares por cancha/día,
+ * anticipación máxima por tipo de usuario, límite de reservas diarias).
+ * Retorna null si el documento no existe o Firestore no responde — en ese
+ * caso el llamador debe seguir usando los valores hardcodeados de CONFIG,
+ * exactamente el comportamiento de antes de que existiera este panel.
+ */
+function getDynamicScheduleConfig() {
+  if (!CONFIG.FIREBASE_PROJECT_ID || !CONFIG.FIREBASE_API_KEY) return null;
+  try {
+    const url = 'https://firestore.googleapis.com/v1/projects/'
+      + encodeURIComponent(CONFIG.FIREBASE_PROJECT_ID)
+      + '/databases/(default)/documents/uct_config/schedule?key='
+      + encodeURIComponent(CONFIG.FIREBASE_API_KEY);
+    const response = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+    if (response.getResponseCode() !== 200) return null;
+    const doc = JSON.parse(response.getContentText());
+    if (!doc.fields) return null;
+    return firestoreValueToJs({ mapValue: { fields: doc.fields } });
+  } catch (e) {
+    console.warn('No se pudo leer la configuración dinámica de horarios:', e.message);
+    return null;
+  }
+}
+
+// =======================================================
 // 📅 CALENDARIOS — DISPONIBILIDAD Y RESERVAS
 // =======================================================
 
@@ -1518,6 +1592,7 @@ function getAvailableSlots(dateStr) {
   let result = { ok: true, date: dateStr, courts: {}, playable: {}, busyLabels: {} };
 
   const specialCourts = {};
+  const closedCourts = {};
   try {
     const ss = SpreadsheetApp.openById(CONFIG.SHEET_MIEMBROS_ID);
     const specialSheet = ss.getSheetByName('horarios_especiales');
@@ -1527,14 +1602,23 @@ function getAvailableSlots(dateStr) {
         const rowFecha = text(specialData[i][0]);
         const rowCourt = text(specialData[i][1]);
         const rowTipo  = text(specialData[i][2]);
-        if (rowFecha === dateStr && rowCourt && rowTipo === 'all_day') {
-          specialCourts[rowCourt] = true;
-        }
+        if (rowFecha !== dateStr || !rowCourt) continue;
+        if (rowTipo === 'all_day') specialCourts[rowCourt] = true;
+        else if (rowTipo === 'closed') closedCourts[rowCourt] = true;
       }
     }
   } catch (specialErr) { /* continuar normalmente */ }
 
+  const dynamicConfig = getDynamicScheduleConfig();
+  const courtSlotsSource = (dynamicConfig && dynamicConfig.courtSlots) || CONFIG.COURT_SLOTS;
+
   for (let courtKey in CONFIG.CALENDARS) {
+    if (closedCourts[courtKey]) {
+      result.courts[courtKey] = [];
+      result.playable[courtKey] = [];
+      result.busyLabels[courtKey] = {};
+      continue;
+    }
     let calId = CONFIG.CALENDARS[courtKey];
     let calendar = CalendarApp.getCalendarById(calId);
 
@@ -1566,9 +1650,9 @@ function getAvailableSlots(dateStr) {
 
     let candidateSlots;
     if (specialCourts[courtKey]) {
-      candidateSlots = CONFIG.SLOTS;
-    } else if (CONFIG.COURT_SLOTS && CONFIG.COURT_SLOTS[courtKey]) {
-      const courtConfig = CONFIG.COURT_SLOTS[courtKey];
+      candidateSlots = (dynamicConfig && dynamicConfig.slots) || CONFIG.SLOTS;
+    } else if (courtSlotsSource && courtSlotsSource[courtKey]) {
+      const courtConfig = courtSlotsSource[courtKey];
       if (Array.isArray(courtConfig)) {
         candidateSlots = courtConfig;
       } else {
@@ -1618,27 +1702,40 @@ function createBooking(data) {
     return { ok: false, msg: 'Tu cuenta @uct.cl tiene acceso de solo lectura. Escribe a un administrador de UCTenis para activarte como socio o funcionario y poder reservar canchas.' };
   }
 
-  // ── Regla: Máximo 1 reserva por día ─────────────────────────────
+  const dynamicConfig = getDynamicScheduleConfig();
+
+  // ── Regla: Máximo de reservas por día (configurable, por defecto 1) ──
+  var maxPerDay = (dynamicConfig && Number(dynamicConfig.maxBookingsPerDay) > 0)
+    ? Number(dynamicConfig.maxBookingsPerDay) : 1;
   if (data.email && data.date) {
     const existingToday = getUserBookingsForDate(data.email, data.date);
-    if (existingToday.length > 0) {
-      return { ok: false, msg: 'Ya tienes una reserva para este día. Solo se permite 1 reserva diaria por jugador.' };
+    if (existingToday.length >= maxPerDay) {
+      return { ok: false, msg: maxPerDay === 1
+        ? 'Ya tienes una reserva para este día. Solo se permite 1 reserva diaria por jugador.'
+        : 'Ya alcanzaste el máximo de ' + maxPerDay + ' reservas para este día.' };
     }
   }
 
-  // ── Regla: Anticipación máxima según tipo de usuario ─────────────
+  // ── Regla: Anticipación máxima según tipo de usuario (configurable) ──
   var MAX_ADVANCE_MS_BACKEND = {
     admin:       7 * 24 * 60 * 60 * 1000,
     socio:       7 * 24 * 60 * 60 * 1000,
     funcionario: 48 * 60 * 60 * 1000
   };
+  if (dynamicConfig && dynamicConfig.maxAdvanceDays) {
+    ['admin', 'socio', 'funcionario'].forEach(function(key) {
+      var dias = Number(dynamicConfig.maxAdvanceDays[key]);
+      if (dias > 0) MAX_ADVANCE_MS_BACKEND[key] = dias * 24 * 60 * 60 * 1000;
+    });
+  }
   var userType = isFuncionario ? 'funcionario' : (data.userType || 'socio');
   var maxAdvanceMs = MAX_ADVANCE_MS_BACKEND[userType] || MAX_ADVANCE_MS_BACKEND.socio;
   var bookingDate = new Date(data.date + 'T12:00:00-04:00'); // mediodia hora Chile
   var msUntilBooking = bookingDate.getTime() - Date.now();
   if (msUntilBooking > maxAdvanceMs) {
-    var maxDias = userType === 'funcionario' ? '48 horas' : '7 días';
-    return { ok: false, msg: 'No puedes reservar con más de ' + maxDias + ' de anticipación.' };
+    var maxDiasLabel = Math.round(maxAdvanceMs / (24 * 60 * 60 * 1000) * 10) / 10;
+    var maxDiasTexto = maxDiasLabel < 1 ? Math.round(maxAdvanceMs / (60 * 60 * 1000)) + ' horas' : maxDiasLabel + ' días';
+    return { ok: false, msg: 'No puedes reservar con más de ' + maxDiasTexto + ' de anticipación.' };
   }
 
   var noonUTC = new Date(data.date + 'T12:00:00Z');

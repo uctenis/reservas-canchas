@@ -390,15 +390,16 @@
 
 <div class="modal-overlay" id="adminModal" aria-hidden="true">
   <div class="modal-content admin-modal">
-    <button class="modal-close-btn" type="button" data-close-modal="adminModal" aria-label="Cerrar">×</button>
-    
-    <!-- Pestañas de Navegación del Administrador -->
-    <div class="admin-tab-bar" style="display: flex; gap: 8px; margin: 15px 20px 20px 20px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 10px; flex-wrap: wrap;">
-      <button type="button" class="btn-pill active" id="tabPlayers" style="padding: 8px 16px; font-size: 0.85rem; border-radius: 8px; cursor: pointer;" onclick="switchAdminSubSection('players')">👥 Jugadores</button>
-      <button type="button" class="btn-pill" id="tabNews" style="padding: 8px 16px; font-size: 0.85rem; border-radius: 8px; cursor: pointer;" onclick="switchAdminSubSection('news')">📢 Novedades</button>
-      <button type="button" class="btn-pill" id="tabSchedules" style="padding: 8px 16px; font-size: 0.85rem; border-radius: 8px; cursor: pointer;" onclick="switchAdminSubSection('schedules')">🗓️ Horarios</button>
+    <div class="admin-page-header">
+      <button class="admin-back-btn" type="button" data-close-modal="adminModal">← Volver al ranking</button>
+      <div class="admin-tab-bar">
+        <button type="button" class="admin-tab-btn active" id="tabPlayers" onclick="switchAdminSubSection('players')">👥 Jugadores</button>
+        <button type="button" class="admin-tab-btn" id="tabNews" onclick="switchAdminSubSection('news')">📢 Novedades</button>
+        <button type="button" class="admin-tab-btn" id="tabSchedules" onclick="switchAdminSubSection('schedules')">🗓️ Horarios</button>
+      </div>
     </div>
 
+    <div class="admin-page-body">
     <!-- Sección de Jugadores -->
     <div id="adminPlayersSection">
       <!-- Vista Listado de Jugadores -->
@@ -622,9 +623,10 @@
           </div>
         </form>
       </div>
-      
-      <!-- Sección de Horarios/Fechas Especiales -->
-      <div id="adminSchedulesSection" class="hidden" style="padding: 0 20px 20px 20px;">
+    </div> <!-- Cierre de #adminNewsSection -->
+
+    <!-- Sección de Horarios/Fechas Especiales -->
+    <div id="adminSchedulesSection" class="hidden" style="padding: 0 20px 20px 20px;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 12px; gap: 12px; flex-wrap: wrap;">
           <div>
             <p class="modal-kicker">Administrador</p>
@@ -701,7 +703,65 @@
             <p style="color:var(--text-secondary);font-size:0.85rem;text-align:center;padding:15px">Cargando...</p>
           </div>
         </div>
+
+        <!-- Horarios Regulares por Cancha -->
+        <div class="admin-section" style="margin-top: 20px;">
+          <h4 style="margin:0 0 6px; font-size:1rem;">🕒 Horarios Regulares por Cancha</h4>
+          <p style="color:var(--text-secondary);font-size:0.85rem;margin-bottom:16px;">
+            Define qué horarios están disponibles para reservar en cada cancha, según el día de la semana. Los cambios aplican a las reservas normales (las fechas especiales de arriba siguen mandando sobre esto para un día puntual).
+          </p>
+
+          <div id="scheduleConfigAlert" class="alert-box" style="display:none; padding: 12px; border-radius: 8px; font-size: 0.85rem; margin-bottom: 15px;"></div>
+
+          <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:16px;" id="scheduleCourtTabs">
+            <button type="button" class="admin-tab-btn active" data-court="cec1" onclick="selectScheduleCourt('cec1')" style="padding:8px 14px;font-size:0.82rem;">CEC 1 (Arcilla)</button>
+            <button type="button" class="admin-tab-btn" data-court="cec2" onclick="selectScheduleCourt('cec2')" style="padding:8px 14px;font-size:0.82rem;">CEC 2 (Arcilla)</button>
+            <button type="button" class="admin-tab-btn" data-court="cjp1" onclick="selectScheduleCourt('cjp1')" style="padding:8px 14px;font-size:0.82rem;">CJP 1 (Asfalto)</button>
+            <button type="button" class="admin-tab-btn" data-court="cjp2" onclick="selectScheduleCourt('cjp2')" style="padding:8px 14px;font-size:0.82rem;">CJP 2 (Asfalto)</button>
+          </div>
+
+          <div id="scheduleGridContainer" style="overflow-x:auto; padding-bottom:6px;">
+            <p style="color:var(--text-secondary);font-size:0.85rem;text-align:center;padding:15px">Cargando horarios...</p>
+          </div>
+
+          <div style="display:flex;justify-content:flex-end;margin-top:10px;">
+            <button class="btn-secondary" type="button" onclick="resetScheduleCourtToDefault()" style="padding: 7px 14px; font-size:0.78rem;">↺ Restablecer esta cancha</button>
+          </div>
+        </div>
+
+        <!-- Parámetros de Reserva -->
+        <div class="admin-section" style="margin-top: 20px;">
+          <h4 style="margin:0 0 6px; font-size:1rem;">⚙️ Parámetros de Reserva</h4>
+          <p style="color:var(--text-secondary);font-size:0.85rem;margin-bottom:16px;">
+            Controla con cuánta anticipación puede reservar cada tipo de usuario y cuántas reservas puede tener por día.
+          </p>
+          <div class="form-row" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:15px; margin-bottom:18px;">
+            <div class="form-group">
+              <label style="display:block; margin-bottom:6px; font-size:0.85rem; color:rgba(255,255,255,0.7);">Anticipación Socios (días)</label>
+              <input type="number" id="cfgMaxAdvanceSocio" min="1" max="60" style="width:100%; padding:10px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:#fff; outline:none;">
+            </div>
+            <div class="form-group">
+              <label style="display:block; margin-bottom:6px; font-size:0.85rem; color:rgba(255,255,255,0.7);">Anticipación Funcionarios (días)</label>
+              <input type="number" id="cfgMaxAdvanceFuncionario" min="1" max="60" style="width:100%; padding:10px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:#fff; outline:none;">
+            </div>
+            <div class="form-group">
+              <label style="display:block; margin-bottom:6px; font-size:0.85rem; color:rgba(255,255,255,0.7);">Anticipación Admins (días)</label>
+              <input type="number" id="cfgMaxAdvanceAdmin" min="1" max="60" style="width:100%; padding:10px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:#fff; outline:none;">
+            </div>
+            <div class="form-group">
+              <label style="display:block; margin-bottom:6px; font-size:0.85rem; color:rgba(255,255,255,0.7);">Máx. reservas por día</label>
+              <input type="number" id="cfgMaxBookingsPerDay" min="1" max="10" style="width:100%; padding:10px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:#fff; outline:none;">
+            </div>
+          </div>
+
+          <div style="display:flex;justify-content:flex-end;">
+            <button class="btn-primary" id="btnSaveScheduleConfig" type="button" onclick="saveScheduleConfigAll(event)" style="padding: 10px 20px; font-size:0.85rem;">
+              💾 Guardar Horarios y Parámetros
+            </button>
+          </div>
+        </div>
       </div>
+    </div>
     </div>
   </div>
 </div> 
@@ -6152,7 +6212,11 @@ function setRankStatus(text, type) {
   if (!status) return;
   status.textContent = text;
   status.className = `rank-status status-${type}`;
-  status.style.display = isPlayerAdminSession() ? 'inline-flex' : 'none';
+  // Solo vale la pena mostrarle este indicador al admin, y únicamente cuando
+  // algo requiere su atención (ej. Firebase no disponible, usando copia
+  // local). Un "Conectando..."/"Firebase conectado" no le dice nada útil al
+  // usuario y solo agrega ruido a la interfaz.
+  status.style.display = (isPlayerAdminSession() && (type === 'warn' || type === 'error')) ? 'inline-flex' : 'none';
 }
 
 function setChallengeMinDate() {
@@ -6619,6 +6683,7 @@ window.switchAdminSubSection = function(section) {
     renderAdminNewsList();
   } else if (section === 'schedules') {
     renderAdminSpecialDatesList();
+    loadScheduleConfig();
   }
 }
 
@@ -7228,29 +7293,197 @@ window.saveAdminSpecialDate = async function(event) {
   btn.disabled = true;
   btn.textContent = 'Guardando...';
 
-  // 1. Save locally
+  // 1. Guardar localmente (cache rápida para esta lista en este navegador)
   const list = getSpecialDates().filter(item => !(item.fecha === fecha && selectedCourts.includes(item.courtId)));
   selectedCourts.forEach(courtId => {
     list.push({ fecha, courtId, type, desc, savedAt: new Date().toISOString() });
   });
   saveSpecialDates(list);
 
-  // 2. Guardado completo en localStorage (Firebase no almacena horarios especiales)
+  // 2. Persistir en el backend (Google Sheet horarios_especiales): sin esto,
+  // la fecha especial solo se ve en el navegador de quien la creó y nunca
+  // afecta la disponibilidad real que ven los demás usuarios al reservar.
+  try {
+    if (window.CONFIG?.API_URL) {
+      const idToken = await DB.getIdToken();
+      const res = await fetch(window.CONFIG.API_URL, {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'admin_free_special_slots',
+          fecha, courts: selectedCourts, type, desc,
+          adminEmail: session?.email || '',
+          idToken
+        })
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.msg || 'Error en el servidor');
+      showAdminScheduleAlert(`✅ Fecha especial guardada para ${selectedCourts.length} cancha(s) el ${fecha}.`);
+    } else {
+      showAdminScheduleAlert(`✅ Guardado localmente (sin conexión al servidor configurada).`, 'warn');
+    }
+  } catch (e) {
+    console.warn('No se pudo sincronizar la fecha especial con el servidor:', e);
+    showAdminScheduleAlert(`⚠️ Guardado localmente, pero no se pudo sincronizar con el servidor: ${e.message}`, 'warn');
+  }
 
-  showAdminScheduleAlert(`✅ Fecha especial guardada para ${selectedCourts.length} cancha(s) el ${fecha}.`);
   btn.disabled = false;
   btn.textContent = '💾 Guardar Fecha Especial';
   document.getElementById('adminSpecialDesc').value = '';
   renderAdminSpecialDatesList();
 }
 
-window.deleteAdminSpecialDate = function(fecha, courtId) {
+window.deleteAdminSpecialDate = async function(fecha, courtId) {
   if (!confirm(`¿Eliminar fecha especial para ${courtId} el ${fecha}?`)) return;
   const list = getSpecialDates().filter(item => !(item.fecha === fecha && item.courtId === courtId));
   saveSpecialDates(list);
   renderAdminSpecialDatesList();
+
+  try {
+    if (window.CONFIG?.API_URL) {
+      const idToken = await DB.getIdToken();
+      const session = DB.getSession();
+      const res = await fetch(window.CONFIG.API_URL, {
+        method: 'POST',
+        body: JSON.stringify({ action: 'admin_remove_special_slots', fecha, courtId, adminEmail: session?.email || '', idToken })
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.msg || 'Error en el servidor');
+    }
+  } catch (e) { console.warn('No se pudo eliminar la fecha especial en el servidor:', e); }
+
   showAdminScheduleAlert(`Fecha especial eliminada.`);
 }
+
+// ──────────────── HORARIOS REGULARES Y PARÁMETROS DE RESERVA ────────────────
+const SCHEDULE_DAYS = [
+  { key: 1, label: 'Lunes' }, { key: 2, label: 'Martes' }, { key: 3, label: 'Miércoles' },
+  { key: 4, label: 'Jueves' }, { key: 5, label: 'Viernes' }, { key: 6, label: 'Sábado' },
+  { key: 0, label: 'Domingo' }
+];
+const SCHEDULE_COURT_LABELS = { cec1: 'CEC 1', cec2: 'CEC 2', cjp1: 'CJP 1', cjp2: 'CJP 2' };
+let scheduleConfigState = null;
+let scheduleConfigCourt = 'cec1';
+
+function showScheduleConfigAlert(msg, type = 'success') {
+  const box = document.getElementById('scheduleConfigAlert');
+  if (!box) return;
+  box.style.display = 'block';
+  box.style.backgroundColor = type === 'error' ? 'rgba(239,68,68,0.15)' : (type === 'warn' ? 'rgba(217,119,6,0.15)' : 'rgba(16,185,129,0.15)');
+  box.style.border = `1px solid ${type === 'error' ? '#ef4444' : (type === 'warn' ? '#d97706' : '#10b981')}`;
+  box.style.color = type === 'error' ? '#fca5a5' : (type === 'warn' ? '#fcd34d' : '#86efac');
+  box.textContent = msg;
+  setTimeout(() => { box.style.display = 'none'; }, 4000);
+}
+
+function cloneDefaultCourtSlots() {
+  return JSON.parse(JSON.stringify(window.DEFAULT_COURT_SLOTS || {}));
+}
+
+async function loadScheduleConfig() {
+  const container = document.getElementById('scheduleGridContainer');
+  try {
+    const saved = await withTimeout(DB.getScheduleConfigCloud(), CLOUD_TIMEOUT_MS, 'Configuración de horarios');
+    scheduleConfigState = {
+      courtSlots: (saved && saved.courtSlots) || cloneDefaultCourtSlots(),
+      maxAdvanceDays: { ...(window.DEFAULT_MAX_ADVANCE_DAYS || {}), ...((saved && saved.maxAdvanceDays) || {}) },
+      maxBookingsPerDay: (saved && Number(saved.maxBookingsPerDay) > 0) ? Number(saved.maxBookingsPerDay) : (window.DEFAULT_MAX_BOOKINGS_PER_DAY || 1)
+    };
+  } catch (e) {
+    console.warn('No se pudo cargar la configuración de horarios, usando valores por defecto:', e);
+    scheduleConfigState = {
+      courtSlots: cloneDefaultCourtSlots(),
+      maxAdvanceDays: { ...(window.DEFAULT_MAX_ADVANCE_DAYS || {}) },
+      maxBookingsPerDay: window.DEFAULT_MAX_BOOKINGS_PER_DAY || 1
+    };
+  }
+
+  document.getElementById('cfgMaxAdvanceSocio').value = scheduleConfigState.maxAdvanceDays.socio || 7;
+  document.getElementById('cfgMaxAdvanceFuncionario').value = scheduleConfigState.maxAdvanceDays.funcionario || 2;
+  document.getElementById('cfgMaxAdvanceAdmin').value = scheduleConfigState.maxAdvanceDays.admin || 7;
+  document.getElementById('cfgMaxBookingsPerDay').value = scheduleConfigState.maxBookingsPerDay || 1;
+
+  if (container) renderScheduleGrid();
+}
+
+window.selectScheduleCourt = function(courtId) {
+  scheduleConfigCourt = courtId;
+  document.querySelectorAll('#scheduleCourtTabs .admin-tab-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.court === courtId);
+  });
+  renderScheduleGrid();
+};
+
+function renderScheduleGrid() {
+  const container = document.getElementById('scheduleGridContainer');
+  if (!container || !scheduleConfigState) return;
+  const slots = window.DEFAULT_SLOTS || [];
+  const courtSlots = scheduleConfigState.courtSlots[scheduleConfigCourt] || {};
+
+  const headerCells = slots.map(slot => `<th style="padding:6px 8px;font-size:0.72rem;color:var(--text-secondary);font-weight:600;white-space:nowrap;">${slot}</th>`).join('');
+  const rows = SCHEDULE_DAYS.map(day => {
+    const enabled = new Set(courtSlots[day.key] || []);
+    const cells = slots.map(slot => {
+      const isOn = enabled.has(slot);
+      return `<td style="padding:3px;text-align:center;">
+        <button type="button" onclick="toggleScheduleSlot(${day.key}, '${slot}')"
+          style="width:34px;height:28px;border-radius:6px;border:1px solid ${isOn ? 'var(--accent-tennis)' : 'rgba(255,255,255,0.1)'};background:${isOn ? 'rgba(198,211,0,0.18)' : 'rgba(255,255,255,0.03)'};color:${isOn ? 'var(--accent-tennis)' : 'var(--text-secondary)'};font-size:0.85rem;cursor:pointer;transition:all 0.15s;">
+          ${isOn ? '✓' : ''}
+        </button>
+      </td>`;
+    }).join('');
+    return `<tr><td style="padding:6px 10px 6px 0;font-size:0.8rem;color:var(--text-primary);font-weight:600;white-space:nowrap;">${day.label}</td>${cells}</tr>`;
+  }).join('');
+
+  container.innerHTML = `<table style="border-collapse:collapse;"><thead><tr><th></th>${headerCells}</tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+window.toggleScheduleSlot = function(dayKey, slot) {
+  if (!scheduleConfigState) return;
+  if (!scheduleConfigState.courtSlots[scheduleConfigCourt]) scheduleConfigState.courtSlots[scheduleConfigCourt] = {};
+  const courtSlots = scheduleConfigState.courtSlots[scheduleConfigCourt];
+  const list = Array.isArray(courtSlots[dayKey]) ? courtSlots[dayKey].slice() : [];
+  const idx = list.indexOf(slot);
+  if (idx >= 0) list.splice(idx, 1);
+  else { list.push(slot); list.sort(); }
+  courtSlots[dayKey] = list;
+  renderScheduleGrid();
+};
+
+window.resetScheduleCourtToDefault = function() {
+  if (!scheduleConfigState) return;
+  const defaults = cloneDefaultCourtSlots();
+  scheduleConfigState.courtSlots[scheduleConfigCourt] = defaults[scheduleConfigCourt] || {};
+  renderScheduleGrid();
+  showScheduleConfigAlert(`Horarios de ${SCHEDULE_COURT_LABELS[scheduleConfigCourt] || scheduleConfigCourt} restablecidos a los valores por defecto (aún debes guardar).`, 'warn');
+};
+
+window.saveScheduleConfigAll = async function(event) {
+  if (event) event.preventDefault();
+  if (!scheduleConfigState) return;
+
+  const btn = document.getElementById('btnSaveScheduleConfig');
+  btn.disabled = true;
+  btn.textContent = 'Guardando...';
+
+  scheduleConfigState.maxAdvanceDays = {
+    socio: Number(document.getElementById('cfgMaxAdvanceSocio').value) || 7,
+    funcionario: Number(document.getElementById('cfgMaxAdvanceFuncionario').value) || 2,
+    admin: Number(document.getElementById('cfgMaxAdvanceAdmin').value) || 7
+  };
+  scheduleConfigState.maxBookingsPerDay = Number(document.getElementById('cfgMaxBookingsPerDay').value) || 1;
+
+  try {
+    const session = DB.getSession();
+    await DB.saveScheduleConfigCloud(scheduleConfigState, session || {});
+    showScheduleConfigAlert('✅ Horarios y parámetros guardados. Ya rigen para las próximas reservas.');
+  } catch (e) {
+    console.error('Error guardando configuración de horarios:', e);
+    showScheduleConfigAlert('⚠️ No se pudo guardar: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '💾 Guardar Horarios y Parámetros';
+  }
+};
 
 window.renderAdminSpecialDatesList = function() {
   const list = getSpecialDates().sort((a, b) => a.fecha.localeCompare(b.fecha));
@@ -7288,7 +7521,7 @@ window.renderAdminSpecialDatesList = function() {
         <button class="btn-del" type="button" onclick="deleteAdminSpecialDate('${item.fecha}', '${item.courtId}')" style="padding: 4px 8px; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.2); border-radius: 6px; color: #fca5a5; cursor: pointer; transition: all 0.2s;">🗑️ Eliminar</button>
       </div>`;
   }).join('');
-}
+};
 
 // ── Auto-aceptar desafío desde URL params (link de email/Calendar) ──
 (function handleUrlChallengeAccept() {

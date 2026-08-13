@@ -42,8 +42,28 @@ const FIREBASE_COLLECTIONS = {
   players: 'ranking_players',
   challenges: 'ranking_challenges',
   news: 'ranking_news',
-  staff: 'uct_staff'            // Funcionarios UCT (solo reservas, sin ranking)
+  staff: 'uct_staff',           // Funcionarios UCT (solo reservas, sin ranking)
+  config: 'uct_config'          // Parámetros editables por el admin (horarios, anticipación, etc.)
 };
+
+// ── Horarios y parámetros de reserva por defecto ────────────────────────────
+// Reflejan lo que hoy está hardcodeado en apps_script_backend.js (CONFIG.SLOTS,
+// CONFIG.COURT_SLOTS, MAX_ADVANCE_MS). Se usan para prellenar el panel de admin
+// cuando todavía no existe un documento uct_config/schedule en Firestore, y el
+// backend cae a estos mismos valores si Firestore no responde.
+const DEFAULT_SLOTS = ['09:00','10:30','12:00','13:30','15:00','16:30','18:00','19:30','21:00'];
+const DEFAULT_COURT_SLOTS = {
+  cec1: { 1:['18:00','19:30','21:00'], 2:['18:00','19:30','21:00'], 3:['18:00','19:30','21:00'], 4:['18:00','19:30','21:00'], 5:['18:00','19:30','21:00'], 6:DEFAULT_SLOTS, 0:[] },
+  cec2: { 1:['18:00','19:30','21:00'], 2:['18:00','19:30','21:00'], 3:['18:00','19:30','21:00'], 4:['18:00','19:30','21:00'], 5:['18:00','19:30','21:00'], 6:DEFAULT_SLOTS, 0:[] },
+  cjp1: { 1:['20:00'], 2:['18:00','19:30','21:00'], 3:['18:00','19:30','21:00'], 4:['18:00','19:30','21:00'], 5:['20:00'], 6:DEFAULT_SLOTS, 0:[] },
+  cjp2: { 1:['20:00'], 2:['18:00','19:30','21:00'], 3:['18:00','19:30','21:00'], 4:['18:00','19:30','21:00'], 5:['20:00'], 6:DEFAULT_SLOTS, 0:[] }
+};
+const DEFAULT_MAX_ADVANCE_DAYS = { admin: 7, socio: 7, funcionario: 2 };
+const DEFAULT_MAX_BOOKINGS_PER_DAY = 1;
+window.DEFAULT_SLOTS = DEFAULT_SLOTS;
+window.DEFAULT_COURT_SLOTS = DEFAULT_COURT_SLOTS;
+window.DEFAULT_MAX_ADVANCE_DAYS = DEFAULT_MAX_ADVANCE_DAYS;
+window.DEFAULT_MAX_BOOKINGS_PER_DAY = DEFAULT_MAX_BOOKINGS_PER_DAY;
 
 // ── Anticipación máxima de reserva por tipo de usuario ──────────────────────
 const MAX_ADVANCE_MS = {
@@ -657,6 +677,43 @@ const DB = {
     if (this.isFirebaseConfigured()) {
       firebaseAuth.signOut().catch(err => console.error("Error al cerrar sesión de Firebase:", err));
     }
+  },
+
+  /** ID token de Firebase del usuario actual, para que el backend (Apps
+   * Script) pueda verificar acciones de administrador contra Google en vez
+   * de confiar en un correo que el propio cliente declara. */
+  async getIdToken() {
+    try {
+      if (firebaseAuth && firebaseAuth.currentUser) {
+        return await firebaseAuth.currentUser.getIdToken();
+      }
+    } catch (e) { console.warn('No se pudo obtener idToken:', e); }
+    return null;
+  },
+
+  /** Lee la configuración editable de horarios/parámetros de reserva.
+   * Retorna null si no existe aún (el llamador debe usar los DEFAULT_*). */
+  async getScheduleConfigCloud() {
+    if (!this.isCloudConfigured()) return null;
+    try {
+      const doc = await firebaseDb.collection(FIREBASE_COLLECTIONS.config).doc('schedule').get();
+      return doc.exists ? doc.data() : null;
+    } catch (e) {
+      console.warn('No se pudo leer la configuración de horarios:', e);
+      return null;
+    }
+  },
+
+  /** Guarda la configuración editable de horarios/parámetros de reserva. */
+  async saveScheduleConfigCloud(config, actor = {}) {
+    if (!this.isCloudConfigured()) throw new Error('Firestore no está disponible.');
+    const data = cleanFirestoreData({
+      ...config,
+      updatedAt: new Date().toISOString(),
+      updatedBy: actor.email || ''
+    });
+    await firebaseDb.collection(FIREBASE_COLLECTIONS.config).doc('schedule').set(data, { merge: true });
+    return data;
   },
   updateUser(updatedUser) {
     const users = this.getUsers().map(u => u.id === updatedUser.id ? updatedUser : u);
