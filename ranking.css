@@ -462,27 +462,27 @@ body {
 
 #rankTable th:nth-child(3),
 #rankTable td:nth-child(3) {
-  width: 62px;
+  width: 50px;
 }
 
 #rankTable th:nth-child(4),
 #rankTable td:nth-child(4) {
-  width: 94px;
+  width: 112px;
 }
 
 #rankTable th:nth-child(5),
 #rankTable td:nth-child(5) {
-  width: 82px;
+  width: 94px;
 }
 
 #rankTable th:nth-child(6),
 #rankTable td:nth-child(6) {
-  width: 86px;
+  width: 112px;
 }
 
 #rankTable th:nth-child(7),
 #rankTable td:nth-child(7) {
-  width: 62px;
+  width: 50px;
 }
 
 #rankTable th:nth-child(8),
@@ -497,6 +497,19 @@ body {
   border-top: 1px solid rgba(255, 255, 255, 0.055);
   border-bottom: 1px solid rgba(255, 255, 255, 0.055);
   color: var(--text-primary);
+  font-size: 0.86rem;
+}
+
+/* EDAD/CATEGORIA/MANO/REVES: una sola línea con elipsis en vez de partir la
+   palabra en dos renglones (ej. "Dos manos" -> "Dos\nmanos"), que rompía la
+   altura pareja de las filas y se veía apretado contra las columnas vecinas. */
+#rankTable td:nth-child(3),
+#rankTable td:nth-child(4),
+#rankTable td:nth-child(5),
+#rankTable td:nth-child(6) {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 #rankTable td:first-child {
