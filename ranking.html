@@ -566,7 +566,7 @@
           </button>
         </div>
         <div class="admin-search-row" style="margin-bottom: 12px;">
-          <input type="search" id="adminNewsSearch" placeholder="Buscar novedades..." aria-label="Buscar novedades" oninput="renderAdminNewsList()" style="width:100%; padding:10px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:#fff; outline:none;">
+          <input type="search" id="adminNewsSearch" placeholder="Buscar novedades..." aria-label="Buscar novedades" oninput="debouncedRenderAdminNewsList()" style="width:100%; padding:10px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:#fff; outline:none;">
         </div>
         <div class="admin-news-list" id="adminNewsList" style="max-height: 480px; overflow-y: auto; padding-right: 4px;">
           <!-- Se llena por JS -->
@@ -709,7 +709,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-<script src="db.js?v=20260602_v3"></script>
+<script src="db.js?v=20260813_v1"></script>
 
 <script>
 // Helper functions for RUT
@@ -762,33 +762,33 @@ const CLOUD_TIMEOUT_MS = 4500;
 
 const OFFICIAL_STATIC_RANKING = {
   M: [
-    { posicion: 1,  nombre: 'David Silva',        posicionAnterior: 1,  id: 'm001', categoria: '3ra',         mano: 'Derecha',    reves: 'Una Mano',  foto: 'fotos/m001.png', fechaNacimiento: '1977-01-21', email: 'dsilva@uct.cl' },
-    { posicion: 2,  nombre: 'Ismael Devia',        posicionAnterior: 2,  id: 'm002', categoria: '3ra',         mano: 'Derecha',    reves: 'Dos manos', foto: 'fotos/m002.png', fechaNacimiento: '1988-06-10', email: 'idevia@uct.cl' },
-    { posicion: 3,  nombre: 'Miguel Escalona',     posicionAnterior: 3,  id: 'm005', categoria: '4ta',         mano: 'Derecha',    reves: 'Dos Manos', foto: 'fotos/m005.png', fechaNacimiento: '1975-07-18', email: 'mescalon@uct.cl' },
-    { posicion: 4,  nombre: 'Luis Otth',           posicionAnterior: 4,  id: 'm004', categoria: '4ta',         mano: 'Ninguna',    reves: 'Dos manos', foto: 'fotos/m004.png', fechaNacimiento: '1992-12-16', email: 'lotth@uct.cl' },
-    { posicion: 5,  nombre: 'Gustavo Curaqueo',    posicionAnterior: 5,  id: 'm009', categoria: 'Principiante', mano: 'Derecha',   reves: 'Dos manos', foto: 'fotos/m009.png', fechaNacimiento: '1978-12-27', email: 'gcuraqueo@uct.cl' },
-    { posicion: 6,  nombre: 'Jaime Castillo',      posicionAnterior: 6,  id: 'm011', categoria: '4ta',         mano: 'Ninguna',    reves: 'Una Mano',  foto: 'fotos/m011.png', fechaNacimiento: '1970-06-17', email: 'jcastill@uct.cl' },
-    { posicion: 7,  nombre: 'Matías Cáceres',      posicionAnterior: 7,  id: 'm007', categoria: '4ta',         mano: 'Izquierda',  reves: 'Dos manos', foto: 'fotos/m007.png', fechaNacimiento: '1997-11-21', email: 'mcaceres@uct.cl' },
-    { posicion: 8,  nombre: 'Rodrigo Castro',      posicionAnterior: 8,  id: 'm006', categoria: '4ta',         mano: 'Derecha',    reves: 'Una Mano',  foto: 'fotos/m006.png', fechaNacimiento: '1989-10-16', email: 'rcastro@uct.cl' },
-    { posicion: 9,  nombre: 'Klaus Hennicke',      posicionAnterior: 9,  id: 'm017', categoria: '4ta',         mano: 'Derecha',    reves: 'Dos manos', foto: 'fotos/m017.png', fechaNacimiento: '1990-11-14', email: 'khennicke@uct.cl' },
-    { posicion: 10, nombre: 'José Melgarejo',      posicionAnterior: 10, id: 'm016', categoria: '3ra',         mano: 'Derecha',    reves: 'Dos manos', foto: 'fotos/m016.png', fechaNacimiento: '1983-05-10', email: 'jmelgarejo@uct.cl' },
+    { posicion: 1,  nombre: 'David Silva',        posicionAnterior: 1,  id: 'm001', categoria: '3ra',         mano: 'Derecha',    reves: 'Una Mano',  foto: 'fotos/m001.png', fechaNacimiento: '', email: 'dsilva@uct.cl' },
+    { posicion: 2,  nombre: 'Ismael Devia',        posicionAnterior: 2,  id: 'm002', categoria: '3ra',         mano: 'Derecha',    reves: 'Dos manos', foto: 'fotos/m002.png', fechaNacimiento: '', email: 'idevia@uct.cl' },
+    { posicion: 3,  nombre: 'Miguel Escalona',     posicionAnterior: 3,  id: 'm005', categoria: '4ta',         mano: 'Derecha',    reves: 'Dos Manos', foto: 'fotos/m005.png', fechaNacimiento: '', email: 'mescalon@uct.cl' },
+    { posicion: 4,  nombre: 'Luis Otth',           posicionAnterior: 4,  id: 'm004', categoria: '4ta',         mano: 'Ninguna',    reves: 'Dos manos', foto: 'fotos/m004.png', fechaNacimiento: '', email: 'lotth@uct.cl' },
+    { posicion: 5,  nombre: 'Gustavo Curaqueo',    posicionAnterior: 5,  id: 'm009', categoria: 'Principiante', mano: 'Derecha',   reves: 'Dos manos', foto: 'fotos/m009.png', fechaNacimiento: '', email: 'gcuraqueo@uct.cl' },
+    { posicion: 6,  nombre: 'Jaime Castillo',      posicionAnterior: 6,  id: 'm011', categoria: '4ta',         mano: 'Ninguna',    reves: 'Una Mano',  foto: 'fotos/m011.png', fechaNacimiento: '', email: 'jcastill@uct.cl' },
+    { posicion: 7,  nombre: 'Matías Cáceres',      posicionAnterior: 7,  id: 'm007', categoria: '4ta',         mano: 'Izquierda',  reves: 'Dos manos', foto: 'fotos/m007.png', fechaNacimiento: '', email: 'mcaceres@uct.cl' },
+    { posicion: 8,  nombre: 'Rodrigo Castro',      posicionAnterior: 8,  id: 'm006', categoria: '4ta',         mano: 'Derecha',    reves: 'Una Mano',  foto: 'fotos/m006.png', fechaNacimiento: '', email: 'rcastro@uct.cl' },
+    { posicion: 9,  nombre: 'Klaus Hennicke',      posicionAnterior: 9,  id: 'm017', categoria: '4ta',         mano: 'Derecha',    reves: 'Dos manos', foto: 'fotos/m017.png', fechaNacimiento: '', email: 'khennicke@uct.cl' },
+    { posicion: 10, nombre: 'José Melgarejo',      posicionAnterior: 10, id: 'm016', categoria: '3ra',         mano: 'Derecha',    reves: 'Dos manos', foto: 'fotos/m016.png', fechaNacimiento: '', email: 'jmelgarejo@uct.cl' },
     { posicion: 11, nombre: 'Juan Maripillan',     posicionAnterior: 11, id: 'm008', categoria: '',            mano: 'Derecha',    reves: 'Dos manos', foto: 'fotos/m008.png', fechaNacimiento: '',          email: 'jmaripillan@uct.cl' },
-    { posicion: 12, nombre: 'Cristian Rebolledo',  posicionAnterior: 12, id: 'm010', categoria: 'Principiante', mano: 'Derecha',   reves: 'Una Mano',  foto: 'fotos/m010.png', fechaNacimiento: '1994-07-26', email: 'crebolledo@uct.cl' },
-    { posicion: 13, nombre: 'Francisco Encina',    posicionAnterior: 13, id: 'm003', categoria: '4ta',         mano: 'Derecha',    reves: 'Una Mano',  foto: 'fotos/m003.png', fechaNacimiento: '1964-01-22', email: 'fencina@uct.cl' },
-    { posicion: 14, nombre: 'Cristian Farias',     posicionAnterior: 14, id: 'm012', categoria: '4ta',         mano: 'Derecha',    reves: 'Una Mano',  foto: 'fotos/m012.png', fechaNacimiento: '1985-03-31', email: 'cristian.farias@uct.cl' },
-    { posicion: 15, nombre: 'Miguel Angulo',       posicionAnterior: 15, id: 'm015', categoria: '3ra',         mano: 'Derecha',    reves: 'Dos manos', foto: 'fotos/m015.png', fechaNacimiento: '1993-10-03', email: 'miguel.angulo@uct.cl' },
-    { posicion: 16, nombre: 'Roberto Bermúdez',    posicionAnterior: 16, id: 'm018', categoria: '1ra',         mano: 'Derecha',    reves: 'Una mano',  foto: 'fotos/m018.png', fechaNacimiento: '1964-09-02', email: 'profesorbermudez@gmail.com' },
+    { posicion: 12, nombre: 'Cristian Rebolledo',  posicionAnterior: 12, id: 'm010', categoria: 'Principiante', mano: 'Derecha',   reves: 'Una Mano',  foto: 'fotos/m010.png', fechaNacimiento: '', email: 'crebolledo@uct.cl' },
+    { posicion: 13, nombre: 'Francisco Encina',    posicionAnterior: 13, id: 'm003', categoria: '4ta',         mano: 'Derecha',    reves: 'Una Mano',  foto: 'fotos/m003.png', fechaNacimiento: '', email: 'fencina@uct.cl' },
+    { posicion: 14, nombre: 'Cristian Farias',     posicionAnterior: 14, id: 'm012', categoria: '4ta',         mano: 'Derecha',    reves: 'Una Mano',  foto: 'fotos/m012.png', fechaNacimiento: '', email: 'cristian.farias@uct.cl' },
+    { posicion: 15, nombre: 'Miguel Angulo',       posicionAnterior: 15, id: 'm015', categoria: '3ra',         mano: 'Derecha',    reves: 'Dos manos', foto: 'fotos/m015.png', fechaNacimiento: '', email: 'miguel.angulo@uct.cl' },
+    { posicion: 16, nombre: 'Roberto Bermúdez',    posicionAnterior: 16, id: 'm018', categoria: '1ra',         mano: 'Derecha',    reves: 'Una mano',  foto: 'fotos/m018.png', fechaNacimiento: '', email: 'profesorbermudez@gmail.com' },
     { posicion: 17, nombre: 'Francisco Muñoz',     posicionAnterior: 17, id: 'm013', categoria: '',            mano: 'Derecha',    reves: 'Dos manos', foto: 'fotos/m013.png', fechaNacimiento: '',          email: 'francisco.munoz@uct.cl' },
-    { posicion: 18, nombre: 'Pablo Lagos',         posicionAnterior: 18, id: 'm014', categoria: '4ta',         mano: 'Derecha',    reves: 'Una mano',  foto: 'fotos/m014.png', fechaNacimiento: '1989-10-18', email: 'pablo.lagos@uct.cl' },
-    { posicion: 19, nombre: 'Paulo Garrido',       posicionAnterior: 19, id: 'm031', categoria: '4ta',         mano: 'Derecha',    reves: 'Una Mano',  foto: 'fotos/m031.png', fechaNacimiento: '1995-08-24', email: 'pgarrido@uct.cl' }
+    { posicion: 18, nombre: 'Pablo Lagos',         posicionAnterior: 18, id: 'm014', categoria: '4ta',         mano: 'Derecha',    reves: 'Una mano',  foto: 'fotos/m014.png', fechaNacimiento: '', email: 'pablo.lagos@uct.cl' },
+    { posicion: 19, nombre: 'Paulo Garrido',       posicionAnterior: 19, id: 'm031', categoria: '4ta',         mano: 'Derecha',    reves: 'Una Mano',  foto: 'fotos/m031.png', fechaNacimiento: '', email: 'pgarrido@uct.cl' }
   ],
   F: [
-    { posicion: 1,  nombre: 'Violeta Moreno',      posicionAnterior: 2,  id: 'f002', categoria: 'Principiante', mano: 'Derecha',   reves: 'Dos manos', foto: 'fotos/f002.png', fechaNacimiento: '1987-03-10', email: 'vmoreno@uct.cl' },
-    { posicion: 2,  nombre: 'Sofía Silva',         posicionAnterior: 1,  id: 'f001', categoria: 'Principiante', mano: 'Derecha',   reves: 'Dos manos', foto: 'fotos/f001.png', fechaNacimiento: '2008-07-28', email: 'ssilvacastillo08@gmail.com' },
-    { posicion: 3,  nombre: 'Rocio Hernandez',     posicionAnterior: 3,  id: 'f006', categoria: 'Principiante', mano: 'Derecha',   reves: 'Dos manos', foto: 'fotos/f006.png', fechaNacimiento: '1993-11-29', email: 'rocio.hernandez@uct.cl' },
-    { posicion: 4,  nombre: 'Fernanda Silva',      posicionAnterior: 4,  id: 'f003', categoria: 'Principiante', mano: 'Derecha',   reves: 'Dos manos', foto: 'fotos/f003.png', fechaNacimiento: '2011-12-07', email: 'ferniwendy@gmail.com' },
-    { posicion: 5,  nombre: 'Doménica Vásquez',    posicionAnterior: 5,  id: 'f007', categoria: 'Principiante', mano: 'Derecha',   reves: 'Dos manos', foto: 'fotos/f007.png', fechaNacimiento: '2008-07-15', email: '' },
-    { posicion: 6,  nombre: 'Baleria Schatter',    posicionAnterior: 6,  id: 'f005', categoria: 'Principiante', mano: 'Derecha',   reves: 'Una Mano',  foto: 'fotos/f005.png', fechaNacimiento: '1997-09-05', email: 'vschatter@uct.cl' },
+    { posicion: 1,  nombre: 'Violeta Moreno',      posicionAnterior: 2,  id: 'f002', categoria: 'Principiante', mano: 'Derecha',   reves: 'Dos manos', foto: 'fotos/f002.png', fechaNacimiento: '', email: 'vmoreno@uct.cl' },
+    { posicion: 2,  nombre: 'Sofía Silva',         posicionAnterior: 1,  id: 'f001', categoria: 'Principiante', mano: 'Derecha',   reves: 'Dos manos', foto: 'fotos/f001.png', fechaNacimiento: '', email: 'ssilvacastillo08@gmail.com' },
+    { posicion: 3,  nombre: 'Rocio Hernandez',     posicionAnterior: 3,  id: 'f006', categoria: 'Principiante', mano: 'Derecha',   reves: 'Dos manos', foto: 'fotos/f006.png', fechaNacimiento: '', email: 'rocio.hernandez@uct.cl' },
+    { posicion: 4,  nombre: 'Fernanda Silva',      posicionAnterior: 4,  id: 'f003', categoria: 'Principiante', mano: 'Derecha',   reves: 'Dos manos', foto: 'fotos/f003.png', fechaNacimiento: '', email: 'ferniwendy@gmail.com' },
+    { posicion: 5,  nombre: 'Doménica Vásquez',    posicionAnterior: 5,  id: 'f007', categoria: 'Principiante', mano: 'Derecha',   reves: 'Dos manos', foto: 'fotos/f007.png', fechaNacimiento: '', email: '' },
+    { posicion: 6,  nombre: 'Baleria Schatter',    posicionAnterior: 6,  id: 'f005', categoria: 'Principiante', mano: 'Derecha',   reves: 'Una Mano',  foto: 'fotos/f005.png', fechaNacimiento: '', email: 'vschatter@uct.cl' },
     { posicion: 7,  nombre: 'Sandra Arenas',       posicionAnterior: 7,  id: 'f004', categoria: '',            mano: 'Derecha',    reves: 'Dos manos', foto: 'fotos/f004.png', fechaNacimiento: '',          email: 'sarenas@uct.cl' },
     { posicion: 8,  nombre: 'Carolina Cárdenas',   posicionAnterior: 8,  id: 'f008', categoria: 'Principiante', mano: 'Derecha',   reves: 'Dos manos', foto: 'fotos/f008.png', fechaNacimiento: '',          email: 'ccardeneas@uct.cl' },
     { posicion: 9,  nombre: 'Bianca Silva',        posicionAnterior: 9,  id: 'f009', categoria: 'Principiante', mano: 'Derecha',   reves: 'Dos manos', foto: 'fotos/f009.png', fechaNacimiento: '',          email: '' },
@@ -844,14 +844,21 @@ const debouncedRefreshRanking = debounce(() => {
   refreshRankingPage();
 }, 400);
 
+// renderAdminNewsList() vuelve a pedir/recalcular todas las novedades (incluye
+// lectura de Firestore + generación de novedades automáticas); con búsqueda
+// sin debounce se dispara completo en cada tecla escrita.
+const debouncedRenderAdminNewsList = debounce(function() { renderAdminNewsList(); }, 300);
+
 document.addEventListener('DOMContentLoaded', () => {
   DB.seed();
   setupEvents();
   setChallengeMinDate();
   renderUserBar();
-  refreshRankingPage();
 
-  // Initialize real-time Firestore listeners on ranking.html
+  // Los listeners se inician antes que refreshRankingPage() para que su primer
+  // snapshot (que siempre llega, incluso sin cambios) tenga ventaja de llegar
+  // primero y así refreshRankingPage() reutilice la caché en vez de duplicar
+  // la misma lectura de la colección con un .get() manual.
   if (DB.isCloudConfigured()) {
     DB.initPlayersListener();
     DB.initChallengesListener();
@@ -867,6 +874,8 @@ document.addEventListener('DOMContentLoaded', () => {
       debouncedRefreshRanking();
     });
   }
+
+  refreshRankingPage();
 
   // Auto-open admin panels if specified in URL query
   const params = new URLSearchParams(location.search);
@@ -957,7 +966,7 @@ function setupEvents() {
   });
   document.getElementById('fAdminPlayer').addEventListener('submit', submitAdminPlayer);
   const adminSearch = document.getElementById('adminPlayerSearch');
-  if (adminSearch) adminSearch.addEventListener('input', renderAdminPlayerList);
+  if (adminSearch) adminSearch.addEventListener('input', debounce(renderAdminPlayerList, 250));
 
   document.getElementById('btnAdminCreatePlayer').addEventListener('click', () => {
     resetAdminForm();
@@ -1784,7 +1793,7 @@ function renderRanking() {
         <td class="pos-cell">${rankBadgeHtml}</td>
         <td class="name-cell">
           <div class="player-cell">
-            <img class="player-avatar" src="${escapeAttr(player.foto)}" data-fallback="${escapeAttr(GENDERS[gender].fallbackAvatar)}" onerror="useFallbackAvatar(this)" alt="${escapeAttr(player.nombre)}">
+            <img class="player-avatar" src="${escapeAttr(player.foto)}" data-fallback="${escapeAttr(GENDERS[gender].fallbackAvatar)}" onerror="useFallbackAvatar(this)" alt="${escapeAttr(player.nombre)}" width="48" height="48" loading="lazy" decoding="async">
             <div class="player-copy">
               <strong>${escapeHTML(player.nombre)}</strong>
               <span>${escapeHTML(compactMeta(player))}</span>
@@ -1886,7 +1895,7 @@ function renderInactivePlayers() {
     const genderTag = `<span style="font-size:0.7rem; background:rgba(255,255,255,0.06); padding:2px 6px; border-radius:4px; margin-left:8px; color:var(--text-secondary);">${player.gender === 'F' ? 'Fem' : 'Masc'}</span>`;
     return `
       <article class="inactive-player-row" data-player-key="${escapeAttr(player.id)}">
-        <img class="player-avatar" src="${escapeAttr(player.foto)}" data-fallback="${escapeAttr(genderFallback)}" onerror="useFallbackAvatar(this)" alt="${escapeAttr(player.nombre)}">
+        <img class="player-avatar" src="${escapeAttr(player.foto)}" data-fallback="${escapeAttr(genderFallback)}" onerror="useFallbackAvatar(this)" alt="${escapeAttr(player.nombre)}" width="48" height="48" loading="lazy" decoding="async">
         <div class="inactive-player-info">
           <strong>${escapeHTML(player.nombre)} ${genderTag}</strong>
         </div>
@@ -2046,7 +2055,7 @@ function renderMyProfile() {
   card.innerHTML = `
     ${alertsHtml}
     <div class="my-profile-card">
-      <img class="player-avatar profile-avatar" src="${escapeAttr(player.foto)}" data-fallback="${escapeAttr(fallback)}" onerror="useFallbackAvatar(this)" alt="${escapeAttr(player.nombre)}">
+      <img class="player-avatar profile-avatar" src="${escapeAttr(player.foto)}" data-fallback="${escapeAttr(fallback)}" onerror="useFallbackAvatar(this)" alt="${escapeAttr(player.nombre)}" width="56" height="56" decoding="async">
       <div class="my-profile-main">
         <strong>${active ? player.pos : 'Inactivo'} ${escapeHTML(player.nombre)}</strong>
         <span>${escapeHTML(compactMeta(player))}</span>
@@ -4735,7 +4744,7 @@ function showPlayerProfile(playerKey) {
   document.getElementById('profileContent').innerHTML = `
     <button class="modal-close-btn" type="button" data-close-modal="profileModal" aria-label="Cerrar">×</button>
     <div class="modal-header">
-      <img src="${escapeAttr(player.foto)}" class="modal-photo" data-fallback="${escapeAttr(fallback)}" onerror="useFallbackAvatar(this)" alt="${escapeAttr(player.nombre)}">
+      <img src="${escapeAttr(player.foto)}" class="modal-photo" data-fallback="${escapeAttr(fallback)}" onerror="useFallbackAvatar(this)" alt="${escapeAttr(player.nombre)}" width="118" height="118" decoding="async">
       <h2 class="modal-name">${escapeHTML(player.nombre)}</h2>
       <p class="profile-rank">${active ? `${player.pos} · Ranking ${GENDERS[player.gender].label}` : `Inactivo · ${GENDERS[player.gender].label}`}</p>
     </div>

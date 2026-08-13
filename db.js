@@ -243,6 +243,12 @@ let cachedChallenges = [];
 let cachedNews = [];
 let cachedStaff = [];
 
+// Caché en memoria de disponibilidad de canchas por fecha (Apps Script tiene
+// latencia alta, hasta unos segundos por cold start). TTL corto para no mostrar
+// horarios desactualizados si alguien más reserva en ese rango.
+const SLOTS_CACHE_TTL_MS = 30 * 1000;
+const slotsCache = new Map();
+
 const DB = {
 
   // ──────────────── USUARIOS ────────────────
@@ -667,7 +673,8 @@ const DB = {
     if (!this.isCloudConfigured()) throw new Error('Firestore no está disponible.');
     // Si no hay caché, hacer fetch manual
     const snapshot = await firebaseDb.collection(FIREBASE_COLLECTIONS.players).get();
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    cachedPlayers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    return cachedPlayers;
   },
 
   // ✅ NUEVO: Inicializar listener de jugadores en tiempo real
@@ -1035,9 +1042,10 @@ const DB = {
     if (!this.isCloudConfigured()) throw new Error('Firestore no está disponible.');
     // Si no hay caché, hacer fetch manual
     const snapshot = await firebaseDb.collection(FIREBASE_COLLECTIONS.challenges).get();
-    return snapshot.docs
+    cachedChallenges = snapshot.docs
       .map(doc => normalizeChallengeRecord({ id: doc.id, ...doc.data() }))
       .sort((a, b) => (a.fecha || '').localeCompare(b.fecha || '') || (b.creado || '').localeCompare(a.creado || ''));
+    return cachedChallenges;
   },
 
   // ✅ NUEVO: Inicializar listener de desafíos en tiempo real
@@ -1113,9 +1121,10 @@ const DB = {
     if (!this.isCloudConfigured()) throw new Error('Firestore no está disponible.');
     // Si no hay caché, hacer fetch manual
     const snapshot = await firebaseDb.collection(FIREBASE_COLLECTIONS.news).get();
-    return snapshot.docs
+    cachedNews = snapshot.docs
       .map(doc => ({ id: doc.id, ...doc.data() }))
       .sort((a, b) => (b.date || b.creado || '').localeCompare(a.date || a.creado || ''));
+    return cachedNews;
   },
 
   // ✅ NUEVO: Inicializar listener de noticias en tiempo real
@@ -1391,15 +1400,24 @@ const DB = {
   // ──────────────── CONEXIÓN AL BACKEND (Google Calendar y Miembros) ────────────────
   // Consultar disponibilidad real de las 4 canchas en Google Calendar
   async getSlotsAPI(fechaStr) {
+    const cached = slotsCache.get(fechaStr);
+    if (cached && (Date.now() - cached.ts) < SLOTS_CACHE_TTL_MS) {
+      return cached.data;
+    }
     try {
       const params = new URLSearchParams({ action: 'get_available_slots', date: fechaStr });
       const res = await fetch(`${window.CONFIG.API_URL}?${params.toString()}`);
       const data = await res.json();
+      if (data && data.ok) slotsCache.set(fechaStr, { data, ts: Date.now() });
       return data; // { ok: true, courts: { cec1: ["09:00", ...], cec2: [...] } }
     } catch (e) {
       console.error('Error obteniendo disponibilidad:', e);
       return { ok: false };
     }
+  },
+  invalidateSlotsCache(fechaStr) {
+    if (fechaStr) slotsCache.delete(fechaStr);
+    else slotsCache.clear();
   },
 
   // Nota: Para usar la versión real que agenda en Google Calendar, se llama a esta función
@@ -1453,6 +1471,7 @@ const DB = {
       const b = { id: data.eventId || Date.now().toString(), userId: user.id || userId, courtId, fecha, slot, status: 'confirmada', creado: new Date().toISOString() };
       bookings.push(b);
       this.saveBookings(bookings);
+      this.invalidateSlotsCache(fecha);
       return { ok: true, booking: b };
     } catch (e) {
       console.error('Error conectando a Apps Script:', e);
@@ -1469,6 +1488,7 @@ const DB = {
       });
       const res = await fetch(`${window.CONFIG.API_URL}?${params.toString()}`);
       const data = await res.json();
+      if (data && data.ok) this.invalidateSlotsCache();
       return data;
     } catch (e) {
       console.error('Error al cancelar en la API:', e);

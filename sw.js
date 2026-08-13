@@ -1,4 +1,4 @@
-const CACHE_NAME = 'tenis-uct-cache-v23';
+const CACHE_NAME = 'tenis-uct-cache-v24';
 const urlsToCache = [
   './',
   'index.html',
