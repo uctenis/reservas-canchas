@@ -7379,30 +7379,45 @@ function cloneDefaultCourtSlots() {
   return JSON.parse(JSON.stringify(window.DEFAULT_COURT_SLOTS || {}));
 }
 
-async function loadScheduleConfig() {
-  const container = document.getElementById('scheduleGridContainer');
-  try {
-    const saved = await withTimeout(DB.getScheduleConfigCloud(), CLOUD_TIMEOUT_MS, 'Configuración de horarios');
-    scheduleConfigState = {
-      courtSlots: (saved && saved.courtSlots) || cloneDefaultCourtSlots(),
-      maxAdvanceDays: { ...(window.DEFAULT_MAX_ADVANCE_DAYS || {}), ...((saved && saved.maxAdvanceDays) || {}) },
-      maxBookingsPerDay: (saved && Number(saved.maxBookingsPerDay) > 0) ? Number(saved.maxBookingsPerDay) : (window.DEFAULT_MAX_BOOKINGS_PER_DAY || 1)
-    };
-  } catch (e) {
-    console.warn('No se pudo cargar la configuración de horarios, usando valores por defecto:', e);
-    scheduleConfigState = {
-      courtSlots: cloneDefaultCourtSlots(),
-      maxAdvanceDays: { ...(window.DEFAULT_MAX_ADVANCE_DAYS || {}) },
-      maxBookingsPerDay: window.DEFAULT_MAX_BOOKINGS_PER_DAY || 1
-    };
-  }
-
+function applyScheduleConfigToForm() {
   document.getElementById('cfgMaxAdvanceSocio').value = scheduleConfigState.maxAdvanceDays.socio || 7;
   document.getElementById('cfgMaxAdvanceFuncionario').value = scheduleConfigState.maxAdvanceDays.funcionario || 2;
   document.getElementById('cfgMaxAdvanceAdmin').value = scheduleConfigState.maxAdvanceDays.admin || 7;
   document.getElementById('cfgMaxBookingsPerDay').value = scheduleConfigState.maxBookingsPerDay || 1;
+  renderScheduleGrid();
+}
 
-  if (container) renderScheduleGrid();
+function defaultScheduleConfig() {
+  return {
+    courtSlots: cloneDefaultCourtSlots(),
+    maxAdvanceDays: { ...(window.DEFAULT_MAX_ADVANCE_DAYS || {}) },
+    maxBookingsPerDay: window.DEFAULT_MAX_BOOKINGS_PER_DAY || 1
+  };
+}
+
+// Igual que refreshRankingPage(): se muestra de inmediato con los valores por
+// defecto (sin esperar a la red) y, si hay algo distinto guardado en
+// Firestore, se actualiza en segundo plano. Así abrir la pestaña "Horarios"
+// no se siente lento aunque Firestore tarde o el documento no exista aún.
+function loadScheduleConfig() {
+  if (!scheduleConfigState) {
+    scheduleConfigState = defaultScheduleConfig();
+  }
+  applyScheduleConfigToForm();
+
+  if (!DB.isCloudConfigured()) return;
+
+  DB.getScheduleConfigCloud().then(saved => {
+    if (!saved) return;
+    scheduleConfigState = {
+      courtSlots: saved.courtSlots || cloneDefaultCourtSlots(),
+      maxAdvanceDays: { ...(window.DEFAULT_MAX_ADVANCE_DAYS || {}), ...(saved.maxAdvanceDays || {}) },
+      maxBookingsPerDay: Number(saved.maxBookingsPerDay) > 0 ? Number(saved.maxBookingsPerDay) : (window.DEFAULT_MAX_BOOKINGS_PER_DAY || 1)
+    };
+    applyScheduleConfigToForm();
+  }).catch(e => {
+    console.warn('No se pudo cargar la configuración de horarios guardada, se mantienen los valores por defecto:', e);
+  });
 }
 
 window.selectScheduleCourt = function(courtId) {
