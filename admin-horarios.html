@@ -357,6 +357,13 @@ async function saveSpecialDate() {
   // 2. Try to save to backend (Apps Script → Google Sheets)
   try {
     if (window.CONFIG && window.CONFIG.API_URL) {
+      let idToken = null;
+      try {
+        if (typeof firebaseAuth !== 'undefined' && firebaseAuth && firebaseAuth.currentUser) {
+          idToken = await firebaseAuth.currentUser.getIdToken();
+        }
+      } catch (tokenErr) { console.warn('No se pudo obtener idToken:', tokenErr); }
+
       const res = await fetch(window.CONFIG.API_URL, {
         method: 'POST',
         body: JSON.stringify({
@@ -365,7 +372,8 @@ async function saveSpecialDate() {
           courts: selectedCourts,
           type,
           desc,
-          adminEmail: session.email
+          adminEmail: session.email,
+          idToken
         })
       });
       const data = await res.json();

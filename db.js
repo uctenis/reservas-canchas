@@ -93,9 +93,7 @@ const DB_STATIC_ACCESS_PLAYERS = [
 function isAccessPlayerActive(player) {
   if (!player) return false;
   return player.activo !== false &&
-    player.activo !== 'false' &&
-    player.participaRanking !== false &&
-    player.participaRanking !== 'false';
+    player.activo !== 'false';
 }
 
 function cleanFirestoreData(data) {
@@ -373,6 +371,9 @@ const DB = {
       if (access.userType === 'admin') {
         return { ok: true, source: 'admin', isAdmin: true };
       }
+      if (access.userType === 'invitado') {
+        return { ok: true, source: 'uct_domain', userType: 'invitado', readOnly: true, isAdmin: false };
+      }
       return {
         ok: true,
         source: access.userType === 'socio' ? 'firebase' : 'staff',
@@ -404,7 +405,8 @@ const DB = {
   isProfileComplete(user) {
     if (!user) return false;
     if (user.isAdmin) return true; // El admin principal no requiere completar ranking
-    
+    if (user.userType === 'invitado') return true; // Acceso de solo lectura, no requiere ficha de jugador
+
     // Campos comunes requeridos para todos (Socio y Funcionario)
     if (!user.nombre || !user.email || !user.genero || !user.telefono || !user.rut) {
       return false;
@@ -459,6 +461,19 @@ const DB = {
       if (!validation.ok) {
         await firebaseAuth.signOut();
         return { ok: false, msg: validation.msg };
+      }
+
+      if (validation.userType === 'invitado') {
+        const guestUser = {
+          id: makeFirebaseDocId(user.email, 'guest'),
+          nombre: user.displayName || '',
+          email: user.email,
+          foto: user.photoURL || '',
+          userType: 'invitado',
+          readOnly: true
+        };
+        localStorage.setItem('uctenis_session', JSON.stringify(guestUser));
+        return { ok: true, user: guestUser, isNew: false, readOnly: true };
       }
 
       const localUsers = this.getUsers();
@@ -525,6 +540,19 @@ const DB = {
       return { ok: false, msg: validation.msg };
     }
 
+    if (validation.userType === 'invitado') {
+      const guestUser = {
+        id: makeFirebaseDocId(email, 'guest'),
+        nombre: nombre || email.split('@')[0],
+        email: email,
+        foto: '',
+        userType: 'invitado',
+        readOnly: true
+      };
+      localStorage.setItem('uctenis_session', JSON.stringify(guestUser));
+      return { ok: true, user: guestUser, isNew: false, readOnly: true };
+    }
+
     const localUsers = this.getUsers();
     let localUser = localUsers.find(u => u.email.toLowerCase() === email.toLowerCase());
 
@@ -560,6 +588,31 @@ const DB = {
   },
 
   completeGoogleRegistration(data) {
+    const users = this.getUsers();
+    const emailLower = String(data.email || '').trim().toLowerCase();
+    let user = users.find(u => String(u.email || '').trim().toLowerCase() === emailLower);
+
+    if (user) {
+      // Si el usuario ya existe en local (porque se creó al iniciar sesión con Google),
+      // actualizamos sus datos de perfil en lugar de intentar un nuevo registro que fallará por duplicado.
+      user.nombre = data.nombre;
+      user.genero = data.genero;
+      user.categoria = normalizeCategoryForDb(data.categoria);
+      user.mano = data.mano || 'Derecha';
+      user.reves = data.reves || 'Dos manos';
+      if (data.foto) user.foto = data.foto;
+      user.telefono = data.telefono || '';
+      user.rut = data.rut || '';
+      user.userType = data.userType || 'socio';
+      user.unidad = data.unidad || '';
+
+      const idx = users.findIndex(u => String(u.email || '').trim().toLowerCase() === emailLower);
+      users[idx] = user;
+      this.saveUsers(users);
+      localStorage.setItem('uctenis_session', JSON.stringify(user));
+      return { ok: true, user };
+    }
+
     const result = this.registerUser({
       nombre: data.nombre,
       email: data.email,
@@ -692,13 +745,15 @@ const DB = {
     const id = player.id || makeFirebaseDocId(player.nombre || player.email, 'player');
     const now = new Date().toISOString();
     const emailLower = normalizeEmailForDb(player.email);
-    const activeValue = player.activo ?? player.participaRanking;
+    const isActivo = player.activo !== undefined ? (player.activo !== false && player.activo !== 'false') : 
+                     (player.participaRanking !== undefined ? (player.participaRanking !== false && player.participaRanking !== 'false') : true);
+    const isParticipa = player.participaRanking !== undefined ? (player.participaRanking !== false && player.participaRanking !== 'false') : isActivo;
     const data = cleanFirestoreData({
       ...player,
       id,
       genero: player.genero || player.gender || '',
-      activo: activeValue === undefined ? true : activeValue !== false,
-      participaRanking: activeValue === undefined ? true : activeValue !== false,
+      activo: isActivo,
+      participaRanking: isParticipa,
       telefono: formatPhoneNumber(player.telefono),
       emailLower,
       updatedAt: now,
@@ -717,13 +772,15 @@ const DB = {
 
     players.forEach(player => {
       const id = player.id || makeFirebaseDocId(player.nombre || player.email, 'player');
-      const activeValue = player.activo ?? player.participaRanking;
+      const isActivo = player.activo !== undefined ? (player.activo !== false && player.activo !== 'false') : 
+                       (player.participaRanking !== undefined ? (player.participaRanking !== false && player.participaRanking !== 'false') : true);
+      const isParticipa = player.participaRanking !== undefined ? (player.participaRanking !== false && player.participaRanking !== 'false') : isActivo;
       const data = cleanFirestoreData({
         ...player,
         id,
         genero: player.genero || player.gender || '',
-        activo: activeValue === undefined ? true : activeValue !== false,
-        participaRanking: activeValue === undefined ? true : activeValue !== false,
+        activo: isActivo,
+        participaRanking: isParticipa,
         telefono: formatPhoneNumber(player.telefono),
         emailLower: normalizeEmailForDb(player.email),
         updatedAt: now,
@@ -819,6 +876,12 @@ const DB = {
     // 5. Respaldo: listas estáticas (socios)
     const staticPlayer = this.findStaticAccessPlayerByEmail(email);
     if (staticPlayer) return { allowed: true, userType: 'socio', profile: staticPlayer };
+
+    // 6. Cualquier correo institucional @uct.cl obtiene acceso de solo lectura
+    // aunque aún no esté cargado como socio/funcionario (debe activarlo un admin).
+    if (normalized.endsWith('@uct.cl')) {
+      return { allowed: true, userType: 'invitado', profile: null, readOnly: true };
+    }
 
     return { allowed: false, userType: null, profile: null };
   },
@@ -1350,6 +1413,10 @@ const DB = {
       }
     }
     if (!user) return { ok: false, msg: 'Usuario no encontrado' };
+
+    if (user.userType === 'invitado' || user.readOnly) {
+      return { ok: false, msg: 'Tu cuenta @uct.cl tiene acceso de solo lectura. Escribe a un administrador de UCTenis para activarte como socio o funcionario y poder reservar canchas.' };
+    }
 
     // Regla: Evitar reservar horario de clases (martes y miércoles de 18:00 a 19:30 en CJP)
     const [y, m, d] = fecha.split('-').map(Number);

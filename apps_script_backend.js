@@ -442,11 +442,10 @@ function notifyChallengeResponse(challenge, nuevoStatus) {
 // =======================================================
 
 function adminFreeSpecialSlots(data) {
-  const adminEmail = text(data.adminEmail);
   const fecha = text(data.fecha);
   const courts = data.courts;
 
-  if (!isAdminRequest({ adminEmail: adminEmail })) {
+  if (!isAdminRequest(data)) {
     return { ok: false, msg: 'Acceso reservado al administrador.' };
   }
   if (!fecha || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
@@ -1245,6 +1244,12 @@ function validateMember(email) {
     return { ok: false, msg: 'Error temporal al verificar acceso. Por favor intenta nuevamente en unos segundos.' };
   }
 
+  // 3. Cualquier correo institucional @uct.cl obtiene acceso de solo lectura,
+  // aunque aún no esté cargado como socio/funcionario (debe activarlo un admin).
+  if (needle.endsWith('@uct.cl') && needle !== '@uct.cl') {
+    return { ok: true, msg: 'Acceso de solo lectura (correo institucional).', source: 'uct_domain', readOnly: true };
+  }
+
   return { ok: false, msg: 'El correo no se encuentra registrado en Firebase.' };
 }
 
@@ -1485,7 +1490,7 @@ function firestoreBool(fields, name, fallback) {
 }
 
 function isFirebasePlayerActive(player) {
-  return player.activo !== false && player.participaRanking !== false;
+  return player.activo !== false;
 }
 
 // =======================================================
@@ -1608,6 +1613,10 @@ function createBooking(data) {
   if (!memberCheck.ok && !isFuncionario) return memberCheck;
   // Si es funcionario sin estar en Sheets, aceptamos igual (su validación
   // primaria ya ocurrió via Firebase en el cliente).
+
+  if (memberCheck.readOnly && !isFuncionario) {
+    return { ok: false, msg: 'Tu cuenta @uct.cl tiene acceso de solo lectura. Escribe a un administrador de UCTenis para activarte como socio o funcionario y poder reservar canchas.' };
+  }
 
   // ── Regla: Máximo 1 reserva por día ─────────────────────────────
   if (data.email && data.date) {
@@ -1808,6 +1817,7 @@ function updateOwnProfile(data) {
   const actorEmail = text(data.actorEmail || data.email);
   const validation = actorEmail ? validateMember(actorEmail) : { ok: false };
   if (!validation.ok) return { ok: false, msg: 'Debes ingresar con una cuenta validada para editar tu ficha.' };
+  if (validation.readOnly) return { ok: false, msg: 'Tu cuenta @uct.cl tiene acceso de solo lectura. Escribe a un administrador de UCTenis para activarte como socio o funcionario.' };
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
@@ -1986,7 +1996,7 @@ function playerFromRow(row, rowNumber) {
 function normalizePlayerPayload(data, existing) {
   const base = existing || {};
   const genero = normalizeGender(payloadField(data, ['genero','gender'], base.genero));
-  const activo = data.activo !== false && data.activo !== 'false' && data.participaRanking !== false && data.participaRanking !== 'false';
+  const activo = data.activo !== false && data.activo !== 'false';
   return {
     id: payloadField(data, ['id','codigo','uid'], base.id),
     nombre: payloadField(data, ['nombre','name','jugador'], base.nombre),
@@ -2175,13 +2185,45 @@ function normalizeCategory(value) {
   return norm(raw) === 'abierta' ? 'Principiante' : raw;
 }
 
+/**
+ * Verifica un ID token de Firebase Auth (Google Sign-In) contra el endpoint
+ * público de Identity Toolkit y devuelve el correo verificado por Google,
+ * o null si el token es inválido, expiró o no corresponde a este proyecto.
+ *
+ * Esto es necesario porque un `adminEmail`/`adminName` enviado directamente
+ * en el POST no prueba nada por sí solo: cualquiera que conozca la URL del
+ * Apps Script (visible en db.js) y un correo de administrador podría
+ * falsificarlo. El idToken sólo lo puede generar Firebase tras un login
+ * real de Google, y Google lo firma — por eso se verifica aquí en el server.
+ */
+function verifyGoogleIdToken(idToken) {
+  const token = text(idToken);
+  if (!token || !CONFIG.FIREBASE_API_KEY) return null;
+  try {
+    const url = 'https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=' + encodeURIComponent(CONFIG.FIREBASE_API_KEY);
+    const response = UrlFetchApp.fetch(url, {
+      method: 'post',
+      contentType: 'application/json',
+      payload: JSON.stringify({ idToken: token }),
+      muteHttpExceptions: true
+    });
+    if (response.getResponseCode() !== 200) return null;
+    const body = JSON.parse(response.getContentText());
+    const account = body.users && body.users[0];
+    if (!account || !account.email) return null;
+    return text(account.email).toLowerCase();
+  } catch (error) {
+    console.warn('Error verificando idToken de Google:', error.message);
+    return null;
+  }
+}
+
 function isAdminRequest(data) {
+  const verifiedEmail = verifyGoogleIdToken(data && data.idToken);
+  if (!verifiedEmail) return false;
   if (CONFIG.ADMIN_PIN && text(data.adminPin || data.pin) !== text(CONFIG.ADMIN_PIN)) return false;
   const emails = (CONFIG.ADMINS.emails || []).map(email => text(email).toLowerCase()).filter(Boolean);
-  const names = (CONFIG.ADMINS.names || []).map(name => norm(name)).filter(Boolean);
-  const email = text(data.adminEmail || data.actorEmail || data.email).toLowerCase();
-  const name = norm(data.adminName || data.adminNombre || data.actorName || data.actorNombre || data.nombre);
-  return Boolean((email && emails.indexOf(email) >= 0) || (name && names.indexOf(name) >= 0));
+  return emails.indexOf(verifiedEmail) >= 0;
 }
 
 // =======================================================
@@ -3023,8 +3065,7 @@ function firebasePatchStaff(docId, patch) {
 
 /** Verifica que la petición venga de un admin válido */
 function checkAdminAccess(data) {
-  const adminEmail = text(data.adminEmail || data.email || '');
-  const adminEmails = CONFIG.ADMINS.emails || [];
-  if (!adminEmail) return false;
-  return adminEmails.some(e => e.toLowerCase() === adminEmail.toLowerCase());
+  // Reutiliza la misma verificación de idToken que isAdminRequest: el correo
+  // debe venir confirmado por Google, no simplemente declarado por el cliente.
+  return isAdminRequest(data);
 }

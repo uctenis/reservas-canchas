@@ -1056,7 +1056,7 @@ async function loadFriendlyOpponents() {
     const sortedPlayers = allPlayers
       .filter(p => {
         const isMe = (p.email && p.email.toLowerCase() === meEmail) || (p.nombre && p.nombre.toLowerCase() === meNombre) || p.id === session.id;
-        const isActive = p.activo !== false && p.participaRanking !== false;
+        const isActive = p.activo !== false;
         return !isMe && isActive;
       })
       .sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '', 'es'));
@@ -1162,11 +1162,11 @@ async function loadChallengeablePlayers() {
 
     const myGender = meRaw.genero || meRaw.gender || 'M';
 
-    // Obtener los jugadores activos del mismo género
+    // Obtener los jugadores activos del mismo género que participan en el ranking
     let genderPlayers = allPlayers.filter(p => {
       const g = p.genero || p.gender || 'M';
-      const active = p.activo ?? p.participaRanking;
-      return g === myGender && (active === undefined || active !== false);
+      const active = p.activo !== false && p.participaRanking !== false;
+      return g === myGender && active;
     });
 
     // Ordenar jugadores por posicion (pos o posicion)
@@ -1763,9 +1763,17 @@ function renderUserBar() {
       <span>${s.nombre.split(' ')[0]}</span>
       <button onclick="doLogout()">Salir</button>
     </div>`;
-    document.getElementById('myBookingsSection').style.display = 'block';
+    document.getElementById('myBookingsSection').style.display = s.userType === 'invitado' ? 'none' : 'block';
     if (s.userType === 'funcionario') {
-      if (banner) banner.style.display = 'block';
+      if (banner) {
+        banner.innerHTML = '🏛️ <strong>Modo Funcionario UCT Activo:</strong> Solo puedes reservar canchas con un máximo de 48 horas de anticipación.';
+        banner.style.display = 'block';
+      }
+    } else if (s.userType === 'invitado') {
+      if (banner) {
+        banner.innerHTML = '👀 <strong>Acceso de solo lectura:</strong> tu correo @uct.cl fue verificado, pero aún no puedes reservar canchas. Escribe a un administrador de UCTenis para activar tu cuenta como socio.';
+        banner.style.display = 'block';
+      }
     } else {
       if (banner) banner.style.display = 'none';
     }
