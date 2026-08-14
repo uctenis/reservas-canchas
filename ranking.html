@@ -10,7 +10,7 @@
   <meta property="og:image" content="https://uctenis.github.io/reservas-canchas/logo_uctenis_v03.png">
   <link rel="icon" href="logo_uctenis_v03.png" type="image/png">
   <link rel="stylesheet" href="style.css?v=20260813_v1">
-  <link rel="stylesheet" href="ranking.css?v=20260813_v2">
+  <link rel="stylesheet" href="ranking.css?v=20260813_v3">
 </head>
 <body>
 <div class="main-container ranking-page">
@@ -626,138 +626,169 @@
     </div> <!-- Cierre de #adminNewsSection -->
 
     <!-- Sección de Horarios/Fechas Especiales -->
-    <div id="adminSchedulesSection" class="hidden" style="padding: 0 20px 20px 20px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 12px; gap: 12px; flex-wrap: wrap;">
-          <div>
-            <p class="modal-kicker">Administrador</p>
-            <h3 style="margin: 0; font-size: 1.28rem;">Administración de Horarios</h3>
-          </div>
+    <div id="adminSchedulesSection" class="hidden schedule-layout" style="padding: 0 20px 20px 20px;">
+        <div class="schedule-header">
+          <p class="modal-kicker">Administrador</p>
+          <h3 style="margin: 0; font-size: 1.28rem;">Administración de Horarios</h3>
         </div>
-        
-        <!-- Crear Fecha Especial -->
-        <div class="admin-section" style="margin-bottom: 20px;">
-          <p style="color:var(--text-secondary);font-size:0.85rem;margin-bottom:18px">
-            Una "fecha especial" permite habilitar todos los horarios en canchas específicas para un día puntual (ej. torneo, feriado donde se habilita todo el día), o cerrarlas.
-          </p>
 
-          <div id="adminScheduleAlert" class="alert-box" style="display:none; padding: 12px; border-radius: 8px; font-size: 0.85rem; margin-bottom: 15px;"></div>
-
-          <div class="form-row" style="display:flex; gap: 15px; margin-bottom: 15px;">
-            <div class="form-group" style="flex:1;">
-              <label for="adminSpecialDate" style="display:block; margin-bottom:6px; font-size:0.85rem; color:rgba(255,255,255,0.7);">📅 Fecha especial</label>
-              <input type="date" id="adminSpecialDate" style="width:100%; padding:10px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:#fff; outline:none;">
-            </div>
-            <div class="form-group" style="flex:1;">
-              <label for="adminSpecialDesc" style="display:block; margin-bottom:6px; font-size:0.85rem; color:rgba(255,255,255,0.7);">📝 Descripción (opcional)</label>
-              <input type="text" id="adminSpecialDesc" placeholder="Ej: Torneo anual" style="width:100%; padding:10px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:#fff; outline:none;">
-            </div>
-          </div>
-
-          <p style="font-size:0.82rem;color:rgba(255,255,255,0.7);margin-bottom:10px;font-weight:600;">🎾 Canchas que aplica</p>
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 18px;">
-            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.85rem;">
-              <input type="checkbox" id="admin_court_cec1" value="cec1" checked> CEC 1 (Arcilla)
-            </label>
-            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.85rem;">
-              <input type="checkbox" id="admin_court_cec2" value="cec2" checked> CEC 2 (Arcilla)
-            </label>
-            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.85rem;">
-              <input type="checkbox" id="admin_court_cjp1" value="cjp1" checked> CJP 1 (Asfalto)
-            </label>
-            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.85rem;">
-              <input type="checkbox" id="admin_court_cjp2" value="cjp2" checked> CJP 2 (Asfalto)
-            </label>
-          </div>
-
-          <p style="font-size:0.82rem;color:rgba(255,255,255,0.7);margin-bottom:10px;font-weight:600;">⏰ Acción</p>
-          <div style="display: flex; gap: 10px; margin-bottom: 18px;">
-            <label style="flex:1; cursor: pointer;">
-              <input type="radio" name="adminSpecialType" value="all_day" checked style="display:none;" id="typeAllDay">
-              <div id="cardAllDay" class="type-card active" style="display:flex; flex-direction:column; align-items:center; padding:10px; border:1px solid var(--accent-tennis); border-radius:10px; background:rgba(198,211,0,0.08); text-align:center; transition: all 0.2s;" onclick="selectAdminSpecialType('all_day')">
-                <span style="font-size:1.4rem;">🌅</span>
-                <strong style="font-size:0.85rem; display:block; margin:4px 0 2px;">Todos los horarios</strong>
-                <span style="color:var(--text-secondary);font-size:0.7rem;">Habilita 09:00–21:00</span>
-              </div>
-            </label>
-            <label style="flex:1; cursor: pointer;">
-              <input type="radio" name="adminSpecialType" value="closed" style="display:none;" id="typeClosed">
-              <div id="cardClosed" class="type-card" style="display:flex; flex-direction:column; align-items:center; padding:10px; border:1px solid rgba(255,255,255,0.1); border-radius:10px; background:rgba(255,255,255,0.03); text-align:center; transition: all 0.2s;" onclick="selectAdminSpecialType('closed')">
-                <span style="font-size:1.4rem;">🚫</span>
-                <strong style="font-size:0.85rem; display:block; margin:4px 0 2px;">Cerrar canchas</strong>
-                <span style="color:var(--text-secondary);font-size:0.7rem;">Sin disponibilidad ese día</span>
-              </div>
-            </label>
-          </div>
-
-          <div style="display:flex;justify-content:flex-end;">
-            <button class="btn-primary" id="btnAdminSaveSchedule" type="button" onclick="saveAdminSpecialDate(event)" style="padding: 10px 20px; font-size:0.85rem;">
-              💾 Guardar Fecha Especial
+        <div class="schedule-body">
+          <!-- Navegación lateral -->
+          <nav class="schedule-sidebar">
+            <button type="button" class="schedule-nav-item active" data-schedule-section="special" onclick="switchScheduleSection('special')">
+              <span class="schedule-nav-icon">📅</span>
+              <span class="schedule-nav-text"><strong>Fechas Especiales</strong><small>Abrir o cerrar canchas por día o período</small></span>
             </button>
-          </div>
-        </div>
-
-        <!-- Lista de Fechas Especiales -->
-        <div class="admin-section">
-          <h4 style="margin:0 0 10px; font-size:1rem;">📋 Fechas Especiales Guardadas</h4>
-          <div id="adminSpecialDatesList" style="max-height: 250px; overflow-y: auto; padding-right: 4px;">
-            <p style="color:var(--text-secondary);font-size:0.85rem;text-align:center;padding:15px">Cargando...</p>
-          </div>
-        </div>
-
-        <!-- Horarios Regulares por Cancha -->
-        <div class="admin-section" style="margin-top: 20px;">
-          <h4 style="margin:0 0 6px; font-size:1rem;">🕒 Horarios Regulares por Cancha</h4>
-          <p style="color:var(--text-secondary);font-size:0.85rem;margin-bottom:16px;">
-            Define qué horarios están disponibles para reservar en cada cancha, según el día de la semana. Los cambios aplican a las reservas normales (las fechas especiales de arriba siguen mandando sobre esto para un día puntual).
-          </p>
-
-          <div id="scheduleConfigAlert" class="alert-box" style="display:none; padding: 12px; border-radius: 8px; font-size: 0.85rem; margin-bottom: 15px;"></div>
-
-          <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:16px;" id="scheduleCourtTabs">
-            <button type="button" class="admin-tab-btn active" data-court="cec1" onclick="selectScheduleCourt('cec1')" style="padding:8px 14px;font-size:0.82rem;">CEC 1 (Arcilla)</button>
-            <button type="button" class="admin-tab-btn" data-court="cec2" onclick="selectScheduleCourt('cec2')" style="padding:8px 14px;font-size:0.82rem;">CEC 2 (Arcilla)</button>
-            <button type="button" class="admin-tab-btn" data-court="cjp1" onclick="selectScheduleCourt('cjp1')" style="padding:8px 14px;font-size:0.82rem;">CJP 1 (Asfalto)</button>
-            <button type="button" class="admin-tab-btn" data-court="cjp2" onclick="selectScheduleCourt('cjp2')" style="padding:8px 14px;font-size:0.82rem;">CJP 2 (Asfalto)</button>
-          </div>
-
-          <div id="scheduleGridContainer" style="overflow-x:auto; padding-bottom:6px;">
-            <p style="color:var(--text-secondary);font-size:0.85rem;text-align:center;padding:15px">Cargando horarios...</p>
-          </div>
-
-          <div style="display:flex;justify-content:flex-end;margin-top:10px;">
-            <button class="btn-secondary" type="button" onclick="resetScheduleCourtToDefault()" style="padding: 7px 14px; font-size:0.78rem;">↺ Restablecer esta cancha</button>
-          </div>
-        </div>
-
-        <!-- Parámetros de Reserva -->
-        <div class="admin-section" style="margin-top: 20px;">
-          <h4 style="margin:0 0 6px; font-size:1rem;">⚙️ Parámetros de Reserva</h4>
-          <p style="color:var(--text-secondary);font-size:0.85rem;margin-bottom:16px;">
-            Controla con cuánta anticipación puede reservar cada tipo de usuario y cuántas reservas puede tener por día.
-          </p>
-          <div class="form-row" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:15px; margin-bottom:18px;">
-            <div class="form-group">
-              <label style="display:block; margin-bottom:6px; font-size:0.85rem; color:rgba(255,255,255,0.7);">Anticipación Socios (días)</label>
-              <input type="number" id="cfgMaxAdvanceSocio" min="1" max="60" style="width:100%; padding:10px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:#fff; outline:none;">
-            </div>
-            <div class="form-group">
-              <label style="display:block; margin-bottom:6px; font-size:0.85rem; color:rgba(255,255,255,0.7);">Anticipación Funcionarios (días)</label>
-              <input type="number" id="cfgMaxAdvanceFuncionario" min="1" max="60" style="width:100%; padding:10px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:#fff; outline:none;">
-            </div>
-            <div class="form-group">
-              <label style="display:block; margin-bottom:6px; font-size:0.85rem; color:rgba(255,255,255,0.7);">Anticipación Admins (días)</label>
-              <input type="number" id="cfgMaxAdvanceAdmin" min="1" max="60" style="width:100%; padding:10px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:#fff; outline:none;">
-            </div>
-            <div class="form-group">
-              <label style="display:block; margin-bottom:6px; font-size:0.85rem; color:rgba(255,255,255,0.7);">Máx. reservas por día</label>
-              <input type="number" id="cfgMaxBookingsPerDay" min="1" max="10" style="width:100%; padding:10px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:#fff; outline:none;">
-            </div>
-          </div>
-
-          <div style="display:flex;justify-content:flex-end;">
-            <button class="btn-primary" id="btnSaveScheduleConfig" type="button" onclick="saveScheduleConfigAll(event)" style="padding: 10px 20px; font-size:0.85rem;">
-              💾 Guardar Horarios y Parámetros
+            <button type="button" class="schedule-nav-item" data-schedule-section="regular" onclick="switchScheduleSection('regular')">
+              <span class="schedule-nav-icon">🕒</span>
+              <span class="schedule-nav-text"><strong>Horarios Regulares</strong><small>Slots disponibles por cancha y día</small></span>
             </button>
+            <button type="button" class="schedule-nav-item" data-schedule-section="params" onclick="switchScheduleSection('params')">
+              <span class="schedule-nav-icon">⚙️</span>
+              <span class="schedule-nav-text"><strong>Parámetros de Reserva</strong><small>Anticipación y límite diario</small></span>
+            </button>
+          </nav>
+
+          <!-- Contenido -->
+          <div class="schedule-content">
+
+            <!-- ═══ FECHAS ESPECIALES ═══ -->
+            <div id="scheduleSectionSpecial" class="schedule-panel">
+              <p class="schedule-panel-desc">
+                Habilita todos los horarios o cierra por completo una o más canchas, para un día puntual o un período de varios días (mantenimiento, torneo, feriado).
+              </p>
+
+              <div id="adminScheduleAlert" class="alert-box" style="display:none; padding: 12px; border-radius: 8px; font-size: 0.85rem; margin-bottom: 15px;"></div>
+
+              <div class="segmented-control" id="specialDateModeToggle">
+                <button type="button" class="segmented-btn active" data-mode="single" onclick="setSpecialDateMode('single')">📅 Fecha única</button>
+                <button type="button" class="segmented-btn" data-mode="range" onclick="setSpecialDateMode('range')">🗓️ Rango de fechas</button>
+              </div>
+
+              <div class="form-row" style="display:flex; gap: 15px; margin-bottom: 15px; flex-wrap: wrap;">
+                <div class="form-group" id="specialDateSingleGroup" style="flex:1; min-width:160px;">
+                  <label for="adminSpecialDate" style="display:block; margin-bottom:6px; font-size:0.85rem; color:rgba(255,255,255,0.7);">📅 Fecha</label>
+                  <input type="date" id="adminSpecialDate" style="width:100%; padding:10px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:#fff; outline:none;">
+                </div>
+                <div class="form-group" id="specialDateStartGroup" style="flex:1; min-width:140px; display:none;">
+                  <label for="adminSpecialDateStart" style="display:block; margin-bottom:6px; font-size:0.85rem; color:rgba(255,255,255,0.7);">📅 Desde</label>
+                  <input type="date" id="adminSpecialDateStart" style="width:100%; padding:10px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:#fff; outline:none;">
+                </div>
+                <div class="form-group" id="specialDateEndGroup" style="flex:1; min-width:140px; display:none;">
+                  <label for="adminSpecialDateEnd" style="display:block; margin-bottom:6px; font-size:0.85rem; color:rgba(255,255,255,0.7);">📅 Hasta</label>
+                  <input type="date" id="adminSpecialDateEnd" style="width:100%; padding:10px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:#fff; outline:none;">
+                </div>
+                <div class="form-group" style="flex:1; min-width:160px;">
+                  <label for="adminSpecialDesc" style="display:block; margin-bottom:6px; font-size:0.85rem; color:rgba(255,255,255,0.7);">📝 Descripción (opcional)</label>
+                  <input type="text" id="adminSpecialDesc" placeholder="Ej: Torneo anual" style="width:100%; padding:10px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:#fff; outline:none;">
+                </div>
+              </div>
+
+              <p style="font-size:0.82rem;color:rgba(255,255,255,0.7);margin-bottom:10px;font-weight:600;">🎾 Canchas que aplica</p>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 18px;">
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.85rem;">
+                  <input type="checkbox" id="admin_court_cec1" value="cec1" checked> CEC 1 (Arcilla)
+                </label>
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.85rem;">
+                  <input type="checkbox" id="admin_court_cec2" value="cec2" checked> CEC 2 (Arcilla)
+                </label>
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.85rem;">
+                  <input type="checkbox" id="admin_court_cjp1" value="cjp1" checked> CJP 1 (Asfalto)
+                </label>
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.85rem;">
+                  <input type="checkbox" id="admin_court_cjp2" value="cjp2" checked> CJP 2 (Asfalto)
+                </label>
+              </div>
+
+              <p style="font-size:0.82rem;color:rgba(255,255,255,0.7);margin-bottom:10px;font-weight:600;">⏰ Acción</p>
+              <div style="display: flex; gap: 10px; margin-bottom: 18px;">
+                <label style="flex:1; cursor: pointer;">
+                  <input type="radio" name="adminSpecialType" value="all_day" checked style="display:none;" id="typeAllDay">
+                  <div id="cardAllDay" class="type-card active" style="display:flex; flex-direction:column; align-items:center; padding:10px; border:1px solid var(--accent-tennis); border-radius:10px; background:rgba(198,211,0,0.08); text-align:center; transition: all 0.2s;" onclick="selectAdminSpecialType('all_day')">
+                    <span style="font-size:1.4rem;">🌅</span>
+                    <strong style="font-size:0.85rem; display:block; margin:4px 0 2px;">Todos los horarios</strong>
+                    <span style="color:var(--text-secondary);font-size:0.7rem;">Habilita 09:00–21:00</span>
+                  </div>
+                </label>
+                <label style="flex:1; cursor: pointer;">
+                  <input type="radio" name="adminSpecialType" value="closed" style="display:none;" id="typeClosed">
+                  <div id="cardClosed" class="type-card" style="display:flex; flex-direction:column; align-items:center; padding:10px; border:1px solid rgba(255,255,255,0.1); border-radius:10px; background:rgba(255,255,255,0.03); text-align:center; transition: all 0.2s;" onclick="selectAdminSpecialType('closed')">
+                    <span style="font-size:1.4rem;">🚫</span>
+                    <strong style="font-size:0.85rem; display:block; margin:4px 0 2px;">Cerrar canchas</strong>
+                    <span style="color:var(--text-secondary);font-size:0.7rem;">Sin disponibilidad ese período</span>
+                  </div>
+                </label>
+              </div>
+
+              <div style="display:flex;justify-content:flex-end;">
+                <button class="btn-primary" id="btnAdminSaveSchedule" type="button" onclick="saveAdminSpecialDate(event)" style="padding: 10px 20px; font-size:0.85rem;">
+                  💾 Guardar
+                </button>
+              </div>
+
+              <div class="schedule-search">
+                <input type="search" id="specialDatesSearch" placeholder="Buscar por cancha, descripción o fecha..." oninput="debouncedFilterSpecialDates()">
+              </div>
+              <div id="adminSpecialDatesList" class="period-list">
+                <p style="color:var(--text-secondary);font-size:0.85rem;text-align:center;padding:15px">Cargando...</p>
+              </div>
+            </div>
+
+            <!-- ═══ HORARIOS REGULARES ═══ -->
+            <div id="scheduleSectionRegular" class="schedule-panel hidden">
+              <p class="schedule-panel-desc">
+                Define qué horarios están disponibles para reservar en cada cancha, según el día de la semana. Los cambios aplican a las reservas normales (las fechas especiales siguen mandando sobre esto para un día o período puntual).
+              </p>
+
+              <div id="scheduleConfigAlert" class="alert-box" style="display:none; padding: 12px; border-radius: 8px; font-size: 0.85rem; margin-bottom: 15px;"></div>
+
+              <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:16px;" id="scheduleCourtTabs">
+                <button type="button" class="admin-tab-btn active" data-court="cec1" onclick="selectScheduleCourt('cec1')" style="padding:8px 14px;font-size:0.82rem;">CEC 1 (Arcilla)</button>
+                <button type="button" class="admin-tab-btn" data-court="cec2" onclick="selectScheduleCourt('cec2')" style="padding:8px 14px;font-size:0.82rem;">CEC 2 (Arcilla)</button>
+                <button type="button" class="admin-tab-btn" data-court="cjp1" onclick="selectScheduleCourt('cjp1')" style="padding:8px 14px;font-size:0.82rem;">CJP 1 (Asfalto)</button>
+                <button type="button" class="admin-tab-btn" data-court="cjp2" onclick="selectScheduleCourt('cjp2')" style="padding:8px 14px;font-size:0.82rem;">CJP 2 (Asfalto)</button>
+              </div>
+
+              <div id="scheduleGridContainer" style="overflow-x:auto; padding-bottom:6px;">
+                <p style="color:var(--text-secondary);font-size:0.85rem;text-align:center;padding:15px">Cargando horarios...</p>
+              </div>
+
+              <div style="display:flex;justify-content:flex-end;margin-top:10px;">
+                <button class="btn-secondary" type="button" onclick="resetScheduleCourtToDefault()" style="padding: 7px 14px; font-size:0.78rem;">↺ Restablecer esta cancha</button>
+              </div>
+            </div>
+
+            <!-- ═══ PARÁMETROS DE RESERVA ═══ -->
+            <div id="scheduleSectionParams" class="schedule-panel hidden">
+              <p class="schedule-panel-desc">
+                Controla con cuánta anticipación puede reservar cada tipo de usuario y cuántas reservas puede tener por día.
+              </p>
+              <div class="form-row" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:15px; margin-bottom:18px;">
+                <div class="form-group">
+                  <label style="display:block; margin-bottom:6px; font-size:0.85rem; color:rgba(255,255,255,0.7);">Anticipación Socios (días)</label>
+                  <input type="number" id="cfgMaxAdvanceSocio" min="1" max="60" style="width:100%; padding:10px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:#fff; outline:none;">
+                </div>
+                <div class="form-group">
+                  <label style="display:block; margin-bottom:6px; font-size:0.85rem; color:rgba(255,255,255,0.7);">Anticipación Funcionarios (días)</label>
+                  <input type="number" id="cfgMaxAdvanceFuncionario" min="1" max="60" style="width:100%; padding:10px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:#fff; outline:none;">
+                </div>
+                <div class="form-group">
+                  <label style="display:block; margin-bottom:6px; font-size:0.85rem; color:rgba(255,255,255,0.7);">Anticipación Admins (días)</label>
+                  <input type="number" id="cfgMaxAdvanceAdmin" min="1" max="60" style="width:100%; padding:10px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:#fff; outline:none;">
+                </div>
+                <div class="form-group">
+                  <label style="display:block; margin-bottom:6px; font-size:0.85rem; color:rgba(255,255,255,0.7);">Máx. reservas por día</label>
+                  <input type="number" id="cfgMaxBookingsPerDay" min="1" max="10" style="width:100%; padding:10px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:#fff; outline:none;">
+                </div>
+              </div>
+
+              <div style="display:flex;justify-content:flex-end;">
+                <button class="btn-primary" id="btnSaveScheduleConfig" type="button" onclick="saveScheduleConfigAll(event)" style="padding: 10px 20px; font-size:0.85rem;">
+                  💾 Guardar Horarios y Parámetros
+                </button>
+              </div>
+            </div>
+
           </div>
         </div>
       </div>
@@ -6673,7 +6704,7 @@ window.switchAdminSubSection = function(section) {
   if (section === 'news') {
     renderAdminNewsList();
   } else if (section === 'schedules') {
-    renderAdminSpecialDatesList();
+    loadSpecialDatesList();
     loadScheduleConfig();
   }
 }
@@ -7228,16 +7259,6 @@ window.deleteNewsFromAdminClick = async function(event) {
 }
 
 // ──────────────── GESTIÓN DE HORARIOS ADMIN LOGIC ────────────────
-const SPECIAL_DATES_KEY = 'uctenis_special_dates';
-
-function getSpecialDates() {
-  return JSON.parse(localStorage.getItem(SPECIAL_DATES_KEY) || '[]');
-}
-
-function saveSpecialDates(list) {
-  localStorage.setItem(SPECIAL_DATES_KEY, JSON.stringify(list));
-}
-
 function showAdminScheduleAlert(msg, type = 'success') {
   const box = document.getElementById('adminScheduleAlert');
   if (!box) return;
@@ -7262,18 +7283,47 @@ window.selectAdminSpecialType = function(type) {
   document.getElementById('cardClosed').classList.toggle('active', type === 'closed');
 }
 
+// ── Navegación lateral de la pestaña Horarios ──
+window.switchScheduleSection = function(section) {
+  document.querySelectorAll('.schedule-nav-item').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.scheduleSection === section);
+  });
+  ['special', 'regular', 'params'].forEach(key => {
+    const panel = document.getElementById('scheduleSection' + key.charAt(0).toUpperCase() + key.slice(1));
+    if (panel) panel.classList.toggle('hidden', key !== section);
+  });
+};
+
+// ── Fecha única vs rango de fechas ──
+window.setSpecialDateMode = function(mode) {
+  document.querySelectorAll('#specialDateModeToggle .segmented-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.mode === mode);
+  });
+  document.getElementById('specialDateSingleGroup').style.display = mode === 'single' ? '' : 'none';
+  document.getElementById('specialDateStartGroup').style.display = mode === 'range' ? '' : 'none';
+  document.getElementById('specialDateEndGroup').style.display = mode === 'range' ? '' : 'none';
+};
+
 window.saveAdminSpecialDate = async function(event) {
   if (event) event.preventDefault();
-  
+
+  const isRange = document.querySelector('#specialDateModeToggle .segmented-btn.active')?.dataset.mode === 'range';
   const fecha = document.getElementById('adminSpecialDate').value;
-  if (!fecha) { showAdminScheduleAlert('Selecciona una fecha.', 'error'); return; }
+  const fechaInicio = document.getElementById('adminSpecialDateStart').value;
+  const fechaFin = document.getElementById('adminSpecialDateEnd').value;
+
+  if (isRange) {
+    if (!fechaInicio || !fechaFin) { showAdminScheduleAlert('Selecciona la fecha de inicio y de término del período.', 'error'); return; }
+    if (fechaFin < fechaInicio) { showAdminScheduleAlert('La fecha de término no puede ser anterior a la de inicio.', 'error'); return; }
+  } else if (!fecha) {
+    showAdminScheduleAlert('Selecciona una fecha.', 'error'); return;
+  }
 
   const selectedCourts = [];
   ['cec1', 'cec2', 'cjp1', 'cjp2'].forEach(id => {
     const cb = document.getElementById(`admin_court_${id}`);
     if (cb && cb.checked) selectedCourts.push(id);
   });
-  
   if (!selectedCourts.length) { showAdminScheduleAlert('Selecciona al menos una cancha.', 'error'); return; }
 
   const type = document.getElementById('typeAllDay').checked ? 'all_day' : 'closed';
@@ -7284,65 +7334,52 @@ window.saveAdminSpecialDate = async function(event) {
   btn.disabled = true;
   btn.textContent = 'Guardando...';
 
-  // 1. Guardar localmente (cache rápida para esta lista en este navegador)
-  const list = getSpecialDates().filter(item => !(item.fecha === fecha && selectedCourts.includes(item.courtId)));
-  selectedCourts.forEach(courtId => {
-    list.push({ fecha, courtId, type, desc, savedAt: new Date().toISOString() });
-  });
-  saveSpecialDates(list);
-
-  // 2. Persistir en el backend (Google Sheet horarios_especiales): sin esto,
-  // la fecha especial solo se ve en el navegador de quien la creó y nunca
-  // afecta la disponibilidad real que ven los demás usuarios al reservar.
   try {
-    if (window.CONFIG?.API_URL) {
-      const idToken = await DB.getIdToken();
-      const res = await fetch(window.CONFIG.API_URL, {
-        method: 'POST',
-        body: JSON.stringify({
-          action: 'admin_free_special_slots',
-          fecha, courts: selectedCourts, type, desc,
-          adminEmail: session?.email || '',
-          idToken
-        })
-      });
-      const data = await res.json();
-      if (!data.ok) throw new Error(data.msg || 'Error en el servidor');
-      showAdminScheduleAlert(`✅ Fecha especial guardada para ${selectedCourts.length} cancha(s) el ${fecha}.`);
-    } else {
-      showAdminScheduleAlert(`✅ Guardado localmente (sin conexión al servidor configurada).`, 'warn');
-    }
-  } catch (e) {
-    console.warn('No se pudo sincronizar la fecha especial con el servidor:', e);
-    showAdminScheduleAlert(`⚠️ Guardado localmente, pero no se pudo sincronizar con el servidor: ${e.message}`, 'warn');
-  }
+    if (!window.CONFIG?.API_URL) throw new Error('No hay conexión al servidor configurada.');
+    const idToken = await DB.getIdToken();
+    const payload = {
+      action: 'admin_free_special_slots',
+      courts: selectedCourts, type, desc,
+      adminEmail: session?.email || '',
+      idToken
+    };
+    if (isRange) { payload.fechaInicio = fechaInicio; payload.fechaFin = fechaFin; }
+    else { payload.fecha = fecha; }
 
-  btn.disabled = false;
-  btn.textContent = '💾 Guardar Fecha Especial';
-  document.getElementById('adminSpecialDesc').value = '';
-  renderAdminSpecialDatesList();
+    const res = await fetch(window.CONFIG.API_URL, { method: 'POST', body: JSON.stringify(payload) });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.msg || 'Error en el servidor');
+
+    const rango = isRange ? `del ${fechaInicio} al ${fechaFin}` : `el ${fecha}`;
+    showAdminScheduleAlert(`✅ Guardado para ${selectedCourts.length} cancha(s), ${rango}.`);
+    document.getElementById('adminSpecialDesc').value = '';
+    loadSpecialDatesList();
+  } catch (e) {
+    console.warn('No se pudo guardar la fecha especial:', e);
+    showAdminScheduleAlert(`⚠️ No se pudo guardar: ${e.message}`, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '💾 Guardar';
+  }
 }
 
-window.deleteAdminSpecialDate = async function(fecha, courtId) {
-  if (!confirm(`¿Eliminar fecha especial para ${courtId} el ${fecha}?`)) return;
-  const list = getSpecialDates().filter(item => !(item.fecha === fecha && item.courtId === courtId));
-  saveSpecialDates(list);
-  renderAdminSpecialDatesList();
-
+window.deleteSpecialPeriod = async function(groupId, label) {
+  if (!confirm(`¿Eliminar "${label}"?`)) return;
   try {
-    if (window.CONFIG?.API_URL) {
-      const idToken = await DB.getIdToken();
-      const session = DB.getSession();
-      const res = await fetch(window.CONFIG.API_URL, {
-        method: 'POST',
-        body: JSON.stringify({ action: 'admin_remove_special_slots', fecha, courtId, adminEmail: session?.email || '', idToken })
-      });
-      const data = await res.json();
-      if (!data.ok) throw new Error(data.msg || 'Error en el servidor');
-    }
-  } catch (e) { console.warn('No se pudo eliminar la fecha especial en el servidor:', e); }
-
-  showAdminScheduleAlert(`Fecha especial eliminada.`);
+    const idToken = await DB.getIdToken();
+    const session = DB.getSession();
+    const res = await fetch(window.CONFIG.API_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'admin_remove_special_slots', groupId, adminEmail: session?.email || '', idToken })
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.msg || 'Error en el servidor');
+    showAdminScheduleAlert('Período eliminado.');
+  } catch (e) {
+    console.warn('No se pudo eliminar el período:', e);
+    showAdminScheduleAlert(`⚠️ No se pudo eliminar: ${e.message}`, 'error');
+  }
+  loadSpecialDatesList();
 }
 
 // ──────────────── HORARIOS REGULARES Y PARÁMETROS DE RESERVA ────────────────
@@ -7491,43 +7528,94 @@ window.saveScheduleConfigAll = async function(event) {
   }
 };
 
-window.renderAdminSpecialDatesList = function() {
-  const list = getSpecialDates().sort((a, b) => a.fecha.localeCompare(b.fecha));
+const SPECIAL_PERIOD_COURTS_MAP = {
+  cec1: 'CEC 1 (Arcilla)', cec2: 'CEC 2 (Arcilla)', cjp1: 'CJP 1 (Asfalto)', cjp2: 'CJP 2 (Asfalto)'
+};
+const SPECIAL_PERIOD_TYPE_LABELS = { all_day: '🌅 Todos los horarios', closed: '🚫 Cerrado' };
+let specialPeriodsCache = [];
+
+function formatPeriodDateShort(fecha) {
+  const months = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  const parts = String(fecha || '').split('-');
+  if (parts.length < 3) return fecha || '';
+  return `${parseInt(parts[2], 10)} ${months[parseInt(parts[1], 10) - 1]} ${parts[0]}`;
+}
+
+function periodDateLabel(period) {
+  return period.fechaInicio === period.fechaFin
+    ? formatPeriodDateShort(period.fechaInicio)
+    : `${formatPeriodDateShort(period.fechaInicio)} → ${formatPeriodDateShort(period.fechaFin)}`;
+}
+
+// Se muestra el estado anterior de inmediato (si lo hay) mientras se pide la
+// lista fresca al backend en segundo plano, para no bloquear la pestaña.
+async function loadSpecialDatesList() {
+  renderFilteredSpecialDates();
+  const container = document.getElementById('adminSpecialDatesList');
+  if (!specialPeriodsCache.length && container) {
+    container.innerHTML = '<p style="color:var(--text-secondary);font-size:0.85rem;text-align:center;padding:15px">Cargando...</p>';
+  }
+  try {
+    if (!window.CONFIG?.API_URL) throw new Error('Sin conexión al servidor configurada.');
+    const params = new URLSearchParams({ action: 'get_special_dates' });
+    const res = await fetch(`${window.CONFIG.API_URL}?${params.toString()}`);
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.msg || 'Error en el servidor');
+    specialPeriodsCache = data.periods || [];
+  } catch (e) {
+    console.warn('No se pudieron cargar las fechas especiales:', e);
+    if (container && !specialPeriodsCache.length) {
+      container.innerHTML = `<p style="color:#f87171;font-size:0.85rem;text-align:center;padding:15px">No se pudo cargar la lista: ${e.message}</p>`;
+    }
+  }
+  renderFilteredSpecialDates();
+}
+
+function renderFilteredSpecialDates() {
   const container = document.getElementById('adminSpecialDatesList');
   if (!container) return;
-  
-  if (!list.length) {
-    container.innerHTML = '<p style="color:var(--text-secondary);font-size:0.85rem;text-align:center;padding:15px">No hay fechas especiales configuradas.</p>';
+  const query = (document.getElementById('specialDatesSearch')?.value || '').trim().toLowerCase();
+
+  let periods = specialPeriodsCache.slice().sort((a, b) => a.fechaInicio.localeCompare(b.fechaInicio));
+  if (query) {
+    periods = periods.filter(p => {
+      const haystack = [
+        periodDateLabel(p),
+        p.desc || '',
+        SPECIAL_PERIOD_TYPE_LABELS[p.tipo] || p.tipo || '',
+        ...(p.courts || []).map(c => SPECIAL_PERIOD_COURTS_MAP[c] || c)
+      ].join(' ').toLowerCase();
+      return haystack.includes(query);
+    });
+  }
+
+  if (!periods.length) {
+    container.innerHTML = `<p style="color:var(--text-secondary);font-size:0.85rem;text-align:center;padding:15px">${query ? 'Sin resultados para tu búsqueda.' : 'No hay fechas especiales configuradas.'}</p>`;
     return;
   }
-  
-  const COURTS_MAP = {
-    cec1: 'CEC 1 (Arcilla)',
-    cec2: 'CEC 2 (Arcilla)',
-    cjp1: 'CJP 1 (Asfalto)',
-    cjp2: 'CJP 2 (Asfalto)'
-  };
-  
-  const months = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-  const typeLabels = { all_day: '🌅 Todos los horarios', closed: '🚫 Cerrado' };
-  
-  container.innerHTML = list.map(item => {
-    const parts = item.fecha.split('-');
-    if (parts.length < 3) return '';
-    const y = parts[0];
-    const m = parseInt(parts[1], 10);
-    const d = parseInt(parts[2], 10);
-    const courtLabel = COURTS_MAP[item.courtId] || item.courtId;
+
+  container.innerHTML = periods.map(p => {
+    const courtsPills = (p.courts || []).map(c => `<span class="period-pill">${SPECIAL_PERIOD_COURTS_MAP[c] || c}</span>`).join('');
+    const typeClass = p.tipo === 'closed' ? 'type-closed' : 'type-all_day';
+    const dateLabel = periodDateLabel(p);
+    const safeLabel = dateLabel.replace(/'/g, "\\'");
     return `
-      <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; margin-bottom: 6px; font-size: 0.82rem;">
-        <div>
-          <strong style="display: block; color: var(--text-primary);">${d} ${months[m-1]} ${y} · ${courtLabel}</strong>
-          <span style="color: var(--text-secondary); font-size: 0.75rem;">${typeLabels[item.type] || item.type}${item.desc ? ' · ' + item.desc : ''}</span>
+      <div class="period-card ${typeClass}">
+        <div class="period-info">
+          <span class="period-dates">${escapeHTML(dateLabel)}</span>
+          <div class="period-meta">
+            <span class="period-pill ${typeClass}">${SPECIAL_PERIOD_TYPE_LABELS[p.tipo] || p.tipo}</span>
+            ${courtsPills}
+          </div>
+          ${p.desc ? `<span class="period-desc">${escapeHTML(p.desc)}</span>` : ''}
         </div>
-        <button class="btn-del" type="button" onclick="deleteAdminSpecialDate('${item.fecha}', '${item.courtId}')" style="padding: 4px 8px; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.2); border-radius: 6px; color: #fca5a5; cursor: pointer; transition: all 0.2s;">🗑️ Eliminar</button>
+        <button class="btn-del" type="button" onclick="deleteSpecialPeriod('${p.groupId}', '${safeLabel}')" style="padding: 4px 8px; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.2); border-radius: 6px; color: #fca5a5; cursor: pointer; transition: all 0.2s; flex-shrink:0;">🗑️</button>
       </div>`;
   }).join('');
-};
+}
+
+const debouncedFilterSpecialDates = debounce(renderFilteredSpecialDates, 200);
+window.debouncedFilterSpecialDates = debouncedFilterSpecialDates;
 
 // ── Auto-aceptar desafío desde URL params (link de email/Calendar) ──
 (function handleUrlChallengeAccept() {

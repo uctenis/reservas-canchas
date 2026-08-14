@@ -137,6 +137,7 @@ function handleRequest(data) {
       case "update_own_profile":     response = updateOwnProfile(data); break;
       case "admin_free_special_slots": response = adminFreeSpecialSlots(data); break;
       case "admin_remove_special_slots": response = adminRemoveSpecialSlots(data); break;
+      case "get_special_dates":      response = getSpecialDatesList(); break;
       case "debug_firebase":         response = debugFirebaseConnection(data.email || 'gcuraqueo@uct.cl'); break;
       // ── Funcionarios UCT ──
       case "admin_create_staff":     response = adminCreateStaff(data); break;
@@ -442,74 +443,150 @@ function notifyChallengeResponse(challenge, nuevoStatus) {
 // 🏗️ SLOTS ESPECIALES (ADMIN)
 // =======================================================
 
+/**
+ * Crea/actualiza una fecha especial: una sola fecha (fecha) o un rango
+ * (fechaInicio/fechaFin, inclusive, máximo 60 días). Cada llamada genera un
+ * groupId compartido por todas las filas (fecha × cancha) que crea, para
+ * poder mostrarlas como un solo período y borrarlas de una vez.
+ */
 function adminFreeSpecialSlots(data) {
-  const fecha = text(data.fecha);
-  const courts = data.courts;
-
   if (!isAdminRequest(data)) {
     return { ok: false, msg: 'Acceso reservado al administrador.' };
   }
-  if (!fecha || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
-    return { ok: false, msg: 'Fecha inválida. Usa formato YYYY-MM-DD.' };
-  }
+
+  const courts = data.courts;
   if (!Array.isArray(courts) || courts.length === 0) {
     return { ok: false, msg: 'Debes proporcionar al menos una cancha.' };
   }
 
+  const fechaInicio = text(data.fechaInicio || data.fecha);
+  const fechaFin = text(data.fechaFin || data.fecha);
+  if (!fechaInicio || !/^\d{4}-\d{2}-\d{2}$/.test(fechaInicio) || !fechaFin || !/^\d{4}-\d{2}-\d{2}$/.test(fechaFin)) {
+    return { ok: false, msg: 'Fecha inválida. Usa formato YYYY-MM-DD.' };
+  }
+
+  const startDate = new Date(fechaInicio + 'T00:00:00Z');
+  const endDate = new Date(fechaFin + 'T00:00:00Z');
+  if (endDate < startDate) {
+    return { ok: false, msg: 'La fecha de término no puede ser anterior a la de inicio.' };
+  }
+  const dayMs = 24 * 60 * 60 * 1000;
+  const totalDays = Math.round((endDate - startDate) / dayMs) + 1;
+  if (totalDays > 60) {
+    return { ok: false, msg: 'El rango no puede superar los 60 días.' };
+  }
+
   const tipo = text(data.type) === 'closed' ? 'closed' : 'all_day';
   const desc = text(data.desc);
+  const groupId = 'sp_' + new Date().getTime().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
 
   const ss = SpreadsheetApp.openById(CONFIG.SHEET_MIEMBROS_ID);
   let sheet = ss.getSheetByName('horarios_especiales');
   if (!sheet) {
     sheet = ss.insertSheet('horarios_especiales');
-    sheet.getRange(1, 1, 1, 4).setValues([['fecha', 'courtId', 'tipo', 'descripcion']]);
+    sheet.getRange(1, 1, 1, 5).setValues([['fecha', 'courtId', 'tipo', 'descripcion', 'groupId']]);
+  } else if (sheet.getLastColumn() < 5) {
+    sheet.getRange(1, 5).setValue('groupId');
   }
 
-  const existing = sheet.getDataRange().getValues();
-  let saved = 0;
-
-  courts.forEach(function(courtId) {
-    const courtIdStr = text(courtId);
-    if (!courtIdStr) return;
-    let foundRow = -1;
-    for (let i = 1; i < existing.length; i++) {
-      if (text(existing[i][0]) === fecha && text(existing[i][1]) === courtIdStr) {
-        foundRow = i + 1;
-        break;
-      }
-    }
-    if (foundRow > 0) {
-      sheet.getRange(foundRow, 1, 1, 4).setValues([[fecha, courtIdStr, tipo, desc]]);
-    } else {
-      sheet.appendRow([fecha, courtIdStr, tipo, desc]);
-    }
-    saved++;
+  const existing = sheet.getLastRow() > 1 ? sheet.getRange(2, 1, sheet.getLastRow() - 1, 5).getValues() : [];
+  const existingIndex = {};
+  existing.forEach(function(row, i) {
+    existingIndex[text(row[0]) + '|' + text(row[1])] = i + 2; // número real de fila en la hoja
   });
 
-  return { ok: true, saved: saved };
+  const validCourts = courts.map(text).filter(Boolean);
+  const rowsToAppend = [];
+  let updated = 0;
+
+  for (let i = 0; i < totalDays; i++) {
+    const d = new Date(startDate.getTime() + i * dayMs);
+    const fecha = Utilities.formatDate(d, 'UTC', 'yyyy-MM-dd');
+    validCourts.forEach(function(courtId) {
+      const rowNumber = existingIndex[fecha + '|' + courtId];
+      if (rowNumber) {
+        sheet.getRange(rowNumber, 1, 1, 5).setValues([[fecha, courtId, tipo, desc, groupId]]);
+        updated++;
+      } else {
+        rowsToAppend.push([fecha, courtId, tipo, desc, groupId]);
+      }
+    });
+  }
+
+  if (rowsToAppend.length > 0) {
+    sheet.getRange(sheet.getLastRow() + 1, 1, rowsToAppend.length, 5).setValues(rowsToAppend);
+  }
+
+  return { ok: true, saved: updated + rowsToAppend.length, groupId: groupId, dias: totalDays };
 }
 
-/** Elimina una fecha especial (una cancha en una fecha puntual). */
+/** Elimina un período completo (por groupId) o, para entradas antiguas sin
+ * groupId, una sola fila puntual (fecha + cancha). */
 function adminRemoveSpecialSlots(data) {
   if (!isAdminRequest(data)) return { ok: false, msg: 'Acceso reservado al administrador.' };
-  const fecha = text(data.fecha);
-  const courtId = text(data.courtId);
-  if (!fecha || !courtId) return { ok: false, msg: 'Fecha y cancha son requeridas.' };
 
   const ss = SpreadsheetApp.openById(CONFIG.SHEET_MIEMBROS_ID);
   const sheet = ss.getSheetByName('horarios_especiales');
   if (!sheet) return { ok: true, removed: 0 };
 
+  const groupId = text(data.groupId);
+  const fecha = text(data.fecha);
+  const courtId = text(data.courtId);
+  if (!groupId && (!fecha || !courtId)) {
+    return { ok: false, msg: 'Se requiere groupId, o fecha y cancha.' };
+  }
+
   const values = sheet.getDataRange().getValues();
   let removed = 0;
   for (let i = values.length - 1; i >= 1; i--) {
-    if (text(values[i][0]) === fecha && text(values[i][1]) === courtId) {
+    const matches = groupId
+      ? text(values[i][4]) === groupId
+      : (text(values[i][0]) === fecha && text(values[i][1]) === courtId);
+    if (matches) {
       sheet.deleteRow(i + 1);
       removed++;
     }
   }
   return { ok: true, removed: removed };
+}
+
+/**
+ * Lee las fechas especiales guardadas y las agrupa por groupId (cada grupo
+ * es un período de uno o más días creado en una sola acción). Las filas
+ * antiguas sin groupId (de antes de este cambio) se muestran cada una como
+ * su propio período de 1 día.
+ */
+function getSpecialDatesList() {
+  const ss = SpreadsheetApp.openById(CONFIG.SHEET_MIEMBROS_ID);
+  const sheet = ss.getSheetByName('horarios_especiales');
+  if (!sheet || sheet.getLastRow() < 2) return { ok: true, periods: [] };
+
+  const values = sheet.getRange(2, 1, sheet.getLastRow() - 1, 5).getValues();
+  const groups = {};
+  let ungroupedCounter = 0;
+
+  values.forEach(function(row) {
+    const fecha = text(row[0]);
+    const courtId = text(row[1]);
+    if (!fecha || !courtId) return;
+    const tipo = text(row[2]);
+    const desc = text(row[3]);
+    const groupId = text(row[4]) || ('_ug_' + (ungroupedCounter++) + '_' + fecha + '_' + courtId);
+
+    if (!groups[groupId]) {
+      groups[groupId] = { groupId: groupId, fechaInicio: fecha, fechaFin: fecha, tipo: tipo, desc: desc, courts: [] };
+    }
+    const g = groups[groupId];
+    if (fecha < g.fechaInicio) g.fechaInicio = fecha;
+    if (fecha > g.fechaFin) g.fechaFin = fecha;
+    if (g.courts.indexOf(courtId) < 0) g.courts.push(courtId);
+  });
+
+  const periods = Object.keys(groups)
+    .map(function(k) { return groups[k]; })
+    .sort(function(a, b) { return a.fechaInicio < b.fechaInicio ? -1 : (a.fechaInicio > b.fechaInicio ? 1 : 0); });
+
+  return { ok: true, periods: periods };
 }
 
 // =======================================================
