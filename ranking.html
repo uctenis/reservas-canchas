@@ -1189,6 +1189,7 @@ async function refreshRankingPage() {
       finalizeRankingLoad();
       renderAll();
       setRankStatus('Firebase conectado', 'ok');
+      setCachedRankingPlayers(players);
     } catch (cloudErr) {
       console.warn('Firebase no disponible, mostrando datos locales.', cloudErr);
       setRankStatus('Copia local', 'warn');
@@ -1208,11 +1209,36 @@ async function refreshRankingPage() {
   });
 }
 
+const RANKING_PLAYERS_CACHE_KEY = 'uctenis_ranking_players_cache_v1';
+
+/** Última lista de jugadores que llegó realmente de Firestore, guardada en
+ * este navegador. Se usa para el pintado instantáneo en vez del snapshot
+ * fijo del código (ver loadStaticRanking): así quien ya visitó la página no
+ * ve un "flashazo" de posiciones o fotos viejas antes de que carguen los
+ * datos reales — el pintado instantáneo ya es (casi) el dato real. */
+function getCachedRankingPlayers() {
+  try {
+    const raw = localStorage.getItem(RANKING_PLAYERS_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) && parsed.length ? parsed : null;
+  } catch (e) { return null; }
+}
+
+function setCachedRankingPlayers(players) {
+  try {
+    if (Array.isArray(players) && players.length) {
+      localStorage.setItem(RANKING_PLAYERS_CACHE_KEY, JSON.stringify(players));
+    }
+  } catch (e) { /* localStorage lleno o no disponible: no es crítico */ }
+}
+
 function loadStaticRanking() {
-  const split = splitPlayersByStatus(buildInitialFirebaseSeed());
+  const cachedPlayersList = getCachedRankingPlayers();
+  const split = splitPlayersByStatus(cachedPlayersList || buildInitialFirebaseSeed());
   rankingState.lists = split.active;
   rankingState.inactive = split.inactive;
-  rankingState.source = 'static';
+  rankingState.source = cachedPlayersList ? 'cache' : 'static';
   rankingState.loadedAt = new Date();
   finalizeRankingLoad();
 }
@@ -1590,8 +1616,16 @@ async function syncChallengesFromCloud() {
     return;
   }
 
-  // Sincronizar en segundo plano con Google Calendar (a través de Google Sheets)
-  if (window.CONFIG?.API_URL) {
+  // Sincronizar en segundo plano con Google Calendar (a través de Google Sheets).
+  // get_challenges recorre la hoja de desafíos y, por cada uno pendiente,
+  // consulta Calendar (lento) para detectar si aceptaron/rechazaron desde ahí.
+  // No bloquea esta página, pero dispararlo en cada visita de cada usuario
+  // carga innecesariamente el backend — se limita a como mucho una vez cada
+  // 5 minutos por navegador.
+  const CHALLENGE_CALENDAR_SYNC_THROTTLE_MS = 5 * 60 * 1000;
+  const lastSyncAt = Number(localStorage.getItem('uctenis_challenge_calendar_sync_at') || 0);
+  if (window.CONFIG?.API_URL && Date.now() - lastSyncAt > CHALLENGE_CALENDAR_SYNC_THROTTLE_MS) {
+    localStorage.setItem('uctenis_challenge_calendar_sync_at', String(Date.now()));
     fetch(window.CONFIG.API_URL + '?action=get_challenges').catch(e => console.warn('Background Calendar sync failed:', e));
   }
 
