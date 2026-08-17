@@ -699,6 +699,288 @@
     }
     .chal-accepted-cal-link:hover { color: #93c5fd; background: rgba(96,165,250,0.14); }
 
+    /* ── NEW CHALLENGE FEED (Premium Hero Section) ── */
+    #newChallengesFeed {
+      display: none;
+      margin-bottom: 28px;
+      animation: challengeFeedIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+    }
+    @keyframes challengeFeedIn {
+      from { opacity: 0; transform: translateY(-16px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .new-challenge-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+    .new-challenge-title-group {
+      flex: 1;
+    }
+    .new-challenge-kicker {
+      font-size: 0.62rem;
+      font-weight: 900;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: #f97316;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 2px;
+    }
+    .new-challenge-kicker-dot {
+      width: 6px; height: 6px;
+      background: #f97316;
+      border-radius: 50%;
+      animation: pulse-live 1.5s ease-in-out infinite;
+    }
+    .new-challenge-heading {
+      font-size: 1.1rem;
+      font-weight: 900;
+      color: #fff;
+      margin: 0;
+    }
+    .new-challenge-see-all {
+      font-size: 0.78rem;
+      color: var(--accent-tennis);
+      font-weight: 700;
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      white-space: nowrap;
+      opacity: 0.85;
+      transition: opacity 0.2s;
+    }
+    .new-challenge-see-all:hover { opacity: 1; }
+    .new-challenge-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 14px;
+    }
+    /* ── Individual Challenge Event Card ── */
+    .challenge-event-card {
+      position: relative;
+      overflow: hidden;
+      border-radius: 20px;
+      padding: 18px 18px 16px;
+      background: linear-gradient(135deg, rgba(20, 27, 46, 0.95) 0%, rgba(15, 23, 42, 0.98) 100%);
+      border: 1.5px solid rgba(249, 115, 22, 0.35);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.03), inset 0 1px 0 rgba(255,255,255,0.06);
+      transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+      cursor: default;
+    }
+    .challenge-event-card:hover {
+      transform: translateY(-3px);
+      border-color: rgba(249, 115, 22, 0.65);
+      box-shadow: 0 16px 48px rgba(0,0,0,0.45), 0 0 30px rgba(249,115,22,0.12);
+    }
+    /* Animated fire glow orb */
+    .challenge-event-card::before {
+      content: '';
+      position: absolute;
+      top: -40px; right: -30px;
+      width: 160px; height: 160px;
+      background: radial-gradient(circle, rgba(249,115,22,0.12) 0%, transparent 70%);
+      pointer-events: none;
+      animation: challengeOrbPulse 3s ease-in-out infinite;
+    }
+    .challenge-event-card.is-accepted-pending::before {
+      background: radial-gradient(circle, rgba(74, 222, 128, 0.1) 0%, transparent 70%);
+    }
+    @keyframes challengeOrbPulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.2); opacity: 0.7; }
+    }
+    .challenge-event-card .ce-top-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }
+    .ce-type-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 0.62rem;
+      font-weight: 900;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 3px 9px;
+      border-radius: 20px;
+    }
+    .ce-type-badge.is-challenge {
+      background: rgba(249,115,22,0.15);
+      color: #fb923c;
+      border: 1px solid rgba(249,115,22,0.35);
+    }
+    .ce-type-badge.is-friendly {
+      background: rgba(99,102,241,0.15);
+      color: #a5b4fc;
+      border: 1px solid rgba(99,102,241,0.3);
+    }
+    .ce-type-badge.is-accepted {
+      background: rgba(74,222,128,0.12);
+      color: #4ade80;
+      border: 1px solid rgba(74,222,128,0.28);
+    }
+    .ce-date-chip {
+      font-size: 0.65rem;
+      font-weight: 700;
+      color: var(--text-secondary);
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 8px;
+      padding: 3px 8px;
+    }
+    /* Players matchup row */
+    .ce-matchup {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .ce-player {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 7px;
+      text-align: center;
+    }
+    .ce-avatar-wrap {
+      position: relative;
+      display: inline-block;
+    }
+    .ce-avatar {
+      width: 58px; height: 58px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 2.5px solid rgba(249, 115, 22, 0.4);
+      background: #1e293b;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4), 0 0 0 4px rgba(249,115,22,0.06);
+      transition: all 0.3s;
+    }
+    .challenge-event-card:hover .ce-avatar {
+      box-shadow: 0 4px 16px rgba(0,0,0,0.5), 0 0 0 5px rgba(249,115,22,0.12);
+    }
+    .ce-avatar.is-friendly-avatar {
+      border-color: rgba(99,102,241,0.4);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4), 0 0 0 4px rgba(99,102,241,0.06);
+    }
+    .ce-rank-badge {
+      position: absolute;
+      bottom: -3px; right: -3px;
+      background: linear-gradient(135deg, #1e293b, #0f172a);
+      border: 1.5px solid rgba(249,115,22,0.5);
+      border-radius: 50%;
+      width: 20px; height: 20px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.58rem;
+      font-weight: 900;
+      color: #fb923c;
+    }
+    .ce-rank-badge.friendly-badge {
+      border-color: rgba(99,102,241,0.5);
+      color: #a5b4fc;
+    }
+    .ce-player-name {
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      max-width: 90px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .ce-vs-center {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+    .ce-vs-text {
+      font-size: 1.1rem;
+      font-weight: 900;
+      color: #f97316;
+      text-shadow: 0 0 12px rgba(249,115,22,0.5);
+      animation: vsGlow 2s ease-in-out infinite alternate;
+    }
+    .ce-vs-text.friendly-vs {
+      color: #818cf8;
+      text-shadow: 0 0 12px rgba(129,140,248,0.5);
+    }
+    @keyframes vsGlow {
+      from { text-shadow: 0 0 8px rgba(249,115,22,0.4); }
+      to   { text-shadow: 0 0 20px rgba(249,115,22,0.8); }
+    }
+    /* Bottom info bar */
+    .ce-info-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-top: 10px;
+      border-top: 1px solid rgba(255,255,255,0.05);
+      gap: 8px;
+    }
+    .ce-court-info {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 0.72rem;
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+    .ce-court-dot {
+      width: 5px; height: 5px;
+      background: var(--text-secondary);
+      border-radius: 50%;
+      opacity: 0.5;
+    }
+    .ce-status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 0.64rem;
+      font-weight: 800;
+      padding: 4px 10px;
+      border-radius: 20px;
+      white-space: nowrap;
+    }
+    .ce-status-pill.status-new {
+      background: linear-gradient(135deg, rgba(249,115,22,0.2), rgba(239,68,68,0.15));
+      color: #fb923c;
+      border: 1px solid rgba(249,115,22,0.4);
+      animation: newPulse 2s ease-in-out infinite;
+    }
+    @keyframes newPulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(249,115,22,0.3); }
+      50%       { box-shadow: 0 0 0 5px rgba(249,115,22,0); }
+    }
+    .ce-status-pill.status-scheduled {
+      background: rgba(74,222,128,0.1);
+      color: #4ade80;
+      border: 1px solid rgba(74,222,128,0.25);
+    }
+    /* Separator line between kicker and main dashboard */
+    .challenge-section-wrap {
+      background: linear-gradient(135deg, rgba(20,27,46,0.6) 0%, rgba(15,23,42,0.8) 100%);
+      border: 1px solid rgba(249, 115, 22, 0.12);
+      border-radius: 24px;
+      padding: 20px;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      box-shadow: 0 4px 24px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.04);
+    }
+    @media (max-width: 768px) {
+      .new-challenge-grid {
+        grid-template-columns: 1fr;
+      }
+      .ce-avatar { width: 50px; height: 50px; }
+    }
+
     /* ── Pending Challenge Modal ── */
     #pendingChallengeModal {
       display: none;
@@ -927,6 +1209,28 @@
 
     <!-- ── PROFILE COMPLETENESS BANNER (no bloqueante) ── -->
     <div id="profileCompleteBanner" class="profile-complete-banner" style="display:none;"></div>
+
+    <!-- ── NEW CHALLENGES FEED (Premium Dynamic Section) ── -->
+    <div id="newChallengesFeed">
+      <div class="challenge-section-wrap">
+        <div class="new-challenge-header">
+          <div class="new-challenge-title-group">
+            <div class="new-challenge-kicker">
+              <span class="new-challenge-kicker-dot"></span>
+              En curso · Últimos 7 días
+            </div>
+            <h2 class="new-challenge-heading">🔥 Desafíos del Club</h2>
+          </div>
+          <a href="ranking.html" class="new-challenge-see-all">
+            Ver todos
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M5 13h11.59l-5.29 5.29 1.41 1.41L20 12l-7.29-7.29-1.41 1.41L16.59 11H5v2z"/></svg>
+          </a>
+        </div>
+        <div class="new-challenge-grid" id="newChallengesGrid">
+          <!-- filled by JS -->
+        </div>
+      </div>
+    </div>
 
     <!-- ── BIRTHDAY BANNER (shown only on the player's exact birthday) ── -->
     <div id="birthdayBanner" role="banner" aria-label="Saludo de cumpleaños">
@@ -2193,13 +2497,122 @@ async function loadLiveData() {
   // NOW render the news section — getPlayerPhoto is available so player photos will load correctly
   renderNewsGrid(filteredTopMover, filteredLatestMatch, filteredNextMatch, filteredBirthdays, activeCustomNews);
 
+  // ── NEW CHALLENGES FEED: challenges created in the last 7 days (pendiente or aceptado) ──
+  (function renderNewChallengesFeed() {
+    const feedEl = document.getElementById('newChallengesFeed');
+    const gridEl = document.getElementById('newChallengesGrid');
+    if (!feedEl || !gridEl) return;
+
+    const recent = challenges.filter(c => {
+      if (c.status === 'eliminado' || c.status === 'completado') return false;
+      // IMPORTANT: pendiente = sent but not yet answered — ALWAYS show regardless of date.
+      // Only expire aceptado/terminado challenges by their scheduled date.
+      if (c.status !== 'pendiente' && isChallengeExpiredByDateTime(c)) return false;
+      return true;
+    }).sort((a, b) => {
+      const myA = isMyChallenge(a) ? 1 : 0;
+      const myB = isMyChallenge(b) ? 1 : 0;
+      if (myA !== myB) return myB - myA;
+      // pendiente first, then by date descending
+      const statusOrder = { pendiente: 2, aceptado: 1, terminado: 0 };
+      const sA = statusOrder[a.status] ?? 0;
+      const sB = statusOrder[b.status] ?? 0;
+      if (sA !== sB) return sB - sA;
+      return (b.creado || b.fecha || '').localeCompare(a.creado || a.fecha || '');
+    }).slice(0, 6);
+
+    if (!recent.length) {
+      feedEl.style.display = 'none';
+      return;
+    }
+
+    feedEl.style.display = 'block';
+    gridEl.innerHTML = recent.map(c => {
+      const retadorName = c.retadorNombre || 'Jugador';
+      const retadoName  = c.retadoNombre  || 'Jugador';
+      const photoR   = getPlayerPhoto(retadorName);
+      const photoRet = getPlayerPhoto(retadoName);
+      const isFriendly    = c.tipo === 'amistoso';
+      const isPending     = c.status === 'pendiente';
+      const isAccepted    = c.status === 'aceptado';
+      const isMine        = isMyChallenge(c);
+      const dateStr       = formatDateShort(c.fecha) || formatDateShort(c.creado) || '';
+      const courtStr      = (c.courtLabel || c.cancha || '').trim() || 'UCTenis';
+      const slotStr       = (() => { try { return c.slot ? formatSlotRobust(c.slot) : ''; } catch(e){ return ''; } })();
+      const slotDisplay   = slotStr ? ` · ${slotStr}` : '';
+
+      // Has the proposed date already passed? (only relevant for pendiente)
+      const proposedDatePassed = isPending && isChallengeExpiredByDateTime(c);
+
+      const typeBadgeClass = isAccepted ? 'is-accepted' : (isFriendly ? 'is-friendly' : 'is-challenge');
+      const typeBadgeText  = isAccepted
+        ? (isFriendly ? '✅ Amistoso Confirmado' : '✅ Desafío Aceptado')
+        : (isFriendly ? '🤝 Amistoso Enviado' : '⚔️ Desafío Enviado');
+      const vsClass    = isFriendly ? 'friendly-vs' : '';
+      const avatarClass = isFriendly ? 'is-friendly-avatar' : '';
+      const rankBadgeClass = isFriendly ? 'friendly-badge' : '';
+      const statusClass = isAccepted ? 'status-scheduled' : 'status-new';
+      const statusText  = isAccepted
+        ? `📅 ${dateStr || 'Programado'}${slotDisplay}`
+        : (proposedDatePassed
+            ? `⏳ Sin respuesta (${dateStr || 'fecha pasada'})`
+            : '🔥 Esperando respuesta');
+      const cardAcceptedClass = isAccepted ? 'is-accepted-pending' : '';
+      const mineHighlight = isMine ? 'border-color: rgba(198,211,0,0.5); box-shadow: 0 8px 32px rgba(0,0,0,0.35), 0 0 20px rgba(198,211,0,0.12);' : '';
+
+      // Position from playersMap
+      const posRetador = (() => { const k = retadorName.toLowerCase().trim(); return playersMap[k]?.posicion || playersMap[k]?.pos || ''; })();
+      const posRetado  = (() => { const k = retadoName.toLowerCase().trim();  return playersMap[k]?.posicion || playersMap[k]?.pos || ''; })();
+
+      const rankRetador = posRetador ? `<div class="ce-rank-badge ${rankBadgeClass}">#${posRetador}</div>` : '';
+      const rankRetado  = posRetado  ? `<div class="ce-rank-badge ${rankBadgeClass}">#${posRetado}</div>` : '';
+      const mineLabel   = isMine ? `<div class="my-match-label" style="top:10px;right:10px;">Tu ${isFriendly ? 'Amistoso' : 'Desafío'}</div>` : '';
+
+      return `<div class="challenge-event-card ${cardAcceptedClass}" style="${mineHighlight}">
+        ${mineLabel}
+        <div class="ce-top-bar">
+          <span class="ce-type-badge ${typeBadgeClass}">${typeBadgeText}</span>
+          ${dateStr ? `<span class="ce-date-chip">${dateStr}${slotDisplay}</span>` : ''}
+        </div>
+        <div class="ce-matchup">
+          <div class="ce-player">
+            <div class="ce-avatar-wrap">
+              <img src="${photoR}" class="ce-avatar ${avatarClass}" alt="${escapeHTML(retadorName)}" onerror="this.src='fotos/default_avatar_h.png'">
+              ${rankRetador}
+            </div>
+            <span class="ce-player-name">${escapeHTML(retadorName.split(' ').slice(0,2).join(' '))}</span>
+          </div>
+          <div class="ce-vs-center">
+            <span class="ce-vs-text ${vsClass}">${isFriendly ? '🤝' : 'VS'}</span>
+          </div>
+          <div class="ce-player">
+            <div class="ce-avatar-wrap">
+              <img src="${photoRet}" class="ce-avatar ${avatarClass}" alt="${escapeHTML(retadoName)}" onerror="this.src='fotos/default_avatar_h.png'">
+              ${rankRetado}
+            </div>
+            <span class="ce-player-name">${escapeHTML(retadoName.split(' ').slice(0,2).join(' '))}</span>
+          </div>
+        </div>
+        <div class="ce-info-bar">
+          <div class="ce-court-info">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" style="opacity:.5"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+            ${escapeHTML(courtStr)}
+          </div>
+          <span class="ce-status-pill ${statusClass}">${statusText}</span>
+        </div>
+      </div>`;
+    }).join('');
+  })();
+
   // Active challenges (pendiente, aceptado or terminado)
   // Exclude any challenge whose scheduled date+slot has already passed
   const active = challenges
-    .filter(c =>
-      (c.status === 'pendiente' || c.status === 'aceptado' || c.status === 'terminado') &&
-      !isChallengeExpiredByDateTime(c)
-    )
+    .filter(c => {
+      if (c.status !== 'pendiente' && c.status !== 'aceptado' && c.status !== 'terminado') return false;
+      // pendiente = still waiting for response, ALWAYS show regardless of proposed date
+      if (c.status !== 'pendiente' && isChallengeExpiredByDateTime(c)) return false;
+      return true;
+    })
     .sort((a, b) => {
       const myA = isMyChallenge(a) ? 1 : 0;
       const myB = isMyChallenge(b) ? 1 : 0;

@@ -4776,7 +4776,6 @@ function showPlayerProfile(playerKey) {
     </div>
 
     <div class="profile-contact-row">
-      ${(canEdit || isPlayerAdminSession()) ? `<div class="contact-item"><span class="label">RUT</span><span class="value" id="profileRutValue">Cargando…</span></div>` : ''}
       <div class="contact-item"><span class="label">Correo</span><span class="value">${escapeHTML(player.email || '-')}</span></div>
       <div class="contact-item">
         <span class="label">WhatsApp</span>
@@ -4788,14 +4787,6 @@ function showPlayerProfile(playerKey) {
     ${editButton}`;
   openModal('profileModal');
 
-  // El RUT ya no viaja en la ficha pública: se pide aparte, autenticado,
-  // solo cuando corresponde mostrarlo (dueño o admin).
-  if (canEdit || isPlayerAdminSession()) {
-    DB.getRutCloud(player.id).then(rut => {
-      const el = document.getElementById('profileRutValue');
-      if (el) el.textContent = rut || '-';
-    });
-  }
 }
 
 function showSessionProfile() {
@@ -4844,16 +4835,6 @@ function openOwnProfileEditor() {
           <select id="ownReves">${selectOptions(['Dos manos', 'Una mano'], player.reves || 'Dos manos')}</select>
         </div>
       </div>
-      <div class="form-row" style="display: flex; gap: 15px;">
-        <div class="form-group" style="flex: 2;">
-          <label for="ownRut">RUT (solo números)</label>
-          <input type="text" id="ownRut" value="" placeholder="Cargando…" maxlength="8" required>
-        </div>
-        <div class="form-group" style="flex: 1;">
-          <label for="ownRutDv" style="text-align: center;">DV</label>
-          <input type="text" id="ownRutDv" value="" readonly placeholder="-" style="text-align: center; font-weight: bold; background: rgba(255,255,255,0.05);">
-        </div>
-      </div>
       <div class="form-row">
         <div class="form-group">
           <label for="ownTelefono">Teléfono (WhatsApp)</label>
@@ -4873,29 +4854,6 @@ function openOwnProfileEditor() {
       <button type="submit" class="btn-primary" id="ownProfileSubmit">Guardar ficha</button>
     </form>`;
 
-  // Attach runtime input listener for dynamic own profile DV calculation
-  setTimeout(() => {
-    const ownRut = document.getElementById('ownRut');
-    const ownRutDv = document.getElementById('ownRutDv');
-    if (ownRut && ownRutDv) {
-      ownRut.addEventListener('input', function() {
-        this.value = this.value.replace(/[^0-9]/g, '').slice(0, 8);
-        ownRutDv.value = calculateRutDV(this.value);
-      });
-    }
-  }, 50);
-
-  // El RUT ya no viaja en la ficha pública (ver DB.getRutCloud): se pide
-  // aparte, autenticado, solo para el dueño de la ficha.
-  DB.getRutCloud(player.id).then(rut => {
-    const ownRut = document.getElementById('ownRut');
-    const ownRutDv = document.getElementById('ownRutDv');
-    if (!ownRut || !ownRutDv) return;
-    const parsed = parseRut(rut);
-    ownRut.value = parsed.body;
-    ownRut.placeholder = '12345678';
-    ownRutDv.value = parsed.dv;
-  });
 }
 
 async function submitOwnProfile(event) {
@@ -4916,10 +4874,6 @@ async function submitOwnProfile(event) {
     return;
   }
 
-  const ownRutBody = document.getElementById('ownRut').value.trim();
-  const ownRutDv = document.getElementById('ownRutDv').value.trim();
-  const ownRutFormatted = formatRut(ownRutBody, ownRutDv);
-
   const payload = {
     ...player,
     nombre: cleanText(document.getElementById('ownNombre').value),
@@ -4929,7 +4883,6 @@ async function submitOwnProfile(event) {
     reves: document.getElementById('ownReves').value,
     foto: document.getElementById('ownFoto').value.trim(),
     telefono: document.getElementById('ownTelefono').value.trim(),
-    rut: ownRutFormatted,
     activo: isPlayerActive(player),
     participaRanking: isPlayerActive(player)
   };
@@ -4938,14 +4891,6 @@ async function submitOwnProfile(event) {
     Object.assign(payload, await readPhotoAttachment('ownPhotoFile'));
     if (payload.photoDataUrl) payload.foto = payload.photoDataUrl;
     const saved = await DB.savePlayerCloud(payload, actorPayload(session));
-    // El RUT no se guarda en la ficha pública (savePlayerCloud lo excluye a
-    // propósito): se persiste aparte, autenticado, vía el backend.
-    try {
-      await DB.saveRutCloud(payload.id, ownRutFormatted);
-    } catch (rutErr) {
-      console.warn('No se pudo guardar el RUT:', rutErr);
-      error.textContent = 'La ficha se guardó, pero el RUT no: ' + rutErr.message;
-    }
     upsertLocalUser(profileToSessionUser(saved, session));
     closeModal('profileModal');
     await refreshRankingPage();
