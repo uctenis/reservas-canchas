@@ -840,17 +840,11 @@ const DB = {
     }
   },
 
-  /** Guarda la configuración editable de horarios/parámetros de reserva. */
-  async saveScheduleConfigCloud(config, actor = {}) {
-    if (!this.isCloudConfigured()) throw new Error('Firestore no está disponible.');
-    const data = cleanFirestoreData({
-      ...config,
-      updatedAt: new Date().toISOString(),
-      updatedBy: actor.email || ''
-    });
-    await firebaseDb.collection(FIREBASE_COLLECTIONS.config).doc('schedule').set(data, { merge: true });
-    return data;
-  },
+  // Nota: guardar uct_config/schedule ya no se hace con un write directo del
+  // SDK de Firestore (chocaba con las reglas de seguridad, "Missing or
+  // insufficient permissions") — ver la acción 'save_schedule_config' del
+  // backend, usada desde saveScheduleConfigAll() en ranking.html.
+
   updateUser(updatedUser) {
     const users = this.getUsers().map(u => u.id === updatedUser.id ? updatedUser : u);
     this.saveUsers(users);
@@ -968,9 +962,13 @@ const DB = {
       updatedAt: now,
       updatedBy: actor.email || actor.adminEmail || actor.actorEmail || ''
     });
+    // El RUT es sensible y esta colección es de lectura pública para el
+    // ranking: nunca se guarda aquí. Se persiste aparte con acceso
+    // restringido — ver saveRutCloud() en ranking.html.
+    delete data.rut;
 
     await firebaseDb.collection(FIREBASE_COLLECTIONS.players).doc(id).set(data, { merge: true });
-    return data;
+    return { ...data, rut: player.rut || '' };
   },
 
   async savePlayersCloud(players, actor = {}) {
@@ -995,13 +993,51 @@ const DB = {
         updatedAt: now,
         updatedBy: actor.email || actor.adminEmail || actor.actorEmail || ''
       });
+      delete data.rut; // ver nota de privacidad en savePlayerCloud()
       const ref = firebaseDb.collection(FIREBASE_COLLECTIONS.players).doc(id);
       batch.set(ref, data, { merge: true });
-      saved.push(data);
+      saved.push({ ...data, rut: player.rut || '' });
     });
 
     if (saved.length) await batch.commit();
     return saved;
+  },
+
+  /** Lee el RUT de un jugador vía el backend (colección privada, acceso
+   * restringido al dueño o a un admin). Retorna '' si no está guardado o
+   * si falla la consulta — nunca lanza, para no romper la carga de la
+   * ficha por un dato secundario. */
+  async getRutCloud(playerId) {
+    if (!this.isCloudConfigured() || !window.CONFIG?.API_URL || !playerId) return '';
+    try {
+      const idToken = await this.getIdTokenOrReauth();
+      if (!idToken) return '';
+      const res = await fetch(window.CONFIG.API_URL, {
+        method: 'POST',
+        body: JSON.stringify({ action: 'get_player_rut', playerId, idToken })
+      });
+      const data = await res.json();
+      return data && data.ok ? (data.rut || '') : '';
+    } catch (e) {
+      console.warn('No se pudo leer el RUT:', e);
+      return '';
+    }
+  },
+
+  /** Guarda el RUT de un jugador vía el backend (ver getRutCloud). */
+  async saveRutCloud(playerId, rut) {
+    if (!this.isCloudConfigured() || !window.CONFIG?.API_URL || !playerId) {
+      throw new Error('No se pudo guardar el RUT: falta configuración de Firestore.');
+    }
+    const idToken = await this.getIdTokenOrReauth();
+    if (!idToken) throw new Error(this.lastAuthError || 'Tu sesión venció.');
+    const res = await fetch(window.CONFIG.API_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'save_player_rut', playerId, rut: rut || '', idToken })
+    });
+    const data = await res.json();
+    if (!data || !data.ok) throw new Error((data && data.msg) || 'No se pudo guardar el RUT.');
+    return true;
   },
 
   async setPlayerActiveCloud(player, active, actor = {}) {

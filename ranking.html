@@ -4776,7 +4776,7 @@ function showPlayerProfile(playerKey) {
     </div>
 
     <div class="profile-contact-row">
-      ${(canEdit || isPlayerAdminSession()) ? `<div class="contact-item"><span class="label">RUT</span><span class="value">${escapeHTML(player.rut || '-')}</span></div>` : ''}
+      ${(canEdit || isPlayerAdminSession()) ? `<div class="contact-item"><span class="label">RUT</span><span class="value" id="profileRutValue">Cargando…</span></div>` : ''}
       <div class="contact-item"><span class="label">Correo</span><span class="value">${escapeHTML(player.email || '-')}</span></div>
       <div class="contact-item">
         <span class="label">WhatsApp</span>
@@ -4787,6 +4787,15 @@ function showPlayerProfile(playerKey) {
     ${historyHtml}
     ${editButton}`;
   openModal('profileModal');
+
+  // El RUT ya no viaja en la ficha pública: se pide aparte, autenticado,
+  // solo cuando corresponde mostrarlo (dueño o admin).
+  if (canEdit || isPlayerAdminSession()) {
+    DB.getRutCloud(player.id).then(rut => {
+      const el = document.getElementById('profileRutValue');
+      if (el) el.textContent = rut || '-';
+    });
+  }
 }
 
 function showSessionProfile() {
@@ -4838,11 +4847,11 @@ function openOwnProfileEditor() {
       <div class="form-row" style="display: flex; gap: 15px;">
         <div class="form-group" style="flex: 2;">
           <label for="ownRut">RUT (solo números)</label>
-          <input type="text" id="ownRut" value="${escapeAttr(parseRut(player.rut).body)}" placeholder="12345678" maxlength="8" required>
+          <input type="text" id="ownRut" value="" placeholder="Cargando…" maxlength="8" required>
         </div>
         <div class="form-group" style="flex: 1;">
           <label for="ownRutDv" style="text-align: center;">DV</label>
-          <input type="text" id="ownRutDv" value="${escapeAttr(parseRut(player.rut).dv)}" readonly placeholder="-" style="text-align: center; font-weight: bold; background: rgba(255,255,255,0.05);">
+          <input type="text" id="ownRutDv" value="" readonly placeholder="-" style="text-align: center; font-weight: bold; background: rgba(255,255,255,0.05);">
         </div>
       </div>
       <div class="form-row">
@@ -4875,6 +4884,18 @@ function openOwnProfileEditor() {
       });
     }
   }, 50);
+
+  // El RUT ya no viaja en la ficha pública (ver DB.getRutCloud): se pide
+  // aparte, autenticado, solo para el dueño de la ficha.
+  DB.getRutCloud(player.id).then(rut => {
+    const ownRut = document.getElementById('ownRut');
+    const ownRutDv = document.getElementById('ownRutDv');
+    if (!ownRut || !ownRutDv) return;
+    const parsed = parseRut(rut);
+    ownRut.value = parsed.body;
+    ownRut.placeholder = '12345678';
+    ownRutDv.value = parsed.dv;
+  });
 }
 
 async function submitOwnProfile(event) {
@@ -4917,6 +4938,14 @@ async function submitOwnProfile(event) {
     Object.assign(payload, await readPhotoAttachment('ownPhotoFile'));
     if (payload.photoDataUrl) payload.foto = payload.photoDataUrl;
     const saved = await DB.savePlayerCloud(payload, actorPayload(session));
+    // El RUT no se guarda en la ficha pública (savePlayerCloud lo excluye a
+    // propósito): se persiste aparte, autenticado, vía el backend.
+    try {
+      await DB.saveRutCloud(payload.id, ownRutFormatted);
+    } catch (rutErr) {
+      console.warn('No se pudo guardar el RUT:', rutErr);
+      error.textContent = 'La ficha se guardó, pero el RUT no: ' + rutErr.message;
+    }
     upsertLocalUser(profileToSessionUser(saved, session));
     closeModal('profileModal');
     await refreshRankingPage();
@@ -5300,9 +5329,21 @@ function fillAdminForm(playerKey) {
     ADMIN_IDENTITIES.emails.some(item => normalizeEmail(item) === normalizeEmail(player.email));
   document.getElementById('adminEsAdministrador').disabled = !isPermanentAdminSession();
   document.getElementById('adminTelefono').value = player.telefono || '+569';
-  const parsedRut = parseRut(player.rut);
-  document.getElementById('adminRut').value = parsedRut.body;
-  document.getElementById('adminRutDv').value = parsedRut.dv;
+  // El RUT ya no viaja en la ficha pública: se pide aparte, autenticado (ver
+  // DB.getRutCloud), en vez de leerlo de player.rut.
+  document.getElementById('adminRut').value = '';
+  document.getElementById('adminRutDv').value = '';
+  document.getElementById('adminRut').placeholder = 'Cargando…';
+  DB.getRutCloud(player.id).then(rut => {
+    const adminRut = document.getElementById('adminRut');
+    const adminRutDv = document.getElementById('adminRutDv');
+    // Si el admin ya cambió de jugador o cerró el formulario, no pisar nada.
+    if (!adminRut || !adminRutDv || document.getElementById('adminPlayerId')?.value !== player.id) return;
+    const parsed = parseRut(rut);
+    adminRut.value = parsed.body;
+    adminRut.placeholder = '12345678';
+    adminRutDv.value = parsed.dv;
+  });
   document.getElementById('adminNotas').value = player.notes || player.notas || '';
   document.getElementById('adminFechaNacimiento').value = dateForInput(player.fechaNacimiento);
   document.getElementById('adminCategoria').value = player.categoria || 'Principiante';
@@ -5454,6 +5495,14 @@ async function submitAdminPlayer(event) {
         await DB.savePlayersCloud(reorderedPlayers, adminPayload(session));
       } else {
         await DB.savePlayerCloud(player, adminPayload(session));
+      }
+      // El RUT no se guarda en la ficha pública (savePlayerCloud/savePlayersCloud
+      // lo excluyen a propósito): se persiste aparte, autenticado.
+      try {
+        await DB.saveRutCloud(playerId, adminRutFormatted);
+      } catch (rutErr) {
+        console.warn('No se pudo guardar el RUT:', rutErr);
+        successMsg.textContent = 'Jugador guardado, pero el RUT no se pudo guardar: ' + rutErr.message;
       }
       // Always persist the full reordered ladder locally so moves are visible immediately.
       savePlayerEditsLocally(reorderedPlayers || savedPlayer);
@@ -7702,7 +7751,25 @@ window.saveScheduleConfigAll = async function(event) {
 
   try {
     const session = DB.getSession();
-    await DB.saveScheduleConfigCloud(scheduleConfigState, session || {});
+    // Escribir esto directo desde el navegador (SDK de Firestore) chocaba con
+    // las reglas de seguridad ("Missing or insufficient permissions"); se
+    // guarda vía el backend con la identidad privilegiada del Apps Script,
+    // igual que ya hace la lectura de esta misma configuración.
+    const idToken = await DB.getIdTokenOrReauth();
+    if (!idToken) throw new Error(DB.lastAuthError || 'Tu sesión venció.');
+    const res = await fetch(window.CONFIG.API_URL, {
+      method: 'POST',
+      body: JSON.stringify({
+        action: 'save_schedule_config',
+        courtSlots: scheduleConfigState.courtSlots,
+        maxAdvanceDays: scheduleConfigState.maxAdvanceDays,
+        maxBookingsPerDay: scheduleConfigState.maxBookingsPerDay,
+        actorEmail: session?.email || '',
+        idToken
+      })
+    });
+    const data = await res.json();
+    if (!data || !data.ok) throw new Error((data && data.msg) || 'No se pudo guardar.');
     markScheduleConfigSaved();
     showScheduleConfigAlert('✅ Horarios y parámetros guardados. Ya rigen para las próximas reservas.');
   } catch (e) {

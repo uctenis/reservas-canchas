@@ -138,6 +138,9 @@ function handleRequest(data) {
       case "admin_free_special_slots": response = adminFreeSpecialSlots(data); break;
       case "admin_remove_special_slots": response = adminRemoveSpecialSlots(data); break;
       case "get_special_dates":      response = getSpecialDatesList(); break;
+      case "get_player_rut":         response = getPlayerRut(data); break;
+      case "save_player_rut":        response = savePlayerRut(data); break;
+      case "save_schedule_config":   response = saveScheduleConfig(data); break;
       case "debug_firebase":         response = debugFirebaseConnection(data.email || 'gcuraqueo@uct.cl'); break;
       // ── Funcionarios UCT ──
       case "admin_create_staff":     response = adminCreateStaff(data); break;
@@ -1768,6 +1771,84 @@ function isFirebasePlayerActive(player) {
 }
 
 // =======================================================
+// 🔒 RUT — DATO SENSIBLE, FUERA DE LA COLECCIÓN PÚBLICA
+// =======================================================
+// El resto de la ficha de un jugador vive en Firestore (ranking_players),
+// que el cliente lee directamente y por lo tanto es visible para cualquiera
+// (aunque la UI solo lo muestre al dueño o a un admin, el dato viaja igual
+// en la respuesta). El RUT se guarda aparte, en ranking_players_private,
+// a la que el cliente nunca accede directamente: solo se lee/escribe aquí,
+// con la identidad privilegiada del propio Apps Script, tras verificar que
+// quien pide el dato es el dueño de esa ficha o un administrador.
+
+function playerPrivateFirestoreUrl(playerId) {
+  return 'https://firestore.googleapis.com/v1/projects/'
+    + encodeURIComponent(CONFIG.FIREBASE_PROJECT_ID)
+    + '/databases/(default)/documents/ranking_players_private/' + encodeURIComponent(playerId)
+    + '?key=' + encodeURIComponent(CONFIG.FIREBASE_API_KEY);
+}
+
+function playerPublicFirestoreUrl(playerId) {
+  return 'https://firestore.googleapis.com/v1/projects/'
+    + encodeURIComponent(CONFIG.FIREBASE_PROJECT_ID)
+    + '/databases/(default)/documents/ranking_players/' + encodeURIComponent(playerId)
+    + '?key=' + encodeURIComponent(CONFIG.FIREBASE_API_KEY);
+}
+
+function isOwnerOrAdminOfPlayer(playerId, idToken) {
+  const verifiedEmail = verifyGoogleIdToken(idToken);
+  if (!verifiedEmail) return false;
+  if (isAdminRequest({ idToken: idToken })) return true;
+  try {
+    const response = UrlFetchApp.fetch(playerPublicFirestoreUrl(playerId), bookingFetchOptions('get', undefined, idToken));
+    if (response.getResponseCode() !== 200) return false;
+    const doc = JSON.parse(response.getContentText());
+    const value = firestoreValueToJs({ mapValue: { fields: doc.fields || {} } }) || {};
+    return text(value.emailLower || value.email).toLowerCase() === verifiedEmail;
+  } catch (e) {
+    return false;
+  }
+}
+
+function getPlayerRut(data) {
+  const playerId = text(data.playerId);
+  if (!playerId) return { ok: false, msg: 'Falta el ID del jugador.' };
+  if (!isOwnerOrAdminOfPlayer(playerId, data.idToken)) {
+    return { ok: false, msg: 'No tienes permiso para ver este dato.' };
+  }
+  try {
+    const response = UrlFetchApp.fetch(playerPrivateFirestoreUrl(playerId), bookingFetchOptions('get', undefined, data.idToken));
+    if (response.getResponseCode() === 404) return { ok: true, rut: '' };
+    if (response.getResponseCode() !== 200) return { ok: false, msg: 'No se pudo leer el RUT.' };
+    const doc = JSON.parse(response.getContentText());
+    const value = firestoreValueToJs({ mapValue: { fields: doc.fields || {} } }) || {};
+    return { ok: true, rut: text(value.rut) };
+  } catch (e) {
+    return { ok: false, msg: 'No se pudo leer el RUT: ' + e.message };
+  }
+}
+
+function savePlayerRut(data) {
+  const playerId = text(data.playerId);
+  if (!playerId) return { ok: false, msg: 'Falta el ID del jugador.' };
+  if (!isOwnerOrAdminOfPlayer(playerId, data.idToken)) {
+    return { ok: false, msg: 'No tienes permiso para editar este dato.' };
+  }
+  try {
+    const response = UrlFetchApp.fetch(
+      playerPrivateFirestoreUrl(playerId),
+      bookingFetchOptions('patch', { fields: { rut: { stringValue: text(data.rut) } } }, data.idToken)
+    );
+    if (response.getResponseCode() < 200 || response.getResponseCode() >= 300) {
+      return { ok: false, msg: 'No se pudo guardar el RUT.' };
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, msg: 'No se pudo guardar el RUT: ' + e.message };
+  }
+}
+
+// =======================================================
 // ⚙️ CONFIGURACIÓN DINÁMICA DE HORARIOS (editable por el admin)
 // =======================================================
 
@@ -1816,6 +1897,39 @@ function getDynamicScheduleConfig(idToken) {
   } catch (e) {
     console.warn('No se pudo leer la configuración dinámica de horarios:', e.message);
     return null;
+  }
+}
+
+/**
+ * Guarda uct_config/schedule con la identidad privilegiada del propio Apps
+ * Script. El panel de admin intentaba escribir este documento directo desde
+ * el navegador (SDK de Firestore) y las reglas de seguridad lo rechazaban
+ * con "Missing or insufficient permissions" — el mismo problema que ya
+ * resolvimos para la lectura, ahora del lado de la escritura.
+ */
+function saveScheduleConfig(data) {
+  if (!isAdminRequest(data)) return { ok: false, msg: 'Acceso reservado al administrador.' };
+  try {
+    const config = {
+      courtSlots: data.courtSlots || {},
+      maxAdvanceDays: data.maxAdvanceDays || {},
+      maxBookingsPerDay: Number(data.maxBookingsPerDay) > 0 ? Number(data.maxBookingsPerDay) : 1,
+      updatedAt: new Date().toISOString(),
+      updatedBy: text(data.actorEmail || data.adminEmail)
+    };
+    const fields = {};
+    Object.keys(config).forEach(function(key) { fields[key] = jsToFirestoreValue(config[key]); });
+    const url = 'https://firestore.googleapis.com/v1/projects/'
+      + encodeURIComponent(CONFIG.FIREBASE_PROJECT_ID)
+      + '/databases/(default)/documents/uct_config/schedule?key='
+      + encodeURIComponent(CONFIG.FIREBASE_API_KEY);
+    const response = UrlFetchApp.fetch(url, bookingFetchOptions('patch', { fields: fields }, data.idToken));
+    if (response.getResponseCode() < 200 || response.getResponseCode() >= 300) {
+      return { ok: false, msg: 'No se pudo guardar la configuración: ' + response.getContentText().substring(0, 200) };
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, msg: 'No se pudo guardar la configuración: ' + e.message };
   }
 }
 
