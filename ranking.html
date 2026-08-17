@@ -1156,8 +1156,35 @@ function setupEvents() {
   });
 }
 
+// El listener de jugadores se inicia antes que refreshRankingPage() (ver
+// DOMContentLoaded). Si su primer snapshot llega dentro de esta ventana, el
+// primer pintado usa el dato real directamente y no hay flashazo de
+// posición/foto vieja; si tarda más (red lenta), se pinta la copia local
+// igual para no demorar la página.
+const RANKING_FIRST_PAINT_GRACE_MS = 250;
+
+function waitForFirstEventOrTimeout(eventName, timeoutMs) {
+  return new Promise(resolve => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      window.removeEventListener(eventName, onEvent);
+      resolve();
+    };
+    const onEvent = () => finish();
+    window.addEventListener(eventName, onEvent, { once: true });
+    setTimeout(finish, timeoutMs);
+  });
+}
+
 async function refreshRankingPage() {
-  // PASO 1: Mostrar datos estáticos de inmediato para que la tabla NUNCA quede vacía
+  if (DB.isCloudConfigured()) {
+    await waitForFirstEventOrTimeout('players-updated', RANKING_FIRST_PAINT_GRACE_MS);
+  }
+
+  // PASO 1: Mostrar datos de inmediato (el snapshot real si ya llegó, si no
+  // la última copia local) para que la tabla NUNCA quede vacía.
   try {
     loadStaticRanking();
     renderAll();
@@ -1234,11 +1261,16 @@ function setCachedRankingPlayers(players) {
 }
 
 function loadStaticRanking() {
-  const cachedPlayersList = getCachedRankingPlayers();
-  const split = splitPlayersByStatus(cachedPlayersList || buildInitialFirebaseSeed());
+  // Si el listener en tiempo real (iniciado antes que refreshRankingPage) ya
+  // entregó su primer snapshot dentro de la ventana de gracia, ese dato real
+  // tiene prioridad sobre la copia local — evita el flashazo por completo en
+  // vez de solo acortarlo.
+  const livePlayers = (typeof DB.getCachedPlayersSnapshot === 'function') ? DB.getCachedPlayersSnapshot() : null;
+  const cachedPlayersList = livePlayers ? null : getCachedRankingPlayers();
+  const split = splitPlayersByStatus(livePlayers || cachedPlayersList || buildInitialFirebaseSeed());
   rankingState.lists = split.active;
   rankingState.inactive = split.inactive;
-  rankingState.source = cachedPlayersList ? 'cache' : 'static';
+  rankingState.source = livePlayers ? 'firebase' : (cachedPlayersList ? 'cache' : 'static');
   rankingState.loadedAt = new Date();
   finalizeRankingLoad();
 }

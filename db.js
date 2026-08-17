@@ -870,6 +870,15 @@ const DB = {
     return cachedPlayers;
   },
 
+  /** Lee la caché de jugadores del listener en tiempo real sin disparar una
+   * consulta nueva a Firestore si todavía está vacía (a diferencia de
+   * getPlayersCloud). La usa el ranking para su primer pintado: si el
+   * listener ya entregó su snapshot en ese momento, evita mostrar una copia
+   * vieja que luego "flashea" al reemplazarse por el dato real. */
+  getCachedPlayersSnapshot() {
+    return cachedPlayers.length > 0 ? cachedPlayers : null;
+  },
+
   // ✅ NUEVO: Inicializar listener de jugadores en tiempo real
   initPlayersListener() {
     if (!this.isCloudConfigured()) return null;
