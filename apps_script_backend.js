@@ -804,15 +804,6 @@ function createChallengeCalendarInvite(data) {
   }
 }
 
-function courtKeyFromName(value) {
-  const raw = norm(value).replace(/\s+/g, '');
-  if (raw.indexOf('cec1') >= 0 || (raw.indexOf('cec') >= 0 && raw.indexOf('1') >= 0)) return 'cec1';
-  if (raw.indexOf('cec2') >= 0 || (raw.indexOf('cec') >= 0 && raw.indexOf('2') >= 0)) return 'cec2';
-  if (raw.indexOf('cjp1') >= 0 || (raw.indexOf('cjp') >= 0 && raw.indexOf('1') >= 0)) return 'cjp1';
-  if (raw.indexOf('cjp2') >= 0 || (raw.indexOf('cjp') >= 0 && raw.indexOf('2') >= 0)) return 'cjp2';
-  return '';
-}
-
 // =======================================================
 // 🏆 DESAFÍOS — CONSTANTES Y UTILIDADES
 // =======================================================
@@ -1607,18 +1598,6 @@ function firebaseStaffFromDocument(doc) {
     isAdmin: firestoreBool(fields, 'isAdmin', false),
     activo: firestoreBool(fields, 'activo', true)
   };
-}
-
-function findSheetPlayerByEmail(email) {
-  const needle = text(email).toLowerCase();
-  if (!needle) return null;
-  try {
-    const index = getPlayersIndex(getSpreadsheet());
-    return index.byEmail[needle] || null;
-  } catch (err) {
-    console.warn('No se pudo validar contra la hoja jugadores:', err);
-    return null;
-  }
 }
 
 function debugFirebaseConnection(testEmail) {
