@@ -1159,9 +1159,11 @@ function setupEvents() {
 // El listener de jugadores se inicia antes que refreshRankingPage() (ver
 // DOMContentLoaded). Si su primer snapshot llega dentro de esta ventana, el
 // primer pintado usa el dato real directamente y no hay flashazo de
-// posición/foto vieja; si tarda más (red lenta), se pinta la copia local
-// igual para no demorar la página.
-const RANKING_FIRST_PAINT_GRACE_MS = 250;
+// posición/foto vieja; si tarda más (red lenta / conexión fría a Firestore),
+// se pinta la copia local igual para no demorar la página. 250ms resultó
+// insuficiente en la práctica; 600ms sigue sintiéndose instantáneo pero le
+// da más margen a la primera consulta.
+const RANKING_FIRST_PAINT_GRACE_MS = 600;
 
 function waitForFirstEventOrTimeout(eventName, timeoutMs) {
   return new Promise(resolve => {
