@@ -10,7 +10,7 @@
   <meta property="og:image" content="https://uctenis.github.io/reservas-canchas/logo_uctenis_v03.png">
   <link rel="icon" href="logo_uctenis_v03.png" type="image/png">
   <link rel="stylesheet" href="style.css?v=20260813_v1">
-  <link rel="stylesheet" href="ranking.css?v=20260813_v3">
+  <link rel="stylesheet" href="ranking.css?v=20260817_profile_v1">
 </head>
 <body>
 <div class="main-container ranking-page">
@@ -4616,6 +4616,10 @@ function showPlayerProfile(playerKey) {
   const player = getPlayerByKey(playerKey);
   if (!player) return;
 
+  const profileContent = document.getElementById('profileContent');
+  profileContent.classList.add('profile-card-view');
+  profileContent.classList.remove('profile-editor-view');
+
   const fallback = GENDERS[player.gender].fallbackAvatar;
   const canEdit = isSamePlayerAsSession(player, DB.getSession());
   const active = isPlayerActive(player);
@@ -4650,7 +4654,7 @@ function showPlayerProfile(playerKey) {
   let lastMatchesHtml = '';
   if (lastMatches.length > 0) {
     lastMatchesHtml = `
-      <div style="margin-top: 16px;">
+      <div class="profile-matches-section">
         <span class="profile-record-label">Últimos Partidos</span>
         <ul class="profile-matches-list">
           ${lastMatches.map(c => {
@@ -4711,7 +4715,7 @@ function showPlayerProfile(playerKey) {
     ? `<span class="profile-hero-rank">${escapeHTML(String(player.pos))}</span>`
     : `<span class="profile-hero-rank inactive">–</span>`;
 
-  document.getElementById('profileContent').innerHTML = `
+  profileContent.innerHTML = `
     <button class="modal-close-btn" type="button" data-close-modal="profileModal" aria-label="Cerrar">×</button>
     <div class="profile-hero">
       <div class="profile-hero-avatar">
@@ -4755,7 +4759,10 @@ function openOwnProfileEditor() {
   const player = getSessionPlayer(session);
   if (!session || !player) return;
 
-  document.getElementById('profileContent').innerHTML = `
+  const profileContent = document.getElementById('profileContent');
+  profileContent.classList.remove('profile-card-view');
+  profileContent.classList.add('profile-editor-view');
+  profileContent.innerHTML = `
     <button class="modal-close-btn" type="button" data-close-modal="profileModal" aria-label="Cerrar">×</button>
     <p class="modal-kicker">Mi ficha</p>
     <h3>Editar ficha técnica</h3>
