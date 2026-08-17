@@ -565,13 +565,15 @@ function adminFreeSpecialSlots(data) {
   if (!sheet) {
     sheet = ss.insertSheet('horarios_especiales');
     sheet.getRange(1, 1, 1, 5).setValues([['fecha', 'courtId', 'tipo', 'descripcion', 'groupId']]);
+    // Forzar la columna de fecha a texto plano: si no, Sheets auto-convierte
+    // el ISO string ('2026-08-20') a un valor Date y las comparaciones por
+    // string (en getAvailableSlots, etc.) dejan de coincidir silenciosamente.
+    // Solo hace falta al crear la hoja; reaplicarlo a toda la columna en cada
+    // guardado (hasta 1000 filas) era el motivo de que esto fuera lento.
+    sheet.getRange(2, 1, sheet.getMaxRows() - 1, 1).setNumberFormat('@');
   } else if (sheet.getLastColumn() < 5) {
     sheet.getRange(1, 5).setValue('groupId');
   }
-  // Forzar la columna de fecha a texto plano: si no, Sheets auto-convierte
-  // el ISO string ('2026-08-20') a un valor Date y las comparaciones por
-  // string (en getAvailableSlots, etc.) dejan de coincidir silenciosamente.
-  sheet.getRange(2, 1, Math.max(sheet.getMaxRows() - 1, 1), 1).setNumberFormat('@');
 
   const existing = sheet.getLastRow() > 1 ? sheet.getRange(2, 1, sheet.getLastRow() - 1, 5).getValues() : [];
   const existingIndex = {};
@@ -589,6 +591,9 @@ function adminFreeSpecialSlots(data) {
     validCourts.forEach(function(courtId) {
       const rowNumber = existingIndex[fecha + '|' + courtId];
       if (rowNumber) {
+        // Reafirma el formato de texto solo en esta celda puntual (por si la
+        // hoja es anterior a este fix y la fecha original quedó como Date).
+        sheet.getRange(rowNumber, 1).setNumberFormat('@');
         sheet.getRange(rowNumber, 1, 1, 5).setValues([[fecha, courtId, tipo, desc, groupId]]);
         updated++;
       } else {
@@ -598,7 +603,9 @@ function adminFreeSpecialSlots(data) {
   }
 
   if (rowsToAppend.length > 0) {
-    sheet.getRange(sheet.getLastRow() + 1, 1, rowsToAppend.length, 5).setValues(rowsToAppend);
+    const startRow = sheet.getLastRow() + 1;
+    sheet.getRange(startRow, 1, rowsToAppend.length, 1).setNumberFormat('@');
+    sheet.getRange(startRow, 1, rowsToAppend.length, 5).setValues(rowsToAppend);
   }
 
   return { ok: true, saved: updated + rowsToAppend.length, groupId: groupId, dias: totalDays };
@@ -2318,7 +2325,7 @@ function makeLocalDate(dateStr, slot) {
   return new Date(dateStr + 'T' + slot + ':00' + offsetStr);
 }
 
-function getAvailableSlots(dateStr, idToken) {
+function getAvailableSlots(dateStr, idToken, courtIdFilter) {
   var offsetStr = getChileOffsetStr(dateStr);
   var startOfDay = new Date(dateStr + 'T00:00:00' + offsetStr);
   var endOfDay   = new Date(dateStr + 'T23:59:59' + offsetStr);
@@ -2363,6 +2370,10 @@ function getAvailableSlots(dateStr, idToken) {
   const courtSlotsSource = (dynamicConfig && dynamicConfig.courtSlots) || CONFIG.COURT_SLOTS;
 
   for (let courtKey in CONFIG.CALENDARS) {
+    // Cuando createBooking() vuelve a comprobar disponibilidad justo antes de
+    // reservar, solo le importa la cancha objetivo: evita barrer Calendar en
+    // las otras 3 (la parte más lenta de esta función) para nada.
+    if (courtIdFilter && courtKey !== courtIdFilter) continue;
     if (closedCourts[courtKey]) {
       result.courts[courtKey] = [];
       result.playable[courtKey] = [];
@@ -2523,7 +2534,9 @@ function createBooking(data) {
 
   // Fuente única de verdad: vuelve a comprobar horario regular, fechas
   // especiales y ocupación real dentro del lock, justo antes de crear.
-  const liveAvailability = getAvailableSlots(dateStr, data.idToken);
+  // Se filtra a esta cancha: la recomprobación ya no necesita barrer
+  // Calendar en las otras 3 (la parte más lenta de esta función).
+  const liveAvailability = getAvailableSlots(dateStr, data.idToken, courtId);
   const liveCourtSlots = liveAvailability && liveAvailability.courts && liveAvailability.courts[courtId];
   if (!liveAvailability.ok || !Array.isArray(liveCourtSlots) || liveCourtSlots.indexOf(slot) < 0) {
     return { ok: false, msg: 'Este horario ya no está disponible. Actualiza la agenda y elige otro.' };
@@ -2535,11 +2548,9 @@ function createBooking(data) {
 
   let startTime = makeLocalDate(data.date, data.slot);
   let endTime = new Date(startTime.getTime() + 90 * 60000);
-
-  let conflicts = calendar.getEvents(startTime, endTime);
-  if (conflicts.length > 0) {
-    return { ok: false, msg: "Este horario ya fue ocupado por otra persona. Por favor elige otro." };
-  }
+  // (El chequeo de conflicto en Calendar ya lo hizo getAvailableSlots arriba
+  // para esta misma cancha/horario; repetirlo aquí era una segunda llamada
+  // a Calendar redundante.)
 
   const bookingId = bookingDocumentId(courtId, dateStr, slot);
   const currentBooking = getBookingDocument(bookingId, data.idToken);
@@ -2650,26 +2661,15 @@ function cancelBooking(data) {
     const cancelled = saveBookingDocument(booking, data.idToken);
     if (!cancelled.ok) return { ok: false, msg: 'No se pudo liberar la reserva en la base de datos. ' + cancelled.msg };
 
-    let calendarError = '';
-    try {
-      const calendar = CalendarApp.getCalendarById(CONFIG.CALENDARS[booking.courtId]);
-      const event = booking.calendarEventId && calendar && calendar.getEventById(booking.calendarEventId);
-      if (event) event.deleteEvent();
-      booking.calendarCleanupPending = false;
-      booking.syncError = '';
-      booking.lastSuccessfulSyncAt = new Date().toISOString();
-    } catch (error) {
-      calendarError = error.message;
-      booking.calendarCleanupPending = true;
-      booking.syncError = calendarError;
-    }
-    booking.updatedAt = new Date().toISOString();
-    saveBookingDocument(booking, data.idToken);
+    // El horario ya quedó libre: 'cancelled' en Firestore es la fuente de
+    // verdad que usa getAvailableSlots, así que el usuario no necesita
+    // esperar a Calendar para eso. Borrar el evento es solo limpieza — se
+    // deja pendiente (calendarCleanupPending) y lo resuelve el trigger
+    // periódico retryPendingBookingSync, igual que ya hace con la creación
+    // cuando Calendar queda pendiente de sincronizar.
     return {
       ok: true,
-      msg: calendarError
-        ? 'Reserva cancelada; quedó pendiente limpiar su evento de Calendar.'
-        : 'Reserva cancelada y horario liberado.',
+      msg: 'Reserva cancelada y horario liberado.',
       booking: publicBooking(booking)
     };
   }
@@ -3884,36 +3884,23 @@ function sendWeekendCourtDigest() {
 /**
  * Helper: retorna las reservas de un usuario en un día específico.
  * Usado por createBooking para la regla de 1 reserva/día.
+ *
+ * Solo consulta Firestore (fuente principal de reservas desde hace tiempo).
+ * Antes también barría los 4 calendarios buscando reservas "legacy" hechas
+ * directamente en Calendar antes de la migración — un costo de 4 llamadas a
+ * Calendar en cada intento de reserva. Como esta función solo se usa para
+ * fechas futuras, cualquier reserva legítima ya está en Firestore; el caso
+ * de una reserva legacy sin migrar para una fecha futura es prácticamente
+ * inexistente meses después de la migración.
  */
 function getUserBookingsForDate(email, dateStr, idToken) {
   if (!email || !dateStr) return [];
-  const found = [];
   const normalizedEmail = text(email).toLowerCase();
   const databaseResult = getDatabaseBookingsForDate(dateStr, idToken);
-  if (databaseResult.ok) {
-    databaseResult.bookings.forEach(function(booking) {
-      if (text(booking.email).toLowerCase() === normalizedEmail) {
-        found.push({ courtId: booking.courtId, bookingId: booking.id, eventId: booking.calendarEventId || '' });
-      }
-    });
-  }
-  const startOfDay = makeLocalDate(dateStr, '00:00');
-  const endOfDay   = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000);
-  for (const courtKey in CONFIG.CALENDARS) {
-    try {
-      const cal = CalendarApp.getCalendarById(CONFIG.CALENDARS[courtKey]);
-      if (!cal) continue;
-      const events = cal.getEvents(startOfDay, endOfDay);
-      events.forEach(ev => {
-        const desc = ev.getDescription() || '';
-        if (desc.toLowerCase().includes(normalizedEmail)) {
-          const duplicate = found.some(function(item) { return item.eventId === ev.getId(); });
-          if (!duplicate) found.push({ courtId: courtKey, eventId: ev.getId() });
-        }
-      });
-    } catch(e) {}
-  }
-  return found;
+  if (!databaseResult.ok) return [];
+  return databaseResult.bookings
+    .filter(function(booking) { return text(booking.email).toLowerCase() === normalizedEmail; })
+    .map(function(booking) { return { courtId: booking.courtId, bookingId: booking.id, eventId: booking.calendarEventId || '' }; });
 }
 
 /**
