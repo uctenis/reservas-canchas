@@ -112,6 +112,19 @@
       </div>
     </div>
 
+    <div class="availability-toolbar" aria-label="Filtros de disponibilidad">
+      <div class="availability-summary">
+        <span class="availability-dot"></span>
+        <div><strong id="availableCount">Buscando horarios</strong><small>disponibilidad en tiempo real</small></div>
+      </div>
+      <div class="availability-filters">
+        <label class="filter-select"><span>Complejo</span><select id="courtFilter" onchange="applyReservationFilters()"><option value="all">Todos</option><option value="cec">CEC · Arcilla</option><option value="cjp">CJP · Asfalto</option></select></label>
+        <label class="filter-select"><span>Momento</span><select id="timeFilter" onchange="applyReservationFilters()"><option value="all">Todo el día</option><option value="morning">Mañana</option><option value="afternoon">Tarde</option><option value="evening">Noche</option></select></label>
+        <button type="button" class="toolbar-btn toolbar-btn-primary" onclick="selectFirstAvailable()">Primer horario libre</button>
+        <button type="button" class="toolbar-btn" id="btnRefreshSlots" onclick="refreshSlotAvailability(true)" aria-label="Actualizar disponibilidad">↻ Actualizar</button>
+      </div>
+    </div>
+
     <div class="legend-row">
       <span class="leg leg-free">Disponible</span>
       <span class="leg leg-busy">Ocupado</span>
@@ -376,13 +389,18 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
 
-<script src="db.js?v=20260813_v1"></script>
+<script src="db.js?v=20260817_admin_reauth"></script>
 <script src="script.js?v=20260602_v2"></script>
 <script>
 // ── STATE ──
 // isChallenge: boolean, retadoId: string|null, retadoNombre: string|null
 let sel = { court: null, date: null, slot: null, isChallenge: false, isFriendly: false, isCampeonato: false, retadoId: null, retadoNombre: null, retadoEmail: null, retadoTelefono: null };
 let currentStep = 1;
+let reservationRules = {
+  maxAdvanceDays: { ...(window.DEFAULT_MAX_ADVANCE_DAYS || { admin: 7, socio: 7, funcionario: 2 }) },
+  maxBookingsPerDay: window.DEFAULT_MAX_BOOKINGS_PER_DAY || 1
+};
+window.RESERVATION_RULES = reservationRules;
 
 // ── HELPERS ──
 // FIX: Genera ISO local (sin conversión UTC que provoca desfase de 1 día en Chile UTC-4)
@@ -416,6 +434,16 @@ document.addEventListener('DOMContentLoaded', () => {
   DB.seed();
   renderUserBar();
   renderDateStrip();
+  if (DB.isCloudConfigured && DB.isCloudConfigured() && DB.getScheduleConfigCloud) {
+    DB.getScheduleConfigCloud().then(config => {
+      if (!config) return;
+      reservationRules.maxAdvanceDays = { ...reservationRules.maxAdvanceDays, ...(config.maxAdvanceDays || {}) };
+      reservationRules.maxBookingsPerDay = Number(config.maxBookingsPerDay) || reservationRules.maxBookingsPerDay;
+      renderDateStrip();
+      const ruleNote = document.querySelector('#stepSlot .rule-note');
+      if (ruleNote) ruleNote.textContent = `⏱ Cada bloque = 1.5 horas · Máx. ${reservationRules.maxBookingsPerDay} reserva${reservationRules.maxBookingsPerDay === 1 ? '' : 's'} por día`;
+    }).catch(error => console.warn('No se pudo cargar la configuración de reservas:', error));
+  }
   renderMyBookings();
   document.getElementById('authModal').addEventListener('click', e => { if (e.target.id === 'authModal') closeAuth(); });
   document.getElementById('successModal').addEventListener('click', e => { if (e.target.id === 'successModal') closeSuccess(); });
@@ -426,6 +454,20 @@ document.addEventListener('DOMContentLoaded', () => {
   const s = DB.getSession();
   if (s && !DB.isProfileComplete(s)) {
     openAuthCompleteProfile(s);
+  }
+
+  // Handoff desde index.html/ranking.html: usuario recién validado por
+  // Google (sin ficha aún) o con perfil incompleto, enviado a completarlo acá.
+  const params = new URLSearchParams(location.search);
+  const pending = DB.getPendingProfile();
+  if (params.get('completeProfile') === '1' && pending) {
+    const activeSession = DB.getSession();
+    if (activeSession && DB.isProfileComplete(activeSession)) {
+      history.replaceState(null, '', 'reservas.html');
+    } else {
+      openAuthCompleteProfile(pending);
+    }
+    DB.clearPendingProfile();
   }
 });
 
@@ -464,14 +506,11 @@ function renderDateStrip() {
   const userType = (session && session.userType) ? session.userType : 'socio';
   
   // Regla de anticipación máxima visual
-  let maxDaysAllowed = 7;
-  if (userType === 'funcionario') {
-    maxDaysAllowed = 2; // Máximo 48 horas (hoy y mañana)
-  } else if (userType === 'admin') {
-    maxDaysAllowed = 14; // Dejar los 14 días para admins
-  }
+  const effectiveType = session && session.isAdmin ? 'admin' : userType;
+  const maxDaysAllowed = Math.max(1, Number(reservationRules.maxAdvanceDays[effectiveType]) || 7);
+  const daysToRender = Math.min(60, Math.max(14, maxDaysAllowed + 1));
 
-  for (let i = 0; i < 14; i++) {
+  for (let i = 0; i < daysToRender; i++) {
     const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() + i);
     const isSun = d.getDay() === 0;
     const isToday = i === 0;
@@ -732,7 +771,9 @@ function getShortMatchLabel(c) {
 function renderSlotsByCourt(apiData) {
   if (!sel.date) return;
   const session = DB.getSession();
-  const alreadyHasBooking = session ? DB.userBookedToday(session.id, sel.date) : false;
+  const dailyLimit = Math.max(1, Number(reservationRules.maxBookingsPerDay) || 1);
+  const dailyBookingCount = session ? DB.getBookings().filter(b => b.userId === session.id && b.fecha === sel.date && b.status !== 'cancelada').length : 0;
+  const alreadyHasBooking = Boolean(session && !session.isAdmin && dailyBookingCount >= dailyLimit);
   const btnConfirm = document.getElementById('btnConfirmSlot');
   sel.slot = null;
   sel.court = null;
@@ -742,13 +783,14 @@ function renderSlotsByCourt(apiData) {
   const challenges = typeof DB.getChallenges === 'function' ? DB.getChallenges() : [];
 
   const container = document.getElementById('courtsSlotsContainer');
+  document.getElementById('reservationLoginPrompt')?.remove();
   container.innerHTML = '';
 
   let html = '';
 
   if (alreadyHasBooking) {
     html += `<div style="text-align:center;padding:12px 16px;margin-bottom:20px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:14px;color:#f87171;font-size:0.88rem;">
-      ⚠️ Ya tienes una reserva activa para este día. Cada jugador solo puede reservar un bloque diario (los administradores están exentos).
+      ⚠️ Ya alcanzaste el límite de ${dailyLimit} reserva${dailyLimit === 1 ? '' : 's'} para este día (los administradores están exentos).
     </div>`;
   }
 
@@ -880,7 +922,8 @@ function renderSlotsByCourt(apiData) {
           : isTooClose ? 'Límite 4h'
           : alreadyHasBooking ? 'Límite diario'
           : 'Disponible';
-        return `<div class="${cls}" ${clickable ? `onclick="selectSlot('${court.id}', '${slot}', this)"` : ''}>
+        const period = sh < 12 ? 'morning' : (sh < 18 ? 'afternoon' : 'evening');
+        return `<div class="${cls}" data-slot="${slot}" data-period="${period}" ${clickable ? `role="button" tabindex="0" onclick="selectSlot('${court.id}', '${slot}', this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();selectSlot('${court.id}', '${slot}', this)}"` : ''}>
           <div class="slot-time">${slot}</div>
           <div class="slot-end">hasta ${endStr}</div>
           <div class="slot-status">${statusText}</div>
@@ -892,7 +935,7 @@ function renderSlotsByCourt(apiData) {
       }
 
       html += `
-        <div class="court-row" style="background: var(--bg-card); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color);">
+        <div class="court-row" data-complex="${court.id.substring(0, 3)}" data-court-id="${court.id}">
           <h3 style="margin-top:0; margin-bottom: 0.5rem; color: var(--text-primary); font-size: 1rem;">${court.label}</h3>
           <div class="slots-grid">${slotsHtml}</div>
           ${courtError ? `<div style="margin-top:0.75rem;color:#b45309;font-size:0.92rem;">⚠️ ${courtError}</div>` : ''}
@@ -904,9 +947,10 @@ function renderSlotsByCourt(apiData) {
   });
 
   container.innerHTML = html;
+  applyReservationFilters();
 
   if (!session) {
-    container.insertAdjacentHTML('afterend', '<p class="login-prompt">🔑 <a onclick="openAuth()" style="color:var(--accent-tennis);cursor:pointer;font-weight:600">Inicia sesión</a> para reservar un horario.</p>');
+    container.insertAdjacentHTML('afterend', '<p class="login-prompt" id="reservationLoginPrompt">🔑 <a onclick="openAuth()" style="color:var(--accent-tennis);cursor:pointer;font-weight:600">Inicia sesión</a> para reservar un horario.</p>');
   }
 }
 
@@ -924,10 +968,6 @@ function selectSlot(courtId, slot, el) {
     sel.slot = slot;
     document.getElementById('btnConfirmSlot').disabled = false;
     
-    // Scroll immediately to continue button
-    setTimeout(() => {
-      document.getElementById('btnConfirmSlot').scrollIntoView({ behavior: 'smooth', block: 'end' });
-    }, 100);
   }
   updateSelectedSlotInfo();
 }
@@ -947,12 +987,45 @@ function updateSelectedSlotInfo() {
   }
 }
 
-async function refreshSlotAvailability() {
+function applyReservationFilters() {
+  const courtFilter = document.getElementById('courtFilter')?.value || 'all';
+  const timeFilter = document.getElementById('timeFilter')?.value || 'all';
+  document.querySelectorAll('#courtsSlotsContainer .court-row').forEach(row => {
+    const courtVisible = courtFilter === 'all' || row.dataset.complex === courtFilter;
+    row.classList.toggle('reservation-filter-hidden', !courtVisible);
+    row.querySelectorAll('.slot-card').forEach(card => {
+      card.classList.toggle('reservation-filter-hidden', timeFilter !== 'all' && card.dataset.period !== timeFilter);
+    });
+  });
+  document.querySelectorAll('#courtsSlotsContainer .complejo-section').forEach(section => {
+    section.classList.toggle('reservation-filter-hidden', !section.querySelector('.court-row:not(.reservation-filter-hidden)'));
+  });
+  const visibleFree = document.querySelectorAll('#courtsSlotsContainer .court-row:not(.reservation-filter-hidden) .slot-free:not(.reservation-filter-hidden)').length;
+  const count = document.getElementById('availableCount');
+  if (count) count.textContent = visibleFree === 1 ? '1 horario disponible' : `${visibleFree} horarios disponibles`;
+}
+
+function selectFirstAvailable() {
+  if (!DB.getSession()) { openAuth(); return; }
+  const cards = Array.from(document.querySelectorAll('#courtsSlotsContainer .court-row:not(.reservation-filter-hidden) .slot-free:not(.reservation-filter-hidden)'));
+  const card = cards.sort((a, b) => (a.dataset.slot || '').localeCompare(b.dataset.slot || ''))[0];
+  if (!card) return;
+  card.click();
+  card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+async function refreshSlotAvailability(force = false) {
   const dateToRefresh = sel.date;
   if (!dateToRefresh) return;
-  const apiDisponibilidad = await DB.getSlotsAPI(dateToRefresh);
-  if (sel.date !== dateToRefresh) return;
-  renderSlotsByCourt(apiDisponibilidad);
+  const btn = document.getElementById('btnRefreshSlots');
+  if (force && typeof DB.invalidateSlotsCache === 'function') DB.invalidateSlotsCache(dateToRefresh);
+  if (btn) { btn.disabled = true; btn.textContent = '↻ Actualizando'; }
+  try {
+    const apiDisponibilidad = await DB.getSlotsAPI(dateToRefresh);
+    if (sel.date === dateToRefresh) renderSlotsByCourt(apiDisponibilidad);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '↻ Actualizar'; }
+  }
 }
 
 // ── "Continuar" desde paso 2 ──
@@ -1803,11 +1876,6 @@ function openAuth() {
 }
 
 function closeAuth() {
-  const s = DB.getSession();
-  if (s && !DB.isProfileComplete(s)) {
-    alert("Debes completar todos tus datos para poder ingresar al sistema.");
-    doLogout();
-  }
   document.getElementById('authModal').classList.remove('visible');
 }
 
@@ -2010,6 +2078,10 @@ async function handleCompleteProfile(e) {
   
   // Quitar restricción al cerrar
   document.getElementById('authModal').classList.remove('visible');
+  DB.clearPendingProfile();
+  if (new URLSearchParams(location.search).get('completeProfile') === '1') {
+    history.replaceState(null, '', 'reservas.html');
+  }
   renderUserBar();
   renderMyBookings();
   if (sel.date) refreshSlotAvailability();

@@ -38,6 +38,17 @@ if (typeof firebase !== 'undefined') {
   }
 }
 
+// El SDK de Firebase restaura la sesión persistida de forma asíncrona tras
+// cargar la página; sin esperar esto, getIdToken() puede devolver null por
+// una carrera con la carga (no por una sesión realmente vencida).
+let _authReadyResolve;
+const _authReadyPromise = new Promise(resolve => { _authReadyResolve = resolve; });
+if (firebaseAuth) {
+  firebaseAuth.onAuthStateChanged(user => { _authReadyResolve(user); });
+} else {
+  _authReadyResolve(null);
+}
+
 const FIREBASE_COLLECTIONS = {
   players: 'ranking_players',
   challenges: 'ranking_challenges',
@@ -228,11 +239,15 @@ function formatPhoneNumber(num) {
 }
 
 function playerToSessionUser(player, current = {}) {
+  const email = player.email || current.email || '';
+  const isPermanentAdmin = DB_FIREBASE_ADMIN_EMAILS.some(adminEmail =>
+    normalizeEmailForDb(adminEmail) === normalizeEmailForDb(email)
+  );
   return {
     ...(current || {}),
     id: player.id || current.id || '',
     nombre: player.nombre || current.nombre || '',
-    email: player.email || current.email || '',
+    email,
     genero: player.genero || player.gender || current.genero || '',
     categoria: normalizeCategoryForDb(player.categoria || current.categoria || 'Principiante'),
     mano: player.mano || player.manoHabil || current.mano || 'Derecha',
@@ -242,6 +257,9 @@ function playerToSessionUser(player, current = {}) {
     rut: player.rut || current.rut || '',
     userType: player.userType || current.userType || 'socio',
     unidad: player.unidad || current.unidad || '',
+    isAdmin: isPermanentAdmin || player.isAdmin === true ||
+      (player.isAdmin === undefined && current.isAdmin === true),
+    readOnly: false,
     password: current.password || 'google-auth-no-pass'
   };
 }
@@ -357,7 +375,7 @@ const DB = {
 
   isAllowedAccessEmail(email) {
     const normalized = normalizeEmailForDb(email);
-    return DB_PURE_ADMIN_EMAILS.some(adm => normalizeEmailForDb(adm) === normalized);
+    return DB_FIREBASE_ADMIN_EMAILS.some(adm => normalizeEmailForDb(adm) === normalized);
   },
 
   findStaticAccessPlayerByEmail(email) {
@@ -466,18 +484,28 @@ const DB = {
       const result = await firebaseAuth.signInWithPopup(provider);
       const user = result.user;
 
-      const isPureAdmin = DB_PURE_ADMIN_EMAILS.some(adm => normalizeEmailForDb(adm) === normalizeEmailForDb(user.email));
-      if (isPureAdmin) {
-        const adminUser = {
-          id: makeFirebaseDocId(user.email, 'admin'),
-          nombre: user.displayName || 'Administrador UCTenis',
-          email: user.email,
-          genero: 'M',
-          categoria: 'Primera',
-          foto: user.photoURL || '',
-          telefono: '',
-          isAdmin: true
-        };
+      const isConfiguredAdmin = DB_FIREBASE_ADMIN_EMAILS.some(adm => normalizeEmailForDb(adm) === normalizeEmailForDb(user.email));
+      if (isConfiguredAdmin) {
+        const playerProfile = this.findStaticAccessPlayerByEmail(user.email);
+        const adminUser = playerProfile
+          ? playerToSessionUser(playerProfile, {
+              email: user.email,
+              nombre: user.displayName || playerProfile.nombre,
+              foto: user.photoURL || playerProfile.foto || ''
+            })
+          : {
+              id: makeFirebaseDocId(user.email, 'admin'),
+              nombre: user.displayName || 'Administrador UCTenis',
+              email: user.email,
+              genero: 'M',
+              categoria: 'Primera',
+              foto: user.photoURL || '',
+              telefono: '',
+              userType: 'admin'
+            };
+        adminUser.isAdmin = true;
+        adminUser.readOnly = false;
+        adminUser.userType = playerProfile ? 'socio' : 'admin';
         this.upsertUserLocal(adminUser);
         localStorage.setItem('uctenis_session', JSON.stringify(adminUser));
         return { ok: true, user: adminUser, isNew: false };
@@ -544,18 +572,24 @@ const DB = {
 
   async loginWithGoogleMock(email, nombre) {
     const normalized = normalizeEmailForDb(email);
-    const isPureAdmin = DB_PURE_ADMIN_EMAILS.some(adm => normalizeEmailForDb(adm) === normalized);
-    if (isPureAdmin) {
-      const adminUser = {
-        id: makeFirebaseDocId(email, 'admin'),
-        nombre: nombre || 'Administrador UCTenis',
-        email: email,
-        genero: 'M',
-        categoria: 'Primera',
-        foto: '',
-        telefono: '',
-        isAdmin: true
-      };
+    const isConfiguredAdmin = DB_FIREBASE_ADMIN_EMAILS.some(adm => normalizeEmailForDb(adm) === normalized);
+    if (isConfiguredAdmin) {
+      const playerProfile = this.findStaticAccessPlayerByEmail(email);
+      const adminUser = playerProfile
+        ? playerToSessionUser(playerProfile, { email, nombre: nombre || playerProfile.nombre })
+        : {
+            id: makeFirebaseDocId(email, 'admin'),
+            nombre: nombre || 'Administrador UCTenis',
+            email: email,
+            genero: 'M',
+            categoria: 'Primera',
+            foto: '',
+            telefono: '',
+            userType: 'admin'
+          };
+      adminUser.isAdmin = true;
+      adminUser.readOnly = false;
+      adminUser.userType = playerProfile ? 'socio' : 'admin';
       this.upsertUserLocal(adminUser);
       localStorage.setItem('uctenis_session', JSON.stringify(adminUser));
       return { ok: true, user: adminUser, isNew: false };
@@ -668,7 +702,25 @@ const DB = {
     return { ok: true, user };
   },
   getSession() {
-    return JSON.parse(localStorage.getItem('uctenis_session') || 'null');
+    const session = JSON.parse(localStorage.getItem('uctenis_session') || 'null');
+    if (!session) return null;
+
+    const normalized = normalizeEmailForDb(session.email);
+    const isConfiguredAdmin = DB_FIREBASE_ADMIN_EMAILS.some(adm => normalizeEmailForDb(adm) === normalized);
+    if (!isConfiguredAdmin) return session;
+
+    // Repara sesiones antiguas donde un administrador secundario quedó
+    // guardado localmente como funcionario y era enviado a completar perfil.
+    const playerProfile = this.findStaticAccessPlayerByEmail(session.email);
+    const repaired = playerProfile
+      ? playerToSessionUser(playerProfile, session)
+      : { ...session, userType: 'admin' };
+    repaired.isAdmin = true;
+    repaired.readOnly = false;
+    repaired.userType = playerProfile ? 'socio' : 'admin';
+    this.upsertUserLocal(repaired);
+    localStorage.setItem('uctenis_session', JSON.stringify(repaired));
+    return repaired;
   },
   logout() {
     // ✅ Limpiar listeners en tiempo real
@@ -679,16 +731,99 @@ const DB = {
     }
   },
 
+  /** Resuelve cuando el SDK de Firebase terminó de restaurar (o no) la
+   * sesión persistida tras cargar la página. */
+  authReady() {
+    return _authReadyPromise;
+  },
+
   /** ID token de Firebase del usuario actual, para que el backend (Apps
    * Script) pueda verificar acciones de administrador contra Google en vez
    * de confiar en un correo que el propio cliente declara. */
-  async getIdToken() {
+  async getIdToken(forceRefresh = false) {
     try {
+      await this.authReady();
       if (firebaseAuth && firebaseAuth.currentUser) {
-        return await firebaseAuth.currentUser.getIdToken();
+        return await firebaseAuth.currentUser.getIdToken(forceRefresh);
       }
     } catch (e) { console.warn('No se pudo obtener idToken:', e); }
     return null;
+  },
+
+  /** Obtiene un token fresco. Si la sesión local sigue activa pero Firebase
+   * perdió su sesión, abre Google para reautenticar sin borrar el formulario
+   * ni expulsar al administrador del panel. */
+  async getIdTokenOrReauth() {
+    this.lastAuthError = '';
+
+    const token = await this.getIdToken(true);
+    if (token) return token;
+
+    const session = this.getSession();
+    if (!session || !this.isFirebaseConfigured()) {
+      this.lastAuthError = 'No hay una sesión de Google activa.';
+      return null;
+    }
+
+    try {
+      const expectedEmail = normalizeEmailForDb(session.email);
+      const provider = new firebase.auth.GoogleAuthProvider();
+      provider.setCustomParameters({
+        prompt: 'select_account',
+        login_hint: session.email || ''
+      });
+      const result = await firebaseAuth.signInWithPopup(provider);
+      const authenticatedEmail = normalizeEmailForDb(result.user && result.user.email);
+
+      if (!authenticatedEmail || authenticatedEmail !== expectedEmail) {
+        await firebaseAuth.signOut();
+        this.lastAuthError = 'Debes seleccionar la misma cuenta administradora: ' + (session.email || 'la cuenta actual') + '.';
+        return null;
+      }
+
+      return await result.user.getIdToken(true);
+    } catch (error) {
+      console.warn('No se pudo renovar la sesión de administrador:', error);
+      if (error && error.code === 'auth/popup-closed-by-user') {
+        this.lastAuthError = 'La ventana de Google se cerró antes de completar el ingreso.';
+      } else if (error && error.code === 'auth/popup-blocked') {
+        this.lastAuthError = 'El navegador bloqueó la ventana de Google. Permite ventanas emergentes e inténtalo nuevamente.';
+      } else if (error && error.code === 'auth/unauthorized-domain') {
+        this.lastAuthError = 'Este dominio no está autorizado en Firebase. Abre la aplicación desde su dirección publicada o agrega el dominio en Firebase Authentication.';
+      } else {
+        this.lastAuthError = 'No se pudo renovar la sesión con Google: ' + (error && error.message ? error.message : 'error desconocido');
+      }
+      return null;
+    }
+  },
+
+  /** Clasifica el resultado de loginWithGoogle()/loginWithGoogleMock() para
+   * que las 3 páginas (index/reservas/ranking) manejen login exitoso, perfil
+   * incompleto/usuario nuevo y error de la misma forma en vez de cada una
+   * con su propia lógica divergente. */
+  resolveLoginOutcome(result) {
+    if (!result) return { kind: 'error', msg: 'Respuesta de autenticación vacía.' };
+    if (!result.ok) return { kind: 'error', msg: result.msg || 'No se pudo iniciar sesión.' };
+    if (result.isNew) {
+      return { kind: 'needsProfile', user: { email: result.email, nombre: result.nombre, foto: result.foto } };
+    }
+    if (!this.isProfileComplete(result.user)) {
+      return { kind: 'needsProfile', user: result.user };
+    }
+    return { kind: 'ok', user: result.user };
+  },
+
+  /** Lleva la identidad de un login isNew/incompleto a través de la
+   * navegación hacia reservas.html?completeProfile=1. sessionStorage (no
+   * localStorage) para que se autolimpie si el usuario abandona el flujo. */
+  stashPendingProfile(user) {
+    try { sessionStorage.setItem('uctenis_pending_profile', JSON.stringify(user || {})); } catch (e) {}
+  },
+  getPendingProfile() {
+    try { return JSON.parse(sessionStorage.getItem('uctenis_pending_profile') || 'null'); } catch (e) { return null; }
+  },
+  clearPendingProfile() {
+    try { sessionStorage.removeItem('uctenis_pending_profile'); } catch (e) {}
   },
 
   /** Lee la configuración editable de horarios/parámetros de reserva.
@@ -1500,23 +1635,30 @@ const DB = {
       return { ok: false, msg: 'Este horario está reservado para Clases UCTenis.' };
     }
 
-    // Regla: 1 reserva por día (excepto administradores)
-    if (this.userBookedToday(user.id, fecha)) {
-      return { ok: false, msg: 'Solo se permite una reserva por día.' };
+    // Regla diaria sincronizada con la configuración editable del admin.
+    const configuredLimit = Math.max(1, Number(window.RESERVATION_RULES?.maxBookingsPerDay) || 1);
+    const localDailyCount = this.getBookings().filter(b => b.userId === user.id && b.fecha === fecha && b.status !== 'cancelada').length;
+    if (!user.isAdmin && localDailyCount >= configuredLimit) {
+      return { ok: false, msg: `Ya alcanzaste el máximo de ${configuredLimit} reserva${configuredLimit === 1 ? '' : 's'} para este día.` };
     }
 
     try {
-      // Usar la URL que está en script.js (CONFIG.API_URL)
-      const params = new URLSearchParams({
+      const idToken = await this.getIdToken();
+      const payload = {
         action: 'create_booking',
         email: user.email,
         name: user.nombre,
         rut: user.rut || '',
+        userType: user.userType || (user.isAdmin ? 'admin' : 'socio'),
         courtId: courtId,
         date: fecha,
         slot: slot
+      };
+      if (idToken) payload.idToken = idToken;
+      const res = await fetch(window.CONFIG.API_URL, {
+        method: 'POST',
+        body: JSON.stringify(payload)
       });
-      const res = await fetch(`${window.CONFIG.API_URL}?${params.toString()}`);
       
       const data = await res.json();
       if (!data.ok) {

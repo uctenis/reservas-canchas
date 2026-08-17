@@ -284,7 +284,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-<script src="db.js?v=20260813_v1"></script>
+<script src="db.js?v=20260817_admin_reauth"></script>
 <script>
 const ADMIN_EMAILS = ['uctenisclub@gmail.com', 'dsilva@uct.cl'];
 const COURTS = [
@@ -323,7 +323,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('specialDate').value = `${y}-${m}-${d}`;
 
   const session = DB.getSession();
-  if (!session || !ADMIN_EMAILS.includes((session.email || '').toLowerCase())) {
+  if (!session || !(session.isAdmin === true || ADMIN_EMAILS.includes((session.email || '').toLowerCase()))) {
     document.getElementById('accessDenied').style.display = 'block';
   } else {
     document.getElementById('adminPanel').style.display = 'block';

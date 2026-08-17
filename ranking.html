@@ -171,85 +171,6 @@
       <p class="auth-error" id="authErr" aria-live="polite"></p>
     </div>
 
-    <div id="authCompleteProfileView" class="auth-view" style="display:none">
-      <p class="modal-kicker">Perfil de jugador</p>
-      <h3>Completa tu perfil</h3>
-      <p class="auth-copy">Estos datos se usarán para mostrar tu ficha dentro del ranking.</p>
-
-      <form id="fCompleteProfile">
-        <input type="hidden" id="cpEmail">
-        <input type="hidden" id="cpFoto">
-
-        <div class="form-group">
-          <label for="cpNombre">Nombre completo</label>
-          <input type="text" id="cpNombre" required>
-        </div>
-
-        <div class="form-row" style="display: flex; gap: 15px;">
-          <div class="form-group" style="flex: 2;">
-            <label for="cpRut">RUT (solo números)</label>
-            <input type="text" id="cpRut" placeholder="12345678" maxlength="8" required>
-          </div>
-          <div class="form-group" style="flex: 1;">
-            <label for="cpRutDv" style="text-align: center;">DV</label>
-            <input type="text" id="cpRutDv" readonly placeholder="-" style="text-align: center; font-weight: bold; background: rgba(255,255,255,0.05);">
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label for="cpTelefono">Teléfono (WhatsApp)</label>
-          <input type="tel" id="cpTelefono" placeholder="+56912345678" value="+569" required>
-        </div>
-
-        <div class="form-row">
-          <div class="form-group">
-            <label for="cpGenero">Género</label>
-            <select id="cpGenero" required>
-              <option value="">Selecciona</option>
-              <option value="M">Masculino</option>
-              <option value="F">Femenino</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label for="cpCat">Categoría</label>
-            <select id="cpCat" required>
-              <option value="">Selecciona</option>
-              <option value="Primera">Primera</option>
-              <option value="Segunda">Segunda</option>
-              <option value="Tercera">Tercera</option>
-              <option value="Cuarta">Cuarta</option>
-              <option value="Principiante">Principiante</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="form-row">
-          <div class="form-group">
-            <label for="cpMano">Mano hábil</label>
-            <select id="cpMano">
-              <option value="Derecha">Derecha</option>
-              <option value="Izquierda">Izquierda</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label for="cpReves">Revés</label>
-            <select id="cpReves">
-              <option value="Dos manos">Dos manos</option>
-              <option value="Una mano">Una mano</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label for="cpPhotoFile">Adjuntar foto</label>
-          <input type="file" id="cpPhotoFile" accept="image/png,image/jpeg,image/webp">
-          <small class="field-hint">JPG, PNG o WEBP. Se optimiza antes de guardar.</small>
-        </div>
-
-        <p class="auth-error" id="cpErr" aria-live="polite"></p>
-        <button type="submit" class="btn-primary" id="btnCompleteProfile">Finalizar registro</button>
-      </form>
-    </div>
   </div>
 </div>
 
@@ -404,27 +325,65 @@
     <div id="adminPlayersSection">
       <!-- Vista Listado de Jugadores -->
       <div id="adminListView" class="admin-subview">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 12px; gap: 12px; flex-wrap: wrap;">
-        <div>
+      <div class="admin-section-header">
+        <div class="admin-section-heading">
           <p class="modal-kicker">Administrador</p>
-          <h3 style="margin: 0; font-size: 1.28rem;">Administración de Jugadores</h3>
+          <h3>Jugadores</h3>
+          <p class="admin-section-subtitle">Gestiona los miembros y jugadores del club</p>
         </div>
-        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-          <button type="button" class="btn-primary" id="btnAdminCreatePlayer" style="padding: 8px 14px; font-size: 0.78rem; font-weight: 800; border-radius: 8px; cursor: pointer; width: auto; min-height: auto;">
-            ➕ Agregar Jugador
+        <div class="admin-section-actions">
+          <button type="button" class="btn-primary admin-btn-primary-lg" id="btnAdminCreatePlayer">
+            ➕ Agregar jugador
           </button>
-          <button type="button" class="btn-primary" id="btnExportPlayers" style="padding: 8px 14px; font-size: 0.76rem; background: #10b981; border: none; border-radius: 8px; font-weight: 800; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 4px 12px rgba(16,185,129,0.22); width: auto; min-height: auto;" onclick="exportPlayersToExcel(event)">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="flex-shrink:0;"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg> Exportar
+          <button type="button" class="admin-btn-ghost" id="btnExportPlayers" onclick="exportPlayersToExcel(event)" title="Exportar jugadores a Excel">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg> Exportar
           </button>
-          <button type="button" class="btn-primary" id="btnResetSystem" style="padding: 8px 14px; font-size: 0.76rem; background: #ef4444; border: none; border-radius: 8px; font-weight: 800; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 4px 12px rgba(239,68,68,0.22); width: auto; min-height: auto;" onclick="resetSystemData(event)">
-            🔄 Reiniciar Temporada
+          <button type="button" class="admin-btn-ghost admin-btn-ghost-danger" id="btnResetSystem" onclick="resetSystemData(event)" title="Reiniciar temporada (requiere doble confirmación)">
+            🔄 Reiniciar temporada
           </button>
         </div>
       </div>
-      <div class="admin-search-row" style="margin-bottom: 12px;">
-        <input type="search" id="adminPlayerSearch" placeholder="Buscar jugador por nombre o correo" aria-label="Buscar jugadores">
+
+      <div class="admin-stat-row" id="adminPlayerStats"></div>
+
+      <div class="admin-toolbar">
+        <div class="schedule-search admin-player-search">
+          <input type="search" id="adminPlayerSearch" placeholder="Buscar jugador por nombre, correo o ID" aria-label="Buscar jugadores">
+        </div>
+        <div class="admin-filter-group">
+          <select id="adminFilterEstado" aria-label="Filtrar por estado">
+            <option value="">Estado: Todos</option>
+            <option value="active">Activos</option>
+            <option value="inactive">Inactivos</option>
+          </select>
+          <select id="adminFilterCategoria" aria-label="Filtrar por categoría">
+            <option value="">Categoría: Todas</option>
+          </select>
+          <select id="adminFilterGenero" aria-label="Filtrar por género">
+            <option value="">Género: Todos</option>
+            <option value="M">Masculino</option>
+            <option value="F">Femenino</option>
+          </select>
+        </div>
       </div>
-      <div class="admin-player-list" id="adminPlayerList" style="max-height: 480px; overflow-y: auto; padding-right: 4px;"></div>
+
+      <div class="admin-table-wrap">
+        <table class="admin-table" id="adminPlayerTable">
+          <thead>
+            <tr>
+              <th>Jugador</th>
+              <th>Categoría</th>
+              <th>Género</th>
+              <th>Email</th>
+              <th>Estado</th>
+              <th>Perfil</th>
+              <th class="table-actions">Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="adminPlayerList"></tbody>
+        </table>
+      </div>
+      <div class="admin-pagination" id="adminPlayerPagination"></div>
     </div>
 
     <!-- Vista Formulario de Jugador -->
@@ -490,6 +449,12 @@
             <label for="adminTelefono">Teléfono (WhatsApp)</label>
             <input type="tel" id="adminTelefono" placeholder="+56912345678" value="+569">
           </div>
+        </div>
+        <div class="form-group" style="padding:12px 14px; border:1px solid rgba(99,102,241,.35); border-radius:10px; background:rgba(99,102,241,.08);">
+          <label for="adminEsAdministrador" style="display:flex;align-items:center;gap:10px;cursor:pointer;margin:0;">
+            <input type="checkbox" id="adminEsAdministrador" style="width:18px;height:18px;accent-color:#a3e635;">
+            <span><strong>Administrador del sistema</strong><br><small class="field-hint">Puede ver y utilizar el Panel Administrador. El propietario mantiene este permiso permanentemente.</small></span>
+          </label>
         </div>
         <div class="form-group">
           <label for="adminNotas">Notas internas</label>
@@ -628,8 +593,12 @@
     <!-- Sección de Horarios/Fechas Especiales -->
     <div id="adminSchedulesSection" class="hidden schedule-layout" style="padding: 0 20px 20px 20px;">
         <div class="schedule-header">
-          <p class="modal-kicker">Administrador</p>
-          <h3 style="margin: 0; font-size: 1.28rem;">Administración de Horarios</h3>
+          <div>
+            <p class="modal-kicker">Centro de operaciones</p>
+            <h3>Configuración de reservas</h3>
+            <p class="schedule-header-copy">Controla disponibilidad, excepciones y políticas desde un solo lugar.</p>
+          </div>
+          <span class="schedule-save-state" id="scheduleSaveState"><i></i> Configuración sincronizada</span>
         </div>
 
         <div class="schedule-body">
@@ -653,7 +622,7 @@
           <div class="schedule-content">
 
             <!-- ═══ FECHAS ESPECIALES ═══ -->
-            <div id="scheduleSectionSpecial" class="schedule-panel">
+            <div id="scheduleSectionSpecial" class="schedule-panel schedule-panel-card">
               <p class="schedule-panel-desc">
                 Habilita todos los horarios o cierra por completo una o más canchas, para un día puntual o un período de varios días (mantenimiento, torneo, feriado).
               </p>
@@ -665,7 +634,7 @@
                 <button type="button" class="segmented-btn" data-mode="range" onclick="setSpecialDateMode('range')">🗓️ Rango de fechas</button>
               </div>
 
-              <div class="form-row" style="display:flex; gap: 15px; margin-bottom: 15px; flex-wrap: wrap;">
+              <div class="form-row schedule-form-grid">
                 <div class="form-group" id="specialDateSingleGroup" style="flex:1; min-width:160px;">
                   <label for="adminSpecialDate" style="display:block; margin-bottom:6px; font-size:0.85rem; color:rgba(255,255,255,0.7);">📅 Fecha</label>
                   <input type="date" id="adminSpecialDate" style="width:100%; padding:10px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:#fff; outline:none;">
@@ -685,17 +654,17 @@
               </div>
 
               <p style="font-size:0.82rem;color:rgba(255,255,255,0.7);margin-bottom:10px;font-weight:600;">🎾 Canchas que aplica</p>
-              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 18px;">
-                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.85rem;">
+              <div class="schedule-court-selector">
+                <label class="schedule-check-card">
                   <input type="checkbox" id="admin_court_cec1" value="cec1" checked> CEC 1 (Arcilla)
                 </label>
-                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.85rem;">
+                <label class="schedule-check-card">
                   <input type="checkbox" id="admin_court_cec2" value="cec2" checked> CEC 2 (Arcilla)
                 </label>
-                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.85rem;">
+                <label class="schedule-check-card">
                   <input type="checkbox" id="admin_court_cjp1" value="cjp1" checked> CJP 1 (Asfalto)
                 </label>
-                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.85rem;">
+                <label class="schedule-check-card">
                   <input type="checkbox" id="admin_court_cjp2" value="cjp2" checked> CJP 2 (Asfalto)
                 </label>
               </div>
@@ -735,48 +704,53 @@
             </div>
 
             <!-- ═══ HORARIOS REGULARES ═══ -->
-            <div id="scheduleSectionRegular" class="schedule-panel hidden">
+            <div id="scheduleSectionRegular" class="schedule-panel schedule-panel-card hidden">
               <p class="schedule-panel-desc">
                 Define qué horarios están disponibles para reservar en cada cancha, según el día de la semana. Los cambios aplican a las reservas normales (las fechas especiales siguen mandando sobre esto para un día o período puntual).
               </p>
 
               <div id="scheduleConfigAlert" class="alert-box" style="display:none; padding: 12px; border-radius: 8px; font-size: 0.85rem; margin-bottom: 15px;"></div>
 
-              <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:16px;" id="scheduleCourtTabs">
+              <div class="schedule-court-tabs" id="scheduleCourtTabs">
                 <button type="button" class="admin-tab-btn active" data-court="cec1" onclick="selectScheduleCourt('cec1')" style="padding:8px 14px;font-size:0.82rem;">CEC 1 (Arcilla)</button>
                 <button type="button" class="admin-tab-btn" data-court="cec2" onclick="selectScheduleCourt('cec2')" style="padding:8px 14px;font-size:0.82rem;">CEC 2 (Arcilla)</button>
                 <button type="button" class="admin-tab-btn" data-court="cjp1" onclick="selectScheduleCourt('cjp1')" style="padding:8px 14px;font-size:0.82rem;">CJP 1 (Asfalto)</button>
                 <button type="button" class="admin-tab-btn" data-court="cjp2" onclick="selectScheduleCourt('cjp2')" style="padding:8px 14px;font-size:0.82rem;">CJP 2 (Asfalto)</button>
               </div>
 
-              <div id="scheduleGridContainer" style="overflow-x:auto; padding-bottom:6px;">
+              <div id="scheduleGridContainer" class="schedule-grid-shell">
                 <p style="color:var(--text-secondary);font-size:0.85rem;text-align:center;padding:15px">Cargando horarios...</p>
               </div>
 
-              <div style="display:flex;justify-content:flex-end;margin-top:10px;">
+              <div class="schedule-panel-actions">
                 <button class="btn-secondary" type="button" onclick="resetScheduleCourtToDefault()" style="padding: 7px 14px; font-size:0.78rem;">↺ Restablecer esta cancha</button>
+                <button class="btn-primary" id="btnSaveScheduleConfigRegular" type="button" onclick="saveScheduleConfigAll(event)">Guardar cambios</button>
               </div>
             </div>
 
             <!-- ═══ PARÁMETROS DE RESERVA ═══ -->
-            <div id="scheduleSectionParams" class="schedule-panel hidden">
+            <div id="scheduleSectionParams" class="schedule-panel schedule-panel-card hidden">
               <p class="schedule-panel-desc">
                 Controla con cuánta anticipación puede reservar cada tipo de usuario y cuántas reservas puede tener por día.
               </p>
-              <div class="form-row" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:15px; margin-bottom:18px;">
-                <div class="form-group">
+              <div class="form-row schedule-param-grid">
+                <div class="form-group schedule-param-card">
+                  <span class="schedule-param-icon">♟</span>
                   <label style="display:block; margin-bottom:6px; font-size:0.85rem; color:rgba(255,255,255,0.7);">Anticipación Socios (días)</label>
                   <input type="number" id="cfgMaxAdvanceSocio" min="1" max="60" style="width:100%; padding:10px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:#fff; outline:none;">
                 </div>
-                <div class="form-group">
+                <div class="form-group schedule-param-card">
+                  <span class="schedule-param-icon">🏛</span>
                   <label style="display:block; margin-bottom:6px; font-size:0.85rem; color:rgba(255,255,255,0.7);">Anticipación Funcionarios (días)</label>
                   <input type="number" id="cfgMaxAdvanceFuncionario" min="1" max="60" style="width:100%; padding:10px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:#fff; outline:none;">
                 </div>
-                <div class="form-group">
+                <div class="form-group schedule-param-card">
+                  <span class="schedule-param-icon">◆</span>
                   <label style="display:block; margin-bottom:6px; font-size:0.85rem; color:rgba(255,255,255,0.7);">Anticipación Admins (días)</label>
                   <input type="number" id="cfgMaxAdvanceAdmin" min="1" max="60" style="width:100%; padding:10px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:#fff; outline:none;">
                 </div>
-                <div class="form-group">
+                <div class="form-group schedule-param-card">
+                  <span class="schedule-param-icon">▦</span>
                   <label style="display:block; margin-bottom:6px; font-size:0.85rem; color:rgba(255,255,255,0.7);">Máx. reservas por día</label>
                   <input type="number" id="cfgMaxBookingsPerDay" min="1" max="10" style="width:100%; padding:10px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:#fff; outline:none;">
                 </div>
@@ -800,7 +774,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-<script src="db.js?v=20260813_v1"></script>
+<script src="db.js?v=20260817_admin_reauth"></script>
 
 <script>
 // Helper functions for RUT
@@ -1011,16 +985,6 @@ function setupEvents() {
   document.getElementById('btnNuevoAmistoso').addEventListener('click', () => openScoreModal(null));
   document.getElementById('btnGoogleLogin').addEventListener('click', handleGoogleLogin);
   document.getElementById('btnMockLogin').addEventListener('click', handleMockLogin);
-  document.getElementById('fCompleteProfile').addEventListener('submit', handleCompleteProfile);
-
-  const cpRut = document.getElementById('cpRut');
-  const cpRutDv = document.getElementById('cpRutDv');
-  if (cpRut && cpRutDv) {
-    cpRut.addEventListener('input', function() {
-      this.value = this.value.replace(/[^0-9]/g, '').slice(0, 8);
-      cpRutDv.value = calculateRutDV(this.value);
-    });
-  }
 
   const adminRut = document.getElementById('adminRut');
   const adminRutDv = document.getElementById('adminRutDv');
@@ -1057,7 +1021,11 @@ function setupEvents() {
   });
   document.getElementById('fAdminPlayer').addEventListener('submit', submitAdminPlayer);
   const adminSearch = document.getElementById('adminPlayerSearch');
-  if (adminSearch) adminSearch.addEventListener('input', debounce(renderAdminPlayerList, 250));
+  if (adminSearch) adminSearch.addEventListener('input', debounce(() => { adminPlayerListState.page = 1; renderAdminPlayerList(); }, 250));
+  ['adminFilterEstado', 'adminFilterCategoria', 'adminFilterGenero'].forEach(id => {
+    const sel = document.getElementById(id);
+    if (sel) sel.addEventListener('change', () => { adminPlayerListState.page = 1; renderAdminPlayerList(); });
+  });
 
   document.getElementById('btnAdminCreatePlayer').addEventListener('click', () => {
     resetAdminForm();
@@ -1130,6 +1098,20 @@ function setupEvents() {
 
     const deleteAdminPlayer = event.target.closest('[data-action="admin-delete-player"]');
     if (deleteAdminPlayer) deletePlayerFromAdmin(deleteAdminPlayer.dataset.playerKey);
+
+    const pagePrev = event.target.closest('[data-action="admin-page-prev"]');
+    if (pagePrev) { adminPlayerListState.page--; renderAdminPlayerList(); }
+
+    const pageNext = event.target.closest('[data-action="admin-page-next"]');
+    if (pageNext) { adminPlayerListState.page++; renderAdminPlayerList(); }
+
+    const rowMenuToggle = event.target.closest('[data-action="admin-row-menu-toggle"]');
+    if (rowMenuToggle) {
+      event.stopPropagation();
+      toggleAdminRowMenu(rowMenuToggle);
+    } else {
+      closeAdminRowMenu();
+    }
 
     const closeBtn = event.target.closest('[data-close-modal]');
     if (closeBtn) closeModal(closeBtn.dataset.closeModal);
@@ -1784,6 +1766,7 @@ function normalizePlayer(row, index, gender) {
     telefono,
     rut,
     notas: cleanText(row?.notes ?? row?.notas),
+    isAdmin: row?.isAdmin === true || row?.admin === true,
     activo: normalizeActiveValue(activeValue)
   };
 }
@@ -1808,7 +1791,8 @@ function fillPlayerFromLocalProfile(player) {
     foto: player.foto || resolvePhoto(user.foto, user.id, player.gender),
     email: player.email || user.email || '',
     telefono: player.telefono || user.telefono || '',
-    rut: player.rut || user.rut || ''
+    rut: player.rut || user.rut || '',
+    isAdmin: player.isAdmin === true || user.isAdmin === true
   };
 }
 
@@ -2850,7 +2834,6 @@ function openAuthModal() {
     ? '<strong>Ingreso local</strong><br>Usa tu correo registrado para abrir sesion en esta version local.'
     : '<strong>Modo simulacion</strong><br>Disponible si Google Auth no responde en esta sesion.';
   document.getElementById('authMainView').style.display = 'block';
-  document.getElementById('authCompleteProfileView').style.display = 'none';
   document.getElementById('authErr').textContent = '';
   openModal('authModal');
 }
@@ -2933,9 +2916,14 @@ async function handleMockLogin() {
 }
 
 async function handleLoginResponse(result) {
-  if (result.isNew || !DB.isProfileComplete(result.user)) {
-    alert("Debes completar todos tus datos para poder ingresar al sistema.");
-    window.location.href = "reservas.html";
+  const outcome = DB.resolveLoginOutcome(result);
+  if (outcome.kind === 'needsProfile') {
+    DB.stashPendingProfile(outcome.user);
+    window.location.href = 'reservas.html?completeProfile=1';
+    return;
+  }
+  if (outcome.kind === 'error') {
+    document.getElementById('authErr').textContent = outcome.msg;
     return;
   }
 
@@ -2945,101 +2933,6 @@ async function handleLoginResponse(result) {
   // Gatillar auto-aceptación si hay un desafío pendiente en cola
   if (typeof window.triggerUrlChallengeAccept === 'function') {
     setTimeout(window.triggerUrlChallengeAccept, 500);
-  }
-}
-
-async function handleCompleteProfile(event) {
-  event.preventDefault();
-  const error = document.getElementById('cpErr');
-  const restoreButton = setButtonBusy(document.getElementById('btnCompleteProfile'), 'Guardando...');
-  error.textContent = '';
-
-  const rutBody = document.getElementById('cpRut').value.trim();
-  const rutDv = document.getElementById('cpRutDv').value.trim();
-  const rut = formatRut(rutBody, rutDv);
-
-  const data = {
-    email: document.getElementById('cpEmail').value,
-    foto: document.getElementById('cpFoto').value,
-    nombre: document.getElementById('cpNombre').value.trim(),
-    genero: document.getElementById('cpGenero').value,
-    categoria: document.getElementById('cpCat').value,
-    mano: document.getElementById('cpMano').value,
-    reves: document.getElementById('cpReves').value,
-    telefono: document.getElementById('cpTelefono').value.trim(),
-    rut: rut
-  };
-
-  if (!data.nombre || !data.genero || !data.categoria || !data.telefono) {
-    error.textContent = 'Completa nombre, teléfono, género y categoría.';
-    restoreButton();
-    return;
-  }
-
-  try {
-    const photoAttachment = await readPhotoAttachment('cpPhotoFile');
-    if (photoAttachment.photoDataUrl) data.foto = photoAttachment.photoDataUrl;
-
-    const result = DB.completeGoogleRegistration(data);
-    if (!result.ok) {
-      error.textContent = result.msg;
-      return;
-    }
-
-    // Buscar si ya existe una ficha con el mismo nombre en el ranking para vincular
-    const existingPlayer = getAllPlayers().find(p => normalizeKey(p.nombre) === normalizeKey(data.nombre));
-    const playerId = existingPlayer ? existingPlayer.id : result.user.id;
-    const position = (existingPlayer && Number.isFinite(existingPlayer.pos)) ? existingPlayer.pos : (rankingState.lists[data.genero] || []).length + 1;
-    const playerPayload = {
-      id: playerId,
-      nombre: data.nombre,
-      email: data.email,
-      genero: data.genero,
-      categoria: normalizeCategory(data.categoria),
-      mano: data.mano,
-      reves: data.reves,
-      foto: data.foto,
-      telefono: data.telefono,
-      rut: data.rut,
-      activo: true,
-      participaRanking: true,
-      posicion: position
-    };
-
-    try {
-      const savedPlayer = await DB.savePlayerCloud(playerPayload, actorPayload(result.user));
-      try {
-        await syncOwnPlayerToSheets(savedPlayer, { ...result.user, email: data.email, nombre: data.nombre });
-      } catch (sheetErr) {
-        console.warn('No se pudo sincronizar la ficha inicial con Google Sheets:', sheetErr);
-      }
-
-      if (existingPlayer) {
-        result.user.id = existingPlayer.id;
-        localStorage.setItem('uctenis_session', JSON.stringify(result.user));
-      }
-    } catch (cloudErr) {
-      console.warn('No se pudo guardar la ficha inicial en Firebase.', cloudErr);
-      savePlayerEditLocally(playerPayload);
-
-      if (existingPlayer) {
-        result.user.id = existingPlayer.id;
-        localStorage.setItem('uctenis_session', JSON.stringify(result.user));
-      }
-    }
-
-    closeModal('authModal');
-    switchGender(data.genero);
-    await refreshRankingPage();
-
-    // Gatillar auto-aceptación si hay un desafío pendiente en cola
-    if (typeof window.triggerUrlChallengeAccept === 'function') {
-      setTimeout(window.triggerUrlChallengeAccept, 500);
-    }
-  } catch (err) {
-    error.textContent = err.message || 'No se pudo finalizar el registro.';
-  } finally {
-    restoreButton();
   }
 }
 
@@ -5198,37 +5091,135 @@ async function resetSystemData(event) {
 }
 window.resetSystemData = resetSystemData;
 
+const adminPlayerListState = { page: 1, pageSize: 25 };
+
+function renderAdminPlayerStats(allPlayers) {
+  const el = document.getElementById('adminPlayerStats');
+  if (!el) return;
+  const total = allPlayers.length;
+  const active = allPlayers.filter(isPlayerActive).length;
+  const inactive = total - active;
+  const incomplete = allPlayers.filter(p => !DB.isProfileComplete(p)).length;
+  el.innerHTML = `
+    <div class="admin-stat-tile"><span class="stat-label">Total</span><span class="stat-value">${total}</span></div>
+    <div class="admin-stat-tile stat-active"><span class="stat-label">Activos</span><span class="stat-value">${active}</span></div>
+    <div class="admin-stat-tile stat-inactive"><span class="stat-label">Inactivos</span><span class="stat-value">${inactive}</span></div>
+    <div class="admin-stat-tile stat-incomplete"><span class="stat-label">Perfiles incompletos</span><span class="stat-value">${incomplete}</span></div>`;
+}
+
+function populateAdminCategoryFilter(allPlayers) {
+  const sel = document.getElementById('adminFilterCategoria');
+  if (!sel) return;
+  const current = sel.value;
+  const cats = [...new Set(allPlayers.map(p => p.categoria).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'));
+  sel.innerHTML = '<option value="">Categoría: Todas</option>' + cats.map(c => `<option value="${escapeAttr(c)}">${escapeHTML(c)}</option>`).join('');
+  if (cats.includes(current)) sel.value = current;
+}
+
+function renderAdminPlayerPagination(total, from, to) {
+  const el = document.getElementById('adminPlayerPagination');
+  if (!el) return;
+  if (!total) { el.innerHTML = ''; return; }
+  const totalPages = Math.max(1, Math.ceil(total / adminPlayerListState.pageSize));
+  el.innerHTML = `
+    <span class="admin-pagination-label">Mostrando ${from + 1}–${to} de ${total} jugadores</span>
+    <div class="admin-pagination-controls">
+      <button type="button" class="admin-icon-btn" data-action="admin-page-prev" ${adminPlayerListState.page <= 1 ? 'disabled' : ''} aria-label="Página anterior">‹</button>
+      <span class="admin-pagination-current">${adminPlayerListState.page} / ${totalPages}</span>
+      <button type="button" class="admin-icon-btn" data-action="admin-page-next" ${adminPlayerListState.page >= totalPages ? 'disabled' : ''} aria-label="Página siguiente">›</button>
+    </div>`;
+}
+
 function renderAdminPlayerList() {
-  const div = document.getElementById('adminPlayerList');
+  const tbody = document.getElementById('adminPlayerList');
   const rawPlayers = getAllPlayers();
+  renderAdminPlayerStats(rawPlayers);
+  populateAdminCategoryFilter(rawPlayers);
+
   const q = (document.getElementById('adminPlayerSearch')?.value || '').toLowerCase().trim();
-  const players = rawPlayers
+  const estadoFilter = document.getElementById('adminFilterEstado')?.value || '';
+  const categoriaFilter = document.getElementById('adminFilterCategoria')?.value || '';
+  const generoFilter = document.getElementById('adminFilterGenero')?.value || '';
+
+  let players = rawPlayers
     .sort((a, b) => a.gender.localeCompare(b.gender) || Number(isPlayerActive(b)) - Number(isPlayerActive(a)) || (a.pos || 9999) - (b.pos || 9999) || a.nombre.localeCompare(b.nombre, 'es'));
 
-  const filtered = q ? players.filter(p => (
-    (p.nombre || '').toLowerCase().includes(q) ||
-    (p.email || '').toLowerCase().includes(q) ||
-    String(p.id || p.localId || p.key || '').toLowerCase().includes(q)
-  )) : players;
+  if (q) {
+    players = players.filter(p => (
+      (p.nombre || '').toLowerCase().includes(q) ||
+      (p.email || '').toLowerCase().includes(q) ||
+      String(p.id || p.localId || p.key || '').toLowerCase().includes(q)
+    ));
+  }
+  if (estadoFilter) players = players.filter(p => estadoFilter === 'active' ? isPlayerActive(p) : !isPlayerActive(p));
+  if (categoriaFilter) players = players.filter(p => (p.categoria || '') === categoriaFilter);
+  if (generoFilter) players = players.filter(p => p.gender === generoFilter);
 
-  if (!filtered.length) {
-    div.innerHTML = '<p class="empty-state">No hay jugadores cargados.</p>';
+  const pageSize = adminPlayerListState.pageSize;
+  const totalPages = Math.max(1, Math.ceil(players.length / pageSize));
+  if (adminPlayerListState.page > totalPages) adminPlayerListState.page = totalPages;
+  if (adminPlayerListState.page < 1) adminPlayerListState.page = 1;
+  const start = (adminPlayerListState.page - 1) * pageSize;
+  const pageItems = players.slice(start, start + pageSize);
+
+  if (!players.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No hay jugadores que coincidan con los filtros.</td></tr>';
+    renderAdminPlayerPagination(0, 0, 0);
     return;
   }
 
-  div.innerHTML = filtered.map(player => `
-    <article class="admin-player-row ${isPlayerActive(player) ? '' : 'is-inactive'}">
-      <div class="admin-player-rank" aria-label="${isPlayerActive(player) ? `Posición ${player.pos}` : 'Inactivo'}">${isPlayerActive(player) ? player.pos : 'I'}</div>
-      <div class="admin-player-info">
-        <strong>${escapeHTML(player.nombre)}</strong>
-        <span>${escapeHTML(GENDERS[player.gender].label)} · ${isPlayerActive(player) ? 'Activo' : 'Inactivo'} · ${escapeHTML(player.email || 'Sin correo')}</span>
-      </div>
-      <div class="admin-player-actions">
-        <button class="btn-mini-profile" type="button" data-action="admin-edit-player" data-player-key="${escapeAttr(player.id)}">Editar</button>
-        <button class="btn-reject" type="button" data-action="admin-delete-player" data-player-key="${escapeAttr(player.id)}">${isPlayerActive(player) ? 'Inactivar' : 'Mantener inactivo'}</button>
-      </div>
-    </article>`).join('');
+  tbody.innerHTML = pageItems.map(player => {
+    const active = isPlayerActive(player);
+    const complete = DB.isProfileComplete(player);
+    const initial = escapeHTML((player.nombre || '?').trim().charAt(0).toUpperCase() || '?');
+    return `
+    <tr class="${active ? '' : 'is-inactive'}">
+      <td>
+        <div class="admin-player-cell">
+          <span class="admin-player-avatar">${initial}</span>
+          <span class="player-name">${escapeHTML(player.nombre)}${player.isAdmin ? ' <small style="color:#bef264;font-weight:800;">ADMIN</small>' : ''}</span>
+        </div>
+      </td>
+      <td>${escapeHTML(player.categoria || '—')}</td>
+      <td>${escapeHTML(GENDERS[player.gender].label)}</td>
+      <td>${escapeHTML(player.email || 'Sin correo')}</td>
+      <td><span class="status-pill ${active ? 'status-active' : 'status-inactive'}">${active ? 'Activo' : 'Inactivo'}</span></td>
+      <td><span class="status-pill ${complete ? 'status-complete' : 'status-incomplete'}">${complete ? 'Completo' : 'Incompleto'}</span></td>
+      <td class="table-actions">
+        <div class="admin-row-actions">
+          <button class="admin-icon-btn" type="button" data-action="admin-edit-player" data-player-key="${escapeAttr(player.id)}" title="Editar jugador" aria-label="Editar jugador">✏️</button>
+          <button class="admin-icon-btn" type="button" data-action="admin-row-menu-toggle" data-player-key="${escapeAttr(player.id)}" title="Más acciones" aria-label="Más acciones">⋯</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+
+  renderAdminPlayerPagination(players.length, start, start + pageItems.length);
 }
+
+function toggleAdminRowMenu(triggerBtn) {
+  const existing = document.querySelector('.admin-row-menu');
+  const playerKey = triggerBtn.dataset.playerKey;
+  const alreadyOpenForThis = existing && existing.dataset.forKey === playerKey;
+  closeAdminRowMenu();
+  if (alreadyOpenForThis) return;
+
+  const player = getAllPlayers().find(p => p.id === playerKey);
+  if (!player) return;
+  const active = isPlayerActive(player);
+
+  const menu = document.createElement('div');
+  menu.className = 'admin-row-menu';
+  menu.dataset.forKey = playerKey;
+  menu.innerHTML = `<button type="button" data-action="admin-delete-player" data-player-key="${escapeAttr(playerKey)}" class="${active ? 'danger' : ''}">${active ? 'Inactivar' : 'Mantener inactivo'}</button>`;
+  triggerBtn.closest('.admin-row-actions').appendChild(menu);
+
+  document.addEventListener('keydown', closeAdminRowMenuOnEscape, { once: true });
+}
+function closeAdminRowMenu() {
+  document.querySelectorAll('.admin-row-menu').forEach(m => m.remove());
+}
+function closeAdminRowMenuOnEscape(e) { if (e.key === 'Escape') closeAdminRowMenu(); }
 
 function resetAdminForm() {
   document.getElementById('fAdminPlayer').reset();
@@ -5237,6 +5228,8 @@ function resetAdminForm() {
   document.getElementById('adminRutDv').value = '';
   document.getElementById('adminGenero').value = rankingState.currentGender;
   document.getElementById('adminEstado').value = 'activo';
+  document.getElementById('adminEsAdministrador').checked = false;
+  document.getElementById('adminEsAdministrador').disabled = !isPermanentAdminSession();
   document.getElementById('adminTelefono').value = '+569';
   document.getElementById('adminNotas').value = '';
   document.getElementById('adminCategoria').value = 'Principiante';
@@ -5256,6 +5249,9 @@ function fillAdminForm(playerKey) {
   document.getElementById('adminGenero').value = player.gender;
   document.getElementById('adminPosicion').value = player.pos || '';
   document.getElementById('adminEstado').value = isPlayerActive(player) ? 'activo' : 'inactivo';
+  document.getElementById('adminEsAdministrador').checked = player.isAdmin === true ||
+    ADMIN_IDENTITIES.emails.some(item => normalizeEmail(item) === normalizeEmail(player.email));
+  document.getElementById('adminEsAdministrador').disabled = !isPermanentAdminSession();
   document.getElementById('adminTelefono').value = player.telefono || '+569';
   const parsedRut = parseRut(player.rut);
   document.getElementById('adminRut').value = parsedRut.body;
@@ -5385,6 +5381,9 @@ async function submitAdminPlayer(event) {
       rut: adminRutFormatted,
       activo: document.getElementById('adminEstado').value !== 'inactivo',
       participaRanking: document.getElementById('adminEstado').value !== 'inactivo',
+      isAdmin: isPermanentAdminSession(session)
+        ? document.getElementById('adminEsAdministrador').checked
+        : Boolean(getAllPlayers().find(item => item.id === playerId)?.isAdmin),
       notas: document.getElementById('adminNotas').value.trim(),
       editedAt: new Date().toISOString(),
       editedBy: session.email
@@ -5423,6 +5422,7 @@ async function submitAdminPlayer(event) {
           foto: item.foto,
           telefono: item.telefono,
           rut: item.rut,
+          isAdmin: item.isAdmin === true,
           pos: toNumber(item.posicion ?? item.pos, NaN)
         });
       });
@@ -5459,6 +5459,7 @@ async function submitAdminPlayer(event) {
           foto: item.foto,
           telefono: item.telefono,
           rut: item.rut,
+          isAdmin: item.isAdmin === true,
           pos: toNumber(item.posicion ?? item.pos, NaN)
         });
       });
@@ -5937,7 +5938,12 @@ function syncSessionWithRankingPlayer() {
   const session = DB.getSession();
   if (!session) return;
   const player = getSessionPlayer(session);
-  if (!player || !player.id || session.id === player.id) return;
+  if (!player || !player.id) return;
+  const permanentAdmin = ADMIN_IDENTITIES.emails.some(item =>
+    normalizeEmail(item) === normalizeEmail(session.email || player.email)
+  );
+  const desiredAdmin = permanentAdmin || player.isAdmin === true;
+  if (session.id === player.id && session.isAdmin === desiredAdmin) return;
 
   const synced = {
     ...session,
@@ -5949,7 +5955,9 @@ function syncSessionWithRankingPlayer() {
     mano: player.mano || session.mano || 'Derecha',
     reves: player.reves || session.reves || 'Dos manos',
     foto: player.foto || session.foto || '',
-    telefono: player.telefono || session.telefono || ''
+    telefono: player.telefono || session.telefono || '',
+    isAdmin: desiredAdmin,
+    readOnly: false
   };
 
   const syncedEmail = normalizeEmail(synced.email);
@@ -6062,15 +6070,21 @@ function samePlayer(a, b) {
 function isAdminSession(session = DB.getSession()) {
   if (!session) return false;
   const email = normalizeEmail(session.email);
-  const name = normalizeKey(session.nombre);
-  return ADMIN_IDENTITIES.emails.some(item => normalizeEmail(item) === email) ||
-    ADMIN_IDENTITIES.names.some(item => normalizeKey(item) === name);
+  return session.isAdmin === true ||
+    ADMIN_IDENTITIES.emails.some(item => normalizeEmail(item) === email);
+}
+
+function isPermanentAdminSession(session = DB.getSession()) {
+  if (!session) return false;
+  const email = normalizeEmail(session.email);
+  return ADMIN_IDENTITIES.emails.some(item => normalizeEmail(item) === email);
 }
 
 function isPlayerAdminSession(session = DB.getSession()) {
   if (!session) return false;
   const email = normalizeEmail(session.email);
-  return ADMIN_IDENTITIES.emails.some(item => normalizeEmail(item) === email);
+  return session.isAdmin === true ||
+    ADMIN_IDENTITIES.emails.some(item => normalizeEmail(item) === email);
 }
 
 function actorPayload(session = DB.getSession()) {
@@ -6105,7 +6119,9 @@ function profileToSessionUser(player, current = DB.getSession()) {
     reves: player.reves || current?.reves || 'Dos manos',
     foto: player.foto || current?.foto || '',
     telefono: player.telefono || current?.telefono || '',
-    rut: player.rut || current?.rut || ''
+    rut: player.rut || current?.rut || '',
+    isAdmin: player.isAdmin === true ||
+      (player.isAdmin === undefined && current?.isAdmin === true)
   };
 }
 
@@ -7336,7 +7352,8 @@ window.saveAdminSpecialDate = async function(event) {
 
   try {
     if (!window.CONFIG?.API_URL) throw new Error('No hay conexión al servidor configurada.');
-    const idToken = await DB.getIdToken();
+    const idToken = await DB.getIdTokenOrReauth();
+    if (!idToken) { showAdminScheduleAlert(DB.lastAuthError || 'No se pudo renovar tu sesión de administrador con Google.', 'error'); return; }
     const payload = {
       action: 'admin_free_special_slots',
       courts: selectedCourts, type, desc,
@@ -7366,7 +7383,8 @@ window.saveAdminSpecialDate = async function(event) {
 window.deleteSpecialPeriod = async function(groupId, label) {
   if (!confirm(`¿Eliminar "${label}"?`)) return;
   try {
-    const idToken = await DB.getIdToken();
+    const idToken = await DB.getIdTokenOrReauth();
+    if (!idToken) { showAdminScheduleAlert(DB.lastAuthError || 'No se pudo renovar tu sesión de administrador con Google.', 'error'); return; }
     const session = DB.getSession();
     const res = await fetch(window.CONFIG.API_URL, {
       method: 'POST',
@@ -7391,6 +7409,19 @@ const SCHEDULE_DAYS = [
 const SCHEDULE_COURT_LABELS = { cec1: 'CEC 1', cec2: 'CEC 2', cjp1: 'CJP 1', cjp2: 'CJP 2' };
 let scheduleConfigState = null;
 let scheduleConfigCourt = 'cec1';
+let scheduleConfigDirty = false;
+
+function markScheduleConfigDirty() {
+  scheduleConfigDirty = true;
+  const state = document.getElementById('scheduleSaveState');
+  if (state) { state.classList.add('is-dirty'); state.innerHTML = '<i></i> Cambios sin guardar'; }
+}
+
+function markScheduleConfigSaved() {
+  scheduleConfigDirty = false;
+  const state = document.getElementById('scheduleSaveState');
+  if (state) { state.classList.remove('is-dirty'); state.innerHTML = '<i></i> Configuración sincronizada'; }
+}
 
 function showScheduleConfigAlert(msg, type = 'success') {
   const box = document.getElementById('scheduleConfigAlert');
@@ -7412,6 +7443,13 @@ function applyScheduleConfigToForm() {
   document.getElementById('cfgMaxAdvanceFuncionario').value = scheduleConfigState.maxAdvanceDays.funcionario || 2;
   document.getElementById('cfgMaxAdvanceAdmin').value = scheduleConfigState.maxAdvanceDays.admin || 7;
   document.getElementById('cfgMaxBookingsPerDay').value = scheduleConfigState.maxBookingsPerDay || 1;
+  ['cfgMaxAdvanceSocio','cfgMaxAdvanceFuncionario','cfgMaxAdvanceAdmin','cfgMaxBookingsPerDay'].forEach(id => {
+    const input = document.getElementById(id);
+    if (input && !input.dataset.dirtyBound) {
+      input.addEventListener('input', markScheduleConfigDirty);
+      input.dataset.dirtyBound = 'true';
+    }
+  });
   renderScheduleGrid();
 }
 
@@ -7436,13 +7474,14 @@ function loadScheduleConfig() {
   if (!DB.isCloudConfigured()) return;
 
   DB.getScheduleConfigCloud().then(saved => {
-    if (!saved) return;
+    if (!saved || scheduleConfigDirty) return;
     scheduleConfigState = {
       courtSlots: saved.courtSlots || cloneDefaultCourtSlots(),
       maxAdvanceDays: { ...(window.DEFAULT_MAX_ADVANCE_DAYS || {}), ...(saved.maxAdvanceDays || {}) },
       maxBookingsPerDay: Number(saved.maxBookingsPerDay) > 0 ? Number(saved.maxBookingsPerDay) : (window.DEFAULT_MAX_BOOKINGS_PER_DAY || 1)
     };
     applyScheduleConfigToForm();
+    markScheduleConfigSaved();
   }).catch(e => {
     console.warn('No se pudo cargar la configuración de horarios guardada, se mantienen los valores por defecto:', e);
   });
@@ -7462,23 +7501,31 @@ function renderScheduleGrid() {
   const slots = window.DEFAULT_SLOTS || [];
   const courtSlots = scheduleConfigState.courtSlots[scheduleConfigCourt] || {};
 
-  const headerCells = slots.map(slot => `<th style="padding:6px 8px;font-size:0.72rem;color:var(--text-secondary);font-weight:600;white-space:nowrap;">${slot}</th>`).join('');
+  const headerCells = slots.map(slot => `<th>${slot}</th>`).join('');
   const rows = SCHEDULE_DAYS.map(day => {
     const enabled = new Set(courtSlots[day.key] || []);
     const cells = slots.map(slot => {
       const isOn = enabled.has(slot);
-      return `<td style="padding:3px;text-align:center;">
+      return `<td>
         <button type="button" onclick="toggleScheduleSlot(${day.key}, '${slot}')"
-          style="width:34px;height:28px;border-radius:6px;border:1px solid ${isOn ? 'var(--accent-tennis)' : 'rgba(255,255,255,0.1)'};background:${isOn ? 'rgba(198,211,0,0.18)' : 'rgba(255,255,255,0.03)'};color:${isOn ? 'var(--accent-tennis)' : 'var(--text-secondary)'};font-size:0.85rem;cursor:pointer;transition:all 0.15s;">
+          class="schedule-slot-toggle ${isOn ? 'is-on' : ''}" aria-label="${day.label} ${slot}: ${isOn ? 'disponible' : 'no disponible'}" aria-pressed="${isOn}">
           ${isOn ? '✓' : ''}
         </button>
       </td>`;
     }).join('');
-    return `<tr><td style="padding:6px 10px 6px 0;font-size:0.8rem;color:var(--text-primary);font-weight:600;white-space:nowrap;">${day.label}</td>${cells}</tr>`;
+    return `<tr><th class="schedule-day-cell"><span>${day.label}</span><span class="schedule-row-actions"><button type="button" onclick="setScheduleDay(${day.key}, true)">Todo</button><button type="button" onclick="setScheduleDay(${day.key}, false)">Vaciar</button></span></th>${cells}</tr>`;
   }).join('');
 
-  container.innerHTML = `<table style="border-collapse:collapse;"><thead><tr><th></th>${headerCells}</tr></thead><tbody>${rows}</tbody></table>`;
+  container.innerHTML = `<table class="schedule-matrix"><thead><tr><th>Día</th>${headerCells}</tr></thead><tbody>${rows}</tbody></table>`;
 }
+
+window.setScheduleDay = function(dayKey, enabled) {
+  if (!scheduleConfigState) return;
+  if (!scheduleConfigState.courtSlots[scheduleConfigCourt]) scheduleConfigState.courtSlots[scheduleConfigCourt] = {};
+  scheduleConfigState.courtSlots[scheduleConfigCourt][dayKey] = enabled ? (window.DEFAULT_SLOTS || []).slice() : [];
+  markScheduleConfigDirty();
+  renderScheduleGrid();
+};
 
 window.toggleScheduleSlot = function(dayKey, slot) {
   if (!scheduleConfigState) return;
@@ -7489,6 +7536,7 @@ window.toggleScheduleSlot = function(dayKey, slot) {
   if (idx >= 0) list.splice(idx, 1);
   else { list.push(slot); list.sort(); }
   courtSlots[dayKey] = list;
+  markScheduleConfigDirty();
   renderScheduleGrid();
 };
 
@@ -7496,6 +7544,7 @@ window.resetScheduleCourtToDefault = function() {
   if (!scheduleConfigState) return;
   const defaults = cloneDefaultCourtSlots();
   scheduleConfigState.courtSlots[scheduleConfigCourt] = defaults[scheduleConfigCourt] || {};
+  markScheduleConfigDirty();
   renderScheduleGrid();
   showScheduleConfigAlert(`Horarios de ${SCHEDULE_COURT_LABELS[scheduleConfigCourt] || scheduleConfigCourt} restablecidos a los valores por defecto (aún debes guardar).`, 'warn');
 };
@@ -7505,8 +7554,8 @@ window.saveScheduleConfigAll = async function(event) {
   if (!scheduleConfigState) return;
 
   const btn = document.getElementById('btnSaveScheduleConfig');
-  btn.disabled = true;
-  btn.textContent = 'Guardando...';
+  const regularBtn = document.getElementById('btnSaveScheduleConfigRegular');
+  [btn, regularBtn].filter(Boolean).forEach(button => { button.disabled = true; button.textContent = 'Guardando...'; });
 
   scheduleConfigState.maxAdvanceDays = {
     socio: Number(document.getElementById('cfgMaxAdvanceSocio').value) || 7,
@@ -7518,13 +7567,14 @@ window.saveScheduleConfigAll = async function(event) {
   try {
     const session = DB.getSession();
     await DB.saveScheduleConfigCloud(scheduleConfigState, session || {});
+    markScheduleConfigSaved();
     showScheduleConfigAlert('✅ Horarios y parámetros guardados. Ya rigen para las próximas reservas.');
   } catch (e) {
     console.error('Error guardando configuración de horarios:', e);
     showScheduleConfigAlert('⚠️ No se pudo guardar: ' + e.message, 'error');
   } finally {
-    btn.disabled = false;
-    btn.textContent = '💾 Guardar Horarios y Parámetros';
+    if (btn) { btn.disabled = false; btn.textContent = '💾 Guardar Horarios y Parámetros'; }
+    if (regularBtn) { regularBtn.disabled = false; regularBtn.textContent = 'Guardar cambios'; }
   }
 };
 
@@ -7697,14 +7747,6 @@ window.debouncedFilterSpecialDates = debouncedFilterSpecialDates;
   }
 })();
 
-// Enforce profile completeness on page load
-(function enforceProfileComplete() {
-  const session = DB.getSession();
-  if (session && !DB.isProfileComplete(session)) {
-    alert("Debes completar todos tus datos para poder ingresar al sistema.");
-    window.location.href = "reservas.html";
-  }
-})();
 </script>
 </body>
 </html>

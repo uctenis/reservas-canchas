@@ -1414,6 +1414,7 @@ function firebaseStaffFromDocument(doc) {
     rut: text(firestoreField(fields, 'rut')),
     unidad: text(firestoreField(fields, 'unidad')),
     userType: 'funcionario',
+    isAdmin: firestoreBool(fields, 'isAdmin', false),
     activo: firestoreBool(fields, 'activo', true)
   };
 }
@@ -1571,6 +1572,7 @@ function firebasePlayerFromDocument(doc) {
     reves: text(firestoreField(fields, 'reves')),
     foto: text(firestoreField(fields, 'foto')),
     telefono: text(firestoreField(fields, 'telefono')),
+    isAdmin: firestoreBool(fields, 'isAdmin', false),
     activo: firestoreBool(fields, 'activo', true),
     participaRanking: firestoreBool(fields, 'participaRanking', true)
   };
@@ -1765,12 +1767,32 @@ function getAvailableSlots(dateStr) {
 }
 
 function createBooking(data) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+
+  try {
+  const dateStr = text(data.date);
+  const slot = text(data.slot);
+  const courtId = text(data.courtId);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr) || !/^\d{1,2}:\d{2}$/.test(slot)) {
+    return { ok: false, msg: 'Fecha u horario no válido.' };
+  }
+  if (!CONFIG.CALENDARS[courtId]) return { ok: false, msg: 'Cancha no válida.' };
+
   let memberCheck = validateMember(data.email);
+  const requestedEmail = text(data.email).toLowerCase();
+  const verifiedBookingEmail = verifyGoogleIdToken(data.idToken);
+  if (verifiedBookingEmail && verifiedBookingEmail !== requestedEmail) {
+    return { ok: false, msg: 'La identidad de la sesión no coincide con el correo de la reserva.' };
+  }
+  const isVerifiedAdmin = Boolean(verifiedBookingEmail &&
+    (CONFIG.ADMINS.emails || []).map(function(email) { return text(email).toLowerCase(); }).indexOf(verifiedBookingEmail) >= 0);
 
   // Aceptar también funcionarios UCT (validados por Firebase en el frontend,
   // aquí sólo verificamos que el correo esté en las hojas de cálculo o
   // es un correo @uct.cl registrado en el sistema).
-  const isFuncionario = (data.userType === 'funcionario');
+  const isFuncionario = data.userType === 'funcionario' || memberCheck.source === 'staff' ||
+    (memberCheck.player && memberCheck.player.userType === 'funcionario');
   if (!memberCheck.ok && !isFuncionario) return memberCheck;
   // Si es funcionario sin estar en Sheets, aceptamos igual (su validación
   // primaria ya ocurrió via Firebase en el cliente).
@@ -1784,7 +1806,7 @@ function createBooking(data) {
   // ── Regla: Máximo de reservas por día (configurable, por defecto 1) ──
   var maxPerDay = (dynamicConfig && Number(dynamicConfig.maxBookingsPerDay) > 0)
     ? Number(dynamicConfig.maxBookingsPerDay) : 1;
-  if (data.email && data.date) {
+  if (!isVerifiedAdmin && data.email && data.date) {
     const existingToday = getUserBookingsForDate(data.email, data.date);
     if (existingToday.length >= maxPerDay) {
       return { ok: false, msg: maxPerDay === 1
@@ -1805,10 +1827,13 @@ function createBooking(data) {
       if (dias > 0) MAX_ADVANCE_MS_BACKEND[key] = dias * 24 * 60 * 60 * 1000;
     });
   }
-  var userType = isFuncionario ? 'funcionario' : (data.userType || 'socio');
+  var userType = isVerifiedAdmin ? 'admin' : (isFuncionario ? 'funcionario' : 'socio');
   var maxAdvanceMs = MAX_ADVANCE_MS_BACKEND[userType] || MAX_ADVANCE_MS_BACKEND.socio;
-  var bookingDate = new Date(data.date + 'T12:00:00-04:00'); // mediodia hora Chile
+  var bookingDate = makeLocalDate(dateStr, slot);
   var msUntilBooking = bookingDate.getTime() - Date.now();
+  if (msUntilBooking < 4 * 60 * 60 * 1000) {
+    return { ok: false, msg: 'Las reservas deben realizarse con al menos 4 horas de anticipación.' };
+  }
   if (msUntilBooking > maxAdvanceMs) {
     var maxDiasLabel = Math.round(maxAdvanceMs / (24 * 60 * 60 * 1000) * 10) / 10;
     var maxDiasTexto = maxDiasLabel < 1 ? Math.round(maxAdvanceMs / (60 * 60 * 1000)) + ' horas' : maxDiasLabel + ' días';
@@ -1821,9 +1846,17 @@ function createBooking(data) {
     return { ok: false, msg: "Este horario está reservado para Clases UCTenis." };
   }
 
-  let calId = CONFIG.CALENDARS[data.courtId];
-  if (!calId) return { ok: false, msg: "Cancha no válida." };
+  // Fuente única de verdad: vuelve a comprobar horario regular, fechas
+  // especiales y ocupación real dentro del lock, justo antes de crear.
+  const liveAvailability = getAvailableSlots(dateStr);
+  const liveCourtSlots = liveAvailability && liveAvailability.courts && liveAvailability.courts[courtId];
+  if (!liveAvailability.ok || !Array.isArray(liveCourtSlots) || liveCourtSlots.indexOf(slot) < 0) {
+    return { ok: false, msg: 'Este horario ya no está disponible. Actualiza la agenda y elige otro.' };
+  }
+
+  let calId = CONFIG.CALENDARS[courtId];
   let calendar = CalendarApp.getCalendarById(calId);
+  if (!calendar) return { ok: false, msg: 'Calendario de la cancha no encontrado.' };
 
   let startTime = makeLocalDate(data.date, data.slot);
   let endTime = new Date(startTime.getTime() + 90 * 60000);
@@ -1836,7 +1869,7 @@ function createBooking(data) {
   try {
     var tipoLabel = isFuncionario ? 'Funcionario UCT' : 'Socio UCTenis';
     let event = calendar.createEvent(
-      'Reserva UCTenis - ' + data.name,
+      'Reserva UCTenis - ' + text(data.name),
       startTime, endTime,
       {
         description: 'Reserva automática generada desde la plataforma web.\nUsuario: ' + data.name + '\nCorreo: ' + data.email + '\nRUT: ' + (data.rut || 'No registrado') + '\nCancha: ' + data.courtId.toUpperCase() + '\nTipo: ' + tipoLabel,
@@ -1847,6 +1880,9 @@ function createBooking(data) {
     return { ok: true, msg: "¡Reserva confirmada y agendada en Google Calendar!", eventId: event.getId() };
   } catch (e) {
     return { ok: false, msg: "No se pudo crear el evento en el calendario: " + e.message };
+  }
+  } finally {
+    lock.releaseLock();
   }
 }
 
@@ -2397,7 +2433,14 @@ function isAdminRequest(data) {
   if (!verifiedEmail) return false;
   if (CONFIG.ADMIN_PIN && text(data.adminPin || data.pin) !== text(CONFIG.ADMIN_PIN)) return false;
   const emails = (CONFIG.ADMINS.emails || []).map(email => text(email).toLowerCase()).filter(Boolean);
-  return emails.indexOf(verifiedEmail) >= 0;
+  if (emails.indexOf(verifiedEmail) >= 0) return true;
+
+  // Administradores delegados: el propietario asigna isAdmin=true desde la
+  // ficha del usuario. El token garantiza que se consulta el correo real.
+  const playerResult = findFirebasePlayerByEmail(verifiedEmail);
+  if (playerResult && playerResult.player && playerResult.player.isAdmin === true) return true;
+  const staffResult = findFirebaseStaffByEmail(verifiedEmail);
+  return Boolean(staffResult && staffResult.staff && staffResult.staff.isAdmin === true);
 }
 
 // =======================================================
@@ -3021,11 +3064,16 @@ function getUserBookingsForDate(email, dateStr) {
  */
 function adminCreateStaff(data) {
   if (!checkAdminAccess(data)) return { ok: false, msg: 'Acceso restringido al administrador.' };
+  const requesterEmail = verifyGoogleIdToken(data && data.idToken);
+  const canManageAdminRoles = (CONFIG.ADMINS.emails || []).map(function(value) {
+    return text(value).toLowerCase();
+  }).indexOf(requesterEmail) >= 0;
   let nombre  = text(data.nombre);
   const email   = text(data.email).toLowerCase().trim();
   const genero  = text(data.genero) || '';
   const unidad  = text(data.unidad) || '';
   const telefono = text(data.telefono) || '';
+  const isAdmin = canManageAdminRoles && (data.isAdmin === true || data.isAdmin === 'true');
   if (!email)  return { ok: false, msg: 'El correo del funcionario es obligatorio.' };
   if (!email.endsWith('@uct.cl')) return { ok: false, msg: 'El correo debe ser institucional (@uct.cl).' };
 
@@ -3038,7 +3086,7 @@ function adminCreateStaff(data) {
   // Verificar que no exista ya en Firebase (via REST para Apps Script)
   const fbResult = firebaseCreateStaff({
     nombre, email, emailLower: email, genero, unidad, telefono,
-    activo: true, userType: 'funcionario',
+    activo: true, isAdmin: isAdmin, userType: 'funcionario',
     creadoPor: text(data.adminEmail),
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
@@ -3098,6 +3146,10 @@ function adminListStaff(data) {
  */
 function adminUpdateStaff(data) {
   if (!checkAdminAccess(data)) return { ok: false, msg: 'Acceso restringido al administrador.' };
+  const requesterEmail = verifyGoogleIdToken(data && data.idToken);
+  const canManageAdminRoles = (CONFIG.ADMINS.emails || []).map(function(value) {
+    return text(value).toLowerCase();
+  }).indexOf(requesterEmail) >= 0;
   const staffId = text(data.staffId);
   if (!staffId) return { ok: false, msg: 'ID del funcionario requerido.' };
   const patch = {};
@@ -3106,6 +3158,9 @@ function adminUpdateStaff(data) {
   if (data.telefono !== undefined) patch.telefono = text(data.telefono);
   if (data.genero   !== undefined) patch.genero   = text(data.genero);
   if (data.activo   !== undefined) patch.activo   = Boolean(data.activo);
+  if (canManageAdminRoles && data.isAdmin !== undefined) {
+    patch.isAdmin = data.isAdmin === true || data.isAdmin === 'true';
+  }
   patch.updatedAt = new Date().toISOString();
   patch.updatedBy = text(data.adminEmail);
   const fbResult = firebasePatchStaff(staffId, patch);

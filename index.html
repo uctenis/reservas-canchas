@@ -925,6 +925,9 @@
     <!-- ── TOP PENDING CHALLENGE ALERT ── -->
     <div id="topChallengeAlert" class="top-challenge-alert" style="display:none;"></div>
 
+    <!-- ── PROFILE COMPLETENESS BANNER (no bloqueante) ── -->
+    <div id="profileCompleteBanner" class="profile-complete-banner" style="display:none;"></div>
+
     <!-- ── BIRTHDAY BANNER (shown only on the player's exact birthday) ── -->
     <div id="birthdayBanner" role="banner" aria-label="Saludo de cumpleaños">
       <div class="bday-glow-orb bday-glow-1"></div>
@@ -1105,7 +1108,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
 
-<script src="db.js?v=20260813_v1"></script>
+<script src="db.js?v=20260817_admin_reauth"></script>
 <script src="script.js?v=20260602_v2"></script>
 <script>
 // Admin emails (must match db.js)
@@ -1493,6 +1496,13 @@ function firstName(value) {
   return (value || 'Jugador').trim().split(/\s+/)[0] || 'Jugador';
 }
 
+function homeRoleQualifier(session) {
+  if (!session) return '';
+  if (session.isAdmin) return ' <span style="color:var(--accent-tennis);font-weight:600;">(Administrador)</span>';
+  if (session.userType === 'invitado' || session.readOnly) return ' <span style="color:var(--text-secondary);font-weight:600;">(Acceso de solo lectura)</span>';
+  return '';
+}
+
 function renderHomeGreeting(session) {
   const greeting = document.getElementById('homeGreeting');
   if (!greeting) return;
@@ -1503,8 +1513,36 @@ function renderHomeGreeting(session) {
   }
   const name = firstName(session.nombre);
   greeting.style.display = 'inline-flex';
-  greeting.innerHTML = `Hola, <strong>${escapeHTML(name)}</strong>. Tu sesion UCTenis esta activa.`;
+  greeting.innerHTML = `Hola, <strong>${escapeHTML(name)}</strong>. Tu sesion UCTenis esta activa.${homeRoleQualifier(session)}`;
 }
+
+function renderProfileBanner() {
+  const el = document.getElementById('profileCompleteBanner');
+  if (!el) return;
+  const session = DB.getSession();
+  if (session && !DB.isProfileComplete(session)) {
+    el.style.display = 'block';
+    el.innerHTML = `
+      <div style="background: linear-gradient(135deg, rgba(251,191,36,0.16) 0%, rgba(251,191,36,0.04) 100%); border: 1px solid rgba(251,191,36,0.4); border-radius: 20px; padding: 16px 24px; margin-bottom: 30px; display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap;">
+        <div style="display:flex; align-items:center; gap:16px;">
+          <span style="font-size:1.8rem;">⚠️</span>
+          <div>
+            <strong style="font-size:1rem; color:#fbbf24; display:block; margin-bottom:2px;">Tu perfil de jugador está incompleto</strong>
+            <p style="font-size:0.88rem; color:var(--text-primary); margin:0;">Complétalo para aprovechar todas las funciones de UCTenis.</p>
+          </div>
+        </div>
+        <button type="button" class="btn-pill btn-login-home" onclick="goCompleteProfileFromHome()" style="font-size:.85rem;padding:9px 18px;white-space:nowrap;">Completar mi perfil</button>
+      </div>`;
+  } else {
+    el.style.display = 'none';
+    el.innerHTML = '';
+  }
+}
+
+window.goCompleteProfileFromHome = function() {
+  DB.stashPendingProfile(DB.getSession());
+  window.location.href = 'reservas.html?completeProfile=1';
+};
 
 function renderIndexUserBar() {
   const s = DB.getSession();
@@ -1516,7 +1554,7 @@ function renderIndexUserBar() {
   renderHomeGreeting(s);
   if (s) {
     // Show admin link if admin
-    if (ADMIN_EMAILS.includes((s.email || '').toLowerCase())) {
+    if (s.isAdmin === true || ADMIN_EMAILS.includes((s.email || '').toLowerCase())) {
       if (adminLink) adminLink.style.display = 'inline-flex';
       if (adminNewsLink) adminNewsLink.style.display = 'inline-flex';
     }
@@ -1527,8 +1565,12 @@ function renderIndexUserBar() {
       <button class="btn-logout-sm" onclick="DB.logout();location.reload()">✕</button>
     </div>`;
   } else {
-    bar.innerHTML = `<button type="button" class="btn-pill btn-login-home" data-open-home-auth style="font-size:.85rem;padding:8px 16px"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="flex-shrink:0"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg> Iniciar sesion</button>`;
+    bar.innerHTML = `<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
+      <button type="button" class="btn-pill btn-login-home" data-open-home-auth style="font-size:.85rem;padding:8px 16px"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="flex-shrink:0"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg> Iniciar sesion</button>
+      <small style="font-size:.72rem;color:var(--text-secondary);">Inicia sesión para reservar canchas y participar del ranking.</small>
+    </div>`;
   }
+  renderProfileBanner();
 }
 
 function openHomeAuthModal() {
@@ -1579,8 +1621,15 @@ function setHomeAuthBusy(button, label) {
 async function finishHomeLogin(result) {
   const error = document.getElementById('homeAuthErr');
   const ok = document.getElementById('homeAuthOk');
-  if (result.isNew) {
-    error.innerHTML = 'Tu correo esta validado, pero aun falta vincular una ficha de jugador. Abre el ranking para completar el perfil.';
+  const outcome = DB.resolveLoginOutcome(result);
+  if (outcome.kind === 'needsProfile') {
+    closeHomeAuthModal();
+    DB.stashPendingProfile(outcome.user);
+    window.location.href = 'reservas.html?completeProfile=1';
+    return;
+  }
+  if (outcome.kind === 'error') {
+    error.textContent = outcome.msg;
     ok.textContent = '';
     return;
   }
@@ -1751,7 +1800,10 @@ async function loadLiveData() {
 
   // --- FILTER CAMPEONATO FOR NON-ADMINS ---
   const sForFilter = DB.getSession();
-  const isAdminForFilter = sForFilter && (typeof ADMIN_EMAILS !== 'undefined' ? ADMIN_EMAILS : ['uctenisclub@gmail.com', 'dsilva@uct.cl']).includes((sForFilter.email || '').toLowerCase());
+  const isAdminForFilter = Boolean(sForFilter && (
+    sForFilter.isAdmin === true ||
+    (typeof ADMIN_EMAILS !== 'undefined' ? ADMIN_EMAILS : ['uctenisclub@gmail.com', 'dsilva@uct.cl']).includes((sForFilter.email || '').toLowerCase())
+  ));
   if (!isAdminForFilter) {
     challenges = challenges.filter(c => c.tipo !== 'campeonato');
   }
@@ -2512,6 +2564,11 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   // Load live challenges after a short delay to allow Firebase to initialize
   setTimeout(() => loadLiveData(), 800);
+
+  // Re-evaluar sesión/banner de perfil al volver por bfcache o al cambiar
+  // la sesión en otra pestaña, para que el banner se oculte solo sin recargar.
+  window.addEventListener('pageshow', () => renderIndexUserBar());
+  window.addEventListener('storage', e => { if (e.key === 'uctenis_session') renderIndexUserBar(); });
 });
 
 // ── Pending Challenge Modal (accept/reject directly from Home) ──
@@ -2788,14 +2845,6 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-// Enforce profile completeness on page load
-(function enforceProfileComplete() {
-  const session = DB.getSession();
-  if (session && !DB.isProfileComplete(session)) {
-    alert("Debes completar todos tus datos para poder ingresar al sistema.");
-    window.location.href = "reservas.html";
-  }
-})();
 </script>
 </body>
 </html>

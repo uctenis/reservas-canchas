@@ -10,7 +10,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js" defer></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js" defer></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js" defer></script>
-  <script src="db.js?v=20260813_v1" defer></script>
+  <script src="db.js?v=20260817_admin_reauth" defer></script>
   <style>
     .main-container{max-width:1100px;margin:0 auto;padding:0 20px 60px}
     header{display:flex;align-items:center;gap:16px;padding:20px 0 24px;border-bottom:1px solid rgba(255,255,255,0.08);margin-bottom:28px}
@@ -162,6 +162,13 @@
         <input type="checkbox" id="staffActivo" style="width:16px;height:16px;" checked> Activo (puede reservar canchas)
       </label>
     </div>
+    <div class="form-group" style="padding:12px 14px;border:1px solid rgba(163,230,53,.3);border-radius:10px;background:rgba(163,230,53,.07);">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+        <input type="checkbox" id="staffEsAdmin" style="width:16px;height:16px;accent-color:#a3e635;">
+        Administrador del sistema
+      </label>
+      <small style="display:block;margin-top:5px;color:var(--text-secondary);">Podrá acceder al panel y sus herramientas administrativas.</small>
+    </div>
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeModal()">Cancelar</button>
       <button class="btn-primary" id="btnSaveStaff" onclick="saveStaff()">Crear y Notificar</button>
@@ -240,12 +247,19 @@ var API_URL = (window.CONFIG && window.CONFIG.API_URL) ? window.CONFIG.API_URL :
 var ADMIN_EMAILS = ['uctenisclub@gmail.com','dsilva@uct.cl'];
 var currentAdmin = null, allSocios = [], allStaff = [], migrateTarget = null;
 
+function isAdminUser(user) {
+  return Boolean(user && (user.isAdmin === true || ADMIN_EMAILS.includes((user.email || '').toLowerCase())));
+}
+
+function canManageAdminRoles() {
+  return Boolean(currentAdmin && ADMIN_EMAILS.includes((currentAdmin.email || '').toLowerCase()));
+}
+
 async function loginAdmin() {
   try {
     var r = await DB.loginWithGoogle();
     if (!r.ok) { document.getElementById('authError').textContent = r.msg; return; }
-    var em = (r.user && r.user.email) ? r.user.email.toLowerCase() : '';
-    if (!ADMIN_EMAILS.includes(em)) { await DB.logout(); document.getElementById('authError').textContent = 'Solo administradores pueden acceder.'; return; }
+    if (!isAdminUser(r.user)) { await DB.logout(); document.getElementById('authError').textContent = 'Solo administradores pueden acceder.'; return; }
     onAdminLoggedIn(r.user);
   } catch(e) { document.getElementById('authError').textContent = e.message; }
 }
@@ -260,7 +274,7 @@ function onAdminLoggedIn(u) {
 
 document.addEventListener('DOMContentLoaded', function() {
   var s = DB.getSession();
-  if (s && ADMIN_EMAILS.includes((s.email||'').toLowerCase())) onAdminLoggedIn(s);
+  if (isAdminUser(s)) onAdminLoggedIn(s);
 });
 
 function showTab(n) {
@@ -381,6 +395,8 @@ function openNewStaffModal() {
   document.getElementById('staffEmail').disabled = false;
   document.getElementById('staffGenero').value = '';
   document.getElementById('staffActivoGroup').style.display = 'none';
+  document.getElementById('staffEsAdmin').checked = false;
+  document.getElementById('staffEsAdmin').disabled = !canManageAdminRoles();
   document.getElementById('btnSaveStaff').textContent = 'Crear y Notificar';
   document.getElementById('modalMsg').innerHTML = '';
   toggleModalFields();
@@ -403,6 +419,8 @@ function openEditUserModal(uid) {
   document.getElementById('staffGenero').value = s.genero||'';
   document.getElementById('staffTelefono').value = s.telefono||'';
   document.getElementById('staffActivo').checked = s.activo!==false;
+  document.getElementById('staffEsAdmin').checked = s.isAdmin === true || ADMIN_EMAILS.includes((s.email || '').toLowerCase());
+  document.getElementById('staffEsAdmin').disabled = !canManageAdminRoles();
   document.getElementById('staffActivoGroup').style.display = 'block';
   document.getElementById('btnSaveStaff').textContent = 'Guardar Cambios';
   document.getElementById('modalMsg').innerHTML = '';
@@ -432,6 +450,11 @@ async function saveStaff() {
   var tel    = document.getElementById('staffTelefono').value.trim();
   var activo = document.getElementById('staffActivo').checked;
   var userType = document.getElementById('staffUserType').value;
+  var existingRoleUser = (sid ? allStaff.find(function(x){return x.id===sid;}) : null) ||
+    (sid ? allSocios.find(function(x){return x.id===sid;}) : null);
+  var isAdmin = canManageAdminRoles()
+    ? document.getElementById('staffEsAdmin').checked
+    : Boolean(existingRoleUser && existingRoleUser.isAdmin === true);
   
   if (!email)  { showModalMsg('El correo es obligatorio.','error'); return; }
   if (!email.endsWith('@uct.cl')) { showModalMsg('El correo debe terminar en @uct.cl.','error'); return; }
@@ -459,16 +482,17 @@ async function saveStaff() {
         telefono: tel,
         activo: activo,
         participaRanking: activo,
+        isAdmin: isAdmin,
         userType: 'socio'
       });
       await DB.savePlayerCloud(payload, { email: currentAdmin && currentAdmin.email });
       showModalMsg('Socio UCTenis guardado con éxito.','success');
     } else {
       if (sid) {
-        await DB.saveStaffCloud({id:sid,nombre,genero,unidad,telefono:tel,activo},{email:currentAdmin&&currentAdmin.email});
+        await DB.saveStaffCloud({id:sid,nombre,genero,unidad,telefono:tel,activo,isAdmin},{email:currentAdmin&&currentAdmin.email});
         showModalMsg('Funcionario actualizado.','success');
       } else {
-        var resp = await apiFetch('admin_create_staff',{adminEmail:currentAdmin&&currentAdmin.email,nombre,email,genero,unidad,telefono:tel});
+        var resp = await apiFetch('admin_create_staff',{adminEmail:currentAdmin&&currentAdmin.email,nombre,email,genero,unidad,telefono:tel,isAdmin});
         if (!resp.ok) { showModalMsg(resp.msg,'error'); btn.disabled=false; btn.textContent='Crear y Notificar'; return; }
         showModalMsg(resp.msg,'success');
       }
