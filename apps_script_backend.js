@@ -2685,7 +2685,16 @@ function cancelBooking(data) {
       if (description.indexOf(verifiedEmail) < 0 && !isAdminRequest(data)) {
         return { ok: false, msg: 'No tienes permiso para cancelar esta reserva.' };
       }
-      event.deleteEvent();
+      try {
+        event.deleteEvent();
+      } catch (deleteError) {
+        // getEventById puede devolver una referencia obsoleta a un evento que
+        // ya fue borrado (p.ej. en un intento anterior). El resultado que
+        // buscamos —que el evento no esté en el calendario— ya se cumple, así
+        // que se trata como éxito en vez de dejar la reserva atascada para
+        // siempre repitiendo el mismo error.
+        console.warn('cancelBooking (legacy): el evento ya no existía al borrarlo:', deleteError.message);
+      }
     }
     return { ok: true, msg: 'Reserva antigua cancelada y horario liberado.' };
   } catch (error) {
