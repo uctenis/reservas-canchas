@@ -1811,14 +1811,18 @@ function firestoreValueToJs(value) {
  * caso el llamador debe seguir usando los valores hardcodeados de CONFIG,
  * exactamente el comportamiento de antes de que existiera este panel.
  */
-function getDynamicScheduleConfig() {
+function getDynamicScheduleConfig(idToken) {
   if (!CONFIG.FIREBASE_PROJECT_ID || !CONFIG.FIREBASE_API_KEY) return null;
   try {
     const url = 'https://firestore.googleapis.com/v1/projects/'
       + encodeURIComponent(CONFIG.FIREBASE_PROJECT_ID)
       + '/databases/(default)/documents/uct_config/schedule?key='
       + encodeURIComponent(CONFIG.FIREBASE_API_KEY);
-    const response = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+    // Igual que las lecturas de reservas: hay que autenticar con la
+    // identidad del propio Apps Script (scope datastore), si no Firestore
+    // rechaza la lectura por reglas de seguridad y esto cae siempre a los
+    // horarios hardcodeados de CONFIG, ignorando lo configurado por el admin.
+    const response = UrlFetchApp.fetch(url, bookingFetchOptions('get', undefined, idToken));
     if (response.getResponseCode() !== 200) return null;
     const doc = JSON.parse(response.getContentText());
     if (!doc.fields) return null;
@@ -2355,7 +2359,7 @@ function getAvailableSlots(dateStr, idToken) {
     }
   } catch (specialErr) { /* continuar normalmente */ }
 
-  const dynamicConfig = getDynamicScheduleConfig();
+  const dynamicConfig = getDynamicScheduleConfig(idToken);
   const courtSlotsSource = (dynamicConfig && dynamicConfig.courtSlots) || CONFIG.COURT_SLOTS;
 
   for (let courtKey in CONFIG.CALENDARS) {
@@ -2472,7 +2476,7 @@ function createBooking(data) {
     return { ok: false, msg: 'Tu cuenta @uct.cl tiene acceso de solo lectura. Escribe a un administrador de UCTenis para activarte como socio o funcionario y poder reservar canchas.' };
   }
 
-  const dynamicConfig = getDynamicScheduleConfig();
+  const dynamicConfig = getDynamicScheduleConfig(data.idToken);
 
   // ── Regla: Máximo de reservas por día (configurable, por defecto 1) ──
   var maxPerDay = (dynamicConfig && Number(dynamicConfig.maxBookingsPerDay) > 0)
