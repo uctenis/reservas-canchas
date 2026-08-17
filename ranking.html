@@ -317,6 +317,7 @@
         <button type="button" class="admin-tab-btn active" id="tabPlayers" onclick="switchAdminSubSection('players')">👥 Jugadores</button>
         <button type="button" class="admin-tab-btn" id="tabNews" onclick="switchAdminSubSection('news')">📢 Novedades</button>
         <button type="button" class="admin-tab-btn" id="tabSchedules" onclick="switchAdminSubSection('schedules')">🗓️ Horarios</button>
+        <button type="button" class="admin-tab-btn" id="tabSync" onclick="switchAdminSubSection('sync')">🔄 Sincronización</button>
       </div>
     </div>
 
@@ -767,6 +768,34 @@
         </div>
       </div>
     </div>
+
+    <!-- Estado de sincronización Firestore ↔ Google Calendar -->
+    <div id="adminSyncSection" class="hidden" style="padding:0 20px 24px;">
+      <div class="admin-section-header" style="align-items:flex-start;gap:16px;">
+        <div class="admin-section-heading">
+          <p class="modal-kicker">Centro de operaciones</p>
+          <h3>Sincronización de reservas</h3>
+          <p class="admin-section-subtitle">Estado de Firestore, Google Calendar y reintentos automáticos.</p>
+        </div>
+        <div class="admin-section-actions" style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button type="button" class="btn-secondary" onclick="loadBookingSyncStatus()">Actualizar</button>
+          <button type="button" class="btn-primary" id="btnRetryBookingSync" onclick="retryBookingSyncNow()">Reintentar pendientes</button>
+        </div>
+      </div>
+      <div id="bookingSyncAlert" class="alert-box" style="display:none;padding:12px;border-radius:8px;margin-bottom:14px;"></div>
+      <div id="bookingSyncSummary" class="schedule-param-grid" style="margin-bottom:18px;"></div>
+      <div class="schedule-panel schedule-panel-card">
+        <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:12px;flex-wrap:wrap;">
+          <div><strong>Operaciones que requieren atención</strong><div id="bookingSyncLastRun" style="font-size:.78rem;color:var(--text-secondary);margin-top:4px;"></div></div>
+        </div>
+        <div class="admin-table-wrap">
+          <table class="admin-table">
+            <thead><tr><th>Reserva</th><th>Fecha</th><th>Estado</th><th>Intentos</th><th>Último error</th></tr></thead>
+            <tbody id="bookingSyncIssues"><tr><td colspan="5">Cargando...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
     </div>
   </div>
 </div> 
@@ -774,7 +803,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-<script src="db.js?v=20260817_admin_reauth"></script>
+<script src="db.js?v=20260817_sync_admin_v2"></script>
 
 <script>
 // Helper functions for RUT
@@ -2527,6 +2556,8 @@ async function completeChallengeResult(id, options = {}) {
     const completed = await persistChallengePatch(id, patch);
 
     if (window.CONFIG?.API_URL) {
+      const idToken = await DB.getIdTokenOrReauth();
+      if (!idToken) throw new Error(DB.lastAuthError || 'Tu sesión venció.');
       fetch(window.CONFIG.API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -2535,7 +2566,8 @@ async function completeChallengeResult(id, options = {}) {
           id,
           automatic: Boolean(options.automatic),
           confirmadoPor: patch.confirmadoPor,
-          confirmadoPorEmail: patch.confirmadoPorEmail
+          confirmadoPorEmail: patch.confirmadoPorEmail,
+          idToken
         })
       }).catch(err => console.warn('No se pudo confirmar el resultado en Google Sheets:', err));
     }
@@ -2595,6 +2627,8 @@ async function setChallengeWalkover(id, status, button) {
     const updated = await persistChallengePatch(id, patch);
 
     if (window.CONFIG?.API_URL) {
+      const idToken = await DB.getIdTokenOrReauth();
+      if (!idToken) throw new Error(DB.lastAuthError || 'Tu sesión venció.');
       fetch(window.CONFIG.API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -2604,7 +2638,8 @@ async function setChallengeWalkover(id, status, button) {
           status,
           actorId: session.id || '',
           actorEmail: session.email || '',
-          actorName: session.nombre || ''
+          actorName: session.nombre || '',
+          idToken
         })
       }).catch(err => console.warn('No se pudo registrar el W.O. en Google Sheets:', err));
     }
@@ -2679,7 +2714,8 @@ async function disputeChallenge(id, button) {
         disputanteEmail: session.email,
         contrarioNombre: contrarioName,
         marcador: challenge.marcador,
-        fecha: challenge.fecha
+        fecha: challenge.fecha,
+        idToken: await DB.getIdTokenOrReauth()
       })
     });
     
@@ -2801,6 +2837,8 @@ async function deleteChallenge(id) {
     (async () => {
       try {
         if (window.CONFIG?.API_URL) {
+          const idToken = await DB.getIdTokenOrReauth();
+          if (!idToken) throw new Error(DB.lastAuthError || 'Tu sesión venció.');
           await fetch(window.CONFIG.API_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'text/plain' },
@@ -2808,7 +2846,8 @@ async function deleteChallenge(id) {
               action: 'respond_challenge',
               id: id,
               status: targetStatus,
-              accept: targetStatus
+              accept: targetStatus,
+              idToken
             })
           }).catch(()=>{});
         }
@@ -3129,7 +3168,7 @@ async function submitChallenge(event) {
       slot: slot,
       courtId: courtId,
       courtLabel: courtLabel,
-      ...(bookingEventId ? { eventId: bookingEventId } : {})
+      ...(bookingEventId ? { bookingId: bookingEventId } : {})
     });
 
     showChallengeSuccess(saved, retado, retadoPlayer);
@@ -3247,51 +3286,24 @@ async function createChallengeRemoteOrLocal(payload) {
 
   let savedChallenge = null;
 
-  // 1. Intentar en Firebase si está configurado
-  if (DB.isCloudConfigured()) {
-    try {
-      const saved = await DB.saveChallengeCloud(challenge);
-      upsertLocalChallenge(saved);
-      savedChallenge = saved;
-    } catch (error) {
-      console.warn('No se pudo crear el desafío en Firebase.', error);
-    }
-  }
-
-  // 2. Intentar en Google Sheets via Apps Script (guarda el desafío y notifica en un solo paso)
+  // Apps Script es la operación autoritativa: valida, registra, agrega a
+  // ambos jugadores a Calendar y envía las dos notificaciones.
   if (window.CONFIG?.API_URL) {
-    try {
-      const res = await fetch(window.CONFIG.API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({
-          action: 'create_challenge',
-          ...challenge
-        })
-      });
-      const data = await res.json().catch(() => null);
-      if (data && data.ok) {
-        console.log('Desafío creado exitosamente en Google Sheets.');
-        if (data.challenge) {
-          const merged = { ...challenge, ...data.challenge };
-          upsertLocalChallenge(merged);
-          savedChallenge = merged;
-        }
-      } else if (data && data.ok === false) {
-        if (savedChallenge && DB.isCloudConfigured()) {
-          DB.deleteChallengeCloud(challenge.id).catch(err => console.warn('No se pudo revertir el desafío rechazado en Firebase:', err));
-        }
-        const validationError = new Error(data.msg || 'El desafío fue rechazado por las reglas de escalerilla.');
-        validationError.isChallengeValidationError = true;
-        throw validationError;
-      }
-    } catch (sheetErr) {
-      if (sheetErr.isChallengeValidationError) throw sheetErr;
-      console.warn('No se pudo crear el desafío en Google Sheets:', sheetErr);
+    const idToken = await DB.getIdTokenOrReauth();
+    if (!idToken) throw new Error(DB.lastAuthError || 'Tu sesión venció. Vuelve a ingresar con Google.');
+    const res = await fetch(window.CONFIG.API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'create_challenge', ...challenge, idToken })
+    });
+    const data = await res.json().catch(() => null);
+    if (!data || data.ok !== true) {
+      throw new Error(data?.msg || 'No se pudo registrar y notificar el desafío.');
     }
+    savedChallenge = { ...challenge, ...(data.challenge || {}) };
   }
 
-  // 3. Respaldo local y notificar vía fallback directo si no se pudo guardar en Google Sheets
+  // Respaldo local únicamente para desarrollo sin backend configurado.
   if (!savedChallenge) {
     const local = DB.createChallenge(payload.retadorId, payload.retadoId, payload.genero, payload.fecha, payload.cancha);
     Object.assign(local, {
@@ -3304,14 +3316,19 @@ async function createChallengeRemoteOrLocal(payload) {
       courtId: payload.courtId || '',
       courtLabel: payload.courtLabel || ''
     });
-    upsertLocalChallenge(local);
     savedChallenge = local;
-    
-    // Si no se guardó en Google Sheets, enviamos la notificación HTML/Calendar por separado
-    await notifyChallenge(local, { nombre: payload.retadorNombre, email: payload.retadorEmail }, { nombre: payload.retadoNombre, email: payload.retadoEmail, telefono: payload.retadoTelefono });
   }
 
-  // Return saved challenge without triggering immediate popups (handled in UI modal)
+  upsertLocalChallenge(savedChallenge);
+  if (DB.isCloudConfigured()) {
+    try {
+      savedChallenge = await DB.saveChallengeCloud(savedChallenge);
+      upsertLocalChallenge(savedChallenge);
+    } catch (error) {
+      console.warn('El desafío quedó registrado; no se pudo actualizar su espejo en Firebase.', error);
+    }
+  }
+
   return savedChallenge;
 }
 
@@ -3440,6 +3457,8 @@ async function notifyChallenge(challenge, retador, retado) {
   if (!window.CONFIG?.API_URL || !retado?.email || retado.email.endsWith('@uctenis.local')) return;
 
   try {
+    const idToken = await DB.getIdTokenOrReauth();
+    if (!idToken) throw new Error(DB.lastAuthError || 'Tu sesión venció.');
     let fechaLabel = challenge.fecha;
     try {
       const DAYS_LONG = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
@@ -3469,7 +3488,10 @@ async function notifyChallenge(challenge, retador, retado) {
         slot: challenge.slot || '',
         cancha: challenge.cancha || '',
         courtId: challenge.courtId || '',
-        genero: challenge.genero
+        bookingId: challenge.bookingId || '',
+        tipo: challenge.tipo || 'ranking',
+        genero: challenge.genero,
+        idToken
       })
     });
     const result = await response.json().catch(() => null);
@@ -3482,52 +3504,49 @@ async function notifyChallenge(challenge, retador, retado) {
 }
 
 async function respondChallenge(id, accept) {
-  let saved = false;
   let acceptedChallenge = null;
-
-  if (DB.isCloudConfigured()) {
-    try {
-      const challenge = await DB.updateChallengeCloud(id, {
-        status: accept ? 'aceptado' : 'rechazado',
-        fechaRespuesta: new Date().toISOString()
-      });
-      upsertLocalChallenge(challenge);
-      if (accept) acceptedChallenge = challenge;
-      saved = true;
-    } catch (error) {
-      console.warn('No se pudo responder el desafío en Firebase.', error);
-    }
-  }
+  let savedChallenge = null;
 
   if (window.CONFIG?.API_URL) {
     try {
+      const idToken = await DB.getIdTokenOrReauth();
+      if (!idToken) throw new Error(DB.lastAuthError || 'Tu sesión venció.');
       const res = await fetch(window.CONFIG.API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({
           action: 'respond_challenge',
           id: id,
-          accept: accept
+          accept: accept,
+          idToken
         })
       });
       const data = await res.json().catch(() => null);
-      if (data && data.ok) {
-        console.log('Respuesta registrada en Google Sheets.');
-        if (data.challenge) {
-          upsertLocalChallenge(data.challenge);
-          if (accept) acceptedChallenge = data.challenge;
-        }
-        saved = true;
-      }
+      if (!data || data.ok !== true) throw new Error(data?.msg || 'No se pudo registrar la respuesta.');
+      savedChallenge = data.challenge || null;
     } catch (sheetErr) {
-      console.warn('No se pudo registrar la respuesta en Google Sheets:', sheetErr);
+      alert(sheetErr.message || 'No se pudo responder el partido. Intenta nuevamente.');
+      return;
     }
   }
 
-  if (!saved) {
+  if (!savedChallenge) {
     DB.respondChallenge(id, accept);
-    if (accept) acceptedChallenge = DB.getChallenges().find(c => c.id === id);
+    savedChallenge = DB.getChallenges().find(c => c.id === id) || null;
   }
+
+  if (savedChallenge) {
+    upsertLocalChallenge(savedChallenge);
+    if (DB.isCloudConfigured()) {
+      try {
+        savedChallenge = await DB.saveChallengeCloud(savedChallenge);
+        upsertLocalChallenge(savedChallenge);
+      } catch (error) {
+        console.warn('La respuesta quedó registrada; no se pudo actualizar Firebase.', error);
+      }
+    }
+  }
+  if (accept) acceptedChallenge = savedChallenge;
 
   if (accept && acceptedChallenge) {
     // Publicar novedad "Challenge Accepted" en Firestore para el feed del home
@@ -4359,12 +4378,15 @@ async function submitScore(event) {
       // 2. Sheets
       if (window.CONFIG?.API_URL) {
         try {
+          const idToken = await DB.getIdTokenOrReauth();
+          if (!idToken) throw new Error(DB.lastAuthError || 'La sesión de Google venció.');
           const res = await fetch(window.CONFIG.API_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
             body: JSON.stringify({
               action: 'create_challenge',
-              ...payload
+              ...payload,
+              idToken
             })
           });
           const data = await res.json().catch(() => null);
@@ -4431,39 +4453,6 @@ async function submitScore(event) {
         });
         upsertLocalChallenge(rankingMergeChallengeRecords(resultPendingChallenge, updated));
         
-        // Send notification email to the loser
-        try {
-          const users = DB.getUsers();
-          const retadorUser = users.find(u => u.id === challenge.retadorId);
-          const retadoUser = users.find(u => u.id === challenge.retadoId);
-          const retadorEmail = challenge.retadorEmail || retadorUser?.email;
-          const retadoEmail = challenge.retadoEmail || retadoUser?.email;
-
-          const ganadorNombre = ganadorId === challenge.retadorId ? (challenge.retadorNombre || retadorUser?.nombre) : (challenge.retadoNombre || retadoUser?.nombre);
-          const ganadorEmail = ganadorId === challenge.retadorId ? retadorEmail : retadoEmail;
-          const perdedorNombre = ganadorId === challenge.retadorId ? (challenge.retadoNombre || retadorUser?.nombre) : (challenge.retadorNombre || retadorUser?.nombre);
-          const perdedorEmail = ganadorId === challenge.retadorId ? retadoEmail : retadorEmail;
-
-          if (perdedorEmail && window.CONFIG?.API_URL) {
-            fetch(window.CONFIG.API_URL, {
-              method: 'POST',
-              headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-              body: JSON.stringify({
-                action: 'notify_result',
-                challengeId: challenge.id,
-                ganadorNombre,
-                ganadorEmail,
-                perdedorNombre,
-                perdedorEmail,
-                marcador,
-                fecha: challenge.fecha,
-                cancha: challenge.cancha
-              })
-            }).catch(err => console.warn('Error al enviar correo de resultado:', err));
-          }
-        } catch (err) {
-          console.warn('Error al preparar correo de resultado:', err);
-        }
         savedInCloud = true;
       } catch (cloudError) {
         console.warn('No se pudo guardar el resultado en Firebase.', cloudError);
@@ -4473,6 +4462,8 @@ async function submitScore(event) {
     // 2. Intentar registrar en Google Sheets via Apps Script (también notifica e invalida reservas/ranking)
     if (window.CONFIG?.API_URL) {
       try {
+        const idToken = await DB.getIdTokenOrReauth();
+        if (!idToken) throw new Error(DB.lastAuthError || 'Tu sesión venció.');
         const res = await fetch(window.CONFIG.API_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -4485,7 +4476,8 @@ async function submitScore(event) {
             fechaResultado: now,
             resultadoIngresadoPor: session.id || session.email || '',
             resultadoIngresadoPorEmail: session.email || '',
-            resultadoIngresadoPorNombre: session.nombre || ''
+            resultadoIngresadoPorNombre: session.nombre || '',
+            idToken
           })
         });
         const data = await res.json().catch(() => null);
@@ -6705,14 +6697,17 @@ window.switchAdminSubSection = function(section) {
   const tabPlayers = document.getElementById('tabPlayers');
   const tabNews = document.getElementById('tabNews');
   const tabSchedules = document.getElementById('tabSchedules');
+  const tabSync = document.getElementById('tabSync');
   
   const secPlayers = document.getElementById('adminPlayersSection');
   const secNews = document.getElementById('adminNewsSection');
   const secSchedules = document.getElementById('adminSchedulesSection');
+  const secSync = document.getElementById('adminSyncSection');
   
   tabPlayers.classList.toggle('active', section === 'players');
   tabNews.classList.toggle('active', section === 'news');
   if (tabSchedules) tabSchedules.classList.toggle('active', section === 'schedules');
+  if (tabSync) tabSync.classList.toggle('active', section === 'sync');
   
   if (secPlayers) secPlayers.style.display = section === 'players' ? 'block' : 'none';
   if (secNews) {
@@ -6723,14 +6718,100 @@ window.switchAdminSubSection = function(section) {
     secSchedules.style.display = section === 'schedules' ? 'block' : 'none';
     secSchedules.classList.toggle('hidden', section !== 'schedules');
   }
+  if (secSync) {
+    secSync.style.display = section === 'sync' ? 'block' : 'none';
+    secSync.classList.toggle('hidden', section !== 'sync');
+  }
   
   if (section === 'news') {
     renderAdminNewsList();
   } else if (section === 'schedules') {
     loadSpecialDatesList();
     loadScheduleConfig();
+  } else if (section === 'sync') {
+    loadBookingSyncStatus();
   }
 }
+
+function formatSyncTimestamp(value) {
+  if (!value) return 'Sin registros todavía';
+  const date = new Date(value);
+  return isNaN(date) ? value : date.toLocaleString('es-CL', { dateStyle: 'short', timeStyle: 'medium' });
+}
+
+function showBookingSyncAlert(message, type = 'success') {
+  const box = document.getElementById('bookingSyncAlert');
+  if (!box) return;
+  box.style.display = 'block';
+  box.style.background = type === 'error' ? 'rgba(239,68,68,.15)' : (type === 'warn' ? 'rgba(245,158,11,.15)' : 'rgba(16,185,129,.15)');
+  box.style.color = type === 'error' ? '#fca5a5' : (type === 'warn' ? '#fcd34d' : '#86efac');
+  box.textContent = message;
+}
+
+window.loadBookingSyncStatus = async function() {
+  const summary = document.getElementById('bookingSyncSummary');
+  const issuesBody = document.getElementById('bookingSyncIssues');
+  if (!summary || !issuesBody) return;
+  summary.innerHTML = '<div class="schedule-param-card">Consultando estado...</div>';
+  try {
+    const idToken = await DB.getIdTokenOrReauth();
+    if (!idToken) throw new Error(DB.lastAuthError || 'Tu sesión venció.');
+    const response = await fetch(window.CONFIG.API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'admin_get_booking_sync_status', idToken })
+    });
+    const data = await response.json().catch(() => null);
+    if (!data || data.ok !== true) throw new Error(data?.msg || 'No se pudo consultar la sincronización.');
+    const counts = data.counts || {};
+    const cards = [
+      ['✅ Confirmadas', counts.confirmed || 0, '#86efac'],
+      ['⏳ Pendientes', counts.pending || 0, '#fcd34d'],
+      ['🔁 En reintento', counts.retry || 0, '#fca5a5'],
+      ['🧹 Limpieza pendiente', counts.cleanupPending || 0, '#c4b5fd']
+    ];
+    summary.innerHTML = cards.map(([label, value, color]) => `<div class="schedule-param-card"><div style="font-size:.78rem;color:var(--text-secondary);">${label}</div><div style="font-size:1.65rem;font-weight:900;color:${color};margin-top:5px;">${value}</div></div>`).join('');
+    const run = data.runStatus || {};
+    document.getElementById('bookingSyncLastRun').textContent = `Última ejecución: ${formatSyncTimestamp(run.lastRunAt)} · Última sincronización exitosa: ${formatSyncTimestamp(run.lastSuccessfulSyncAt)}`;
+    const issues = data.issues || [];
+    issuesBody.innerHTML = issues.length ? issues.map(item => `
+      <tr>
+        <td><strong>${escapeHTML(item.courtId || '')} ${escapeHTML(item.slot || '')}</strong><br><small>${escapeHTML(item.name || item.email || item.id || '')}</small></td>
+        <td>${escapeHTML(item.date || '')}</td>
+        <td>${escapeHTML(item.status || '')}</td>
+        <td>${Number(item.attempts || 0)}</td>
+        <td style="max-width:300px;white-space:normal;">${escapeHTML(item.error || 'Sin detalle')}</td>
+      </tr>`).join('') : '<tr><td colspan="5" style="text-align:center;color:#86efac;">✓ No hay operaciones pendientes ni errores.</td></tr>';
+    showBookingSyncAlert(issues.length ? `Hay ${issues.length} operación(es) que requieren seguimiento.` : 'Firestore y Google Calendar están sincronizados.', issues.length ? 'warn' : 'success');
+  } catch (error) {
+    summary.innerHTML = '';
+    issuesBody.innerHTML = '<tr><td colspan="5">No se pudo cargar el estado.</td></tr>';
+    showBookingSyncAlert(error.message || 'Error consultando sincronización.', 'error');
+  }
+};
+
+window.retryBookingSyncNow = async function() {
+  const button = document.getElementById('btnRetryBookingSync');
+  const original = button?.textContent || '';
+  if (button) { button.disabled = true; button.textContent = 'Reintentando...'; }
+  try {
+    const idToken = await DB.getIdTokenOrReauth();
+    if (!idToken) throw new Error(DB.lastAuthError || 'Tu sesión venció.');
+    const response = await fetch(window.CONFIG.API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'admin_retry_booking_sync', idToken })
+    });
+    const data = await response.json().catch(() => null);
+    if (!data || data.ok !== true) throw new Error(data?.msg || 'No se pudo ejecutar el reintento.');
+    showBookingSyncAlert(`Proceso terminado: ${data.confirmed || 0} confirmada(s), ${data.cleaned || 0} limpieza(s), ${data.failed || 0} error(es).`, data.failed ? 'warn' : 'success');
+    await loadBookingSyncStatus();
+  } catch (error) {
+    showBookingSyncAlert(error.message || 'Error ejecutando reintentos.', 'error');
+  } finally {
+    if (button) { button.disabled = false; button.textContent = original; }
+  }
+};
 
 window.adminNewsListCache = [];
 

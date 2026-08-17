@@ -389,7 +389,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
 
-<script src="db.js?v=20260817_admin_reauth"></script>
+<script src="db.js?v=20260817_sync_admin_v2"></script>
 <script src="script.js?v=20260602_v2"></script>
 <script>
 // ── STATE ──
@@ -1472,45 +1472,37 @@ function buildMatchWhatsappUrl(challenge) {
 }
 
 async function persistReservationMatch(challenge) {
-  upsertReservationChallenge(challenge);
   let saved = challenge;
 
+  if (window.CONFIG?.API_URL) {
+    const idToken = await DB.getIdTokenOrReauth();
+    if (!idToken) throw new Error(DB.lastAuthError || 'Tu sesión venció. Vuelve a ingresar con Google.');
+    const res = await fetch(window.CONFIG.API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        action: 'create_challenge',
+        ...saved,
+        cancha: saved.courtLabel || saved.cancha,
+        bookingId: saved.bookingId || '',
+        tipo: saved.tipo || 'amistoso',
+        idToken
+      })
+    });
+    const data = await res.json().catch(() => null);
+    if (!data || data.ok !== true) {
+      throw new Error(data?.msg || 'No se pudo registrar y notificar el partido.');
+    }
+    saved = { ...saved, ...(data.challenge || {}) };
+  }
+
+  upsertReservationChallenge(saved);
   if (DB.isCloudConfigured()) {
     try {
       saved = await DB.saveChallengeCloud(saved);
       upsertReservationChallenge(saved);
     } catch (cloudErr) {
-      console.warn('No se pudo guardar el partido en Firebase:', cloudErr);
-    }
-  }
-
-  if (window.CONFIG?.API_URL) {
-    try {
-      const res = await fetch(window.CONFIG.API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({
-          action: 'create_challenge',
-          ...saved,
-          cancha: saved.courtLabel || saved.cancha,
-          bookingId: saved.bookingId || '',
-          tipo: saved.tipo || 'amistoso'
-        })
-      });
-      const data = await res.json().catch(() => null);
-      if (data && data.ok && data.challenge) {
-        saved = { ...saved, ...data.challenge };
-        upsertReservationChallenge(saved);
-        if (DB.isCloudConfigured()) {
-          DB.saveChallengeCloud(saved).catch(err => {
-            console.warn('No se pudo reflejar el partido de Sheets en Firebase:', err);
-          });
-        }
-      } else if (data && data.ok === false) {
-        console.warn('Apps Script rechazó el partido:', data.msg);
-      }
-    } catch (sheetErr) {
-      console.warn('No se pudo sincronizar el partido con Apps Script:', sheetErr);
+      console.warn('El partido quedó registrado; no se pudo actualizar su espejo en Firebase:', cloudErr);
     }
   }
 
@@ -1576,7 +1568,16 @@ async function finalConfirmNormal(s, btn) {
       tipo: 'amistoso',
       bookingId: r.booking.id
     });
-    challenge = await persistReservationMatch(challenge);
+    try {
+      challenge = await persistReservationMatch(challenge);
+    } catch (matchError) {
+      DB.cancelBooking(r.booking.id, s.id);
+      await DB.cancelBookingAPI(r.booking.id, sel.court.id).catch(() => null);
+      alert('No se pudo crear y notificar el amistoso. La cancha fue liberada. ' + matchError.message);
+      btn.disabled = false;
+      btn.innerHTML = '✅ Confirmar reserva';
+      return;
+    }
     whatsappUrl = buildMatchWhatsappUrl(challenge);
   } else if (sel.isCampeonato && sel.retadoId) {
     challenge = DB.createChallenge(s.id, sel.retadoId, s.genero || 'M', sel.date, sel.court.label);
@@ -1613,9 +1614,14 @@ async function finalConfirmNormal(s, btn) {
   const wd = dayOfWeekFromISO(sel.date);
   const [y, m, d] = sel.date.split('-');
   const isFriendlyWithOpponent = Boolean(challenge && challenge.tipo === 'amistoso');
-  document.getElementById('successIcon').textContent = isFriendlyWithOpponent ? '🤝' : '🎉';
-  document.getElementById('successTitle').textContent = isFriendlyWithOpponent ? '¡Amistoso enviado!' : '¡Reserva confirmada!';
-  document.getElementById('successMsg').textContent = isFriendlyWithOpponent
+  const calendarPending = Boolean(r.pending);
+  document.getElementById('successIcon').textContent = calendarPending ? '⏳' : (isFriendlyWithOpponent ? '🤝' : '🎉');
+  document.getElementById('successTitle').textContent = calendarPending
+    ? '¡Horario asegurado!'
+    : (isFriendlyWithOpponent ? '¡Amistoso enviado!' : '¡Reserva confirmada!');
+  document.getElementById('successMsg').textContent = calendarPending
+    ? `${sel.court.label} · ${DAYS_LONG[wd]}, ${parseInt(d)} de ${MONTHS_LONG[parseInt(m) - 1]} ${y} · ${sel.slot}. La invitación de Google Calendar se está sincronizando.`
+    : isFriendlyWithOpponent
     ? `Invitaste a ${challenge.retadoNombre} · ${DAYS_LONG[wd]}, ${parseInt(d)} de ${MONTHS_LONG[parseInt(m) - 1]} ${y} · ${sel.slot} · ${sel.court.label}`
     : `${sel.court.label} · ${DAYS_LONG[wd]}, ${parseInt(d)} de ${MONTHS_LONG[parseInt(m) - 1]} ${y} · ${sel.slot}`;
   if (whatsappUrl) {
@@ -1637,7 +1643,7 @@ async function finalConfirmNormal(s, btn) {
 }
 
 async function finalConfirmChallenge(s, btn) {
-  // 1. Create booking in Google Calendar API first to ensure slot is available
+  // 1. Asegurar el horario en Firestore y sincronizarlo con Google Calendar.
   const r = await DB.createBookingAPI(s.id, sel.court.id, sel.date, sel.slot);
   
   if (!r.ok) {
@@ -1647,8 +1653,9 @@ async function finalConfirmChallenge(s, btn) {
     return;
   }
 
-  // 2. Create and save challenge locally
-  const challenge = DB.createChallenge(s.id, sel.retadoId, s.genero || 'M', sel.date, sel.court.label);
+  // 2. Registrar el desafío en una sola operación: Sheets, correos,
+  // Calendar y espejo de Firebase.
+  let challenge = DB.createChallenge(s.id, sel.retadoId, s.genero || 'M', sel.date, sel.court.label);
   Object.assign(challenge, {
     retadorNombre: s.nombre,
     retadorEmail: s.email,
@@ -1658,69 +1665,30 @@ async function finalConfirmChallenge(s, btn) {
     slot: sel.slot,
     courtId: sel.court.id,
     courtLabel: sel.court.label,
-    bookingId: r.booking.id
+    bookingId: r.booking.id,
+    tipo: 'ranking'
   });
-  
-  // Save challenge locally
-  DB.saveChallenges(DB.getChallenges().map(item => item.id === challenge.id ? { ...item, ...challenge } : item));
-
-  // 3. Save challenge to Firebase (Cloud source of truth)
-  if (DB.isCloudConfigured()) {
-    try {
-      await DB.saveChallengeCloud(challenge);
-    } catch(e) {
-      console.warn('Error saving challenge to Firebase:', e);
-    }
+  try {
+    challenge = await persistReservationMatch(challenge);
+  } catch (matchError) {
+    DB.cancelBooking(r.booking.id, s.id);
+    await DB.cancelBookingAPI(r.booking.id, sel.court.id).catch(() => null);
+    alert('No se pudo crear y notificar el desafío. La cancha fue liberada. ' + matchError.message);
+    btn.disabled = false;
+    btn.innerHTML = '✅ Confirmar reserva';
+    return;
   }
 
-  // 4. Generate WhatsApp URL
-  let whatsappUrl = null;
-  const cleanPhone = String(sel.retadoTelefono || '').replace(/[^0-9]/g, '');
-  if (cleanPhone) {
-    const parts = sel.date.split('-');
-    const dateFormatted = parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : sel.date;
-    const currentUrl = window.location.origin + window.location.pathname.replace('reservas.html', 'ranking.html');
-    const text = `🎾 ¡Hola! Te he desafiado en UCTenis.
-
-📅 Fecha: ${dateFormatted} · Hora: ${sel.slot}
-🏟️ Cancha: ${sel.court.label}
-
-Por favor, ingresa a la página para aceptar o rechazar el desafío:
-${currentUrl}
-
-¡Nos vemos en la cancha! 🏆`;
-    whatsappUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`;
-  }
-
-  // 5. Notify opponent via Apps Script in background (e-mail notification)
+  const whatsappUrl = buildMatchWhatsappUrl(challenge);
   const wd = dayOfWeekFromISO(sel.date);
   const [y, m, d] = sel.date.split('-');
-  if (window.CONFIG?.API_URL) {
-    fetch(window.CONFIG.API_URL, {
-      method: 'POST',
-      body: JSON.stringify({
-        action: 'notify_challenge',
-        challengeId: challenge.id,
-        retadorNombre: s.nombre,
-        retadorEmail: s.email,
-        retadoNombre: challenge.retadoNombre,
-        retadoEmail: challenge.retadoEmail || '',
-        retadoId: challenge.retadoId,
-        retadoTelefono: challenge.retadoTelefono || '',
-        fecha: challenge.fecha,
-        fechaLabel: `${DAYS_LONG[wd]}, ${parseInt(d)} de ${MONTHS_LONG[parseInt(m)-1]} ${y}`,
-        slot: challenge.slot,
-        cancha: challenge.courtLabel,
-        courtId: challenge.courtId
-      })
-    }).catch(e => console.warn('Error notify challenge in background:', e));
-  }
 
-  // 6. Update success modal and show it
-  document.getElementById('successIcon').textContent = '⚔️'; // ⚔️
-  document.getElementById('successTitle').textContent = '¡Desafío enviado!';
-  document.getElementById('successMsg').textContent =
-    `Has retado a ${sel.retadoNombre} · ${DAYS_LONG[wd]}, ${parseInt(d)} de ${MONTHS_LONG[parseInt(m)-1]} ${y} · ${sel.slot} · ${sel.court.label}`;
+  // 3. Update success modal and show it
+  document.getElementById('successIcon').textContent = r.pending ? '⏳' : '⚔️';
+  document.getElementById('successTitle').textContent = r.pending ? '¡Horario asegurado!' : '¡Desafío enviado!';
+  document.getElementById('successMsg').textContent = r.pending
+    ? `El desafío quedó registrado y el horario está asegurado. La invitación de Google Calendar se está sincronizando.`
+    : `Has retado a ${sel.retadoNombre} · ${DAYS_LONG[wd]}, ${parseInt(d)} de ${MONTHS_LONG[parseInt(m)-1]} ${y} · ${sel.slot} · ${sel.court.label}`;
 
   if (whatsappUrl) {
     document.getElementById('whatsappLink').href = whatsappUrl;
@@ -1790,6 +1758,7 @@ function renderMyBookingsUI(list) {
       <div class="mb-info">
         <strong>${courts[b.courtId] || b.courtId}</strong>
         <span>${DAYS_SHORT[wd]} · ${b.slot} – ${endStr}</span>
+        ${b.status === 'pendiente_calendar' ? '<span style="color:#b7791f;font-size:.78rem">⏳ Sincronizando con Google Calendar</span>' : ''}
       </div>
       <div class="mb-actions">
         ${!isPast ? `<button class="btn-cancel-bk" onclick="cancelBooking('${b.id}')">Cancelar</button>` : '<span class="past-label">Finalizada</span>'}
@@ -1807,7 +1776,7 @@ async function cancelBooking(id) {
   if (DB.isFirebaseConfigured()) {
     const loader = document.createElement('div');
     loader.style = "position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);display:flex;flex-direction:column;justify-content:center;align-items:center;z-index:9999;color:white;font-weight:bold;font-size:1.2rem;gap:12px;";
-    loader.innerHTML = '🔄 <span style="font-family:sans-serif;">Cancelando reserva en Google Calendar...</span>';
+    loader.innerHTML = '🔄 <span style="font-family:sans-serif;">Cancelando reserva...</span>';
     document.body.appendChild(loader);
 
     try {

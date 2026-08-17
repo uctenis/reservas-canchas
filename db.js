@@ -2,7 +2,7 @@
 
 if (typeof window.CONFIG === 'undefined') {
   window.CONFIG = {
-    API_URL: "https://script.google.com/macros/s/AKfycbxxdlWgNakuIttTXiy-Rs6OLlex4da4grOmIYLXHhyx_IbTKkVUjnyNQXHy-jA6Bs2S/exec"
+    API_URL: "https://script.google.com/macros/s/AKfycbzlzQPYAW_pz4IKdrZqNwjzkKSkvX5gJ6-2_MNteGWW_fDPNPPkkyFBVpy3gpRlV2TG/exec"
   };
 }
 
@@ -54,7 +54,8 @@ const FIREBASE_COLLECTIONS = {
   challenges: 'ranking_challenges',
   news: 'ranking_news',
   staff: 'uct_staff',           // Funcionarios UCT (solo reservas, sin ranking)
-  config: 'uct_config'          // Parámetros editables por el admin (horarios, anticipación, etc.)
+  config: 'uct_config',         // Parámetros editables por el admin (horarios, anticipación, etc.)
+  bookings: 'court_bookings'    // Fuente principal; Google Calendar es su proyección
 };
 
 // ── Horarios y parámetros de reserva por defecto ────────────────────────────
@@ -1597,8 +1598,13 @@ const DB = {
       return cached.data;
     }
     try {
-      const params = new URLSearchParams({ action: 'get_available_slots', date: fechaStr });
-      const res = await fetch(`${window.CONFIG.API_URL}?${params.toString()}`);
+      const idToken = await this.getIdToken();
+      const res = idToken
+        ? await fetch(window.CONFIG.API_URL, {
+            method: 'POST',
+            body: JSON.stringify({ action: 'get_available_slots', date: fechaStr, idToken })
+          })
+        : await fetch(`${window.CONFIG.API_URL}?${new URLSearchParams({ action: 'get_available_slots', date: fechaStr }).toString()}`);
       const data = await res.json();
       if (data && data.ok) slotsCache.set(fechaStr, { data, ts: Date.now() });
       return data; // { ok: true, courts: { cec1: ["09:00", ...], cec2: [...] } }
@@ -1646,6 +1652,7 @@ const DB = {
       const idToken = await this.getIdToken();
       const payload = {
         action: 'create_booking',
+        userId: user.id || userId || '',
         email: user.email,
         name: user.nombre,
         rut: user.rut || '',
@@ -1665,13 +1672,25 @@ const DB = {
         return { ok: false, msg: data.msg };
       }
 
-      // Si fue exitoso en Google, lo guardamos localmente también
+      // Guardar una copia local del registro principal de Firestore.
       const bookings = this.getBookings();
-      const b = { id: data.eventId || Date.now().toString(), userId: user.id || userId, courtId, fecha, slot, status: 'confirmada', creado: new Date().toISOString() };
-      bookings.push(b);
+      const remoteBooking = data.booking || {};
+      const b = {
+        id: remoteBooking.id || data.eventId || Date.now().toString(),
+        calendarEventId: remoteBooking.calendarEventId || data.eventId || '',
+        userId: user.id || userId,
+        courtId,
+        fecha,
+        slot,
+        status: data.pending ? 'pendiente_calendar' : 'confirmada',
+        creado: remoteBooking.creado || new Date().toISOString()
+      };
+      const existingIndex = bookings.findIndex(item => item.id === b.id);
+      if (existingIndex >= 0) bookings[existingIndex] = { ...bookings[existingIndex], ...b };
+      else bookings.push(b);
       this.saveBookings(bookings);
       this.invalidateSlotsCache(fecha);
-      return { ok: true, booking: b };
+      return { ok: true, pending: Boolean(data.pending), msg: data.msg || '', booking: b };
     } catch (e) {
       console.error('Error conectando a Apps Script:', e);
       return { ok: false, msg: 'No se pudo conectar al servidor de reservas. Intenta nuevamente.' };
@@ -1680,12 +1699,23 @@ const DB = {
 
   async cancelBookingAPI(bookingId, courtId) {
     try {
-      const params = new URLSearchParams({
+      const session = this.getSession();
+      const idToken = await this.getIdToken();
+      if (!idToken || !session?.email) {
+        return { ok: false, msg: 'Tu sesión venció. Vuelve a ingresar antes de cancelar.' };
+      }
+      const payload = {
         action: 'cancel_booking',
         courtId: courtId,
-        eventId: bookingId
+        bookingId: bookingId,
+        eventId: bookingId,
+        email: session.email,
+        idToken: idToken
+      };
+      const res = await fetch(window.CONFIG.API_URL, {
+        method: 'POST',
+        body: JSON.stringify(payload)
       });
-      const res = await fetch(`${window.CONFIG.API_URL}?${params.toString()}`);
       const data = await res.json();
       if (data && data.ok) this.invalidateSlotsCache();
       return data;
@@ -1708,15 +1738,21 @@ const DB = {
       .sort((a,b) => a.fecha.localeCompare(b.fecha) || a.slot.localeCompare(b.slot));
   },
   async syncUserBookingsAPI(userId) {
-    const user = this.getUsers().find(u => u.id === userId);
+    const session = this.getSession();
+    const user = this.getUsers().find(u => u.id === userId) || (session && session.id === userId ? session : null);
     if (!user || !this.isFirebaseConfigured()) return;
     
     try {
-      const params = new URLSearchParams({
-        action: 'get_user_bookings',
-        email: user.email
+      const idToken = await this.getIdToken();
+      if (!idToken) return;
+      const res = await fetch(window.CONFIG.API_URL, {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'get_user_bookings',
+          email: user.email,
+          idToken: idToken
+        })
       });
-      const res = await fetch(`${window.CONFIG.API_URL}?${params.toString()}`);
       const data = await res.json();
       
       if (data.ok && data.bookings) {
@@ -1728,12 +1764,20 @@ const DB = {
             const isPast = new Date(b.fecha + 'T' + b.slot + ':00') < new Date();
             if (isPast) return b;
             
-            const existsInGoogle = data.bookings.some(gb => 
+            const remote = data.bookings.find(gb =>
               gb.id === b.id || (gb.courtId === b.courtId && gb.fecha === b.fecha && gb.slot === b.slot)
             );
-            if (!existsInGoogle) {
+            if (!remote) {
               return { ...b, status: 'cancelada' };
             }
+            return {
+              ...b,
+              id: remote.id || b.id,
+              calendarEventId: remote.calendarEventId || b.calendarEventId || '',
+              status: remote.status === 'confirmed' || remote.status === 'legacy_confirmed'
+                ? 'confirmada'
+                : 'pendiente_calendar'
+            };
           }
           return b;
         });
@@ -1746,12 +1790,13 @@ const DB = {
           if (!existsLocal) {
             updated.push({
               id: gb.id,
+              calendarEventId: gb.calendarEventId || '',
               userId: userId,
               courtId: gb.courtId,
               fecha: gb.fecha,
               slot: gb.slot,
-              status: 'confirmada',
-              creado: new Date().toISOString()
+              status: gb.status === 'confirmed' || gb.status === 'legacy_confirmed' ? 'confirmada' : 'pendiente_calendar',
+              creado: gb.creado || new Date().toISOString()
             });
           }
         });
