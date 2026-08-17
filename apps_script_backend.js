@@ -568,11 +568,15 @@ function adminFreeSpecialSlots(data) {
   } else if (sheet.getLastColumn() < 5) {
     sheet.getRange(1, 5).setValue('groupId');
   }
+  // Forzar la columna de fecha a texto plano: si no, Sheets auto-convierte
+  // el ISO string ('2026-08-20') a un valor Date y las comparaciones por
+  // string (en getAvailableSlots, etc.) dejan de coincidir silenciosamente.
+  sheet.getRange(2, 1, Math.max(sheet.getMaxRows() - 1, 1), 1).setNumberFormat('@');
 
   const existing = sheet.getLastRow() > 1 ? sheet.getRange(2, 1, sheet.getLastRow() - 1, 5).getValues() : [];
   const existingIndex = {};
   existing.forEach(function(row, i) {
-    existingIndex[text(row[0]) + '|' + text(row[1])] = i + 2; // número real de fila en la hoja
+    existingIndex[dateCellToStr(row[0], ss) + '|' + text(row[1])] = i + 2; // número real de fila en la hoja
   });
 
   const validCourts = courts.map(text).filter(Boolean);
@@ -621,7 +625,7 @@ function adminRemoveSpecialSlots(data) {
   for (let i = values.length - 1; i >= 1; i--) {
     const matches = groupId
       ? text(values[i][4]) === groupId
-      : (text(values[i][0]) === fecha && text(values[i][1]) === courtId);
+      : (dateCellToStr(values[i][0], ss) === fecha && text(values[i][1]) === courtId);
     if (matches) {
       sheet.deleteRow(i + 1);
       removed++;
@@ -646,7 +650,7 @@ function getSpecialDatesList() {
   let ungroupedCounter = 0;
 
   values.forEach(function(row) {
-    const fecha = text(row[0]);
+    const fecha = dateCellToStr(row[0], ss);
     const courtId = text(row[1]);
     if (!fecha || !courtId) return;
     const tipo = text(row[2]);
@@ -2341,7 +2345,7 @@ function getAvailableSlots(dateStr, idToken) {
     if (specialSheet) {
       const specialData = specialSheet.getDataRange().getValues();
       for (let i = 1; i < specialData.length; i++) {
-        const rowFecha = text(specialData[i][0]);
+        const rowFecha = dateCellToStr(specialData[i][0], ss);
         const rowCourt = text(specialData[i][1]);
         const rowTipo  = text(specialData[i][2]);
         if (rowFecha !== dateStr || !rowCourt) continue;
@@ -3346,6 +3350,16 @@ function getChallengeStatsByPlayer() {
 function text(value) {
   if (value === null || value === undefined) return '';
   return value.toString().replace(/\s+/g, ' ').trim();
+}
+
+/** Lee una celda de fecha como 'yyyy-MM-dd', tolerando que Sheets la haya
+ * auto-convertido a un objeto Date (ocurre al escribir texto ISO en una
+ * celda sin formato de texto forzado). */
+function dateCellToStr(value, ss) {
+  if (value instanceof Date) {
+    return Utilities.formatDate(value, ss.getSpreadsheetTimeZone(), 'yyyy-MM-dd');
+  }
+  return text(value);
 }
 
 function norm(value) {
