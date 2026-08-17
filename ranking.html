@@ -1156,35 +1156,15 @@ function setupEvents() {
   });
 }
 
-// El listener de jugadores se inicia antes que refreshRankingPage() (ver
-// DOMContentLoaded). Si su primer snapshot llega dentro de esta ventana, el
-// primer pintado usa el dato real directamente y no hay flashazo de
-// posición/foto vieja; si tarda más (red lenta / conexión fría a Firestore),
-// se pinta la copia local igual para no demorar la página. 250ms resultó
-// insuficiente en la práctica; 600ms sigue sintiéndose instantáneo pero le
-// da más margen a la primera consulta.
-const RANKING_FIRST_PAINT_GRACE_MS = 600;
-
-function waitForFirstEventOrTimeout(eventName, timeoutMs) {
-  return new Promise(resolve => {
-    let settled = false;
-    const finish = () => {
-      if (settled) return;
-      settled = true;
-      window.removeEventListener(eventName, onEvent);
-      resolve();
-    };
-    const onEvent = () => finish();
-    window.addEventListener(eventName, onEvent, { once: true });
-    setTimeout(finish, timeoutMs);
-  });
-}
+// Nota: se probó hacer que refreshRankingPage() esperara un margen fijo
+// (250ms, luego 600ms) al primer snapshot del listener de jugadores antes
+// de pintar, para evitar el flashazo de posición/foto vieja. No sirvió — el
+// flash seguía apareciendo igual — y sí sumaba una demora fija perceptible
+// a cada carga de la página. Se revirtió: loadStaticRanking() sigue
+// prefiriendo el snapshot real si el listener YA lo tiene disponible en ese
+// instante (sin costo, no bloquea nada), pero ya no se espera por él.
 
 async function refreshRankingPage() {
-  if (DB.isCloudConfigured()) {
-    await waitForFirstEventOrTimeout('players-updated', RANKING_FIRST_PAINT_GRACE_MS);
-  }
-
   // PASO 1: Mostrar datos de inmediato (el snapshot real si ya llegó, si no
   // la última copia local) para que la tabla NUNCA quede vacía.
   try {
