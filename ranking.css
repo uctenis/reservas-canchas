@@ -1268,8 +1268,14 @@ body {
 /* =========================================================================
    Ficha de jugador — tarjeta de perfil (modal .profile-modal)
    ========================================================================= */
+/* style.css (compartido en todo el sitio) define .modal-content con
+   max-width: 400px para sus propios modales simples. Como esa propiedad
+   nunca se sobreescribe aquí, ese tope se colaba en la ficha sin importar
+   qué width se le pidiera — max-width siempre gana sobre width, tenga o no
+   !important. Hay que igualar max-width a cada width que se define abajo. */
 .profile-modal {
   width: min(96vw, 900px) !important;
+  max-width: min(96vw, 900px) !important;
   padding: 0 !important;
 }
 
@@ -1283,6 +1289,7 @@ body {
 
 .profile-modal.profile-editor-view {
   width: min(92vw, 540px) !important;
+  max-width: min(92vw, 540px) !important;
 }
 
 .profile-hero {
