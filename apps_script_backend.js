@@ -27,11 +27,20 @@ const CONFIG = {
   ADMIN_PIN: "",
   PHOTO_FOLDER_NAME: "UCTenis fotos jugadores",
 
+  MAIN_CALENDAR_ID: "e500541f01f115243cc82fdd8cb8af53885461cb6d91e8f6e2c22ed07557c23c@group.calendar.google.com",
+
   CALENDARS: {
     "cec1": "e500541f01f115243cc82fdd8cb8af53885461cb6d91e8f6e2c22ed07557c23c@group.calendar.google.com",
-    "cec2": "5ed0d53a5c6913b60c1886bd04748fac22783d81209501200038e5dc6352b323@group.calendar.google.com",
-    "cjp1": "9c053fe813a0903f56d9aa39efa99dc495dc041115b662940e5d1735bec43ff3@group.calendar.google.com",
-    "cjp2": "0562d62a2046c1253e0f7b0e9f3d0c11dd850e79219eb050aa1a9770cf6b7702@group.calendar.google.com"
+    "cec2": "e500541f01f115243cc82fdd8cb8af53885461cb6d91e8f6e2c22ed07557c23c@group.calendar.google.com",
+    "cjp1": "e500541f01f115243cc82fdd8cb8af53885461cb6d91e8f6e2c22ed07557c23c@group.calendar.google.com",
+    "cjp2": "e500541f01f115243cc82fdd8cb8af53885461cb6d91e8f6e2c22ed07557c23c@group.calendar.google.com"
+  },
+
+  COURT_NAMES: {
+    "cec1": "CEC Cancha 1",
+    "cec2": "CEC Cancha 2",
+    "cjp1": "CJP Cancha 1",
+    "cjp2": "CJP Cancha 2"
   },
 
   SLOTS: ['09:00','10:30','12:00','13:30','15:00','16:30','18:00','19:30','21:00'],
@@ -75,6 +84,44 @@ const CONFIG = {
     }
   }
 };
+
+/**
+ * Retorna el nombre legible de la cancha a partir de su ID.
+ */
+function getCourtName(courtId) {
+  const map = (CONFIG && CONFIG.COURT_NAMES) || {
+    cec1: 'CEC Cancha 1',
+    cec2: 'CEC Cancha 2',
+    cjp1: 'CJP Cancha 1',
+    cjp2: 'CJP Cancha 2'
+  };
+  return map[text(courtId).toLowerCase()] || text(courtId).toUpperCase();
+}
+
+/**
+ * Detecta a qué cancha pertenece un evento del calendario unificado
+ * analizando el título, descripción o ubicación.
+ */
+function detectCourtFromEvent(event) {
+  if (!event) return 'cec1';
+  const title = (event.getTitle() || '').toLowerCase();
+  const desc = (event.getDescription() || '').toLowerCase();
+  const loc = (event.getLocation() || '').toLowerCase();
+
+  // 1. Tags directos entre corchetes o IDs exactos
+  if (title.includes('[cec cancha 1]') || title.includes('[cec 1]') || title.includes('[cec1]') || loc.includes('cec cancha 1') || desc.includes('(cec1)') || desc.includes('cancha: cec cancha 1') || desc.includes('cancha: cec 1')) return 'cec1';
+  if (title.includes('[cec cancha 2]') || title.includes('[cec 2]') || title.includes('[cec2]') || loc.includes('cec cancha 2') || desc.includes('(cec2)') || desc.includes('cancha: cec cancha 2') || desc.includes('cancha: cec 2')) return 'cec2';
+  if (title.includes('[cjp cancha 1]') || title.includes('[cjp 1]') || title.includes('[cjp1]') || loc.includes('cjp cancha 1') || desc.includes('(cjp1)') || desc.includes('cancha: cjp cancha 1') || desc.includes('cancha: cjp 1')) return 'cjp1';
+  if (title.includes('[cjp cancha 2]') || title.includes('[cjp 2]') || title.includes('[cjp2]') || loc.includes('cjp cancha 2') || desc.includes('(cjp2)') || desc.includes('cancha: cjp cancha 2') || desc.includes('cancha: cjp 2')) return 'cjp2';
+
+  // 2. Coincidencias generales
+  if (title.includes('cec 1') || title.includes('cec-1') || loc.includes('cec 1')) return 'cec1';
+  if (title.includes('cec 2') || title.includes('cec-2') || loc.includes('cec 2')) return 'cec2';
+  if (title.includes('cjp 1') || title.includes('cjp-1') || loc.includes('cjp 1')) return 'cjp1';
+  if (title.includes('cjp 2') || title.includes('cjp-2') || loc.includes('cjp 2')) return 'cjp2';
+
+  return 'cec1';
+}
 
 // =======================================================
 // 🌐 PUNTO DE ENTRADA WEB (API)
@@ -698,14 +745,16 @@ function createChallengeCalendarInvite(data) {
     const guestList = [text(data.retadorEmail), text(data.retadoEmail)].filter(Boolean);
     const guests = guestList.join(',');
     const isFriendly = text(data.tipo) === 'amistoso';
-    const title = (isFriendly ? 'Partido amistoso UCTenis: ' : 'Desafio ranking UCTenis: ') + text(data.retadorNombre) + ' vs ' + text(data.retadoNombre);
+    const courtKey = text(data.courtId || (data.cancha && data.cancha.toLowerCase().includes('cjp') ? 'cjp1' : 'cec1'));
+    const courtName = getCourtName(courtKey);
+    const title = '[' + courtName + '] ' + (isFriendly ? 'Partido amistoso UCTenis: ' : 'Desafio ranking UCTenis: ') + text(data.retadorNombre) + ' vs ' + text(data.retadoNombre);
     const description = [
       isFriendly ? 'Partido amistoso UCTenis.' : 'Desafio de ranking UCTenis.',
+      'Cancha: ' + courtName + ' (' + courtKey + ')',
       'Organizador: ' + text(data.retadorNombre) + ' <' + text(data.retadorEmail) + '>',
       'Invitado: ' + text(data.retadoNombre) + ' <' + text(data.retadoEmail) + '>',
       'Fecha: ' + (text(data.fechaLabel) || fecha),
       slot ? 'Hora: ' + slot : '',
-      'Cancha: ' + text(data.cancha),
       '',
       isFriendly
         ? 'Acepten o rechacen el partido amistoso en la pagina de UCTenis.'
@@ -729,12 +778,14 @@ function createChallengeCalendarInvite(data) {
         const bookingSaved = saveBookingDocument(booking);
         if (!bookingSaved.ok) throw new Error(bookingSaved.msg || 'No se pudieron asociar los invitados a la reserva.');
 
-        if (booking.calendarEventId && CONFIG.CALENDARS[booking.courtId]) {
-          const courtCalendar = CalendarApp.getCalendarById(CONFIG.CALENDARS[booking.courtId]);
+        const calId = CONFIG.MAIN_CALENDAR_ID || CONFIG.CALENDARS[booking.courtId] || CONFIG.CALENDARS['cec1'];
+        if (booking.calendarEventId && calId) {
+          const courtCalendar = CalendarApp.getCalendarById(calId);
           const bookingEvent = courtCalendar && courtCalendar.getEventById(booking.calendarEventId);
           if (bookingEvent) {
             guestList.forEach(function(email) { bookingEvent.addGuest(email); });
             bookingEvent.setTitle(title);
+            if (bookingEvent.setLocation) bookingEvent.setLocation(courtName);
             bookingEvent.setDescription(description + '\n\nReserva-ID: ' + booking.id);
             return { ok: true, eventId: bookingEvent.getId(), calendarId: booking.courtId, reusedBooking: true };
           }
@@ -760,12 +811,14 @@ function createChallengeCalendarInvite(data) {
       }
 
       // Compatibilidad con reservas antiguas cuyo bookingId era eventId.
-      if (courtId && CONFIG.CALENDARS[courtId]) {
-        const legacyCalendar = CalendarApp.getCalendarById(CONFIG.CALENDARS[courtId]);
+      if (courtId) {
+        const legacyCalId = CONFIG.MAIN_CALENDAR_ID || CONFIG.CALENDARS[courtId] || CONFIG.CALENDARS['cec1'];
+        const legacyCalendar = CalendarApp.getCalendarById(legacyCalId);
         const legacyEvent = legacyCalendar && legacyCalendar.getEventById(bookingId);
         if (legacyEvent) {
           guestList.forEach(function(email) { legacyEvent.addGuest(email); });
           legacyEvent.setTitle(title);
+          if (legacyEvent.setLocation) legacyEvent.setLocation(courtName);
           return { ok: true, eventId: legacyEvent.getId(), calendarId: courtId, reusedBooking: true, legacy: true };
         }
       }
@@ -2092,24 +2145,28 @@ function publicBooking(booking) {
 }
 
 function createBookingCalendarEvent(booking) {
-  const calendar = CalendarApp.getCalendarById(CONFIG.CALENDARS[booking.courtId]);
-  if (!calendar) throw new Error('Calendario de la cancha no encontrado.');
+  const calId = CONFIG.MAIN_CALENDAR_ID || CONFIG.CALENDARS[booking.courtId] || CONFIG.CALENDARS['cec1'];
+  const calendar = CalendarApp.getCalendarById(calId);
+  if (!calendar) throw new Error('Calendario maestro de canchas no encontrado.');
   const startTime = makeLocalDate(booking.date, booking.slot);
   const endTime = new Date(startTime.getTime() + 90 * 60000);
+  const courtName = getCourtName(booking.courtId);
   const description = [
     'Reserva automática generada desde la plataforma web.',
     'Reserva-ID: ' + booking.id,
+    'Cancha: ' + courtName + ' (' + booking.courtId + ')',
     'Usuario: ' + booking.name,
     'Correo: ' + booking.email,
     'RUT: ' + (booking.rut || 'No registrado'),
-    'Cancha: ' + booking.courtId.toUpperCase(),
     'Tipo: ' + booking.userTypeLabel
   ].join('\n');
   const guestEmails = Array.isArray(booking.guestEmails) && booking.guestEmails.length
     ? booking.guestEmails.filter(Boolean)
     : [booking.email].filter(Boolean);
-  return calendar.createEvent(booking.matchTitle || ('Reserva UCTenis - ' + booking.name), startTime, endTime, {
+  const eventTitle = booking.matchTitle || ('[' + courtName + '] Reserva UCTenis - ' + booking.name);
+  return calendar.createEvent(eventTitle, startTime, endTime, {
     description: description,
+    location: courtName,
     guests: guestEmails.join(','),
     sendInvites: true
   });
@@ -2126,8 +2183,9 @@ function releaseChallengeBooking(bookingId, courtId) {
     booking.cancelledBy = 'challenge_response';
     booking.calendarCleanupPending = Boolean(booking.calendarEventId);
     saveBookingDocument(booking);
-    if (booking.calendarEventId && CONFIG.CALENDARS[booking.courtId]) {
-      const calendar = CalendarApp.getCalendarById(CONFIG.CALENDARS[booking.courtId]);
+    const calId = CONFIG.MAIN_CALENDAR_ID || CONFIG.CALENDARS[booking.courtId] || CONFIG.CALENDARS['cec1'];
+    if (booking.calendarEventId && calId) {
+      const calendar = CalendarApp.getCalendarById(calId);
       const event = calendar && calendar.getEventById(booking.calendarEventId);
       if (event) event.deleteEvent();
     }
@@ -2139,8 +2197,9 @@ function releaseChallengeBooking(bookingId, courtId) {
   }
 
   // Compatibilidad con desafíos anteriores, donde bookingId era el eventId.
-  if (bookingId && CONFIG.CALENDARS[courtId]) {
-    const legacyCalendar = CalendarApp.getCalendarById(CONFIG.CALENDARS[courtId]);
+  const calId = CONFIG.MAIN_CALENDAR_ID || CONFIG.CALENDARS[courtId] || CONFIG.CALENDARS['cec1'];
+  if (bookingId && calId) {
+    const legacyCalendar = CalendarApp.getCalendarById(calId);
     const legacyEvent = legacyCalendar && legacyCalendar.getEventById(bookingId);
     if (legacyEvent) legacyEvent.deleteEvent();
   }
@@ -2148,7 +2207,8 @@ function releaseChallengeBooking(bookingId, courtId) {
 }
 
 function findCalendarEventForBooking(booking) {
-  const calendar = CalendarApp.getCalendarById(CONFIG.CALENDARS[booking.courtId]);
+  const calId = CONFIG.MAIN_CALENDAR_ID || CONFIG.CALENDARS[booking.courtId] || CONFIG.CALENDARS['cec1'];
+  const calendar = CalendarApp.getCalendarById(calId);
   if (!calendar) return null;
   if (booking.calendarEventId) {
     const byId = calendar.getEventById(booking.calendarEventId);
@@ -2351,13 +2411,14 @@ function migrateCalendarBookingsInternal(data, actorEmail) {
   const end = new Date(start.getTime() + days * 24 * 60 * 60 * 1000);
   let imported = 0, skipped = 0, failed = 0;
 
-  Object.keys(CONFIG.CALENDARS).forEach(function(courtId) {
-    try {
-      const calendar = CalendarApp.getCalendarById(CONFIG.CALENDARS[courtId]);
-      if (!calendar) return;
+  const mainCalId = CONFIG.MAIN_CALENDAR_ID || CONFIG.CALENDARS['cec1'];
+  try {
+    const calendar = CalendarApp.getCalendarById(mainCalId);
+    if (calendar) {
       calendar.getEvents(start, end).forEach(function(event) {
         const title = event.getTitle() || '';
-        if (!/^reserva uctenis\s*-\s*/i.test(title)) return;
+        if (!/reserva uctenis/i.test(title) && !/desafio/i.test(title) && !/amistoso/i.test(title)) return;
+        const courtId = detectCourtFromEvent(event);
         const eventStart = event.getStartTime();
         const dateStr = Utilities.formatDate(eventStart, 'America/Santiago', 'yyyy-MM-dd');
         const slot = Utilities.formatDate(eventStart, 'America/Santiago', 'HH:mm');
@@ -2372,6 +2433,7 @@ function migrateCalendarBookingsInternal(data, actorEmail) {
         const typeMatch = description.match(/tipo:\s*([^\n\r]+)/i);
         const email = emailMatch ? text(emailMatch[1]).toLowerCase() : '';
         const now = new Date().toISOString();
+        const cleanName = title.replace(/^\[[^\]]+\]\s*/i, '').replace(/^reserva uctenis\s*-\s*/i, '').trim();
         const booking = {
           id: id,
           courtId: courtId,
@@ -2380,7 +2442,7 @@ function migrateCalendarBookingsInternal(data, actorEmail) {
           userId: '',
           email: email,
           emailLower: email,
-          name: text(title.replace(/^reserva uctenis\s*-\s*/i, '')) || 'Jugador/a',
+          name: cleanName || 'Jugador/a',
           rut: rutMatch ? text(rutMatch[1]) : '',
           userType: '',
           userTypeLabel: typeMatch ? text(typeMatch[1]) : '',
@@ -2395,11 +2457,11 @@ function migrateCalendarBookingsInternal(data, actorEmail) {
         if (saveBookingDocument(booking, data.idToken).ok) imported++;
         else failed++;
       });
-    } catch (error) {
-      console.warn('Migración Calendar ' + courtId + ':', error.message);
-      failed++;
     }
-  });
+  } catch (error) {
+    console.warn('Migración Calendar maestro:', error.message);
+    failed++;
+  }
   return { ok: failed === 0, imported: imported, skipped: skipped, failed: failed, days: days };
 }
 
@@ -2428,8 +2490,6 @@ function getAvailableSlots(dateStr, idToken, courtIdFilter) {
   let result = { ok: true, date: dateStr, courts: {}, playable: {}, busyLabels: {}, bookingSource: 'database' };
 
   // Las reservas propias de la plataforma se leen primero desde Firestore.
-  // Calendar se sigue leyendo para clases, bloqueos externos y reservas
-  // antiguas creadas antes de esta migración.
   const databaseResult = getDatabaseBookingsForDate(dateStr, idToken);
   const databaseBusy = {};
   if (databaseResult.ok) {
@@ -2462,10 +2522,52 @@ function getAvailableSlots(dateStr, idToken, courtIdFilter) {
   const dynamicConfig = getDynamicScheduleConfig(idToken);
   const courtSlotsSource = (dynamicConfig && dynamicConfig.courtSlots) || CONFIG.COURT_SLOTS;
 
-  for (let courtKey in CONFIG.CALENDARS) {
-    // Cuando createBooking() vuelve a comprobar disponibilidad justo antes de
-    // reservar, solo le importa la cancha objetivo: evita barrer Calendar en
-    // las otras 3 (la parte más lenta de esta función) para nada.
+  // Leer Calendar una sola vez desde el calendario maestro (Cancha CEC 1)
+  const mainCalId = CONFIG.MAIN_CALENDAR_ID || CONFIG.CALENDARS['cec1'];
+  const calendar = CalendarApp.getCalendarById(mainCalId);
+  let allEvents = [];
+  if (calendar) {
+    try {
+      allEvents = calendar.getEvents(startOfDay, endOfDay);
+    } catch (e) {
+      console.warn('No se pudo leer el calendario maestro:', e.message);
+    }
+  }
+
+  // Indexar tiempos ocupados por cancha
+  const busyTimesByCourt = { cec1: [], cec2: [], cjp1: [], cjp2: [] };
+  allEvents.forEach(e => {
+    const rawTitle = e.getTitle() || '';
+    const title = rawTitle.toLowerCase();
+    let busyLabel = '';
+    const isClass = title.includes('clases uctenis') || title.includes('clase uctenis');
+    if (isClass) busyLabel = 'Clases UCTenis';
+
+    const eventCourt = detectCourtFromEvent(e);
+    const timeItem = { start: e.getStartTime().getTime(), end: e.getEndTime().getTime(), label: busyLabel };
+
+    if (isClass) {
+      if (title.includes('cjp') || eventCourt.startsWith('cjp')) {
+        busyTimesByCourt['cjp1'].push(timeItem);
+        busyTimesByCourt['cjp2'].push(timeItem);
+      } else if (title.includes('cec') || eventCourt.startsWith('cec')) {
+        busyTimesByCourt['cec1'].push(timeItem);
+        busyTimesByCourt['cec2'].push(timeItem);
+      } else {
+        ['cec1', 'cec2', 'cjp1', 'cjp2'].forEach(c => {
+          if (!busyTimesByCourt[c]) busyTimesByCourt[c] = [];
+          busyTimesByCourt[c].push(timeItem);
+        });
+      }
+    } else {
+      if (!busyTimesByCourt[eventCourt]) busyTimesByCourt[eventCourt] = [];
+      busyTimesByCourt[eventCourt].push(timeItem);
+    }
+  });
+
+  const courtKeys = Object.keys(CONFIG.CALENDARS);
+  for (let i = 0; i < courtKeys.length; i++) {
+    const courtKey = courtKeys[i];
     if (courtIdFilter && courtKey !== courtIdFilter) continue;
     if (closedCourts[courtKey]) {
       result.courts[courtKey] = [];
@@ -2473,8 +2575,6 @@ function getAvailableSlots(dateStr, idToken, courtIdFilter) {
       result.busyLabels[courtKey] = {};
       continue;
     }
-    let calId = CONFIG.CALENDARS[courtKey];
-    let calendar = CalendarApp.getCalendarById(calId);
 
     if (!calendar) {
       result.courts[courtKey] = { error: "Calendario no encontrado" };
@@ -2482,25 +2582,7 @@ function getAvailableSlots(dateStr, idToken, courtIdFilter) {
       continue;
     }
 
-    let events;
-    try {
-      events = calendar.getEvents(startOfDay, endOfDay);
-    } catch (e) {
-      result.courts[courtKey] = { error: "No se pudo leer el calendario: " + e.message };
-      result.playable[courtKey] = [];
-      continue;
-    }
-
-    let busyTimes = [];
-    events.forEach(e => {
-      const rawTitle = e.getTitle() || '';
-      const title = rawTitle.toLowerCase();
-      let busyLabel = '';
-      if (title.includes('clases uctenis') || title.includes('clase uctenis')) {
-        if (!specialCourts[courtKey]) busyLabel = 'Clases UCTenis';
-      }
-      busyTimes.push({ start: e.getStartTime().getTime(), end: e.getEndTime().getTime(), label: busyLabel });
-    });
+    const busyTimes = busyTimesByCourt[courtKey] || [];
 
     let candidateSlots;
     if (specialCourts[courtKey]) {
@@ -2531,7 +2613,7 @@ function getAvailableSlots(dateStr, idToken, courtIdFilter) {
         result.busyLabels[courtKey][slot] = 'Clases UCTenis';
       } else if (!isDatabaseBooking && !busyMatch) {
         availableSlots.push(slot);
-      } else if (busyMatch.label) {
+      } else if (busyMatch && busyMatch.label) {
         result.busyLabels[courtKey][slot] = busyMatch.label;
       }
     });
@@ -2627,15 +2709,13 @@ function createBooking(data) {
 
   // Fuente única de verdad: vuelve a comprobar horario regular, fechas
   // especiales y ocupación real dentro del lock, justo antes de crear.
-  // Se filtra a esta cancha: la recomprobación ya no necesita barrer
-  // Calendar en las otras 3 (la parte más lenta de esta función).
   const liveAvailability = getAvailableSlots(dateStr, data.idToken, courtId);
   const liveCourtSlots = liveAvailability && liveAvailability.courts && liveAvailability.courts[courtId];
   if (!liveAvailability.ok || !Array.isArray(liveCourtSlots) || liveCourtSlots.indexOf(slot) < 0) {
     return { ok: false, msg: 'Este horario ya no está disponible. Actualiza la agenda y elige otro.' };
   }
 
-  let calId = CONFIG.CALENDARS[courtId];
+  let calId = CONFIG.MAIN_CALENDAR_ID || CONFIG.CALENDARS[courtId] || CONFIG.CALENDARS['cec1'];
   let calendar = CalendarApp.getCalendarById(calId);
   if (!calendar) return { ok: false, msg: 'Calendario de la cancha no encontrado.' };
 
@@ -2768,7 +2848,7 @@ function cancelBooking(data) {
   }
 
   // Compatibilidad temporal con reservas antiguas cuyo ID era el de Calendar.
-  const calId = CONFIG.CALENDARS[text(data.courtId)];
+  const calId = CONFIG.MAIN_CALENDAR_ID || CONFIG.CALENDARS[text(data.courtId)] || CONFIG.CALENDARS['cec1'];
   if (!calId) return { ok: false, msg: 'Reserva no encontrada.' };
   try {
     const calendar = CalendarApp.getCalendarById(calId);
@@ -2781,11 +2861,6 @@ function cancelBooking(data) {
       try {
         event.deleteEvent();
       } catch (deleteError) {
-        // getEventById puede devolver una referencia obsoleta a un evento que
-        // ya fue borrado (p.ej. en un intento anterior). El resultado que
-        // buscamos —que el evento no esté en el calendario— ya se cumple, así
-        // que se trata como éxito en vez de dejar la reserva atascada para
-        // siempre repitiendo el mismo error.
         console.warn('cancelBooking (legacy): el evento ya no existía al borrarlo:', deleteError.message);
       }
     }
@@ -2826,11 +2901,9 @@ function getUserBookings(data) {
 
     // Durante la transición también se muestran reservas antiguas existentes
     // únicamente en Calendar. Las nuevas siempre salen de Firestore.
-    for (let courtKey in CONFIG.CALENDARS) {
-      let calId = CONFIG.CALENDARS[courtKey];
-      let calendar = CalendarApp.getCalendarById(calId);
-      if (!calendar) continue;
-
+    const mainCalId = CONFIG.MAIN_CALENDAR_ID || CONFIG.CALENDARS['cec1'];
+    let calendar = CalendarApp.getCalendarById(mainCalId);
+    if (calendar) {
       let events = calendar.getEvents(startRange, endRange);
       events.forEach(e => {
         const desc = e.getDescription() || "";
@@ -2838,6 +2911,7 @@ function getUserBookings(data) {
         const matchesEmail = desc.toLowerCase().includes(email.toLowerCase()) ||
                              title.toLowerCase().includes(email.toLowerCase());
         if (matchesEmail) {
+          const courtKey = detectCourtFromEvent(e);
           const start = e.getStartTime();
           const date = Utilities.formatDate(start, 'America/Santiago', 'yyyy-MM-dd');
           const slot = Utilities.formatDate(start, 'America/Santiago', 'HH:mm');
@@ -3752,13 +3826,6 @@ function getBookingsForDate(dateStr) {
   const startOfDay = new Date(dateStr + 'T00:00:00' + offsetStr);
   const endOfDay   = new Date(dateStr + 'T23:59:59' + offsetStr);
 
-  const COURT_NAMES = {
-    cec1: 'CEC Cancha 1',
-    cec2: 'CEC Cancha 2',
-    cjp1: 'CJP Cancha 1',
-    cjp2: 'CJP Cancha 2'
-  };
-
   const bookings = [];
   const occupiedKeys = {};
   const databaseResult = getDatabaseBookingsForDate(dateStr);
@@ -3768,48 +3835,61 @@ function getBookingsForDate(dateStr) {
       bookings.push({
         id: booking.id,
         courtKey: booking.courtId,
-        courtName: COURT_NAMES[booking.courtId] || text(booking.courtId).toUpperCase(),
+        courtName: getCourtName(booking.courtId),
         slot: booking.slot,
         nombre: booking.name || 'Jugador/a',
         email: booking.email || '',
+        rut: booking.rut || '',
+        userTypeLabel: booking.userTypeLabel || '',
         status: booking.status
       });
       occupiedKeys[key] = true;
     });
   }
 
-  for (const courtKey in CONFIG.CALENDARS) {
-    const calId = CONFIG.CALENDARS[courtKey];
-    try {
-      const calendar = CalendarApp.getCalendarById(calId);
-      if (!calendar) continue;
+  const mainCalId = CONFIG.MAIN_CALENDAR_ID || CONFIG.CALENDARS['cec1'];
+  try {
+    const calendar = CalendarApp.getCalendarById(mainCalId);
+    if (calendar) {
       const events = calendar.getEvents(startOfDay, endOfDay);
       events.forEach(function(ev) {
         const title = ev.getTitle() || '';
-        // Solo incluir reservas UCTenis (no clases ni bloques internos)
-        if (!title.toLowerCase().startsWith('reserva uctenis')) return;
+        const titleLower = title.toLowerCase();
+        // Incluir reservas UCTenis, desafíos y amistosos
+        if (!titleLower.includes('reserva uctenis') && !titleLower.includes('desafio') && !titleLower.includes('amistoso')) return;
+
+        const courtKey = detectCourtFromEvent(ev);
         const desc = ev.getDescription() || '';
-        // Extraer nombre del título: "Reserva UCTenis - Nombre Apellido"
-        const nombre = title.replace(/^reserva uctenis\s*-\s*/i, '').trim() || 'Jugador/a';
-        // Extraer email de la descripción
         const emailMatch = desc.match(/correo:\s*([^\n\r]+)/i);
+        const rutMatch = desc.match(/rut:\s*([^\n\r]+)/i);
+        const tipoMatch = desc.match(/tipo:\s*([^\n\r]+)/i);
+        const userMatch = desc.match(/usuario:\s*([^\n\r]+)/i);
+
+        const cleanTitle = title.replace(/^\[[^\]]+\]\s*/i, '').replace(/^reserva uctenis\s*-\s*/i, '').trim();
+        const nombre = (userMatch && userMatch[1].trim()) || cleanTitle || 'Jugador/a';
         const email = emailMatch ? emailMatch[1].trim() : '';
+        const rut = rutMatch ? rutMatch[1].trim() : '';
+        const userTypeLabel = tipoMatch ? tipoMatch[1].trim() : '';
         const start = ev.getStartTime();
         const slot = Utilities.formatDate(start, 'America/Santiago', 'HH:mm');
         const bookingKey = courtKey + '|' + slot;
         if (occupiedKeys[bookingKey]) return;
+
         bookings.push({
           courtKey: courtKey,
-          courtName: COURT_NAMES[courtKey] || courtKey.toUpperCase(),
+          courtName: getCourtName(courtKey),
           slot: slot,
           nombre: nombre,
-          email: email
+          email: email,
+          rut: rut,
+          userTypeLabel: userTypeLabel,
+          status: 'confirmed'
         });
         occupiedKeys[bookingKey] = true;
       });
-    } catch(e) {
-      console.warn('getBookingsForDate error en ' + courtKey + ': ' + e.message);
     }
+  } catch(e) {
+    console.warn('getBookingsForDate error en calendar maestro: ' + e.message);
   }
 
   // Ordenar por hora, luego por cancha
@@ -3822,17 +3902,19 @@ function getBookingsForDate(dateStr) {
 }
 
 /**
- * Genera el HTML de la tabla de reservas para el correo.
+ * Genera el HTML de la tabla de reservas para el correo (administradores y seguridad).
  * @param {Array} bookings - Array de reservas
  * @returns {string} HTML de la tabla
  */
 function buildCourtDigestTable(bookings) {
   const rows = bookings.map(function(b, i) {
     const bg = i % 2 === 0 ? 'background:#f9f9f9;' : '';
+    const rutLabel = b.rut ? ('<br><span style="color:#666;font-size:12px;">RUT: ' + b.rut + '</span>') : '';
+    const tipoBadge = b.userTypeLabel ? (' <span style="font-size:11px;background:#e8f5e9;color:#2e7d32;padding:2px 6px;border-radius:4px;font-weight:600;">' + b.userTypeLabel + '</span>') : '';
     return '<tr style="' + bg + '">' +
-      '<td style="padding:8px 12px;font-weight:600;color:#1a6b3a;">' + b.slot + '</td>' +
-      '<td style="padding:8px 12px;">' + b.courtName + '</td>' +
-      '<td style="padding:8px 12px;">' + b.nombre + '</td>' +
+      '<td style="padding:8px 12px;font-weight:600;color:#1a6b3a;white-space:nowrap;">' + b.slot + '</td>' +
+      '<td style="padding:8px 12px;font-weight:600;">' + b.courtName + '</td>' +
+      '<td style="padding:8px 12px;">' + b.nombre + tipoBadge + rutLabel + '</td>' +
       '</tr>';
   }).join('');
 
@@ -3840,7 +3922,7 @@ function buildCourtDigestTable(bookings) {
     '<thead><tr style="background:#1a6b3a;color:#fff;">' +
     '<th style="padding:8px 12px;text-align:left;">Hora</th>' +
     '<th style="padding:8px 12px;text-align:left;">Cancha</th>' +
-    '<th style="padding:8px 12px;text-align:left;">Reservado por</th>' +
+    '<th style="padding:8px 12px;text-align:left;">Reservado por / Acceso</th>' +
     '</tr></thead>' +
     '<tbody>' + rows + '</tbody>' +
     '</table>';

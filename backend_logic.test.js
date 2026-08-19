@@ -109,18 +109,23 @@ function testRetryCounterAndAdminAlert() {
     name: 'Jugador', email: 'jugador@uct.cl', status: 'calendar_retry', syncAttempts: 4
   };
   const saved = [];
+  const origCreateBookingCalendarEvent = context.createBookingCalendarEvent;
   context.queryBookingDocuments = () => ({ ok: true, bookings: [booking] });
   context.findCalendarEventForBooking = () => null;
   context.createBookingCalendarEvent = () => { throw new Error('Calendar temporalmente no disponible'); };
   context.saveBookingDocument = value => { saved.push({ ...value }); return { ok: true, booking: value }; };
 
-  const result = context.retryPendingBookingSync();
-  assert.equal(result.failed, 1);
-  assert.equal(saved[0].syncAttempts, 5);
-  assert.match(saved[0].syncError, /Calendar temporalmente/);
-  assert.ok(saved[0].syncAlertedAt, 'registra cuándo notificó al administrador');
-  assert.equal(sentEmails.length, 1, 'alerta al alcanzar cinco intentos');
-  assert.ok(context.getBookingSyncRunStatus().lastRunAt);
+  try {
+    const result = context.retryPendingBookingSync();
+    assert.equal(result.failed, 1);
+    assert.equal(saved[0].syncAttempts, 5);
+    assert.match(saved[0].syncError, /Calendar temporalmente/);
+    assert.ok(saved[0].syncAlertedAt, 'registra cuándo notificó al administrador');
+    assert.equal(sentEmails.length, 1, 'alerta al alcanzar cinco intentos');
+    assert.ok(context.getBookingSyncRunStatus().lastRunAt);
+  } finally {
+    context.createBookingCalendarEvent = origCreateBookingCalendarEvent;
+  }
 }
 
 function testChallengeRequestAuthentication() {
@@ -166,6 +171,92 @@ function testRejectedChallengeReleasesCourtAndNotifiesChallenger() {
   assert.equal(responseNotification, 'rechazado', 'se informa al retador del rechazo');
 }
 
+function testSingleCalendarTaggingAndDetection() {
+  assert.equal(context.getCourtName('cec1'), 'CEC Cancha 1');
+  assert.equal(context.getCourtName('cec2'), 'CEC Cancha 2');
+  assert.equal(context.getCourtName('cjp1'), 'CJP Cancha 1');
+  assert.equal(context.getCourtName('cjp2'), 'CJP Cancha 2');
+
+  const ev1 = { getTitle() { return '[CEC Cancha 2] Reserva UCTenis - Carlos'; }, getDescription() { return ''; }, getLocation() { return 'CEC Cancha 2'; } };
+  assert.equal(context.detectCourtFromEvent(ev1), 'cec2');
+
+  const ev2 = { getTitle() { return 'Reserva UCTenis - Pedro'; }, getDescription() { return 'Cancha: CJP Cancha 1 (cjp1)\nUsuario: Pedro'; }, getLocation() { return ''; } };
+  assert.equal(context.detectCourtFromEvent(ev2), 'cjp1');
+
+  const ev3 = { getTitle() { return '[CJP Cancha 2] Desafío UCTenis: Ana vs Bea'; }, getDescription() { return ''; }, getLocation() { return 'CJP Cancha 2'; } };
+  assert.equal(context.detectCourtFromEvent(ev3), 'cjp2');
+}
+
+function testCreateBookingCalendarEventFormat() {
+  let createdTitle = '';
+  let createdOptions = {};
+  const mockCalendar = {
+    createEvent(title, start, end, options) {
+      createdTitle = title;
+      createdOptions = options;
+      return { getId() { return 'new-event-123'; } };
+    }
+  };
+  context.CalendarApp = {
+    getCalendarById(id) {
+      assert.equal(id, 'e500541f01f115243cc82fdd8cb8af53885461cb6d91e8f6e2c22ed07557c23c@group.calendar.google.com');
+      return mockCalendar;
+    }
+  };
+
+  const booking = {
+    id: 'cec1_2026-08-25_1800',
+    courtId: 'cec1',
+    date: '2026-08-25',
+    slot: '18:00',
+    name: 'David Silva',
+    email: 'dsilva@uct.cl',
+    rut: '12.345.678-9',
+    userTypeLabel: 'Socio UCTenis'
+  };
+
+  const event = context.createBookingCalendarEvent(booking);
+  assert.equal(event.getId(), 'new-event-123');
+  assert.equal(createdTitle, '[CEC Cancha 1] Reserva UCTenis - David Silva');
+  assert.equal(createdOptions.location, 'CEC Cancha 1');
+  assert.match(createdOptions.description, /Reserva-ID: cec1_2026-08-25_1800/);
+  assert.match(createdOptions.description, /RUT: 12\.345\.678-9/);
+  assert.match(createdOptions.description, /Cancha: CEC Cancha 1 \(cec1\)/);
+  assert.match(createdOptions.description, /Tipo: Socio UCTenis/);
+}
+
+function testCourtDigestTableAndSecurityFormat() {
+  const sampleBookings = [
+    {
+      slot: '18:00',
+      courtName: 'CEC Cancha 1',
+      nombre: 'David Silva',
+      rut: '12.345.678-9',
+      userTypeLabel: 'Socio UCTenis'
+    },
+    {
+      slot: '19:30',
+      courtName: 'CJP Cancha 2',
+      nombre: 'María González',
+      rut: '18.765.432-1',
+      userTypeLabel: 'Funcionario UCT'
+    }
+  ];
+
+  const htmlTable = context.buildCourtDigestTable(sampleBookings);
+  assert.match(htmlTable, /Hora/);
+  assert.match(htmlTable, /Cancha/);
+  assert.match(htmlTable, /Reservado por \/ Acceso/);
+  assert.match(htmlTable, /18:00/);
+  assert.match(htmlTable, /CEC Cancha 1/);
+  assert.match(htmlTable, /David Silva/);
+  assert.match(htmlTable, /RUT: 12\.345\.678-9/);
+  assert.match(htmlTable, /Socio UCTenis/);
+  assert.match(htmlTable, /CJP Cancha 2/);
+  assert.match(htmlTable, /María González/);
+  assert.match(htmlTable, /Funcionario UCT/);
+}
+
 assert.equal(context.bookingDocumentId('CEC1', '2026-08-20', '18:00'), 'cec1_2026-08-20_1800');
 testSharedCalendarInvitation();
 testPendingCalendarCarriesBothGuests();
@@ -173,4 +264,7 @@ testRetryCounterAndAdminAlert();
 testChallengeRequestAuthentication();
 testResultNotifiesBothPlayers();
 testRejectedChallengeReleasesCourtAndNotifiesChallenger();
+testSingleCalendarTaggingAndDetection();
+testCreateBookingCalendarEventFormat();
+testCourtDigestTableAndSecurityFormat();
 console.log('backend_logic.test.js: OK');
