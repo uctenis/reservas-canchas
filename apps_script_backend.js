@@ -1,0 +1,4596 @@
+/**
+ * UCTenis - Sistema de Reservas y Sincronización
+ *
+ * INSTRUCCIONES DE INSTALACIÓN:
+ * 1. Ve a script.google.com y crea un nuevo proyecto.
+ * 2. Pega todo este código en el archivo "Código.gs".
+ * 3. Configura los IDs de los 4 calendarios de las canchas y el ID de tu Google Sheet con los miembros.
+ * 4. Haz clic en "Implementar" -> "Nueva implementación".
+ * 5. Selecciona tipo "Aplicación web".
+ * 6. Ejecutar como: "Tú" y Quién tiene acceso: "Cualquier persona".
+ * 7. Copia la "URL de la aplicación web" y ponla en tu archivo script.js como API_URL.
+ */
+
+// =======================================================
+// ⚙️ CONFIGURACIÓN DEL SISTEMA
+// =======================================================
+const CONFIG = {
+  SHEET_MIEMBROS_ID: "1daJNs_3BA8Enagm61KwBDZee3SFUer-zirRFW2ID_nE",
+
+  FIREBASE_PROJECT_ID: "uctenis-club",
+  FIREBASE_API_KEY: "AIzaSyDxNdwD8hHQmN2efhRwflL7RkpC-RFs3ow",
+
+  ADMINS: {
+    emails: ["uctenisclub@gmail.com", "dsilva@uct.cl"],
+    names: ["UCTenis Club", "David Silva"]
+  },
+  ADMIN_PIN: "",
+  PHOTO_FOLDER_NAME: "UCTenis fotos jugadores",
+
+  MAIN_CALENDAR_ID: "e500541f01f115243cc82fdd8cb8af53885461cb6d91e8f6e2c22ed07557c23c@group.calendar.google.com",
+
+  CALENDARS: {
+    "cec1": "e500541f01f115243cc82fdd8cb8af53885461cb6d91e8f6e2c22ed07557c23c@group.calendar.google.com",
+    "cec2": "e500541f01f115243cc82fdd8cb8af53885461cb6d91e8f6e2c22ed07557c23c@group.calendar.google.com",
+    "cjp1": "e500541f01f115243cc82fdd8cb8af53885461cb6d91e8f6e2c22ed07557c23c@group.calendar.google.com",
+    "cjp2": "e500541f01f115243cc82fdd8cb8af53885461cb6d91e8f6e2c22ed07557c23c@group.calendar.google.com"
+  },
+
+  COURT_NAMES: {
+    "cec1": "CEC Cancha 1",
+    "cec2": "CEC Cancha 2",
+    "cjp1": "CJP Cancha 1",
+    "cjp2": "CJP Cancha 2"
+  },
+
+  SLOTS: ['09:00','10:30','12:00','13:30','15:00','16:30','18:00','19:30','21:00'],
+
+  COURT_SLOTS: {
+    cec1: {
+      1: ['18:00', '19:30', '21:00'],
+      2: ['18:00', '19:30', '21:00'],
+      3: ['18:00', '19:30', '21:00'],
+      4: ['18:00', '19:30', '21:00'],
+      5: ['18:00', '19:30', '21:00'],
+      6: ['09:00','10:30','12:00','13:30','15:00','16:30','18:00','19:30','21:00'],
+      0: []
+    },
+    cec2: {
+      1: ['18:00', '19:30', '21:00'],
+      2: ['18:00', '19:30', '21:00'],
+      3: ['18:00', '19:30', '21:00'],
+      4: ['18:00', '19:30', '21:00'],
+      5: ['18:00', '19:30', '21:00'],
+      6: ['09:00','10:30','12:00','13:30','15:00','16:30','18:00','19:30','21:00'],
+      0: []
+    },
+    cjp1: {
+      1: ['20:00'],
+      2: ['18:00', '19:30', '21:00'],
+      3: ['18:00', '19:30', '21:00'],
+      4: ['18:00', '19:30', '21:00'],
+      5: ['20:00'],
+      6: ['09:00','10:30','12:00','13:30','15:00','16:30','18:00','19:30','21:00'],
+      0: []
+    },
+    cjp2: {
+      1: ['20:00'],
+      2: ['18:00', '19:30', '21:00'],
+      3: ['18:00', '19:30', '21:00'],
+      4: ['18:00', '19:30', '21:00'],
+      5: ['20:00'],
+      6: ['09:00','10:30','12:00','13:30','15:00','16:30','18:00','19:30','21:00'],
+      0: []
+    }
+  }
+};
+
+/**
+ * Retorna el nombre legible de la cancha a partir de su ID.
+ */
+function getCourtName(courtId) {
+  const map = (CONFIG && CONFIG.COURT_NAMES) || {
+    cec1: 'CEC Cancha 1',
+    cec2: 'CEC Cancha 2',
+    cjp1: 'CJP Cancha 1',
+    cjp2: 'CJP Cancha 2'
+  };
+  return map[text(courtId).toLowerCase()] || text(courtId).toUpperCase();
+}
+
+/**
+ * Detecta a qué cancha pertenece un evento del calendario unificado
+ * analizando el título, descripción o ubicación.
+ *
+ * En modo `strict` (usado donde una mala detección podría dejar una cancha
+ * doblemente reservada) devuelve null cuando no hay coincidencia, en vez de
+ * asumir 'cec1' — así el llamador puede fallar cerrado (tratar el evento
+ * como ocupado en las 4 canchas) en lugar de liberar 3 canchas por error.
+ */
+function detectCourtFromEvent(event, strict) {
+  const fallback = strict ? null : 'cec1';
+  if (!event) return fallback;
+  const title = (event.getTitle() || '').toLowerCase();
+  const desc = (event.getDescription() || '').toLowerCase();
+  const loc = (event.getLocation() || '').toLowerCase();
+
+  // 1. Tags directos entre corchetes o IDs exactos
+  if (title.includes('[cec cancha 1]') || title.includes('[cec 1]') || title.includes('[cec1]') || loc.includes('cec cancha 1') || desc.includes('(cec1)') || desc.includes('cancha: cec cancha 1') || desc.includes('cancha: cec 1')) return 'cec1';
+  if (title.includes('[cec cancha 2]') || title.includes('[cec 2]') || title.includes('[cec2]') || loc.includes('cec cancha 2') || desc.includes('(cec2)') || desc.includes('cancha: cec cancha 2') || desc.includes('cancha: cec 2')) return 'cec2';
+  if (title.includes('[cjp cancha 1]') || title.includes('[cjp 1]') || title.includes('[cjp1]') || loc.includes('cjp cancha 1') || desc.includes('(cjp1)') || desc.includes('cancha: cjp cancha 1') || desc.includes('cancha: cjp 1')) return 'cjp1';
+  if (title.includes('[cjp cancha 2]') || title.includes('[cjp 2]') || title.includes('[cjp2]') || loc.includes('cjp cancha 2') || desc.includes('(cjp2)') || desc.includes('cancha: cjp cancha 2') || desc.includes('cancha: cjp 2')) return 'cjp2';
+
+  // 2. Coincidencias generales
+  if (title.includes('cec 1') || title.includes('cec-1') || loc.includes('cec 1')) return 'cec1';
+  if (title.includes('cec 2') || title.includes('cec-2') || loc.includes('cec 2')) return 'cec2';
+  if (title.includes('cjp 1') || title.includes('cjp-1') || loc.includes('cjp 1')) return 'cjp1';
+  if (title.includes('cjp 2') || title.includes('cjp-2') || loc.includes('cjp 2')) return 'cjp2';
+
+  return fallback;
+}
+
+// =======================================================
+// 🌐 PUNTO DE ENTRADA WEB (API)
+// =======================================================
+
+function doGet(e) {
+  if (!e || !e.parameter) {
+    return ContentService.createTextOutput(JSON.stringify({
+      ok: false,
+      msg: "Ejecutado desde el editor de Apps Script o sin parámetros."
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+  return handleRequest(e.parameter);
+}
+
+function doPost(e) {
+  if (!e) {
+    return ContentService.createTextOutput(JSON.stringify({
+      ok: false,
+      msg: "Petición POST vacía o ejecutada desde el editor de Apps Script."
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+  let data = {};
+  try {
+    if (e.postData && e.postData.contents) {
+      data = JSON.parse(e.postData.contents);
+    } else {
+      data = e.parameter || {};
+    }
+  } catch(err) {
+    data = e.parameter || {};
+  }
+  return handleRequest(data);
+}
+
+function handleRequest(data) {
+  try {
+    let response = { ok: false, msg: "Acción no reconocida." };
+
+    switch (data.action) {
+      case "validate_member":        response = validateMember(data.email); break;
+      case "get_ranking":            response = getRanking(); break;
+      case "get_available_slots":    response = getAvailableSlots(data.date, data.idToken); break;
+      case "create_booking":         response = createBooking(data); break;
+      case "cancel_booking":         response = cancelBooking(data); break;
+      case "get_user_bookings":      response = getUserBookings(data); break;
+      case "notify_challenge":       response = notifyChallengeRequest(data); break;
+      case "notify_result":          response = notifyResultRequest(data); break;
+      case "notify_dispute":         response = notifyDispute(data); break;
+      case "get_challenges":         response = getChallenges(); break;
+      case "create_challenge":       response = createChallenge(data); break;
+      case "respond_challenge":      response = respondChallenge(data); break;
+      case "submit_challenge_result":  response = submitChallengeResult(data); break;
+      case "confirm_challenge_result": response = confirmChallengeResult(data); break;
+      case "dispute_challenge_result": response = disputeChallengeResult(data); break;
+      case "admin_resolve_challenge_dispute": response = adminResolveChallengeDispute(data); break;
+      case "set_challenge_walkover":   response = setChallengeWalkover(data); break;
+      case "admin_save_player":      response = adminSavePlayer(data); break;
+      case "admin_delete_player":    response = adminDeletePlayer(data); break;
+      case "admin_reorder_ranking":  response = adminReorderRanking(data); break;
+      case "update_own_profile":     response = updateOwnProfile(data); break;
+      case "admin_free_special_slots": response = adminFreeSpecialSlots(data); break;
+      case "admin_remove_special_slots": response = adminRemoveSpecialSlots(data); break;
+      case "get_special_dates":      response = getSpecialDatesList(); break;
+      case "get_player_rut":         response = getPlayerRut(data); break;
+      case "save_player_rut":        response = savePlayerRut(data); break;
+      case "save_schedule_config":   response = saveScheduleConfig(data); break;
+      case "debug_firebase":         response = debugFirebaseConnection(data.email || 'gcuraqueo@uct.cl'); break;
+      // ── Funcionarios UCT ──
+      case "admin_create_staff":     response = adminCreateStaff(data); break;
+      case "admin_list_staff":       response = adminListStaff(data); break;
+      case "admin_update_staff":     response = adminUpdateStaff(data); break;
+      case "admin_migrate_user":     response = adminMigrateUser(data); break;
+      case "update_own_staff_profile": response = updateOwnStaffProfile(data); break;
+      case "admin_retry_booking_sync": response = adminRetryBookingSync(data); break;
+      case "admin_get_booking_sync_status": response = adminGetBookingSyncStatus(data); break;
+      case "admin_migrate_calendar_bookings": response = adminMigrateCalendarBookings(data); break;
+    }
+
+    return ContentService.createTextOutput(JSON.stringify(response))
+      .setMimeType(ContentService.MimeType.JSON);
+
+  } catch (error) {
+    return ContentService.createTextOutput(JSON.stringify({ ok: false, msg: "Error en el servidor: " + error.message }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+// =======================================================
+// 📧 NOTIFICACIONES — DESAFÍOS
+// =======================================================
+
+function notifyChallengeRequest(data) {
+  const verifiedEmail = verifyGoogleIdToken(data && data.idToken);
+  if (!verifiedEmail || verifiedEmail !== text(data.retadorEmail).toLowerCase()) {
+    return { ok: false, msg: 'No tienes permiso para enviar esta invitación.' };
+  }
+  return notifyChallenge(data);
+}
+
+function notifyChallenge(data) {
+  const retadoEmail = text(data.retadoEmail);
+  const retadorEmail = text(data.retadorEmail);
+  const retadoNombre = text(data.retadoNombre) || 'jugador/a';
+  const retadorNombre = text(data.retadorNombre) || 'Un jugador';
+  const fecha = text(data.fecha) || 'fecha por coordinar';
+  const fechaLabel = text(data.fechaLabel) || fecha;
+  const cancha = text(data.cancha) || 'cancha por definir';
+  const slot = text(data.slot) || '';
+  const retadoTelefono = text(data.retadoTelefono);
+  const isFriendly = text(data.tipo) === 'amistoso';
+
+  if (!retadoEmail) return { ok: false, msg: 'Correo del jugador retado no proporcionado.' };
+
+  const calendarResult = createChallengeCalendarInvite({
+    challengeId: text(data.id || data.challengeId),
+    retadorNombre: retadorNombre,
+    retadorEmail: retadorEmail,
+    retadoNombre: retadoNombre,
+    retadoEmail: retadoEmail,
+    fecha: fecha,
+    fechaLabel: fechaLabel,
+    slot: slot,
+    cancha: cancha,
+    courtId: text(data.courtId),
+    bookingId: text(data.bookingId),
+    tipo: text(data.tipo)
+  });
+
+  const rankingUrl = 'https://uctenis.github.io/reservas-canchas/ranking.html';
+  const headline = isFriendly ? '¡Tienes una invitación a un amistoso!' : '¡Tienes un nuevo desafío!';
+  const introLine = isFriendly
+    ? '<strong>' + retadorNombre + '</strong> reservó un partido amistoso contigo en UCTenis.'
+    : '<strong>' + retadorNombre + '</strong> te ha retado en el ranking UCTenis.';
+  const ctaLabel = isFriendly ? 'Aceptar o Rechazar amistoso' : 'Aceptar o Rechazar desafío';
+  const subjectLabel = isFriendly
+    ? '🎾 Invitación amistoso UCTenis: ' + retadorNombre + ' vs ' + retadoNombre
+    : '🎾 ¡Te desafían en UCTenis! ' + retadorNombre + ' te reta';
+  const slotLine = slot ? '<tr><td style="padding:6px 12px;color:#555;">Hora</td><td style="padding:6px 12px;font-weight:600;">' + slot + '</td></tr>' : '';
+  const calendarLine = calendarResult.ok
+    ? (calendarResult.pending
+      ? '<p style="color:#e67e22;margin:0 0 8px;">⏳ La invitación de Google Calendar está en proceso de sincronización.</p>'
+      : '<p style="color:#27ae60;margin:0 0 8px;">✅ También se envió una invitación de Google Calendar.</p>')
+    : '<p style="color:#e74c3c;margin:0 0 8px;">⚠️ No se pudo crear la invitación Calendar: ' + calendarResult.msg + '</p>';
+
+  const htmlBody = [
+    '<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;border:1px solid #e0e0e0;border-radius:10px;overflow:hidden;">',
+    '  <div style="background:#1a6b3a;padding:24px;text-align:center;">',
+    '    <h1 style="color:#fff;margin:0;font-size:22px;">🎾 UCTenis</h1>',
+    '    <p style="color:#c8e6c9;margin:6px 0 0;">' + headline + '</p>',
+    '  </div>',
+    '  <div style="padding:24px;">',
+    '    <p style="font-size:16px;margin:0 0 16px;">Hola <strong>' + retadoNombre + '</strong>,</p>',
+    '    <p style="margin:0 0 16px;">' + introLine + '</p>',
+    '    <table style="width:100%;border-collapse:collapse;margin-bottom:20px;">',
+    '      <tr style="background:#f5f5f5;"><td style="padding:6px 12px;color:#555;">Fecha</td><td style="padding:6px 12px;font-weight:600;">' + fechaLabel + '</td></tr>',
+    '      <tr><td style="padding:6px 12px;color:#555;">Cancha</td><td style="padding:6px 12px;font-weight:600;">' + cancha + '</td></tr>',
+    slotLine,
+    '    </table>',
+    calendarLine,
+    '    <div style="text-align:center;margin:20px 0;">',
+    '      <a href="' + rankingUrl + '" style="background:#1a6b3a;color:#fff;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px;">' + ctaLabel + '</a>',
+    '    </div>',
+    '    <p style="color:#888;font-size:12px;margin:16px 0 0;">UCTenis — Plataforma de ranking universitario</p>',
+    '  </div>',
+    '</div>'
+  ].join('\n');
+
+  let retadoMail = { ok: false, msg: 'Sin correo del invitado.' };
+  let retadorMail = { ok: true, skipped: true };
+  try {
+    MailApp.sendEmail({
+      to: retadoEmail,
+      subject: subjectLabel,
+      htmlBody: htmlBody,
+      name: 'UCTenis Club',
+      replyTo: (CONFIG.ADMINS.emails || [])[0] || ''
+    });
+    retadoMail = { ok: true };
+  } catch (mailError) {
+    retadoMail = { ok: false, msg: mailError.message };
+  }
+
+  if (retadorEmail && retadorEmail.toLowerCase() !== retadoEmail.toLowerCase()) {
+    const confirmationTitle = isFriendly ? 'Amistoso enviado' : 'Desafío enviado';
+    const confirmationBody = [
+      '<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;border:1px solid #e0e0e0;border-radius:10px;overflow:hidden;">',
+      '<div style="background:#1a6b3a;padding:24px;text-align:center;"><h1 style="color:#fff;margin:0;font-size:22px;">🎾 UCTenis</h1>',
+      '<p style="color:#c8e6c9;margin:6px 0 0;">✅ ' + confirmationTitle + '</p></div>',
+      '<div style="padding:24px;"><p style="font-size:16px;margin:0 0 16px;">Hola <strong>' + retadorNombre + '</strong>,</p>',
+      '<p style="margin:0 0 16px;">Tu invitación a <strong>' + retadoNombre + '</strong> fue registrada correctamente.</p>',
+      '<table style="width:100%;border-collapse:collapse;margin-bottom:20px;">',
+      '<tr style="background:#f5f5f5;"><td style="padding:6px 12px;color:#555;">Fecha</td><td style="padding:6px 12px;font-weight:600;">' + fechaLabel + '</td></tr>',
+      '<tr><td style="padding:6px 12px;color:#555;">Cancha</td><td style="padding:6px 12px;font-weight:600;">' + cancha + '</td></tr>',
+      slot ? '<tr style="background:#f5f5f5;"><td style="padding:6px 12px;color:#555;">Hora</td><td style="padding:6px 12px;font-weight:600;">' + slot + '</td></tr>' : '',
+      '</table><p style="color:#555;">Te avisaremos cuando ' + retadoNombre + ' acepte o rechace.</p>',
+      '<div style="text-align:center;margin:20px 0;"><a href="' + rankingUrl + '" style="background:#1a6b3a;color:#fff;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;">Ver mis partidos</a></div>',
+      '<p style="color:#888;font-size:12px;">UCTenis — Plataforma de ranking universitario</p></div></div>'
+    ].join('');
+    try {
+      MailApp.sendEmail({
+        to: retadorEmail,
+        subject: '✅ UCTenis: ' + confirmationTitle + ' a ' + retadoNombre,
+        htmlBody: confirmationBody,
+        name: 'UCTenis Club',
+        replyTo: (CONFIG.ADMINS.emails || [])[0] || ''
+      });
+      retadorMail = { ok: true };
+    } catch (mailError) {
+      retadorMail = { ok: false, msg: mailError.message };
+    }
+  }
+
+  const waText = isFriendly
+    ? '🎾 ¡Hola ' + retadoNombre + '! ' + retadorNombre + ' reservó un amistoso contigo en UCTenis. Fecha: ' + fechaLabel + (slot ? ', ' + slot : '') + ' en ' + cancha + '. Acepta o rechaza en: ' + rankingUrl
+    : '🎾 ¡Hola ' + retadoNombre + '! ' + retadorNombre + ' te ha retado en UCTenis. Fecha: ' + fechaLabel + (slot ? ', ' + slot : '') + ' en ' + cancha + '. Acepta o rechaza en: ' + rankingUrl;
+  const cleanPhone = retadoTelefono.replace(/[^0-9]/g, '');
+  const whatsappUrl = cleanPhone ? 'https://wa.me/' + cleanPhone + '?text=' + encodeURIComponent(waText) : '';
+
+  const notificationOk = retadoMail.ok && retadorMail.ok && calendarResult.ok;
+  return {
+    ok: notificationOk,
+    msg: notificationOk
+      ? (calendarResult.pending ? 'Ambos jugadores fueron notificados; Calendar se sincronizará automáticamente.' : 'Ambos jugadores fueron notificados y agregados a Calendar.')
+      : (!retadoMail.ok ? 'No se pudo enviar el correo al jugador invitado.'
+        : (!retadorMail.ok ? 'No se pudo enviar la confirmación al jugador que invitó.' : 'No se pudo agregar a ambos jugadores a Calendar.')),
+    calendar: calendarResult,
+    emails: { retado: retadoMail, retador: retadorMail },
+    whatsappUrl: whatsappUrl
+  };
+}
+
+/**
+ * Correo doble: uno personalizado al ganador (¡felicitaciones!) y otro al perdedor.
+ */
+function notifyResult(data) {
+  const ganadorNombre = text(data.ganadorNombre) || 'El ganador';
+  const ganadorEmail = text(data.ganadorEmail);
+  const perdedorNombre = text(data.perdedorNombre) || 'El perdedor';
+  const perdedorEmail = text(data.perdedorEmail);
+  const marcador = text(data.marcador) || 'sin marcador';
+  const fecha = text(data.fecha) || '';
+  const cancha = text(data.cancha) || '';
+
+  if (!perdedorEmail && !ganadorEmail) return { ok: false, msg: 'Correos de los jugadores no proporcionados.' };
+
+  const RANKING_URL = 'https://uctenis.github.io/reservas-canchas/ranking.html#desafios';
+  const fechaRow = fecha ? '<tr style="background:#f5f5f5;"><td style="padding:6px 12px;color:#555;">Fecha</td><td style="padding:6px 12px;font-weight:600;">' + fecha + '</td></tr>' : '';
+  const canchaRow = cancha ? '<tr><td style="padding:6px 12px;color:#555;">Cancha</td><td style="padding:6px 12px;font-weight:600;">' + cancha + '</td></tr>' : '';
+  const deliveries = {
+    perdedor: { ok: !perdedorEmail, skipped: !perdedorEmail },
+    ganador: { ok: !ganadorEmail, skipped: !ganadorEmail }
+  };
+
+  // ── Correo al PERDEDOR ──────────────────────────────────────────────────────
+  if (perdedorEmail) {
+    const body = [
+      '<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;border:1px solid #e0e0e0;border-radius:10px;overflow:hidden;">',
+      '<div style="background:#1a6b3a;padding:24px;text-align:center;"><h1 style="color:#fff;margin:0;font-size:22px;">🎾 UCTenis</h1>',
+      '<p style="color:#c8e6c9;margin:6px 0 0;">Resultado de tu desafío</p></div>',
+      '<div style="padding:24px;">',
+      '<p style="font-size:16px;margin:0 0 16px;">Hola <strong>' + perdedorNombre + '</strong>,</p>',
+      '<p style="margin:0 0 16px;">Se registró el resultado de tu desafío contra <strong>' + ganadorNombre + '</strong>.</p>',
+      '<table style="width:100%;border-collapse:collapse;margin-bottom:20px;">',
+      fechaRow, canchaRow,
+      '<tr style="background:#f5f5f5;"><td style="padding:6px 12px;color:#555;">Marcador</td><td style="padding:6px 12px;font-weight:600;">' + marcador + '</td></tr>',
+      '<tr><td style="padding:6px 12px;color:#555;">Ganador</td><td style="padding:6px 12px;font-weight:600;color:#1a6b3a;">' + ganadorNombre + '</td></tr>',
+      '</table>',
+      '<p style="margin:0 0 16px;color:#555;">Si el resultado no es correcto, puedes disputarlo en la página de ranking.</p>',
+      '<div style="text-align:center;margin:20px 0;"><a href="' + RANKING_URL + '" style="background:#1a6b3a;color:#fff;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px;">Ver Ranking / Disputar</a></div>',
+      '<p style="color:#888;font-size:12px;margin:16px 0 0;">UCTenis — Plataforma de ranking universitario</p>',
+      '</div></div>'
+    ].join('');
+    try {
+      MailApp.sendEmail({ to: perdedorEmail, subject: '🎾 Resultado UCTenis: ' + ganadorNombre + ' venció a ' + perdedorNombre, htmlBody: body, name: 'UCTenis Club' });
+      deliveries.perdedor = { ok: true };
+    } catch(e) {
+      deliveries.perdedor = { ok: false, msg: e.message };
+      console.warn('notifyResult perdedor error:', e.message);
+    }
+  }
+
+  // ── Correo al GANADOR ───────────────────────────────────────────────────────
+  if (ganadorEmail) {
+    const body = [
+      '<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;border:1px solid #e0e0e0;border-radius:10px;overflow:hidden;">',
+      '<div style="background:#1a6b3a;padding:24px;text-align:center;"><h1 style="color:#fff;margin:0;font-size:22px;">🎾 UCTenis</h1>',
+      '<p style="color:#c8e6c9;margin:6px 0 0;">🏆 ¡Victoria registrada!</p></div>',
+      '<div style="padding:24px;">',
+      '<p style="font-size:16px;margin:0 0 16px;">¡Felicitaciones <strong>' + ganadorNombre + '</strong>! 🎉</p>',
+      '<p style="margin:0 0 16px;">Ganaste tu desafío contra <strong>' + perdedorNombre + '</strong>. Pendiente de confirmación por tu rival (48 horas).</p>',
+      '<table style="width:100%;border-collapse:collapse;margin-bottom:20px;">',
+      fechaRow, canchaRow,
+      '<tr style="background:#f5f5f5;"><td style="padding:6px 12px;color:#555;">Marcador</td><td style="padding:6px 12px;font-weight:600;">' + marcador + '</td></tr>',
+      '<tr><td style="padding:6px 12px;color:#555;">Resultado</td><td style="padding:6px 12px;font-weight:600;color:#1a6b3a;">✅ Victoria</td></tr>',
+      '</table>',
+      '<p style="margin:0 0 16px;color:#555;">Si tu rival no confirma en 48 horas, el resultado se acepta automáticamente.</p>',
+      '<div style="text-align:center;margin:20px 0;"><a href="' + RANKING_URL + '" style="background:#1a6b3a;color:#fff;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px;">Ver Ranking</a></div>',
+      '<p style="color:#888;font-size:12px;margin:16px 0 0;">UCTenis — Plataforma de ranking universitario</p>',
+      '</div></div>'
+    ].join('');
+    try {
+      MailApp.sendEmail({ to: ganadorEmail, subject: '🏆 ¡Ganaste tu desafío UCTenis! vs ' + perdedorNombre, htmlBody: body, name: 'UCTenis Club' });
+      deliveries.ganador = { ok: true };
+    } catch(e) {
+      deliveries.ganador = { ok: false, msg: e.message };
+      console.warn('notifyResult ganador error:', e.message);
+    }
+  }
+
+  const ok = deliveries.perdedor.ok && deliveries.ganador.ok;
+  return { ok: ok, emails: deliveries, msg: ok ? 'Resultado notificado a ambos jugadores.' : 'El resultado se guardó, pero falló uno de los correos.' };
+}
+
+function notifyResultRequest(data) {
+  const found = findChallengeRow(text(data.challengeId || data.id));
+  if (!found) return { ok: false, msg: 'Desafío no encontrado.' };
+  const challenge = challengeFromRow(found.sheet.getRange(found.rowNumber, 1, 1, 30).getValues()[0]);
+  const authorization = authorizeChallengeParticipant(data, challenge);
+  if (!authorization.ok) return authorization;
+  return notifyResult(data);
+}
+
+/**
+ * Notifica a los admins cuando se disputa un resultado.
+ * También notifica al jugador que ingresó el marcador (el contrario del disputante).
+ */
+function notifyDispute(data) {
+  const challengeId = text(data.challengeId);
+  const disputanteNombre = text(data.disputanteNombre) || 'Un jugador';
+  const disputanteEmail = text(data.disputanteEmail);
+  const contrarioNombre = text(data.contrarioNombre) || 'su oponente';
+  const contrarioEmail = text(data.contrarioEmail);
+  const marcador = text(data.marcador) || 'sin marcador';
+  const fecha = text(data.fecha) || '';
+
+  const adminEmails = (CONFIG.ADMINS.emails || []).filter(Boolean).join(',');
+  if (!adminEmails) return { ok: false, msg: 'No hay correos de administrador configurados.' };
+
+  const rankingUrl = 'https://uctenis.github.io/reservas-canchas/ranking.html#desafios';
+
+  // Correo a admins
+  const htmlBodyAdmin = [
+    '<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;border:1px solid #e0e0e0;border-radius:10px;overflow:hidden;">',
+    '  <div style="background:#c0392b;padding:24px;text-align:center;">',
+    '    <h1 style="color:#fff;margin:0;font-size:22px;">🎾 UCTenis — Disputa de Resultado</h1>',
+    '  </div>',
+    '  <div style="padding:24px;">',
+    '    <p style="font-size:16px;margin:0 0 16px;">Un jugador ha disputado un resultado registrado.</p>',
+    '    <table style="width:100%;border-collapse:collapse;margin-bottom:20px;">',
+    '      <tr style="background:#f5f5f5;"><td style="padding:6px 12px;color:#555;">Disputante</td><td style="padding:6px 12px;font-weight:600;">' + disputanteNombre + (disputanteEmail ? ' &lt;' + disputanteEmail + '&gt;' : '') + '</td></tr>',
+    '      <tr><td style="padding:6px 12px;color:#555;">Contrario</td><td style="padding:6px 12px;font-weight:600;">' + contrarioNombre + '</td></tr>',
+    '      <tr style="background:#f5f5f5;"><td style="padding:6px 12px;color:#555;">Marcador disputado</td><td style="padding:6px 12px;font-weight:600;">' + marcador + '</td></tr>',
+    fecha ? '      <tr><td style="padding:6px 12px;color:#555;">Fecha del desafío</td><td style="padding:6px 12px;font-weight:600;">' + fecha + '</td></tr>' : '',
+    challengeId ? '      <tr style="background:#f5f5f5;"><td style="padding:6px 12px;color:#555;">ID Desafío</td><td style="padding:6px 12px;font-family:monospace;">' + challengeId + '</td></tr>' : '',
+    '    </table>',
+    '    <div style="text-align:center;margin:20px 0;">',
+    '      <a href="' + rankingUrl + '" style="background:#c0392b;color:#fff;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px;">Revisar en Ranking</a>',
+    '    </div>',
+    '    <p style="color:#888;font-size:12px;margin:16px 0 0;">UCTenis — Notificación automática del sistema</p>',
+    '  </div>',
+    '</div>'
+  ].join('\n');
+
+  MailApp.sendEmail({
+    to: adminEmails,
+    subject: '⚠️ Disputa de resultado UCTenis: ' + disputanteNombre + ' vs ' + contrarioNombre,
+    htmlBody: htmlBodyAdmin,
+    name: 'UCTenis'
+  });
+
+  // Correo al contrario (quien registró el marcador), si tiene email
+  if (contrarioEmail && contrarioEmail !== disputanteEmail) {
+    try {
+      const htmlBodyContrario = [
+        '<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;border:1px solid #e0e0e0;border-radius:10px;overflow:hidden;">',
+        '<div style="background:#c0392b;padding:24px;text-align:center;"><h1 style="color:#fff;margin:0;font-size:22px;">🎾 UCTenis</h1>',
+        '<p style="color:#fad7d7;margin:6px 0 0;">⚠️ Tu resultado fue disputado</p></div>',
+        '<div style="padding:24px;">',
+        '<p style="font-size:16px;margin:0 0 16px;">Hola <strong>' + contrarioNombre + '</strong>,</p>',
+        '<p style="margin:0 0 16px;"><strong>' + disputanteNombre + '</strong> ha disputado el resultado que registraste. Los administradores lo revisarán pronto.</p>',
+        '<table style="width:100%;border-collapse:collapse;margin-bottom:20px;">',
+        '<tr style="background:#f5f5f5;"><td style="padding:6px 12px;color:#555;">Marcador disputado</td><td style="padding:6px 12px;font-weight:600;">' + marcador + '</td></tr>',
+        fecha ? '<tr><td style="padding:6px 12px;color:#555;">Fecha del desafío</td><td style="padding:6px 12px;font-weight:600;">' + fecha + '</td></tr>' : '',
+        '</table>',
+        '<div style="text-align:center;margin:20px 0;"><a href="' + rankingUrl + '" style="background:#c0392b;color:#fff;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px;">Ver Ranking</a></div>',
+        '<p style="color:#888;font-size:12px;">UCTenis — Notificación automática del sistema</p>',
+        '</div></div>'
+      ].join('');
+      MailApp.sendEmail({ to: contrarioEmail, subject: '⚠️ UCTenis: ' + disputanteNombre + ' disputó tu resultado', htmlBody: htmlBodyContrario, name: 'UCTenis Club' });
+    } catch(e) { console.warn('notifyDispute contrario email error:', e.message); }
+  }
+
+  return { ok: true };
+}
+
+/**
+ * Notifica al retador cuando el retado acepta o rechaza su desafío.
+ */
+function notifyChallengeResponse(challenge, nuevoStatus) {
+  const retadorEmail = text(challenge.retadorEmail);
+  if (!retadorEmail) return;
+  const retadorNombre = text(challenge.retadorNombre) || 'jugador';
+  const retadoNombre = text(challenge.retadoNombre) || 'tu rival';
+  const fecha = text(challenge.fecha) || '';
+  const cancha = text(challenge.cancha) || '';
+  const slot = text(challenge.slot) || '';
+  const isFriendly = text(challenge.tipo) === 'amistoso';
+  const tipoLabel = isFriendly ? 'amistoso' : 'desafío';
+  const aceptado = nuevoStatus === 'aceptado';
+  const RANKING_URL = 'https://uctenis.github.io/reservas-canchas/ranking.html#desafios';
+
+  const headline = aceptado ? '✅ ¡Tu ' + tipoLabel + ' fue aceptado!' : '❌ Tu ' + tipoLabel + ' fue rechazado';
+  const subject = aceptado
+    ? '🎾 UCTenis: ' + retadoNombre + ' aceptó tu ' + tipoLabel
+    : '🎾 UCTenis: ' + retadoNombre + ' rechazó tu ' + tipoLabel;
+  const intro = aceptado
+    ? '<strong>' + retadoNombre + '</strong> aceptó tu ' + tipoLabel + '. ¡Prepárate para jugar!'
+    : '<strong>' + retadoNombre + '</strong> rechazó tu ' + tipoLabel + '. La reserva de cancha fue liberada.';
+  const extra = aceptado
+    ? '<p style="margin:0 0 16px;color:#555;">La cancha ya está reservada. Recuerda presentarte 5 minutos antes.</p>'
+    : '<p style="margin:0 0 16px;color:#555;">Puedes desafiar a otro jugador desde la página de ranking.</p>';
+
+  try {
+    const htmlBody = [
+      '<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;border:1px solid #e0e0e0;border-radius:10px;overflow:hidden;">',
+      '<div style="background:#1a6b3a;padding:24px;text-align:center;"><h1 style="color:#fff;margin:0;font-size:22px;">🎾 UCTenis</h1>',
+      '<p style="color:#c8e6c9;margin:6px 0 0;">' + headline + '</p></div>',
+      '<div style="padding:24px;">',
+      '<p style="font-size:16px;margin:0 0 16px;">Hola <strong>' + retadorNombre + '</strong>,</p>',
+      '<p style="margin:0 0 16px;">' + intro + '</p>',
+      '<table style="width:100%;border-collapse:collapse;margin-bottom:20px;">',
+      '<tr style="background:#f5f5f5;"><td style="padding:6px 12px;color:#555;">Rival</td><td style="padding:6px 12px;font-weight:600;">' + retadoNombre + '</td></tr>',
+      fecha ? '<tr><td style="padding:6px 12px;color:#555;">Fecha</td><td style="padding:6px 12px;font-weight:600;">' + fecha + '</td></tr>' : '',
+      cancha ? '<tr style="background:#f5f5f5;"><td style="padding:6px 12px;color:#555;">Cancha</td><td style="padding:6px 12px;font-weight:600;">' + cancha + '</td></tr>' : '',
+      slot ? '<tr><td style="padding:6px 12px;color:#555;">Hora</td><td style="padding:6px 12px;font-weight:600;">' + slot + '</td></tr>' : '',
+      '</table>',
+      extra,
+      '<div style="text-align:center;margin:20px 0;"><a href="' + RANKING_URL + '" style="background:#1a6b3a;color:#fff;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px;">Ver mis desafíos</a></div>',
+      '<p style="color:#888;font-size:12px;margin:16px 0 0;">UCTenis — Plataforma de ranking universitario</p>',
+      '</div></div>'
+    ].join('');
+    MailApp.sendEmail({ to: retadorEmail, subject: subject, htmlBody: htmlBody, name: 'UCTenis Club' });
+  } catch (err) {
+    console.warn('notifyChallengeResponse error:', err.message);
+  }
+}
+
+// =======================================================
+// 🏗️ SLOTS ESPECIALES (ADMIN)
+// =======================================================
+
+/**
+ * Crea/actualiza una fecha especial: una sola fecha (fecha) o un rango
+ * (fechaInicio/fechaFin, inclusive, máximo 60 días). Cada llamada genera un
+ * groupId compartido por todas las filas (fecha × cancha) que crea, para
+ * poder mostrarlas como un solo período y borrarlas de una vez.
+ */
+function adminFreeSpecialSlots(data) {
+  if (!isAdminRequest(data)) {
+    return { ok: false, msg: 'Acceso reservado al administrador.' };
+  }
+
+  const courts = data.courts;
+  if (!Array.isArray(courts) || courts.length === 0) {
+    return { ok: false, msg: 'Debes proporcionar al menos una cancha.' };
+  }
+
+  const fechaInicio = text(data.fechaInicio || data.fecha);
+  const fechaFin = text(data.fechaFin || data.fecha);
+  if (!fechaInicio || !/^\d{4}-\d{2}-\d{2}$/.test(fechaInicio) || !fechaFin || !/^\d{4}-\d{2}-\d{2}$/.test(fechaFin)) {
+    return { ok: false, msg: 'Fecha inválida. Usa formato YYYY-MM-DD.' };
+  }
+
+  const startDate = new Date(fechaInicio + 'T00:00:00Z');
+  const endDate = new Date(fechaFin + 'T00:00:00Z');
+  if (endDate < startDate) {
+    return { ok: false, msg: 'La fecha de término no puede ser anterior a la de inicio.' };
+  }
+  const dayMs = 24 * 60 * 60 * 1000;
+  const totalDays = Math.round((endDate - startDate) / dayMs) + 1;
+  if (totalDays > 60) {
+    return { ok: false, msg: 'El rango no puede superar los 60 días.' };
+  }
+
+  const tipo = text(data.type) === 'closed' ? 'closed' : 'all_day';
+  const desc = text(data.desc);
+  const groupId = 'sp_' + new Date().getTime().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
+
+  const ss = SpreadsheetApp.openById(CONFIG.SHEET_MIEMBROS_ID);
+  let sheet = ss.getSheetByName('horarios_especiales');
+  if (!sheet) {
+    sheet = ss.insertSheet('horarios_especiales');
+    sheet.getRange(1, 1, 1, 5).setValues([['fecha', 'courtId', 'tipo', 'descripcion', 'groupId']]);
+    // Forzar la columna de fecha a texto plano: si no, Sheets auto-convierte
+    // el ISO string ('2026-08-20') a un valor Date y las comparaciones por
+    // string (en getAvailableSlots, etc.) dejan de coincidir silenciosamente.
+    // Solo hace falta al crear la hoja; reaplicarlo a toda la columna en cada
+    // guardado (hasta 1000 filas) era el motivo de que esto fuera lento.
+    sheet.getRange(2, 1, sheet.getMaxRows() - 1, 1).setNumberFormat('@');
+  } else if (sheet.getLastColumn() < 5) {
+    sheet.getRange(1, 5).setValue('groupId');
+  }
+
+  const existing = sheet.getLastRow() > 1 ? sheet.getRange(2, 1, sheet.getLastRow() - 1, 5).getValues() : [];
+  const existingIndex = {};
+  existing.forEach(function(row, i) {
+    existingIndex[dateCellToStr(row[0], ss) + '|' + text(row[1])] = i + 2; // número real de fila en la hoja
+  });
+
+  const validCourts = courts.map(text).filter(Boolean);
+  const rowsToAppend = [];
+  let updated = 0;
+
+  for (let i = 0; i < totalDays; i++) {
+    const d = new Date(startDate.getTime() + i * dayMs);
+    const fecha = Utilities.formatDate(d, 'UTC', 'yyyy-MM-dd');
+    validCourts.forEach(function(courtId) {
+      const rowNumber = existingIndex[fecha + '|' + courtId];
+      if (rowNumber) {
+        // Reafirma el formato de texto solo en esta celda puntual (por si la
+        // hoja es anterior a este fix y la fecha original quedó como Date).
+        sheet.getRange(rowNumber, 1).setNumberFormat('@');
+        sheet.getRange(rowNumber, 1, 1, 5).setValues([[fecha, courtId, tipo, desc, groupId]]);
+        updated++;
+      } else {
+        rowsToAppend.push([fecha, courtId, tipo, desc, groupId]);
+      }
+    });
+  }
+
+  if (rowsToAppend.length > 0) {
+    const startRow = sheet.getLastRow() + 1;
+    sheet.getRange(startRow, 1, rowsToAppend.length, 1).setNumberFormat('@');
+    sheet.getRange(startRow, 1, rowsToAppend.length, 5).setValues(rowsToAppend);
+  }
+
+  return { ok: true, saved: updated + rowsToAppend.length, groupId: groupId, dias: totalDays };
+}
+
+/** Elimina un período completo (por groupId) o, para entradas antiguas sin
+ * groupId, una sola fila puntual (fecha + cancha). */
+function adminRemoveSpecialSlots(data) {
+  if (!isAdminRequest(data)) return { ok: false, msg: 'Acceso reservado al administrador.' };
+
+  const ss = SpreadsheetApp.openById(CONFIG.SHEET_MIEMBROS_ID);
+  const sheet = ss.getSheetByName('horarios_especiales');
+  if (!sheet) return { ok: true, removed: 0 };
+
+  const groupId = text(data.groupId);
+  const fecha = text(data.fecha);
+  const courtId = text(data.courtId);
+  if (!groupId && (!fecha || !courtId)) {
+    return { ok: false, msg: 'Se requiere groupId, o fecha y cancha.' };
+  }
+
+  const values = sheet.getDataRange().getValues();
+  let removed = 0;
+  for (let i = values.length - 1; i >= 1; i--) {
+    const matches = groupId
+      ? text(values[i][4]) === groupId
+      : (dateCellToStr(values[i][0], ss) === fecha && text(values[i][1]) === courtId);
+    if (matches) {
+      sheet.deleteRow(i + 1);
+      removed++;
+    }
+  }
+  return { ok: true, removed: removed };
+}
+
+/**
+ * Lee las fechas especiales guardadas y las agrupa por groupId (cada grupo
+ * es un período de uno o más días creado en una sola acción). Las filas
+ * antiguas sin groupId (de antes de este cambio) se muestran cada una como
+ * su propio período de 1 día.
+ */
+function getSpecialDatesList() {
+  const ss = SpreadsheetApp.openById(CONFIG.SHEET_MIEMBROS_ID);
+  const sheet = ss.getSheetByName('horarios_especiales');
+  if (!sheet || sheet.getLastRow() < 2) return { ok: true, periods: [] };
+
+  const values = sheet.getRange(2, 1, sheet.getLastRow() - 1, 5).getValues();
+  const groups = {};
+  let ungroupedCounter = 0;
+
+  values.forEach(function(row) {
+    const fecha = dateCellToStr(row[0], ss);
+    const courtId = text(row[1]);
+    if (!fecha || !courtId) return;
+    const tipo = text(row[2]);
+    const desc = text(row[3]);
+    const groupId = text(row[4]) || ('_ug_' + (ungroupedCounter++) + '_' + fecha + '_' + courtId);
+
+    if (!groups[groupId]) {
+      groups[groupId] = { groupId: groupId, fechaInicio: fecha, fechaFin: fecha, tipo: tipo, desc: desc, courts: [] };
+    }
+    const g = groups[groupId];
+    if (fecha < g.fechaInicio) g.fechaInicio = fecha;
+    if (fecha > g.fechaFin) g.fechaFin = fecha;
+    if (g.courts.indexOf(courtId) < 0) g.courts.push(courtId);
+  });
+
+  const periods = Object.keys(groups)
+    .map(function(k) { return groups[k]; })
+    .sort(function(a, b) { return a.fechaInicio < b.fechaInicio ? -1 : (a.fechaInicio > b.fechaInicio ? 1 : 0); });
+
+  return { ok: true, periods: periods };
+}
+
+// =======================================================
+// 📅 INVITACIÓN CALENDAR PARA DESAFÍOS
+// =======================================================
+
+function createChallengeCalendarInvite(data) {
+  const fecha = text(data.fecha);
+  if (!fecha || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+    return { ok: false, msg: 'Fecha no valida.' };
+  }
+
+  try {
+    const slot = text(data.slot);
+    const guestList = [text(data.retadorEmail), text(data.retadoEmail)].filter(Boolean);
+    const guests = guestList.join(',');
+    const isFriendly = text(data.tipo) === 'amistoso';
+    const courtKey = text(data.courtId || (data.cancha && data.cancha.toLowerCase().includes('cjp') ? 'cjp1' : 'cec1'));
+    const courtName = getCourtName(courtKey);
+    const title = '[' + courtName + '] ' + (isFriendly ? 'Partido amistoso UCTenis: ' : 'Desafio ranking UCTenis: ') + text(data.retadorNombre) + ' vs ' + text(data.retadoNombre);
+    const description = [
+      isFriendly ? 'Partido amistoso UCTenis.' : 'Desafio de ranking UCTenis.',
+      'Cancha: ' + courtName + ' (' + courtKey + ')',
+      'Organizador: ' + text(data.retadorNombre) + ' <' + text(data.retadorEmail) + '>',
+      'Invitado: ' + text(data.retadoNombre) + ' <' + text(data.retadoEmail) + '>',
+      'Fecha: ' + (text(data.fechaLabel) || fecha),
+      slot ? 'Hora: ' + slot : '',
+      '',
+      isFriendly
+        ? 'Acepten o rechacen el partido amistoso en la pagina de UCTenis.'
+        : 'La cancha ya queda reservada por el sistema. Acepten o rechacen el desafio en la pagina de ranking.'
+    ].filter(Boolean).join('\n');
+
+    // La reserva de cancha es la cita principal. Se reutiliza y se agregan
+    // ambos jugadores como invitados, evitando dos eventos para el retador.
+    const bookingId = text(data.bookingId);
+    const courtId = text(data.courtId);
+    if (bookingId) {
+      const stored = getBookingDocument(bookingId);
+      if (!stored.ok) throw new Error(stored.msg || 'No se pudo comprobar la reserva asociada.');
+      if (stored.ok && stored.booking) {
+        const booking = stored.booking;
+        booking.guestEmails = guestList;
+        booking.challengeId = text(data.challengeId);
+        booking.matchType = isFriendly ? 'amistoso' : 'ranking';
+        booking.matchTitle = title;
+        booking.updatedAt = new Date().toISOString();
+        const bookingSaved = saveBookingDocument(booking);
+        if (!bookingSaved.ok) throw new Error(bookingSaved.msg || 'No se pudieron asociar los invitados a la reserva.');
+
+        const calId = CONFIG.MAIN_CALENDAR_ID || CONFIG.CALENDARS[booking.courtId] || CONFIG.CALENDARS['cec1'];
+        if (booking.calendarEventId && calId) {
+          const courtCalendar = CalendarApp.getCalendarById(calId);
+          const bookingEvent = courtCalendar && courtCalendar.getEventById(booking.calendarEventId);
+          if (bookingEvent) {
+            guestList.forEach(function(email) { bookingEvent.addGuest(email); });
+            bookingEvent.setTitle(title);
+            if (bookingEvent.setLocation) bookingEvent.setLocation(courtName);
+            bookingEvent.setDescription(description + '\n\nReserva-ID: ' + booking.id);
+            return { ok: true, eventId: bookingEvent.getId(), calendarId: booking.courtId, reusedBooking: true };
+          }
+        }
+
+        // Si Calendar estaba pendiente, el trigger creará la misma cita con
+        // ambos invitados usando guestEmails.
+        if (['pending_calendar', 'calendar_retry'].indexOf(booking.status) >= 0) {
+          return { ok: true, pending: true, eventId: '', calendarId: booking.courtId, reusedBooking: true };
+        }
+
+        // Si el documento decía confirmado pero el evento fue eliminado o no
+        // pudo encontrarse, el mismo registro vuelve a la cola de reintentos.
+        if (booking.status === 'confirmed') {
+          booking.status = 'calendar_retry';
+          booking.calendarEventId = '';
+          booking.syncError = 'La cita Calendar asociada no fue encontrada; se recreará automáticamente.';
+          booking.updatedAt = new Date().toISOString();
+          const retrySaved = saveBookingDocument(booking);
+          if (!retrySaved.ok) throw new Error(retrySaved.msg || booking.syncError);
+          return { ok: true, pending: true, eventId: '', calendarId: booking.courtId, reusedBooking: true };
+        }
+      }
+
+      // Compatibilidad con reservas antiguas cuyo bookingId era eventId.
+      if (courtId) {
+        const legacyCalId = CONFIG.MAIN_CALENDAR_ID || CONFIG.CALENDARS[courtId] || CONFIG.CALENDARS['cec1'];
+        const legacyCalendar = CalendarApp.getCalendarById(legacyCalId);
+        const legacyEvent = legacyCalendar && legacyCalendar.getEventById(bookingId);
+        if (legacyEvent) {
+          guestList.forEach(function(email) { legacyEvent.addGuest(email); });
+          legacyEvent.setTitle(title);
+          if (legacyEvent.setLocation) legacyEvent.setLocation(courtName);
+          return { ok: true, eventId: legacyEvent.getId(), calendarId: courtId, reusedBooking: true, legacy: true };
+        }
+      }
+
+      return { ok: false, msg: 'No se encontró la reserva de cancha asociada; no se creó una cita duplicada.' };
+    }
+
+    const calendar = CalendarApp.getDefaultCalendar();
+    if (!calendar) return { ok: false, msg: 'Calendario no encontrado.' };
+    let event;
+    if (/^\d{1,2}:\d{2}$/.test(slot)) {
+      const dateParts = fecha.split('-').map(Number);
+      const timeParts = slot.split(':').map(Number);
+      const start = new Date(dateParts[0], dateParts[1] - 1, dateParts[2], timeParts[0], timeParts[1], 0);
+      const end = new Date(start.getTime() + 90 * 60 * 1000);
+      event = calendar.createEvent(title, start, end, {
+        description: description,
+        location: text(data.cancha),
+        guests: guests,
+        sendInvites: true
+      });
+    } else {
+      const dateParts = fecha.split('-').map(Number);
+      const date = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
+      event = calendar.createAllDayEvent(title, date, {
+        description: description,
+        location: text(data.cancha),
+        guests: guests,
+        sendInvites: true
+      });
+    }
+
+    if (CalendarApp.EventTransparency && CalendarApp.EventTransparency.TRANSPARENT) {
+      event.setTransparency(CalendarApp.EventTransparency.TRANSPARENT);
+    }
+    return { ok: true, eventId: event.getId(), calendarId: 'default' };
+  } catch (error) {
+    return { ok: false, msg: error.message };
+  }
+}
+
+// =======================================================
+// 🏆 DESAFÍOS — CONSTANTES Y UTILIDADES
+// =======================================================
+
+const CHALLENGE_RESPONSE_MS = 48 * 60 * 60 * 1000;
+const CHALLENGE_RESULT_CONFIRM_MS = 48 * 60 * 60 * 1000;
+const CHALLENGE_ACTIVE_STATUSES = ['pendiente', 'aceptado', 'resultado_pendiente'];
+const CHALLENGE_HISTORY_STATUSES = ['completado', 'wo_retador', 'wo_retado', 'vencido', 'rechazado'];
+const CHALLENGE_OFFICIAL_STATUSES = CHALLENGE_ACTIVE_STATUSES.concat(CHALLENGE_HISTORY_STATUSES);
+
+function challengeTime(value) {
+  const raw = text(value);
+  if (!raw) return 0;
+  const time = new Date(raw).getTime();
+  return isNaN(time) ? 0 : time;
+}
+
+/**
+ * Indica si ya llegó (o pasó) la fecha/hora agendada del partido. Sin fecha
+ * registrada se considera "pasada" para no bloquear registros legados que
+ * no la tengan — el resguardo es sólo para evitar reportar/confirmar un
+ * resultado o W.O. antes de que el partido pueda haber ocurrido.
+ */
+function challengeMatchTimeHasPassed(challenge) {
+  const fecha = text(challenge && challenge.fecha);
+  if (!fecha) return true;
+  try {
+    const slot = text(challenge.slot) || '23:59';
+    return Date.now() >= makeLocalDate(fecha, slot).getTime();
+  } catch (e) {
+    return true;
+  }
+}
+
+function isChallengeResultDisputed(challenge) {
+  return Boolean(
+    challenge &&
+    (challenge.resultadoReclamado === true ||
+     challenge.resultadoReclamado === 'true' ||
+     text(challenge.reclamoResultado))
+  );
+}
+
+function isActiveChallengeStatus(status) {
+  return CHALLENGE_ACTIVE_STATUSES.indexOf(text(status)) >= 0;
+}
+
+function authorizeChallengeParticipant(data, challenge) {
+  const verifiedEmail = verifyGoogleIdToken(data && data.idToken);
+  if (!verifiedEmail) return { ok: false, msg: 'Tu sesión de Google venció.' };
+  if (verifiedEmail === text(challenge.retadorEmail).toLowerCase() ||
+      verifiedEmail === text(challenge.retadoEmail).toLowerCase() ||
+      isAdminRequest(data)) {
+    return { ok: true, email: verifiedEmail };
+  }
+  return { ok: false, msg: 'No perteneces a este partido.' };
+}
+
+// =======================================================
+// 🏆 DESAFÍOS — CRUD
+// =======================================================
+
+function getChallenges() {
+  const sheet = getChallengesSheet();
+  const values = sheet.getDataRange().getValues();
+  const challenges = [];
+
+  for (let i = 1; i < values.length; i++) {
+    const row = values[i];
+    if (!text(row[0])) continue;
+    let challenge = challengeFromRow(row);
+    const rowStatus = text(row[10]);
+
+    if (challenge.status !== rowStatus) {
+      const updatedAt = challenge.actualizado || new Date().toISOString();
+      challenge.actualizado = updatedAt;
+      sheet.getRange(i + 1, 11).setValue(challenge.status);
+      sheet.getRange(i + 1, 15).setValue(updatedAt);
+      if (challenge.fechaConfirmacion) sheet.getRange(i + 1, 24).setValue(challenge.fechaConfirmacion);
+      if (challenge.confirmadoPor) sheet.getRange(i + 1, 25).setValue(challenge.confirmadoPor);
+
+      if (challenge.status === 'completado' && rowStatus === 'resultado_pendiente' && !challenge.rankingAplicado) {
+        // El ciclo leer-modificar-escribir de applyChallengeResultToRanking
+        // reescribe toda la hoja de ranking. confirmChallengeResult y
+        // setChallengeWalkover ya lo hacen bajo LockService; este disparador
+        // automático (auto-confirmación a las 48h) también debe serializarse
+        // con ellos o dos resoluciones casi simultáneas pueden pisarse y
+        // perder un movimiento de ranking en silencio.
+        const rankingLock = LockService.getScriptLock();
+        rankingLock.waitLock(15000);
+        try {
+          // Se relee el estado del "aplicado" bajo el lock por si otro
+          // proceso ya lo resolvió mientras se esperaba el candado.
+          const rankingAplicadoNow = text(sheet.getRange(i + 1, 30).getValue());
+          if (!rankingAplicadoNow) {
+            const rankingUpdate = applyChallengeResultToRanking(challenge);
+            if (rankingUpdate.ok) {
+              const appliedAt = new Date().toISOString();
+              sheet.getRange(i + 1, 30).setValue(appliedAt);
+              challenge.rankingAplicado = appliedAt;
+            }
+          } else {
+            challenge.rankingAplicado = rankingAplicadoNow;
+          }
+        } finally {
+          rankingLock.releaseLock();
+        }
+      }
+
+      if (challenge.status === 'vencido' && rowStatus === 'pendiente') {
+        // Una invitación sin responder pasa a vencido tras 48h; hasta ahora
+        // eso no liberaba la cancha reservada y el horario quedaba
+        // bloqueado indefinidamente pese a que el partido nunca se aceptó.
+        try {
+          if (challenge.bookingId && challenge.courtId) {
+            releaseChallengeBooking(challenge.bookingId, challenge.courtId);
+          }
+        } catch (e) {
+          console.warn('Error liberando cancha de desafío vencido: ' + e.message);
+        }
+      }
+    }
+
+    if (challenge.status === 'pendiente' && challenge.eventId) {
+      try {
+        const calendar = CalendarApp.getDefaultCalendar();
+        const event = calendar.getEventById(challenge.eventId);
+        if (event) {
+          const guests = event.getGuestList();
+          const retadoEmailNorm = challenge.retadoEmail.toLowerCase().trim();
+          let retadoGuest = guests.find(g => g.getEmail().toLowerCase().trim() === retadoEmailNorm);
+
+          if (retadoGuest) {
+            const status = retadoGuest.getGuestStatus();
+            if (status === CalendarApp.GuestStatus.YES) {
+              challenge.status = 'aceptado';
+              challenge.actualizado = new Date().toISOString();
+              sheet.getRange(i + 1, 11).setValue('aceptado');
+              sheet.getRange(i + 1, 15).setValue(challenge.actualizado);
+              updateChallengeInFirebase(challenge.id, { status: 'aceptado', actualizado: challenge.actualizado });
+            } else if (status === CalendarApp.GuestStatus.NO) {
+              challenge.status = 'rechazado';
+              challenge.actualizado = new Date().toISOString();
+              sheet.getRange(i + 1, 11).setValue('rechazado');
+              sheet.getRange(i + 1, 15).setValue(challenge.actualizado);
+              updateChallengeInFirebase(challenge.id, { status: 'rechazado', actualizado: challenge.actualizado });
+              try {
+                if (challenge.bookingId && challenge.courtId) {
+                  releaseChallengeBooking(challenge.bookingId, challenge.courtId);
+                }
+              } catch (e) {
+                console.warn('Error deleting booking event on calendar reject: ' + e.message);
+              }
+            }
+          }
+        }
+      } catch (calErr) {
+        console.warn('Error checking calendar event status: ' + calErr.message);
+      }
+    }
+
+    challenges.push(challenge);
+  }
+
+  return { ok: true, challenges: challenges };
+}
+
+function createChallenge(data) {
+  const verifiedEmail = verifyGoogleIdToken(data && data.idToken);
+  const actorMatchesChallenger = verifiedEmail === text(data.retadorEmail).toLowerCase();
+  const isVerifiedAdmin = verifiedEmail && !actorMatchesChallenger && isAdminRequest(data);
+  if (!verifiedEmail || (!actorMatchesChallenger && !isVerifiedAdmin)) {
+    return { ok: false, msg: 'Tu sesión no coincide con el jugador que crea el partido.' };
+  }
+  const sheet = getChallengesSheet();
+  const id = text(data.id) || Utilities.getUuid();
+  const now = new Date().toISOString();
+  const challenge = {
+    id: id,
+    retadorId: text(data.retadorId),
+    retadorNombre: text(data.retadorNombre),
+    retadorEmail: text(data.retadorEmail),
+    retadoId: text(data.retadoId),
+    retadoNombre: text(data.retadoNombre),
+    retadoEmail: text(data.retadoEmail),
+    genero: text(data.genero),
+    fecha: text(data.fecha),
+    cancha: text(data.cancha),
+    status: text(data.status) || 'pendiente',
+    marcador: text(data.marcador) || '',
+    ganadorId: text(data.ganadorId) || '',
+    creado: now,
+    actualizado: now,
+    slot: text(data.slot),
+    courtId: text(data.courtId),
+    eventId: '',
+    bookingId: text(data.bookingId),
+    tipo: text(data.tipo) || 'ranking',
+    fechaResultado: text(data.fechaResultado),
+    resultadoIngresadoPor: text(data.resultadoIngresadoPor),
+    resultadoIngresadoPorEmail: text(data.resultadoIngresadoPorEmail),
+    fechaConfirmacion: text(data.fechaConfirmacion),
+    confirmadoPor: text(data.confirmadoPor),
+    resultadoReclamado: data.resultadoReclamado === true || data.resultadoReclamado === 'true',
+    reclamoResultado: text(data.reclamoResultado),
+    fechaReclamo: text(data.fechaReclamo),
+    reclamadoPor: text(data.reclamadoPor),
+    rankingAplicado: text(data.rankingAplicado)
+  };
+  normalizeChallengeCompletion(challenge);
+
+  const rulesCheck = validateChallengeCreation(challenge);
+  if (!rulesCheck.ok) return rulesCheck;
+
+  let notificationResult = { ok: true, skipped: true };
+  try {
+    if (challenge.status !== 'completado' && challenge.retadoEmail) {
+      notificationResult = notifyChallenge(challenge);
+      if (!notificationResult.ok) {
+        return { ok: false, msg: notificationResult.msg || 'No se pudo notificar al jugador invitado.', notification: notificationResult };
+      }
+      if (notificationResult.calendar && notificationResult.calendar.ok) {
+        challenge.eventId = notificationResult.calendar.eventId;
+      }
+    }
+  } catch (mailError) {
+    return { ok: false, msg: 'No se pudo enviar la invitación: ' + mailError.message };
+  }
+
+  sheet.appendRow(challengeToRow(challenge));
+
+  if (challenge.status === 'completado') {
+    // Mismo LockService que usan confirmChallengeResult/setChallengeWalkover:
+    // un registro directo de resultado (p.ej. "Registrar amistoso") no debe
+    // pisarse con otra resolución de ranking que esté en curso al mismo
+    // tiempo para otro desafío.
+    const rankingLock = LockService.getScriptLock();
+    rankingLock.waitLock(15000);
+    try {
+      const rankingUpdate = applyChallengeResultToRanking(challenge);
+      if (rankingUpdate.ok) {
+        const appliedAt = new Date().toISOString();
+        challenge.rankingAplicado = appliedAt;
+        const appended = findChallengeRow(challenge.id);
+        if (appended) setChallengeRowPatch(appended.sheet, appended.rowNumber, { rankingAplicado: appliedAt });
+      }
+    } finally {
+      rankingLock.releaseLock();
+    }
+  }
+
+  return { ok: true, challenge: publicChallenge(challenge), notification: notificationResult };
+}
+
+function respondChallenge(data) {
+  const found = findChallengeRow(text(data.id));
+  if (!found) return { ok: false, msg: 'Desafío no encontrado.' };
+
+  let status = 'rechazado';
+  if (data.status === 'eliminado' || data.accept === 'eliminado') {
+    status = 'eliminado';
+  } else if (data.accept === true || data.accept === 'true' || data.status === 'aceptado') {
+    status = 'aceptado';
+  }
+
+  const challenge = challengeFromRow(found.sheet.getRange(found.rowNumber, 1, 1, 30).getValues()[0]);
+  const verifiedEmail = verifyGoogleIdToken(data && data.idToken);
+  const actorMatchesInvitedPlayer = verifiedEmail === text(challenge.retadoEmail).toLowerCase();
+  const isVerifiedAdmin = verifiedEmail && !actorMatchesInvitedPlayer && isAdminRequest(data);
+  if (!verifiedEmail || (!actorMatchesInvitedPlayer && !isVerifiedAdmin)) {
+    return { ok: false, msg: 'Solo el jugador invitado puede responder este partido.' };
+  }
+  if (challenge.status === 'vencido') {
+    setChallengeRowPatch(found.sheet, found.rowNumber, {
+      status: 'vencido',
+      actualizado: challenge.actualizado || new Date().toISOString()
+    });
+    try {
+      if (challenge.bookingId && challenge.courtId) {
+        releaseChallengeBooking(challenge.bookingId, challenge.courtId);
+      }
+    } catch (e) { console.warn('Error liberando cancha de desafío vencido: ' + e.message); }
+    return { ok: false, msg: 'El plazo de 48 horas para responder este desafío ya venció.', challenge: publicChallenge(challenge) };
+  }
+  if (challenge.status !== 'pendiente' && status !== 'eliminado') {
+    return { ok: false, msg: 'Solo se puede responder un desafío pendiente.', challenge: publicChallenge(challenge) };
+  }
+
+  if (status === 'rechazado' || status === 'eliminado') {
+    try {
+      if (challenge.bookingId && challenge.courtId) {
+        releaseChallengeBooking(challenge.bookingId, challenge.courtId);
+      }
+    } catch (e) { console.warn('Error deleting court reservation: ' + e.message); }
+
+    try {
+      if (challenge.eventId) {
+        const defaultCal = CalendarApp.getDefaultCalendar();
+        if (defaultCal) {
+          const inviteEvent = defaultCal.getEventById(challenge.eventId);
+          if (inviteEvent) inviteEvent.deleteEvent();
+        }
+      }
+    } catch (e) { console.warn('Error deleting challenge invite: ' + e.message); }
+  }
+
+  if (status === 'eliminado') {
+    found.sheet.deleteRow(found.rowNumber);
+    challenge.status = 'eliminado';
+  } else {
+    found.sheet.getRange(found.rowNumber, 11).setValue(status);
+    found.sheet.getRange(found.rowNumber, 15).setValue(new Date().toISOString());
+    challenge.status = status;
+    challenge.actualizado = new Date().toISOString();
+    // Notificar al retador que le respondieron
+    if (status === 'aceptado' || status === 'rechazado') {
+      try { notifyChallengeResponse(challenge, status); } catch(e) { console.warn('notifyChallengeResponse error:', e.message); }
+    }
+  }
+
+  return { ok: true, challenge: publicChallenge(challenge) };
+}
+
+function submitChallengeResult(data) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+
+  try {
+    const found = findChallengeRow(text(data.id));
+    if (!found) return { ok: false, msg: 'Desafío no encontrado.' };
+
+    const previous = challengeFromRow(found.sheet.getRange(found.rowNumber, 1, 1, 30).getValues()[0]);
+    const authorization = authorizeChallengeParticipant(data, previous);
+    if (!authorization.ok) return authorization;
+    const requesterIsAdmin = isAdminRequest(data);
+    if (['completado', 'wo_retador', 'wo_retado'].indexOf(previous.status) >= 0 && previous.rankingAplicado) {
+      return { ok: false, msg: 'El resultado ya fue confirmado.' };
+    }
+    // Reenviar un marcador borraba en silencio cualquier reclamo activo,
+    // permitiendo que el mismo bug de auto-confirmación (ver
+    // confirmChallengeResult) se usara para pisar la disputa del rival.
+    if (isChallengeResultDisputed(previous) && !requesterIsAdmin) {
+      return { ok: false, msg: 'Este resultado está reclamado; un administrador debe resolverlo antes de reportar un nuevo marcador.' };
+    }
+    if (['aceptado', 'resultado_pendiente'].indexOf(previous.status) < 0 && !requesterIsAdmin) {
+      return { ok: false, msg: 'Solo se puede reportar un resultado para un desafío aceptado.' };
+    }
+    if (!requesterIsAdmin && !challengeMatchTimeHasPassed(previous)) {
+      return { ok: false, msg: 'Aún no llega la fecha del partido; no se puede reportar un resultado por adelantado.' };
+    }
+
+    const now = new Date().toISOString();
+    found.sheet.getRange(found.rowNumber, 11).setValue('resultado_pendiente');
+    found.sheet.getRange(found.rowNumber, 12).setValue(text(data.marcador));
+    found.sheet.getRange(found.rowNumber, 13).setValue(text(data.ganadorId));
+    found.sheet.getRange(found.rowNumber, 15).setValue(now);
+    if (data.tipo) {
+      found.sheet.getRange(found.rowNumber, 20).setValue(text(data.tipo));
+    }
+    found.sheet.getRange(found.rowNumber, 21, 1, 10).setValues([[
+      text(data.fechaResultado) || now,
+      text(data.resultadoIngresadoPor || data.actorId || data.actorEmail),
+      text(data.resultadoIngresadoPorEmail || data.actorEmail),
+      '', '', false, '', '', '', ''
+    ]]);
+
+    const updated = challengeFromRow(found.sheet.getRange(found.rowNumber, 1, 1, 30).getValues()[0]);
+    let resultNotification = { ok: false, skipped: true };
+    try {
+      const winnerIsChallenger = text(updated.ganadorId) === text(updated.retadorId);
+      resultNotification = notifyResult({
+        ganadorNombre: winnerIsChallenger ? updated.retadorNombre : updated.retadoNombre,
+        ganadorEmail: winnerIsChallenger ? updated.retadorEmail : updated.retadoEmail,
+        perdedorNombre: winnerIsChallenger ? updated.retadoNombre : updated.retadorNombre,
+        perdedorEmail: winnerIsChallenger ? updated.retadoEmail : updated.retadorEmail,
+        marcador: updated.marcador,
+        fecha: updated.fecha,
+        cancha: updated.cancha
+      });
+    } catch (notificationError) {
+      resultNotification = { ok: false, msg: notificationError.message };
+      console.warn('submitChallengeResult notification error:', notificationError.message);
+    }
+    return {
+      ok: true,
+      challenge: publicChallenge(updated),
+      notification: resultNotification,
+      rankingUpdate: { ok: true, skipped: true, msg: 'Resultado pendiente de confirmación; la escalerilla aún no se mueve.' }
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function setChallengeRowPatch(sheet, rowNumber, patch) {
+  const columns = {
+    status: 11, marcador: 12, ganadorId: 13, actualizado: 15, tipo: 20,
+    fechaResultado: 21, resultadoIngresadoPor: 22, resultadoIngresadoPorEmail: 23,
+    fechaConfirmacion: 24, confirmadoPor: 25, resultadoReclamado: 26,
+    reclamoResultado: 27, fechaReclamo: 28, reclamadoPor: 29, rankingAplicado: 30
+  };
+  Object.keys(patch).forEach(function(key) {
+    if (Object.prototype.hasOwnProperty.call(columns, key)) {
+      sheet.getRange(rowNumber, columns[key]).setValue(patch[key]);
+    }
+  });
+}
+
+function confirmChallengeResult(data) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+
+  try {
+    const found = findChallengeRow(text(data.id));
+    if (!found) return { ok: false, msg: 'Desafío no encontrado.' };
+
+    const challenge = challengeFromRow(found.sheet.getRange(found.rowNumber, 1, 1, 30).getValues()[0]);
+    const authorization = authorizeChallengeParticipant(data, challenge);
+    if (!authorization.ok) return authorization;
+    if (isChallengeResultDisputed(challenge)) {
+      return { ok: false, msg: 'El resultado está reclamado y requiere revisión administrativa.' };
+    }
+    if (!hasRecordedChallengeResult(challenge)) {
+      return { ok: false, msg: 'No hay resultado para confirmar.' };
+    }
+    if (['resultado_pendiente', 'completado'].indexOf(challenge.status) < 0) {
+      return { ok: false, msg: 'El desafío no está esperando confirmación.' };
+    }
+    // Quien reportó el marcador no puede confirmárselo a sí mismo — eso
+    // debe hacerlo el rival. Se exceptúa la auto-confirmación automática de
+    // 48h (que igualmente ya aplica getChallenges() al leer), pero sólo si
+    // el plazo realmente se cumplió — nunca confiando ciegamente en un
+    // data.automatic que envía el propio cliente.
+    const submitterEmail = text(challenge.resultadoIngresadoPorEmail).toLowerCase();
+    const isSelfConfirm = Boolean(submitterEmail) && authorization.email === submitterEmail;
+    const resultAgeMs = Date.now() - challengeTime(challenge.fechaResultado || challenge.actualizado);
+    const autoConfirmEligible = resultAgeMs >= CHALLENGE_RESULT_CONFIRM_MS;
+    if (isSelfConfirm && !isAdminRequest(data) && !autoConfirmEligible) {
+      return { ok: false, msg: 'El resultado debe confirmarlo el rival, no quien lo reportó.' };
+    }
+
+    const now = new Date().toISOString();
+    const patch = {
+      status: 'completado',
+      fechaConfirmacion: text(data.fechaConfirmacion) || now,
+      confirmadoPor: text(data.confirmadoPor || data.actorId || data.actorEmail) || (data.automatic ? 'automatico_48h' : ''),
+      actualizado: now
+    };
+
+    const updated = normalizeChallengeCompletion({ ...challenge, ...patch });
+    let rankingUpdate = { ok: true, skipped: true, msg: 'Ranking ya aplicado previamente.' };
+    if (!challenge.rankingAplicado) {
+      rankingUpdate = applyChallengeResultToRanking(updated);
+      if (rankingUpdate.ok) {
+        patch.rankingAplicado = now;
+        updated.rankingAplicado = now;
+      }
+    }
+
+    setChallengeRowPatch(found.sheet, found.rowNumber, patch);
+    updateChallengeInFirebase(challenge.id, {
+      status: 'completado',
+      fechaConfirmacion: patch.fechaConfirmacion,
+      confirmadoPor: patch.confirmadoPor,
+      actualizado: now,
+      rankingAplicado: patch.rankingAplicado || challenge.rankingAplicado || ''
+    });
+
+    const saved = challengeFromRow(found.sheet.getRange(found.rowNumber, 1, 1, 30).getValues()[0]);
+    return { ok: true, challenge: publicChallenge(saved), rankingUpdate: rankingUpdate };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function disputeChallengeResult(data) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+
+  try {
+    const found = findChallengeRow(text(data.id || data.challengeId));
+    if (!found) return { ok: false, msg: 'Desafío no encontrado.' };
+
+    const challenge = challengeFromRow(found.sheet.getRange(found.rowNumber, 1, 1, 30).getValues()[0]);
+    const authorization = authorizeChallengeParticipant(data, challenge);
+    if (!authorization.ok) return authorization;
+    if (challenge.status !== 'resultado_pendiente') {
+      return { ok: false, msg: 'Solo se puede reclamar un resultado pendiente.' };
+    }
+
+    const now = new Date().toISOString();
+    const patch = {
+      resultadoReclamado: true,
+      reclamoResultado: text(data.reclamoResultado) || 'Resultado reclamado por el rival.',
+      fechaReclamo: now,
+      reclamadoPor: text(data.reclamadoPor || data.disputanteEmail || data.disputanteNombre),
+      actualizado: now
+    };
+    setChallengeRowPatch(found.sheet, found.rowNumber, patch);
+
+    notifyDispute({
+      challengeId: challenge.id,
+      disputanteNombre: text(data.disputanteNombre || data.reclamadoPor) || 'Un jugador',
+      disputanteEmail: text(data.disputanteEmail),
+      contrarioNombre: text(data.contrarioNombre) || 'su oponente',
+      contrarioEmail: text(data.contrarioEmail),
+      marcador: challenge.marcador,
+      fecha: challenge.fecha
+    });
+
+    updateChallengeInFirebase(challenge.id, {
+      resultadoReclamado: 'true',
+      reclamoResultado: patch.reclamoResultado,
+      fechaReclamo: patch.fechaReclamo,
+      reclamadoPor: patch.reclamadoPor,
+      actualizado: now
+    });
+
+    const saved = challengeFromRow(found.sheet.getRange(found.rowNumber, 1, 1, 30).getValues()[0]);
+    return { ok: true, challenge: publicChallenge(saved) };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * Admin: resuelve un resultado reclamado — hasta ahora un resultado
+ * disputado no tenía ninguna vía de salida y dejaba a ambos jugadores
+ * bloqueados indefinidamente (resultado_pendiente cuenta como desafío
+ * activo). Requiere { id, ganadorId, marcador? } y admin verificado.
+ */
+function adminResolveChallengeDispute(data) {
+  if (!isAdminRequest(data)) return { ok: false, msg: 'Acceso reservado al administrador.' };
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  try {
+    const found = findChallengeRow(text(data.id));
+    if (!found) return { ok: false, msg: 'Desafío no encontrado.' };
+
+    const challenge = challengeFromRow(found.sheet.getRange(found.rowNumber, 1, 1, 30).getValues()[0]);
+    if (challenge.status !== 'resultado_pendiente') {
+      return { ok: false, msg: 'Solo se puede resolver un resultado pendiente de confirmación.' };
+    }
+    const ganadorId = text(data.ganadorId);
+    if (ganadorId !== challenge.retadorId && ganadorId !== challenge.retadoId) {
+      return { ok: false, msg: 'El ganador indicado no pertenece a este desafío.' };
+    }
+
+    const verifiedEmail = verifyGoogleIdToken(data.idToken);
+    const now = new Date().toISOString();
+    const patch = {
+      status: 'completado',
+      marcador: text(data.marcador) || challenge.marcador,
+      ganadorId: ganadorId,
+      fechaConfirmacion: now,
+      confirmadoPor: verifiedEmail || 'admin',
+      resultadoReclamado: false,
+      reclamoResultado: '',
+      fechaReclamo: '',
+      reclamadoPor: '',
+      actualizado: now
+    };
+
+    const updated = normalizeChallengeCompletion({ ...challenge, ...patch });
+    let rankingUpdate = { ok: true, skipped: true, msg: 'Ranking ya aplicado previamente.' };
+    if (!challenge.rankingAplicado) {
+      rankingUpdate = applyChallengeResultToRanking(updated);
+      if (rankingUpdate.ok) {
+        patch.rankingAplicado = now;
+        updated.rankingAplicado = now;
+      }
+    }
+
+    setChallengeRowPatch(found.sheet, found.rowNumber, patch);
+    updateChallengeInFirebase(challenge.id, {
+      status: 'completado',
+      marcador: patch.marcador,
+      ganadorId: patch.ganadorId,
+      fechaConfirmacion: patch.fechaConfirmacion,
+      confirmadoPor: patch.confirmadoPor,
+      resultadoReclamado: 'false',
+      reclamoResultado: '',
+      fechaReclamo: '',
+      reclamadoPor: '',
+      actualizado: now,
+      rankingAplicado: patch.rankingAplicado || challenge.rankingAplicado || ''
+    });
+
+    const saved = challengeFromRow(found.sheet.getRange(found.rowNumber, 1, 1, 30).getValues()[0]);
+    return { ok: true, challenge: publicChallenge(saved), rankingUpdate: rankingUpdate };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function setChallengeWalkover(data) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+
+  try {
+    const found = findChallengeRow(text(data.id));
+    if (!found) return { ok: false, msg: 'Desafío no encontrado.' };
+
+    const status = text(data.status);
+    if (status !== 'wo_retador' && status !== 'wo_retado') {
+      return { ok: false, msg: 'Tipo de W.O. inválido.' };
+    }
+
+    const challenge = challengeFromRow(found.sheet.getRange(found.rowNumber, 1, 1, 30).getValues()[0]);
+    const authorization = authorizeChallengeParticipant(data, challenge);
+    if (!authorization.ok) return authorization;
+    if (challenge.status !== 'aceptado') {
+      return { ok: false, msg: 'Solo se puede marcar W.O. en un desafío aceptado.' };
+    }
+    // Un W.O. declara que el rival no se presentó — no puede reclamarse
+    // antes de que siquiera empiece el horario agendado del partido. Un
+    // admin puede resolverlo en cualquier momento (p.ej. con evidencia
+    // aportada fuera del sistema).
+    if (!isAdminRequest(data) && !challengeMatchTimeHasPassed(challenge)) {
+      return { ok: false, msg: 'Aún no llega la hora agendada del partido; no se puede declarar W.O. por adelantado.' };
+    }
+
+    const now = new Date().toISOString();
+    const ganadorId = status === 'wo_retador' ? challenge.retadoId : challenge.retadorId;
+    const patch = {
+      status: status,
+      marcador: 'W.O.',
+      ganadorId: ganadorId,
+      fechaResultado: now,
+      resultadoIngresadoPor: text(data.actorId || data.actorEmail),
+      resultadoIngresadoPorEmail: text(data.actorEmail),
+      fechaConfirmacion: now,
+      confirmadoPor: text(data.actorId || data.actorEmail || data.actorName),
+      resultadoReclamado: false,
+      reclamoResultado: '',
+      fechaReclamo: '',
+      reclamadoPor: '',
+      actualizado: now
+    };
+
+    const updated = normalizeChallengeCompletion({ ...challenge, ...patch });
+    const rankingUpdate = applyChallengeResultToRanking(updated);
+    if (rankingUpdate.ok) {
+      patch.rankingAplicado = now;
+      updated.rankingAplicado = now;
+    }
+
+    setChallengeRowPatch(found.sheet, found.rowNumber, patch);
+    updateChallengeInFirebase(challenge.id, {
+      status: status, marcador: 'W.O.', ganadorId: ganadorId,
+      fechaResultado: now, fechaConfirmacion: now,
+      confirmadoPor: patch.confirmadoPor, actualizado: now,
+      rankingAplicado: patch.rankingAplicado || ''
+    });
+
+    const saved = challengeFromRow(found.sheet.getRange(found.rowNumber, 1, 1, 30).getValues()[0]);
+    return { ok: true, challenge: publicChallenge(saved), rankingUpdate: rankingUpdate };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// =======================================================
+// 🏆 DESAFÍOS — HOJA Y UTILIDADES
+// =======================================================
+
+function getChallengesSheet() {
+  const ss = SpreadsheetApp.openById(CONFIG.SHEET_MIEMBROS_ID);
+  let sheet = ss.getSheetByName(' LIBRO DESAFIOS') || ss.getSheetByName('LIBRO DESAFIOS');
+  if (!sheet) sheet = ss.insertSheet(' LIBRO DESAFIOS');
+
+  const headers = ['id','retadorId','retadorNombre','retadorEmail','retadoId','retadoNombre','retadoEmail','genero','fecha','cancha','status','marcador','ganadorId','creado','actualizado','slot','courtId','eventId','bookingId','tipo','fechaResultado','resultadoIngresadoPor','resultadoIngresadoPorEmail','fechaConfirmacion','confirmadoPor','resultadoReclamado','reclamoResultado','fechaReclamo','reclamadoPor','rankingAplicado'];
+  const first = sheet.getRange(1, 1, 1, headers.length).getValues()[0];
+  if (!text(first[0])) {
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  } else {
+    headers.forEach(function(header, index) {
+      if (!text(first[index])) sheet.getRange(1, index + 1).setValue(header);
+    });
+  }
+  return sheet;
+}
+
+function findChallengeRow(id) {
+  if (!id) return null;
+  const sheet = getChallengesSheet();
+  const values = sheet.getDataRange().getValues();
+  for (let i = 1; i < values.length; i++) {
+    if (text(values[i][0]) === id) return { sheet: sheet, rowNumber: i + 1 };
+  }
+  return null;
+}
+
+function challengePlayerMatchesRole(challenge, role, ref) {
+  const prefix = role === 'retado' ? 'retado' : 'retador';
+  const id = text(ref.id);
+  const email = text(ref.email).toLowerCase();
+  const nombre = norm(ref.nombre);
+  return Boolean(
+    (id && text(challenge[prefix + 'Id']) === id) ||
+    (email && text(challenge[prefix + 'Email']).toLowerCase() === email) ||
+    (nombre && norm(challenge[prefix + 'Nombre']) === nombre)
+  );
+}
+
+function hasActiveChallengeInRole(sheet, role, ref, excludeId) {
+  const values = sheet.getDataRange().getValues();
+  for (let i = 1; i < values.length; i++) {
+    const challenge = challengeFromRow(values[i]);
+    if (!challenge.id || challenge.id === excludeId) continue;
+    if (text(challenge.tipo) === 'amistoso' || text(challenge.tipo) === 'campeonato') continue;
+    if (!isActiveChallengeStatus(challenge.status)) continue;
+    if (challengePlayerMatchesRole(challenge, role, ref)) return true;
+  }
+  return false;
+}
+
+function isSamePlayerReference(a, b) {
+  const idA = text(a && a.id), idB = text(b && b.id);
+  const emailA = text(a && a.email).toLowerCase(), emailB = text(b && b.email).toLowerCase();
+  const nameA = norm(a && a.nombre), nameB = norm(b && b.nombre);
+  return Boolean((idA && idA === idB) || (emailA && emailA === emailB) || (nameA && nameA === nameB));
+}
+
+function hasUnresolvedChallengeBetween(sheet, refA, refB, excludeId) {
+  const values = sheet.getDataRange().getValues();
+  for (let i = 1; i < values.length; i++) {
+    const c = challengeFromRow(values[i]);
+    if (!c.id || c.id === excludeId) continue;
+    if (['pendiente', 'aceptado'].indexOf(c.status) < 0) continue;
+    const matchesA = challengePlayerMatchesRole(c, 'retador', refA) || challengePlayerMatchesRole(c, 'retado', refA);
+    const matchesB = challengePlayerMatchesRole(c, 'retador', refB) || challengePlayerMatchesRole(c, 'retado', refB);
+    if (matchesA && matchesB) return true;
+  }
+  return false;
+}
+
+function validateChallengeCreation(challenge) {
+  const retadorRef = { id: challenge.retadorId, nombre: challenge.retadorNombre, email: challenge.retadorEmail };
+  const retadoRef  = { id: challenge.retadoId,  nombre: challenge.retadoNombre,  email: challenge.retadoEmail };
+
+  if (isSamePlayerReference(retadorRef, retadoRef)) {
+    return { ok: false, msg: 'No puedes desafiarte a ti mismo.' };
+  }
+
+  if (text(challenge.tipo) === 'amistoso' || text(challenge.tipo) === 'campeonato') {
+    // Amistoso/campeonato no tienen el límite de "un desafío activo" del
+    // ranking, pero antes tampoco tenían ningún resguardo: se podían crear
+    // invitaciones ilimitadas entre los mismos dos jugadores, cada una
+    // generando un evento real de Calendar y una reserva real en Firestore.
+    const sheet = getChallengesSheet();
+    if (challenge.status === 'pendiente' && hasUnresolvedChallengeBetween(sheet, retadorRef, retadoRef, challenge.id)) {
+      return { ok: false, msg: 'Ya existe una invitación sin resolver entre estos dos jugadores.' };
+    }
+    return { ok: true };
+  }
+  if (challenge.status !== 'pendiente') return { ok: true };
+
+  const genero = normalizeGender(challenge.genero);
+  if (!genero) return { ok: false, msg: 'Género de desafío no válido.' };
+
+  const ss = getSpreadsheet();
+  const entries = readRankingEntries(ss, genero);
+  const retadorIndex = findRankingEntryIndex(entries, retadorRef);
+  const retadoIndex  = findRankingEntryIndex(entries, retadoRef);
+
+  if (retadorIndex < 0 || retadoIndex < 0) {
+    return { ok: false, msg: 'Ambos jugadores deben estar activos en la escalerilla.' };
+  }
+  if (!(retadoIndex < retadorIndex && retadorIndex - retadoIndex <= 3)) {
+    return { ok: false, msg: 'Solo se puede desafiar hasta 3 posiciones superiores.' };
+  }
+
+  const sheet = getChallengesSheet();
+  if (hasActiveChallengeInRole(sheet, 'retador', retadorRef, challenge.id)) {
+    return { ok: false, msg: 'El retador ya tiene un desafío activo como retador.' };
+  }
+  if (hasActiveChallengeInRole(sheet, 'retado', retadoRef, challenge.id)) {
+    return { ok: false, msg: 'El retado ya tiene un desafío activo como retado.' };
+  }
+  return { ok: true };
+}
+
+function challengeFromRow(row) {
+  const challenge = {
+    id: text(row[0]),
+    retadorId: text(row[1]),
+    retadorNombre: text(row[2]),
+    retadorEmail: text(row[3]),
+    retadoId: text(row[4]),
+    retadoNombre: text(row[5]),
+    retadoEmail: text(row[6]),
+    genero: text(row[7]),
+    fecha: text(row[8]),
+    cancha: text(row[9]),
+    status: text(row[10]) || 'pendiente',
+    marcador: text(row[11]) || null,
+    ganadorId: text(row[12]) || null,
+    creado: text(row[13]),
+    actualizado: text(row[14]),
+    slot: text(row[15]) || '',
+    courtId: text(row[16]) || '',
+    eventId: text(row[17]) || '',
+    bookingId: text(row[18]) || '',
+    tipo: text(row[19]) || 'ranking',
+    fechaResultado: text(row[20]) || '',
+    resultadoIngresadoPor: text(row[21]) || '',
+    resultadoIngresadoPorEmail: text(row[22]) || '',
+    fechaConfirmacion: text(row[23]) || '',
+    confirmadoPor: text(row[24]) || '',
+    resultadoReclamado: row[25] === true || text(row[25]) === 'true',
+    reclamoResultado: text(row[26]) || '',
+    fechaReclamo: text(row[27]) || '',
+    reclamadoPor: text(row[28]) || '',
+    rankingAplicado: text(row[29]) || ''
+  };
+  return normalizeChallengeCompletion(challenge);
+}
+
+function hasRecordedChallengeResult(challenge) {
+  return Boolean(challenge && (text(challenge.marcador) || text(challenge.ganadorId)));
+}
+
+function normalizeChallengeCompletion(challenge) {
+  if (!challenge) return challenge;
+
+  if (!challenge.status) {
+    challenge.status = hasRecordedChallengeResult(challenge) ? 'completado' : 'pendiente';
+  } else if (challenge.status === 'terminado') {
+    challenge.status = hasRecordedChallengeResult(challenge) ? 'completado' : 'aceptado';
+  }
+
+  if (CHALLENGE_OFFICIAL_STATUSES.indexOf(challenge.status) < 0 && challenge.status !== 'eliminado') {
+    challenge.status = hasRecordedChallengeResult(challenge) ? 'completado' : 'pendiente';
+  }
+
+  if (hasRecordedChallengeResult(challenge) && !challenge.fechaResultado) {
+    challenge.fechaResultado = challenge.actualizado || challenge.creado || new Date().toISOString();
+  }
+
+  const now = new Date().getTime();
+  if (challenge.status === 'pendiente') {
+    const createdAt = challengeTime(challenge.creado || challenge.actualizado);
+    if (createdAt && now - createdAt >= CHALLENGE_RESPONSE_MS) {
+      challenge.status = 'vencido';
+      challenge.actualizado = challenge.actualizado || new Date().toISOString();
+    }
+  }
+
+  if (challenge.status === 'resultado_pendiente' && !isChallengeResultDisputed(challenge)) {
+    const resultAt = challengeTime(challenge.fechaResultado || challenge.actualizado);
+    if (resultAt && now - resultAt >= CHALLENGE_RESULT_CONFIRM_MS) {
+      challenge.status = 'completado';
+      challenge.fechaConfirmacion = challenge.fechaConfirmacion || new Date().toISOString();
+      challenge.confirmadoPor = challenge.confirmadoPor || 'automatico_48h';
+      challenge.actualizado = challenge.fechaConfirmacion;
+    }
+  }
+  return challenge;
+}
+
+function challengeToRow(challenge) {
+  return [
+    challenge.id, challenge.retadorId, challenge.retadorNombre, challenge.retadorEmail,
+    challenge.retadoId, challenge.retadoNombre, challenge.retadoEmail, challenge.genero,
+    challenge.fecha, challenge.cancha, challenge.status, challenge.marcador, challenge.ganadorId,
+    challenge.creado, challenge.actualizado, challenge.slot || '', challenge.courtId || '',
+    challenge.eventId || '', challenge.bookingId || '', challenge.tipo || 'ranking',
+    challenge.fechaResultado || '', challenge.resultadoIngresadoPor || '',
+    challenge.resultadoIngresadoPorEmail || '', challenge.fechaConfirmacion || '',
+    challenge.confirmadoPor || '', challenge.resultadoReclamado === true,
+    challenge.reclamoResultado || '', challenge.fechaReclamo || '',
+    challenge.reclamadoPor || '', challenge.rankingAplicado || ''
+  ];
+}
+
+function publicChallenge(challenge) {
+  return {
+    id: challenge.id,
+    retadorId: challenge.retadorId, retadorNombre: challenge.retadorNombre,
+    retadoId: challenge.retadoId, retadoNombre: challenge.retadoNombre,
+    genero: challenge.genero, fecha: challenge.fecha, cancha: challenge.cancha,
+    status: challenge.status, marcador: challenge.marcador || null,
+    ganadorId: challenge.ganadorId || null, creado: challenge.creado,
+    actualizado: challenge.actualizado, slot: challenge.slot || '',
+    courtId: challenge.courtId || '', eventId: challenge.eventId || '',
+    bookingId: challenge.bookingId || '', tipo: challenge.tipo || 'ranking',
+    fechaResultado: challenge.fechaResultado || '',
+    resultadoIngresadoPor: challenge.resultadoIngresadoPor || '',
+    resultadoIngresadoPorEmail: challenge.resultadoIngresadoPorEmail || '',
+    fechaConfirmacion: challenge.fechaConfirmacion || '',
+    confirmadoPor: challenge.confirmadoPor || '',
+    resultadoReclamado: challenge.resultadoReclamado === true,
+    reclamoResultado: challenge.reclamoResultado || '',
+    fechaReclamo: challenge.fechaReclamo || '',
+    reclamadoPor: challenge.reclamadoPor || '',
+    rankingAplicado: challenge.rankingAplicado || ''
+  };
+}
+
+// =======================================================
+// ✅ VALIDACIÓN DE MIEMBROS (Firebase + fallback)
+// =======================================================
+
+const KNOWN_PLAYER_EMAILS = [
+  'uctenisclub@gmail.com',
+  'dsilva@uct.cl'
+];
+
+function validateMember(email) {
+  const needle = text(email).toLowerCase();
+  if (!needle) return { ok: false, msg: 'Correo no proporcionado.' };
+
+  // 1. Buscar en Socios (ranking_players)
+  const result = findFirebasePlayerByEmail(needle);
+  if (result && result.player) {
+    return { ok: true, msg: 'Miembro validado.', player: result.player, source: 'firebase' };
+  }
+
+  // 2. Buscar en Funcionarios (uct_staff)
+  const staffResult = findFirebaseStaffByEmail(needle);
+  if (staffResult && staffResult.staff) {
+    return { ok: true, msg: 'Funcionario validado.', player: staffResult.staff, source: 'staff' };
+  }
+
+  if ((result && result.connectionError) || (staffResult && staffResult.connectionError)) {
+    if (KNOWN_PLAYER_EMAILS.indexOf(needle) !== -1) {
+      console.warn('Firebase no disponible, validando por lista de respaldo: ' + needle);
+      return { ok: true, msg: 'Miembro validado (modo respaldo - Firebase no disponible).', source: 'fallback' };
+    }
+    return { ok: false, msg: 'Error temporal al verificar acceso. Por favor intenta nuevamente en unos segundos.' };
+  }
+
+  // 3. Cualquier correo institucional @uct.cl obtiene acceso de solo lectura,
+  // aunque aún no esté cargado como socio/funcionario (debe activarlo un admin).
+  if (needle.endsWith('@uct.cl') && needle !== '@uct.cl') {
+    return { ok: true, msg: 'Acceso de solo lectura (correo institucional).', source: 'uct_domain', readOnly: true };
+  }
+
+  return { ok: false, msg: 'El correo no se encuentra registrado en Firebase.' };
+}
+
+function findFirebaseStaffByEmail(email) {
+  const needle = text(email).toLowerCase();
+  if (!needle || !CONFIG.FIREBASE_PROJECT_ID || !CONFIG.FIREBASE_API_KEY) return null;
+
+  try {
+    const firestoreUrl = 'https://firestore.googleapis.com/v1/projects/'
+      + encodeURIComponent(CONFIG.FIREBASE_PROJECT_ID)
+      + '/databases/(default)/documents:runQuery?key='
+      + encodeURIComponent(CONFIG.FIREBASE_API_KEY);
+    const queryPayload = {
+      structuredQuery: {
+        from: [{ collectionId: 'uct_staff' }],
+        where: {
+          fieldFilter: {
+            field: { fieldPath: 'emailLower' },
+            op: 'EQUAL',
+            value: { stringValue: needle }
+          }
+        },
+        limit: 1
+      }
+    };
+    const response = UrlFetchApp.fetch(firestoreUrl, {
+      method: 'post', contentType: 'application/json',
+      payload: JSON.stringify(queryPayload), muteHttpExceptions: true
+    });
+    if (response.getResponseCode() !== 200) {
+      console.warn('Respuesta no exitosa de Firestore para staff (' + response.getResponseCode() + ')');
+      return { staff: null, connectionError: true };
+    }
+    const results = JSON.parse(response.getContentText());
+    for (let i = 0; i < results.length; i++) {
+      if (!results[i].document) continue;
+      const staff = firebaseStaffFromDocument(results[i].document);
+      if (staff && staff.email && text(staff.email).toLowerCase() === email && staff.activo !== false) {
+        return { staff: staff };
+      }
+    }
+  } catch (error) {
+    console.warn('Error al verificar staff en Firebase:', error.message);
+    return { staff: null, connectionError: true };
+  }
+  return null;
+}
+
+function firebaseStaffFromDocument(doc) {
+  const fields = doc.fields || {};
+  const id = text(firestoreField(fields, 'id')) || doc.name.split('/').pop();
+  return {
+    id: id,
+    nombre: text(firestoreField(fields, 'nombre')),
+    email: text(firestoreField(fields, 'email')),
+    genero: text(firestoreField(fields, 'genero') || firestoreField(fields, 'gender')),
+    foto: text(firestoreField(fields, 'foto')),
+    telefono: text(firestoreField(fields, 'telefono')),
+    rut: text(firestoreField(fields, 'rut')),
+    unidad: text(firestoreField(fields, 'unidad')),
+    userType: 'funcionario',
+    isAdmin: firestoreBool(fields, 'isAdmin', false),
+    activo: firestoreBool(fields, 'activo', true)
+  };
+}
+
+function debugFirebaseConnection(testEmail) {
+  const needle = (testEmail || '').toLowerCase().trim();
+  try {
+    const firestoreUrl = 'https://firestore.googleapis.com/v1/projects/'
+      + encodeURIComponent(CONFIG.FIREBASE_PROJECT_ID)
+      + '/databases/(default)/documents:runQuery?key='
+      + encodeURIComponent(CONFIG.FIREBASE_API_KEY);
+    const queryPayload = {
+      structuredQuery: {
+        from: [{ collectionId: 'ranking_players' }],
+        where: {
+          fieldFilter: {
+            field: { fieldPath: 'emailLower' },
+            op: 'EQUAL',
+            value: { stringValue: needle }
+          }
+        },
+        limit: 1
+      }
+    };
+    const response = UrlFetchApp.fetch(firestoreUrl, {
+      method: 'post', contentType: 'application/json',
+      payload: JSON.stringify(queryPayload), muteHttpExceptions: true
+    });
+    const code = response.getResponseCode();
+    const body = response.getContentText().substring(0, 500);
+    const parsed = JSON.parse(response.getContentText());
+    const hasDoc = parsed && parsed[0] && parsed[0].document;
+    return { ok: true, httpCode: code, email: needle, documentFound: hasDoc, preview: body };
+  } catch (err) {
+    return { ok: false, error: String(err), email: needle };
+  }
+}
+
+function updateChallengeInFirebase(challengeId, fields) {
+  if (!CONFIG.FIREBASE_PROJECT_ID || !CONFIG.FIREBASE_API_KEY || !challengeId) return;
+  try {
+    const firestoreUrl = 'https://firestore.googleapis.com/v1/projects/'
+      + encodeURIComponent(CONFIG.FIREBASE_PROJECT_ID)
+      + '/databases/(default)/documents/ranking_challenges/'
+      + encodeURIComponent(challengeId)
+      + '?key=' + encodeURIComponent(CONFIG.FIREBASE_API_KEY);
+
+    const docFields = {};
+    const fieldPaths = [];
+    Object.entries(fields).forEach(([key, val]) => {
+      if (val === null || val === undefined) return;
+      docFields[key] = { stringValue: String(val) };
+      fieldPaths.push('updateMask.fieldPaths=' + encodeURIComponent(key));
+    });
+
+    const urlWithMask = firestoreUrl + '&' + fieldPaths.join('&');
+    const response = UrlFetchApp.fetch(urlWithMask, {
+      method: 'patch', contentType: 'application/json',
+      payload: JSON.stringify({ fields: docFields }), muteHttpExceptions: true
+    });
+    if (response.getResponseCode() >= 300) {
+      console.warn('Error updating Firebase Firestore: ' + response.getContentText());
+    }
+  } catch (err) {
+    console.warn('Error updating Firebase Firestore:', err);
+  }
+}
+
+function findFirebasePlayerByEmail(email) {
+  const needle = text(email).toLowerCase();
+  if (!needle || !CONFIG.FIREBASE_PROJECT_ID || !CONFIG.FIREBASE_API_KEY) return null;
+
+  const fieldsToTry = ['emailLower', 'email'];
+  let lastConnectionError = false;
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    lastConnectionError = false;
+    for (let i = 0; i < fieldsToTry.length; i++) {
+      const result = queryFirebasePlayerByEmailField(fieldsToTry[i], needle);
+      if (result && result.player) return result;
+      if (result && result.connectionError) lastConnectionError = true;
+    }
+    if (!lastConnectionError) break;
+    if (attempt < 1) Utilities.sleep(1500);
+  }
+
+  if (lastConnectionError) return { player: null, connectionError: true };
+  return null;
+}
+
+function queryFirebasePlayerByEmailField(fieldPath, email) {
+  try {
+    const firestoreUrl = 'https://firestore.googleapis.com/v1/projects/'
+      + encodeURIComponent(CONFIG.FIREBASE_PROJECT_ID)
+      + '/databases/(default)/documents:runQuery?key='
+      + encodeURIComponent(CONFIG.FIREBASE_API_KEY);
+    const queryPayload = {
+      structuredQuery: {
+        from: [{ collectionId: 'ranking_players' }],
+        where: {
+          fieldFilter: {
+            field: { fieldPath: fieldPath },
+            op: 'EQUAL',
+            value: { stringValue: email }
+          }
+        },
+        limit: 1
+      }
+    };
+    const response = UrlFetchApp.fetch(firestoreUrl, {
+      method: 'post', contentType: 'application/json',
+      payload: JSON.stringify(queryPayload), muteHttpExceptions: true
+    });
+    if (response.getResponseCode() !== 200) {
+      console.warn('Respuesta no exitosa de Firestore (' + response.getResponseCode() + ')');
+      return { player: null, connectionError: true };
+    }
+    const results = JSON.parse(response.getContentText());
+    for (let i = 0; i < results.length; i++) {
+      if (!results[i].document) continue;
+      const player = firebasePlayerFromDocument(results[i].document);
+      if (player && player.email && text(player.email).toLowerCase() === email && isFirebasePlayerActive(player)) {
+        return { player: player };
+      }
+    }
+    return null;
+  } catch (fbError) {
+    console.warn('Error de red al consultar Firebase Firestore:', fbError);
+    return { player: null, connectionError: true };
+  }
+}
+
+function firebasePlayerFromDocument(doc) {
+  const fields = doc.fields || {};
+  const id = text(firestoreField(fields, 'id')) || doc.name.split('/').pop();
+  return {
+    id: id,
+    nombre: text(firestoreField(fields, 'nombre')),
+    email: text(firestoreField(fields, 'email')),
+    genero: text(firestoreField(fields, 'genero') || firestoreField(fields, 'gender')),
+    categoria: text(firestoreField(fields, 'categoria')),
+    mano: text(firestoreField(fields, 'mano') || firestoreField(fields, 'manoHabil')),
+    reves: text(firestoreField(fields, 'reves')),
+    foto: text(firestoreField(fields, 'foto')),
+    telefono: text(firestoreField(fields, 'telefono')),
+    isAdmin: firestoreBool(fields, 'isAdmin', false),
+    activo: firestoreBool(fields, 'activo', true),
+    participaRanking: firestoreBool(fields, 'participaRanking', true)
+  };
+}
+
+function firestoreField(fields, name) {
+  const value = fields && fields[name];
+  if (!value) return '';
+  if (Object.prototype.hasOwnProperty.call(value, 'stringValue')) return value.stringValue;
+  if (Object.prototype.hasOwnProperty.call(value, 'integerValue')) return Number(value.integerValue);
+  if (Object.prototype.hasOwnProperty.call(value, 'doubleValue')) return Number(value.doubleValue);
+  if (Object.prototype.hasOwnProperty.call(value, 'booleanValue')) return value.booleanValue;
+  return '';
+}
+
+function firestoreBool(fields, name, fallback) {
+  const value = fields && fields[name];
+  if (!value || !Object.prototype.hasOwnProperty.call(value, 'booleanValue')) return fallback;
+  return value.booleanValue;
+}
+
+function isFirebasePlayerActive(player) {
+  return player.activo !== false;
+}
+
+// =======================================================
+// 🔒 RUT — DATO SENSIBLE, FUERA DE LA COLECCIÓN PÚBLICA
+// =======================================================
+// El resto de la ficha de un jugador vive en Firestore (ranking_players),
+// que el cliente lee directamente y por lo tanto es visible para cualquiera
+// (aunque la UI solo lo muestre al dueño o a un admin, el dato viaja igual
+// en la respuesta). El RUT se guarda aparte, en ranking_players_private,
+// a la que el cliente nunca accede directamente: solo se lee/escribe aquí,
+// con la identidad privilegiada del propio Apps Script, tras verificar que
+// quien pide el dato es el dueño de esa ficha o un administrador.
+
+function playerPrivateFirestoreUrl(playerId) {
+  return 'https://firestore.googleapis.com/v1/projects/'
+    + encodeURIComponent(CONFIG.FIREBASE_PROJECT_ID)
+    + '/databases/(default)/documents/ranking_players_private/' + encodeURIComponent(playerId)
+    + '?key=' + encodeURIComponent(CONFIG.FIREBASE_API_KEY);
+}
+
+function playerPublicFirestoreUrl(playerId) {
+  return 'https://firestore.googleapis.com/v1/projects/'
+    + encodeURIComponent(CONFIG.FIREBASE_PROJECT_ID)
+    + '/databases/(default)/documents/ranking_players/' + encodeURIComponent(playerId)
+    + '?key=' + encodeURIComponent(CONFIG.FIREBASE_API_KEY);
+}
+
+function isOwnerOrAdminOfPlayer(playerId, idToken) {
+  const verifiedEmail = verifyGoogleIdToken(idToken);
+  if (!verifiedEmail) return false;
+  if (isAdminRequest({ idToken: idToken })) return true;
+  try {
+    const response = UrlFetchApp.fetch(playerPublicFirestoreUrl(playerId), bookingFetchOptions('get', undefined, idToken));
+    if (response.getResponseCode() !== 200) return false;
+    const doc = JSON.parse(response.getContentText());
+    const value = firestoreValueToJs({ mapValue: { fields: doc.fields || {} } }) || {};
+    return text(value.emailLower || value.email).toLowerCase() === verifiedEmail;
+  } catch (e) {
+    return false;
+  }
+}
+
+function getPlayerRut(data) {
+  const playerId = text(data.playerId);
+  if (!playerId) return { ok: false, msg: 'Falta el ID del jugador.' };
+  if (!isOwnerOrAdminOfPlayer(playerId, data.idToken)) {
+    return { ok: false, msg: 'No tienes permiso para ver este dato.' };
+  }
+  try {
+    const response = UrlFetchApp.fetch(playerPrivateFirestoreUrl(playerId), bookingFetchOptions('get', undefined, data.idToken));
+    if (response.getResponseCode() === 404) return { ok: true, rut: '' };
+    if (response.getResponseCode() !== 200) return { ok: false, msg: 'No se pudo leer el RUT.' };
+    const doc = JSON.parse(response.getContentText());
+    const value = firestoreValueToJs({ mapValue: { fields: doc.fields || {} } }) || {};
+    return { ok: true, rut: text(value.rut) };
+  } catch (e) {
+    return { ok: false, msg: 'No se pudo leer el RUT: ' + e.message };
+  }
+}
+
+function savePlayerRut(data) {
+  const playerId = text(data.playerId);
+  if (!playerId) return { ok: false, msg: 'Falta el ID del jugador.' };
+  if (!isOwnerOrAdminOfPlayer(playerId, data.idToken)) {
+    return { ok: false, msg: 'No tienes permiso para editar este dato.' };
+  }
+  try {
+    const response = UrlFetchApp.fetch(
+      playerPrivateFirestoreUrl(playerId),
+      bookingFetchOptions('patch', { fields: { rut: { stringValue: text(data.rut) } } }, data.idToken)
+    );
+    if (response.getResponseCode() < 200 || response.getResponseCode() >= 300) {
+      return { ok: false, msg: 'No se pudo guardar el RUT.' };
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, msg: 'No se pudo guardar el RUT: ' + e.message };
+  }
+}
+
+// =======================================================
+// ⚙️ CONFIGURACIÓN DINÁMICA DE HORARIOS (editable por el admin)
+// =======================================================
+
+/** Convierte un valor de documento REST de Firestore (stringValue/mapValue/
+ * arrayValue/...) a su equivalente JS plano, recursivamente. */
+function firestoreValueToJs(value) {
+  if (!value) return null;
+  if ('stringValue' in value) return value.stringValue;
+  if ('integerValue' in value) return Number(value.integerValue);
+  if ('doubleValue' in value) return Number(value.doubleValue);
+  if ('booleanValue' in value) return value.booleanValue;
+  if ('nullValue' in value) return null;
+  if ('arrayValue' in value) return (value.arrayValue.values || []).map(firestoreValueToJs);
+  if ('mapValue' in value) {
+    const out = {};
+    const fields = value.mapValue.fields || {};
+    Object.keys(fields).forEach(function(k) { out[k] = firestoreValueToJs(fields[k]); });
+    return out;
+  }
+  return null;
+}
+
+/**
+ * Lee uct_config/schedule desde Firestore (horarios regulares por cancha/día,
+ * anticipación máxima por tipo de usuario, límite de reservas diarias).
+ * Retorna null si el documento no existe o Firestore no responde — en ese
+ * caso el llamador debe seguir usando los valores hardcodeados de CONFIG,
+ * exactamente el comportamiento de antes de que existiera este panel.
+ */
+function getDynamicScheduleConfig(idToken) {
+  if (!CONFIG.FIREBASE_PROJECT_ID || !CONFIG.FIREBASE_API_KEY) return null;
+  try {
+    const url = 'https://firestore.googleapis.com/v1/projects/'
+      + encodeURIComponent(CONFIG.FIREBASE_PROJECT_ID)
+      + '/databases/(default)/documents/uct_config/schedule?key='
+      + encodeURIComponent(CONFIG.FIREBASE_API_KEY);
+    // Igual que las lecturas de reservas: hay que autenticar con la
+    // identidad del propio Apps Script (scope datastore), si no Firestore
+    // rechaza la lectura por reglas de seguridad y esto cae siempre a los
+    // horarios hardcodeados de CONFIG, ignorando lo configurado por el admin.
+    const response = UrlFetchApp.fetch(url, bookingFetchOptions('get', undefined, idToken));
+    if (response.getResponseCode() !== 200) return null;
+    const doc = JSON.parse(response.getContentText());
+    if (!doc.fields) return null;
+    return firestoreValueToJs({ mapValue: { fields: doc.fields } });
+  } catch (e) {
+    console.warn('No se pudo leer la configuración dinámica de horarios:', e.message);
+    return null;
+  }
+}
+
+/**
+ * Guarda uct_config/schedule con la identidad privilegiada del propio Apps
+ * Script. El panel de admin intentaba escribir este documento directo desde
+ * el navegador (SDK de Firestore) y las reglas de seguridad lo rechazaban
+ * con "Missing or insufficient permissions" — el mismo problema que ya
+ * resolvimos para la lectura, ahora del lado de la escritura.
+ */
+function saveScheduleConfig(data) {
+  if (!isAdminRequest(data)) return { ok: false, msg: 'Acceso reservado al administrador.' };
+  try {
+    const config = {
+      courtSlots: data.courtSlots || {},
+      maxAdvanceDays: data.maxAdvanceDays || {},
+      maxBookingsPerDay: Number(data.maxBookingsPerDay) > 0 ? Number(data.maxBookingsPerDay) : 1,
+      updatedAt: new Date().toISOString(),
+      updatedBy: text(data.actorEmail || data.adminEmail)
+    };
+    const fields = {};
+    Object.keys(config).forEach(function(key) { fields[key] = jsToFirestoreValue(config[key]); });
+    const url = 'https://firestore.googleapis.com/v1/projects/'
+      + encodeURIComponent(CONFIG.FIREBASE_PROJECT_ID)
+      + '/databases/(default)/documents/uct_config/schedule?key='
+      + encodeURIComponent(CONFIG.FIREBASE_API_KEY);
+    const response = UrlFetchApp.fetch(url, bookingFetchOptions('patch', { fields: fields }, data.idToken));
+    if (response.getResponseCode() < 200 || response.getResponseCode() >= 300) {
+      return { ok: false, msg: 'No se pudo guardar la configuración: ' + response.getContentText().substring(0, 200) };
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, msg: 'No se pudo guardar la configuración: ' + e.message };
+  }
+}
+
+// =======================================================
+// 🗄️ RESERVAS — FIRESTORE COMO FUENTE PRINCIPAL
+// =======================================================
+
+const BOOKING_COLLECTION = 'court_bookings';
+const BOOKING_ACTIVE_STATUSES = ['pending_calendar', 'confirmed', 'calendar_retry'];
+const BOOKING_SYNC_ALERT_AFTER = 5;
+const BOOKING_SYNC_ALERT_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+const BOOKING_SYNC_PROPERTY_KEY = 'UCTENIS_BOOKING_SYNC_STATUS';
+
+function bookingDocumentId(courtId, dateStr, slot) {
+  return [text(courtId).toLowerCase(), text(dateStr), text(slot).replace(':', '')].join('_');
+}
+
+function isActiveBookingStatus(status) {
+  return BOOKING_ACTIVE_STATUSES.indexOf(text(status)) >= 0;
+}
+
+function jsToFirestoreValue(value) {
+  if (value === null || value === undefined) return { nullValue: null };
+  if (typeof value === 'boolean') return { booleanValue: value };
+  if (typeof value === 'number') {
+    return Number.isInteger(value) ? { integerValue: String(value) } : { doubleValue: value };
+  }
+  if (Array.isArray(value)) return { arrayValue: { values: value.map(jsToFirestoreValue) } };
+  if (typeof value === 'object') {
+    const fields = {};
+    Object.keys(value).forEach(function(key) { fields[key] = jsToFirestoreValue(value[key]); });
+    return { mapValue: { fields: fields } };
+  }
+  return { stringValue: String(value) };
+}
+
+function bookingToFirestoreFields(booking) {
+  const fields = {};
+  Object.keys(booking || {}).forEach(function(key) {
+    // El RUT sólo se usa al crear la invitación Calendar y no se persiste
+    // en la colección operacional de reservas.
+    if (key === 'rut') return;
+    if (booking[key] !== undefined) fields[key] = jsToFirestoreValue(booking[key]);
+  });
+  return fields;
+}
+
+function bookingFromFirestoreDocument(doc) {
+  if (!doc || !doc.fields) return null;
+  const booking = firestoreValueToJs({ mapValue: { fields: doc.fields } }) || {};
+  booking.id = text(booking.id) || text(doc.name).split('/').pop();
+  return booking;
+}
+
+function bookingFirestoreUrl(path) {
+  return 'https://firestore.googleapis.com/v1/projects/'
+    + encodeURIComponent(CONFIG.FIREBASE_PROJECT_ID)
+    + '/databases/(default)/documents/' + path
+    + '?key=' + encodeURIComponent(CONFIG.FIREBASE_API_KEY);
+}
+
+function bookingFetchOptions(method, payload, idToken) {
+  const options = { method: method || 'get', muteHttpExceptions: true };
+  if (payload !== undefined) {
+    options.contentType = 'application/json';
+    options.payload = JSON.stringify(payload);
+  }
+  // Firestore se consume con la identidad del propietario del Apps Script.
+  // Esto evita exponer escrituras directas de reservas a los clientes y hace
+  // que las reglas de negocio vivan exclusivamente en este backend.
+  try {
+    options.headers = { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() };
+  } catch (serverAuthError) {
+    // Fallback útil sólo en entornos de prueba; en Apps Script debe utilizarse
+    // el scope datastore declarado en appsscript.json.
+    if (idToken) options.headers = { Authorization: 'Bearer ' + idToken };
+  }
+  return options;
+}
+
+function getBookingDocument(id, idToken) {
+  if (!id) return { ok: false, notFound: true };
+  try {
+    const response = UrlFetchApp.fetch(
+      bookingFirestoreUrl(BOOKING_COLLECTION + '/' + encodeURIComponent(id)),
+      bookingFetchOptions('get', undefined, idToken)
+    );
+    const code = response.getResponseCode();
+    if (code === 404) return { ok: true, notFound: true, booking: null };
+    if (code !== 200) return { ok: false, msg: 'Firestore GET ' + code + ': ' + response.getContentText().substring(0, 180) };
+    return { ok: true, booking: bookingFromFirestoreDocument(JSON.parse(response.getContentText())) };
+  } catch (error) {
+    return { ok: false, msg: 'No se pudo leer la reserva: ' + error.message };
+  }
+}
+
+function saveBookingDocument(booking, idToken) {
+  try {
+    const response = UrlFetchApp.fetch(
+      bookingFirestoreUrl(BOOKING_COLLECTION + '/' + encodeURIComponent(booking.id)),
+      bookingFetchOptions('patch', { fields: bookingToFirestoreFields(booking) }, idToken)
+    );
+    const code = response.getResponseCode();
+    if (code < 200 || code >= 300) {
+      return { ok: false, msg: 'Firestore PATCH ' + code + ': ' + response.getContentText().substring(0, 220) };
+    }
+    return { ok: true, booking: bookingFromFirestoreDocument(JSON.parse(response.getContentText())) };
+  } catch (error) {
+    return { ok: false, msg: 'No se pudo guardar la reserva: ' + error.message };
+  }
+}
+
+function queryBookingDocuments(fieldPath, fieldValue, idToken) {
+  try {
+    const url = 'https://firestore.googleapis.com/v1/projects/'
+      + encodeURIComponent(CONFIG.FIREBASE_PROJECT_ID)
+      + '/databases/(default)/documents:runQuery?key=' + encodeURIComponent(CONFIG.FIREBASE_API_KEY);
+    const structuredQuery = { from: [{ collectionId: BOOKING_COLLECTION }] };
+    if (fieldPath) {
+      structuredQuery.where = {
+        fieldFilter: {
+          field: { fieldPath: fieldPath },
+          op: 'EQUAL',
+          value: jsToFirestoreValue(fieldValue)
+        }
+      };
+    }
+    const response = UrlFetchApp.fetch(url, bookingFetchOptions('post', { structuredQuery: structuredQuery }, idToken));
+    const code = response.getResponseCode();
+    if (code !== 200) return { ok: false, bookings: [], msg: 'Firestore query ' + code + ': ' + response.getContentText().substring(0, 180) };
+    const rows = JSON.parse(response.getContentText()) || [];
+    return {
+      ok: true,
+      bookings: rows.map(function(row) { return bookingFromFirestoreDocument(row.document); }).filter(Boolean)
+    };
+  } catch (error) {
+    return { ok: false, bookings: [], msg: 'No se pudieron consultar reservas: ' + error.message };
+  }
+}
+
+function getDatabaseBookingsForDate(dateStr, idToken) {
+  const result = queryBookingDocuments('date', dateStr, idToken);
+  if (!result.ok) return result;
+  result.bookings = result.bookings.filter(function(booking) { return isActiveBookingStatus(booking.status); });
+  return result;
+}
+
+function publicBooking(booking) {
+  return {
+    id: booking.id,
+    courtId: booking.courtId,
+    fecha: booking.date,
+    date: booking.date,
+    slot: booking.slot,
+    status: booking.status,
+    calendarEventId: booking.calendarEventId || '',
+    creado: booking.createdAt || '',
+    actualizado: booking.updatedAt || ''
+  };
+}
+
+function createBookingCalendarEvent(booking) {
+  const calId = CONFIG.MAIN_CALENDAR_ID || CONFIG.CALENDARS[booking.courtId] || CONFIG.CALENDARS['cec1'];
+  const calendar = CalendarApp.getCalendarById(calId);
+  if (!calendar) throw new Error('Calendario maestro de canchas no encontrado.');
+  const startTime = makeLocalDate(booking.date, booking.slot);
+  const endTime = new Date(startTime.getTime() + 90 * 60000);
+  const courtName = getCourtName(booking.courtId);
+  const description = [
+    'Reserva automática generada desde la plataforma web.',
+    'Reserva-ID: ' + booking.id,
+    'Cancha: ' + courtName + ' (' + booking.courtId + ')',
+    'Usuario: ' + booking.name,
+    'Correo: ' + booking.email,
+    'RUT: ' + (booking.rut || 'No registrado'),
+    'Tipo: ' + booking.userTypeLabel
+  ].join('\n');
+  const guestEmails = Array.isArray(booking.guestEmails) && booking.guestEmails.length
+    ? booking.guestEmails.filter(Boolean)
+    : [booking.email].filter(Boolean);
+  const eventTitle = booking.matchTitle || ('[' + courtName + '] Reserva UCTenis - ' + booking.name);
+  return calendar.createEvent(eventTitle, startTime, endTime, {
+    description: description,
+    location: courtName,
+    guests: guestEmails.join(','),
+    sendInvites: true
+  });
+}
+
+function releaseChallengeBooking(bookingId, courtId) {
+  const stored = getBookingDocument(bookingId);
+  if (stored.ok && stored.booking) {
+    const booking = stored.booking;
+    const now = new Date().toISOString();
+    booking.status = 'cancelled';
+    booking.cancelledAt = now;
+    booking.updatedAt = now;
+    booking.cancelledBy = 'challenge_response';
+    booking.calendarCleanupPending = Boolean(booking.calendarEventId);
+    saveBookingDocument(booking);
+    const calId = CONFIG.MAIN_CALENDAR_ID || CONFIG.CALENDARS[booking.courtId] || CONFIG.CALENDARS['cec1'];
+    if (booking.calendarEventId && calId) {
+      const calendar = CalendarApp.getCalendarById(calId);
+      const event = calendar && calendar.getEventById(booking.calendarEventId);
+      if (event) event.deleteEvent();
+    }
+    booking.calendarCleanupPending = false;
+    booking.syncError = '';
+    booking.updatedAt = new Date().toISOString();
+    saveBookingDocument(booking);
+    return true;
+  }
+
+  // Compatibilidad con desafíos anteriores, donde bookingId era el eventId.
+  const calId = CONFIG.MAIN_CALENDAR_ID || CONFIG.CALENDARS[courtId] || CONFIG.CALENDARS['cec1'];
+  if (bookingId && calId) {
+    const legacyCalendar = CalendarApp.getCalendarById(calId);
+    const legacyEvent = legacyCalendar && legacyCalendar.getEventById(bookingId);
+    if (legacyEvent) legacyEvent.deleteEvent();
+  }
+  return false;
+}
+
+function findCalendarEventForBooking(booking) {
+  const calId = CONFIG.MAIN_CALENDAR_ID || CONFIG.CALENDARS[booking.courtId] || CONFIG.CALENDARS['cec1'];
+  const calendar = CalendarApp.getCalendarById(calId);
+  if (!calendar) return null;
+  if (booking.calendarEventId) {
+    const byId = calendar.getEventById(booking.calendarEventId);
+    if (byId) return byId;
+  }
+  const start = makeLocalDate(booking.date, booking.slot);
+  const end = new Date(start.getTime() + 90 * 60000);
+  const marker = 'reserva-id: ' + text(booking.id).toLowerCase();
+  const events = calendar.getEvents(start, end);
+  for (let i = 0; i < events.length; i++) {
+    if ((events[i].getDescription() || '').toLowerCase().indexOf(marker) >= 0) return events[i];
+  }
+  return null;
+}
+
+function recordBookingSyncRun(summary) {
+  const now = new Date().toISOString();
+  const previousRaw = PropertiesService.getScriptProperties().getProperty(BOOKING_SYNC_PROPERTY_KEY);
+  let previous = {};
+  try { previous = previousRaw ? JSON.parse(previousRaw) : {}; } catch (e) {}
+  const status = {
+    lastRunAt: now,
+    lastRunOk: summary.ok === true && Number(summary.failed || 0) === 0,
+    lastSuccessfulSyncAt: summary.ok === true && Number(summary.failed || 0) === 0
+      ? now
+      : (previous.lastSuccessfulSyncAt || ''),
+    confirmed: Number(summary.confirmed || 0),
+    cleaned: Number(summary.cleaned || 0),
+    failed: Number(summary.failed || 0),
+    scanned: Number(summary.scanned || 0),
+    msg: text(summary.msg)
+  };
+  PropertiesService.getScriptProperties().setProperty(BOOKING_SYNC_PROPERTY_KEY, JSON.stringify(status));
+  return status;
+}
+
+function getBookingSyncRunStatus() {
+  const raw = PropertiesService.getScriptProperties().getProperty(BOOKING_SYNC_PROPERTY_KEY);
+  if (!raw) return {};
+  try { return JSON.parse(raw); } catch (e) { return {}; }
+}
+
+function sendBookingSyncFailureAlert(booking, errorMessage) {
+  const attempts = Number(booking.syncAttempts || 0);
+  if (attempts < BOOKING_SYNC_ALERT_AFTER) return false;
+  const lastAlertMs = booking.syncAlertedAt ? new Date(booking.syncAlertedAt).getTime() : 0;
+  if (lastAlertMs && Date.now() - lastAlertMs < BOOKING_SYNC_ALERT_COOLDOWN_MS) return false;
+
+  const adminEmails = (CONFIG.ADMINS.emails || []).filter(Boolean).join(',');
+  if (!adminEmails) return false;
+  try {
+    MailApp.sendEmail({
+      to: adminEmails,
+      subject: '⚠️ UCTenis: reserva sin sincronizar tras ' + attempts + ' intentos',
+      htmlBody: [
+        '<div style="font-family:Arial,sans-serif;max-width:560px;">',
+        '<h2 style="color:#c0392b;">⚠️ Fallo persistente de sincronización</h2>',
+        '<p>Una reserva no pudo sincronizarse correctamente con Google Calendar.</p>',
+        '<table style="border-collapse:collapse;width:100%;">',
+        '<tr><td style="padding:6px;border:1px solid #ddd;">Reserva</td><td style="padding:6px;border:1px solid #ddd;"><strong>' + text(booking.id) + '</strong></td></tr>',
+        '<tr><td style="padding:6px;border:1px solid #ddd;">Cancha</td><td style="padding:6px;border:1px solid #ddd;">' + text(booking.courtId).toUpperCase() + '</td></tr>',
+        '<tr><td style="padding:6px;border:1px solid #ddd;">Fecha y hora</td><td style="padding:6px;border:1px solid #ddd;">' + text(booking.date) + ' ' + text(booking.slot) + '</td></tr>',
+        '<tr><td style="padding:6px;border:1px solid #ddd;">Intentos</td><td style="padding:6px;border:1px solid #ddd;">' + attempts + '</td></tr>',
+        '<tr><td style="padding:6px;border:1px solid #ddd;">Error</td><td style="padding:6px;border:1px solid #ddd;">' + text(errorMessage) + '</td></tr>',
+        '</table><p>Revisa el panel de administración de UCTenis.</p></div>'
+      ].join(''),
+      name: 'UCTenis Club'
+    });
+    booking.syncAlertedAt = new Date().toISOString();
+    return true;
+  } catch (alertError) {
+    console.warn('No se pudo enviar alerta de sincronización:', alertError.message);
+    return false;
+  }
+}
+
+function retryPendingBookingSync(idToken) {
+  const result = queryBookingDocuments('', '', idToken);
+  if (!result.ok) {
+    recordBookingSyncRun({ ok: false, failed: 1, msg: result.msg });
+    return result;
+  }
+  const nowMs = Date.now();
+  let confirmed = 0, cleaned = 0, failed = 0, deferred = 0;
+
+  result.bookings.slice(0, 500).forEach(function(staleBooking) {
+    // Lock corto por reserva (no por todo el batch, para no bloquear al
+    // resto de la app durante todo el run) y relectura fresca justo antes
+    // de escribir: la reserva que trajo la consulta en bloque puede estar
+    // desactualizada si el usuario la canceló mientras tanto, y un PATCH a
+    // ciegas sobre esa copia vieja resucitaría la cancelación.
+    const lock = LockService.getScriptLock();
+    if (!lock.tryLock(5000)) { deferred++; return; }
+    try {
+      const fresh = getBookingDocument(staleBooking.id, idToken);
+      if (!fresh.ok || !fresh.booking) return;
+      const booking = fresh.booking;
+
+      if (booking.status === 'cancelled' && booking.calendarCleanupPending) {
+        booking.syncAttempts = Number(booking.syncAttempts || 0) + 1;
+        booking.lastSyncAttemptAt = new Date().toISOString();
+        const cancelledEvent = findCalendarEventForBooking(booking);
+        if (cancelledEvent) cancelledEvent.deleteEvent();
+        booking.calendarCleanupPending = false;
+        booking.syncError = '';
+        booking.lastSuccessfulSyncAt = new Date().toISOString();
+        booking.updatedAt = new Date().toISOString();
+        if (saveBookingDocument(booking, idToken).ok) cleaned++;
+        return;
+      }
+      if (['pending_calendar', 'calendar_retry'].indexOf(booking.status) < 0) return;
+      const start = makeLocalDate(booking.date, booking.slot);
+      if (start.getTime() + 90 * 60000 < nowMs) return;
+
+      booking.syncAttempts = Number(booking.syncAttempts || 0) + 1;
+      booking.lastSyncAttemptAt = new Date().toISOString();
+      let event = findCalendarEventForBooking(booking);
+      if (!event) event = createBookingCalendarEvent(booking);
+      booking.calendarEventId = event.getId();
+      booking.status = 'confirmed';
+      booking.calendarSyncedAt = new Date().toISOString();
+      booking.lastSuccessfulSyncAt = booking.calendarSyncedAt;
+      booking.updatedAt = booking.calendarSyncedAt;
+      booking.syncError = '';
+      if (saveBookingDocument(booking, idToken).ok) confirmed++;
+      else failed++;
+    } catch (error) {
+      const booking = staleBooking;
+      booking.syncAttempts = Number(booking.syncAttempts || 0) + (booking.lastSyncAttemptAt ? 0 : 1);
+      booking.lastSyncAttemptAt = booking.lastSyncAttemptAt || new Date().toISOString();
+      booking.status = booking.status === 'cancelled' ? 'cancelled' : 'calendar_retry';
+      booking.syncError = error.message;
+      sendBookingSyncFailureAlert(booking, error.message);
+      booking.updatedAt = new Date().toISOString();
+      saveBookingDocument(booking, idToken);
+      failed++;
+    } finally {
+      lock.releaseLock();
+    }
+  });
+  const summary = { ok: true, confirmed: confirmed, cleaned: cleaned, failed: failed, deferred: deferred, scanned: result.bookings.length };
+  summary.runStatus = recordBookingSyncRun(summary);
+  return summary;
+}
+
+function adminRetryBookingSync(data) {
+  if (!isAdminRequest(data)) return { ok: false, msg: 'Acceso reservado al administrador.' };
+  return retryPendingBookingSync(data.idToken);
+}
+
+function adminGetBookingSyncStatus(data) {
+  if (!isAdminRequest(data)) return { ok: false, msg: 'Acceso reservado al administrador.' };
+  const result = queryBookingDocuments('', '', data.idToken);
+  if (!result.ok) return result;
+
+  const counts = { total: result.bookings.length, confirmed: 0, pending: 0, retry: 0, cancelled: 0, cleanupPending: 0, failedAlerts: 0 };
+  const issues = [];
+  result.bookings.forEach(function(booking) {
+    if (booking.status === 'confirmed') counts.confirmed++;
+    else if (booking.status === 'pending_calendar') counts.pending++;
+    else if (booking.status === 'calendar_retry') counts.retry++;
+    else if (booking.status === 'cancelled') counts.cancelled++;
+    if (booking.calendarCleanupPending) counts.cleanupPending++;
+    if (Number(booking.syncAttempts || 0) >= BOOKING_SYNC_ALERT_AFTER) counts.failedAlerts++;
+    if (booking.status === 'pending_calendar' || booking.status === 'calendar_retry' || booking.calendarCleanupPending || booking.syncError) {
+      issues.push({
+        id: booking.id,
+        courtId: booking.courtId,
+        date: booking.date,
+        slot: booking.slot,
+        name: booking.name || '',
+        email: booking.email || '',
+        status: booking.status,
+        attempts: Number(booking.syncAttempts || 0),
+        error: booking.syncError || '',
+        lastAttemptAt: booking.lastSyncAttemptAt || '',
+        alertedAt: booking.syncAlertedAt || ''
+      });
+    }
+  });
+  issues.sort(function(a, b) { return text(b.lastAttemptAt).localeCompare(text(a.lastAttemptAt)); });
+  return { ok: true, counts: counts, issues: issues.slice(0, 50), runStatus: getBookingSyncRunStatus() };
+}
+
+/**
+ * Función destinada a un trigger de tiempo (recomendado: cada 5 minutos).
+ * Reintenta invitaciones pendientes y limpia eventos de reservas canceladas.
+ */
+function runBookingSyncTrigger() {
+  const result = retryPendingBookingSync();
+  if (!result.ok) console.error('runBookingSyncTrigger:', result.msg);
+  return result;
+}
+
+/**
+ * Importación única de reservas futuras creadas antes de que Firestore fuera
+ * la fuente principal. Se puede invocar como acción administrativa con
+ * days=30 (máximo 90) y es idempotente gracias al ID cancha+fecha+hora.
+ */
+function adminMigrateCalendarBookings(data) {
+  if (!isAdminRequest(data)) return { ok: false, msg: 'Acceso reservado al administrador.' };
+  return migrateCalendarBookingsInternal(data, verifyGoogleIdToken(data.idToken));
+}
+
+/** Ejecutar una sola vez desde el editor después de publicar esta versión. */
+function migrateCalendarBookingsFromEditor() {
+  return migrateCalendarBookingsInternal({ days: 30 }, Session.getActiveUser().getEmail());
+}
+
+function migrateCalendarBookingsInternal(data, actorEmail) {
+  const days = Math.min(90, Math.max(1, Number(data.days) || 30));
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start.getTime() + days * 24 * 60 * 60 * 1000);
+  let imported = 0, skipped = 0, failed = 0, ambiguous = 0;
+
+  const mainCalId = CONFIG.MAIN_CALENDAR_ID || CONFIG.CALENDARS['cec1'];
+  try {
+    const calendar = CalendarApp.getCalendarById(mainCalId);
+    if (calendar) {
+      calendar.getEvents(start, end).forEach(function(event) {
+        const title = event.getTitle() || '';
+        if (!/reserva uctenis/i.test(title) && !/desafio/i.test(title) && !/amistoso/i.test(title)) return;
+        // No adivinar la cancha: importar un evento bajo la cancha
+        // equivocada puede "liberar" en Firestore una cancha que en
+        // realidad sigue ocupada por este mismo evento. Se deja para
+        // revisión manual del admin en vez de migrarlo mal.
+        const courtId = detectCourtFromEvent(event, true);
+        if (!courtId) { ambiguous++; return; }
+        const eventStart = event.getStartTime();
+        const dateStr = Utilities.formatDate(eventStart, 'America/Santiago', 'yyyy-MM-dd');
+        const slot = Utilities.formatDate(eventStart, 'America/Santiago', 'HH:mm');
+        const id = bookingDocumentId(courtId, dateStr, slot);
+        const existing = getBookingDocument(id, data.idToken);
+        if (!existing.ok) { failed++; return; }
+        if (existing.booking && isActiveBookingStatus(existing.booking.status)) { skipped++; return; }
+
+        const description = event.getDescription() || '';
+        const emailMatch = description.match(/correo:\s*([^\n\r]+)/i);
+        const rutMatch = description.match(/rut:\s*([^\n\r]+)/i);
+        const typeMatch = description.match(/tipo:\s*([^\n\r]+)/i);
+        const email = emailMatch ? text(emailMatch[1]).toLowerCase() : '';
+        const now = new Date().toISOString();
+        const cleanName = title.replace(/^\[[^\]]+\]\s*/i, '').replace(/^reserva uctenis\s*-\s*/i, '').trim();
+        const booking = {
+          id: id,
+          courtId: courtId,
+          date: dateStr,
+          slot: slot,
+          userId: '',
+          email: email,
+          emailLower: email,
+          name: cleanName || 'Jugador/a',
+          rut: rutMatch ? text(rutMatch[1]) : '',
+          userType: '',
+          userTypeLabel: typeMatch ? text(typeMatch[1]) : '',
+          status: 'confirmed',
+          calendarEventId: event.getId(),
+          createdAt: now,
+          updatedAt: now,
+          calendarSyncedAt: now,
+          migratedFromCalendar: true,
+          migratedBy: text(actorEmail)
+        };
+        if (saveBookingDocument(booking, data.idToken).ok) imported++;
+        else failed++;
+      });
+    }
+  } catch (error) {
+    console.warn('Migración Calendar maestro:', error.message);
+    failed++;
+  }
+  return { ok: failed === 0, imported: imported, skipped: skipped, failed: failed, ambiguous: ambiguous, days: days };
+}
+
+// =======================================================
+// 📅 CALENDARIOS — DISPONIBILIDAD Y RESERVAS
+// =======================================================
+
+function getChileOffsetStr(dateStr) {
+  var noonUTC = new Date(dateStr + 'T12:00:00Z');
+  var raw = Utilities.formatDate(noonUTC, 'America/Santiago', 'Z');
+  return raw.slice(0, 3) + ':' + raw.slice(3);
+}
+
+function makeLocalDate(dateStr, slot) {
+  var offsetStr = getChileOffsetStr(dateStr);
+  return new Date(dateStr + 'T' + slot + ':00' + offsetStr);
+}
+
+function getAvailableSlots(dateStr, idToken, courtIdFilter) {
+  var offsetStr = getChileOffsetStr(dateStr);
+  var startOfDay = new Date(dateStr + 'T00:00:00' + offsetStr);
+  var endOfDay   = new Date(dateStr + 'T23:59:59' + offsetStr);
+  var noonUTC = new Date(dateStr + 'T12:00:00Z');
+  var dayOfWeek = parseInt(Utilities.formatDate(noonUTC, 'America/Santiago', 'u'), 10) % 7;
+
+  let result = { ok: true, date: dateStr, courts: {}, playable: {}, busyLabels: {}, bookingSource: 'database' };
+
+  // Las reservas propias de la plataforma se leen primero desde Firestore.
+  const databaseResult = getDatabaseBookingsForDate(dateStr, idToken);
+  const databaseBusy = {};
+  if (databaseResult.ok) {
+    databaseResult.bookings.forEach(function(booking) {
+      databaseBusy[text(booking.courtId) + '|' + text(booking.slot)] = true;
+    });
+  } else {
+    result.bookingSource = 'calendar_fallback';
+    result.bookingWarning = databaseResult.msg || 'Firestore no disponible.';
+  }
+
+  const specialCourts = {};
+  const closedCourts = {};
+  try {
+    const ss = SpreadsheetApp.openById(CONFIG.SHEET_MIEMBROS_ID);
+    const specialSheet = ss.getSheetByName('horarios_especiales');
+    if (specialSheet) {
+      const specialData = specialSheet.getDataRange().getValues();
+      for (let i = 1; i < specialData.length; i++) {
+        const rowFecha = dateCellToStr(specialData[i][0], ss);
+        const rowCourt = text(specialData[i][1]);
+        const rowTipo  = text(specialData[i][2]);
+        if (rowFecha !== dateStr || !rowCourt) continue;
+        if (rowTipo === 'all_day') specialCourts[rowCourt] = true;
+        else if (rowTipo === 'closed') closedCourts[rowCourt] = true;
+      }
+    }
+  } catch (specialErr) { /* continuar normalmente */ }
+
+  const dynamicConfig = getDynamicScheduleConfig(idToken);
+  const courtSlotsSource = (dynamicConfig && dynamicConfig.courtSlots) || CONFIG.COURT_SLOTS;
+
+  // Leer Calendar una sola vez desde el calendario maestro (Cancha CEC 1)
+  const mainCalId = CONFIG.MAIN_CALENDAR_ID || CONFIG.CALENDARS['cec1'];
+  const calendar = CalendarApp.getCalendarById(mainCalId);
+  let allEvents = [];
+  if (calendar) {
+    try {
+      allEvents = calendar.getEvents(startOfDay, endOfDay);
+    } catch (e) {
+      console.warn('No se pudo leer el calendario maestro:', e.message);
+    }
+  }
+
+  // Indexar tiempos ocupados por cancha
+  const busyTimesByCourt = { cec1: [], cec2: [], cjp1: [], cjp2: [] };
+  allEvents.forEach(e => {
+    const rawTitle = e.getTitle() || '';
+    const title = rawTitle.toLowerCase();
+    let busyLabel = '';
+    const isClass = title.includes('clases uctenis') || title.includes('clase uctenis');
+    if (isClass) busyLabel = 'Clases UCTenis';
+
+    // Modo estricto: un evento cuya cancha no se puede determinar con
+    // certeza NO debe asumirse como 'cec1' — eso liberaría las otras 3
+    // canchas para ese horario aunque el evento real las esté ocupando.
+    // Se trata como ocupado en las 4 canchas (falla cerrado) hasta que un
+    // admin lo etiquete correctamente.
+    const eventCourt = detectCourtFromEvent(e, true);
+    const timeItem = { start: e.getStartTime().getTime(), end: e.getEndTime().getTime(), label: busyLabel };
+
+    if (isClass) {
+      if (title.includes('cjp') || (eventCourt && eventCourt.startsWith('cjp'))) {
+        busyTimesByCourt['cjp1'].push(timeItem);
+        busyTimesByCourt['cjp2'].push(timeItem);
+      } else if (title.includes('cec') || (eventCourt && eventCourt.startsWith('cec'))) {
+        busyTimesByCourt['cec1'].push(timeItem);
+        busyTimesByCourt['cec2'].push(timeItem);
+      } else {
+        ['cec1', 'cec2', 'cjp1', 'cjp2'].forEach(c => {
+          if (!busyTimesByCourt[c]) busyTimesByCourt[c] = [];
+          busyTimesByCourt[c].push(timeItem);
+        });
+      }
+    } else if (!eventCourt) {
+      ['cec1', 'cec2', 'cjp1', 'cjp2'].forEach(c => {
+        if (!busyTimesByCourt[c]) busyTimesByCourt[c] = [];
+        busyTimesByCourt[c].push(timeItem);
+      });
+    } else {
+      if (!busyTimesByCourt[eventCourt]) busyTimesByCourt[eventCourt] = [];
+      busyTimesByCourt[eventCourt].push(timeItem);
+    }
+  });
+
+  const courtKeys = Object.keys(CONFIG.CALENDARS);
+  for (let i = 0; i < courtKeys.length; i++) {
+    const courtKey = courtKeys[i];
+    if (courtIdFilter && courtKey !== courtIdFilter) continue;
+    if (closedCourts[courtKey]) {
+      result.courts[courtKey] = [];
+      result.playable[courtKey] = [];
+      result.busyLabels[courtKey] = {};
+      continue;
+    }
+
+    if (!calendar) {
+      result.courts[courtKey] = { error: "Calendario no encontrado" };
+      result.playable[courtKey] = [];
+      continue;
+    }
+
+    const busyTimes = busyTimesByCourt[courtKey] || [];
+
+    let candidateSlots;
+    if (specialCourts[courtKey]) {
+      candidateSlots = (dynamicConfig && dynamicConfig.slots) || CONFIG.SLOTS;
+    } else if (courtSlotsSource && courtSlotsSource[courtKey]) {
+      const courtConfig = courtSlotsSource[courtKey];
+      if (Array.isArray(courtConfig)) {
+        candidateSlots = courtConfig;
+      } else {
+        candidateSlots = courtConfig[dayOfWeek] || courtConfig['default'] || CONFIG.SLOTS;
+      }
+    } else {
+      candidateSlots = CONFIG.SLOTS;
+    }
+
+    result.playable[courtKey] = candidateSlots;
+    result.busyLabels[courtKey] = {};
+
+    let availableSlots = [];
+    candidateSlots.forEach(slot => {
+      let slotStart = makeLocalDate(dateStr, slot);
+      let slotEnd = new Date(slotStart.getTime() + 90 * 60000);
+      let isClassSlot = (dayOfWeek === 2 || dayOfWeek === 3) && slot === '18:00' && courtKey.startsWith('cjp') && !specialCourts[courtKey];
+      let busyMatch = busyTimes.find(b => (slotStart.getTime() < b.end && slotEnd.getTime() > b.start));
+      let isDatabaseBooking = databaseBusy[courtKey + '|' + slot] === true;
+
+      if (isClassSlot) {
+        result.busyLabels[courtKey][slot] = 'Clases UCTenis';
+      } else if (!isDatabaseBooking && !busyMatch) {
+        availableSlots.push(slot);
+      } else if (busyMatch && busyMatch.label) {
+        result.busyLabels[courtKey][slot] = busyMatch.label;
+      }
+    });
+
+    result.courts[courtKey] = availableSlots;
+  }
+
+  return result;
+}
+
+function createBooking(data) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+
+  try {
+  const dateStr = text(data.date);
+  const slot = text(data.slot);
+  const courtId = text(data.courtId);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr) || !/^\d{1,2}:\d{2}$/.test(slot)) {
+    return { ok: false, msg: 'Fecha u horario no válido.' };
+  }
+  if (!CONFIG.CALENDARS[courtId]) return { ok: false, msg: 'Cancha no válida.' };
+
+  let memberCheck = validateMember(data.email);
+  const requestedEmail = text(data.email).toLowerCase();
+  const verifiedBookingEmail = verifyGoogleIdToken(data.idToken);
+  if (!verifiedBookingEmail) {
+    return { ok: false, msg: 'Tu sesión de Google venció. Vuelve a ingresar antes de reservar.' };
+  }
+  if (verifiedBookingEmail !== requestedEmail) {
+    return { ok: false, msg: 'La identidad de la sesión no coincide con el correo de la reserva.' };
+  }
+  const isVerifiedAdmin = Boolean(verifiedBookingEmail &&
+    (CONFIG.ADMINS.emails || []).map(function(email) { return text(email).toLowerCase(); }).indexOf(verifiedBookingEmail) >= 0);
+
+  // Aceptar también funcionarios UCT (validados por Firebase en el frontend,
+  // aquí sólo verificamos que el correo esté en las hojas de cálculo o
+  // es un correo @uct.cl registrado en el sistema).
+  const isFuncionario = data.userType === 'funcionario' || memberCheck.source === 'staff' ||
+    (memberCheck.player && memberCheck.player.userType === 'funcionario');
+  if (!memberCheck.ok && !isFuncionario) return memberCheck;
+  // Si es funcionario sin estar en Sheets, aceptamos igual (su validación
+  // primaria ya ocurrió via Firebase en el cliente).
+
+  if (memberCheck.readOnly && !isFuncionario) {
+    return { ok: false, msg: 'Tu cuenta @uct.cl tiene acceso de solo lectura. Escribe a un administrador de UCTenis para activarte como socio o funcionario y poder reservar canchas.' };
+  }
+
+  const dynamicConfig = getDynamicScheduleConfig(data.idToken);
+
+  // ── Regla: Máximo de reservas por día (configurable, por defecto 1) ──
+  var maxPerDay = (dynamicConfig && Number(dynamicConfig.maxBookingsPerDay) > 0)
+    ? Number(dynamicConfig.maxBookingsPerDay) : 1;
+  if (!isVerifiedAdmin && data.email && data.date) {
+    const existingToday = getUserBookingsForDate(data.email, data.date, data.idToken);
+    // Falla cerrado: si no se pudo comprobar el límite diario, no se debe
+    // asumir que el usuario no tiene reservas — eso saltaría la regla de
+    // negocio justo cuando Firestore está inestable.
+    if (!existingToday.ok) {
+      return { ok: false, msg: 'No se pudo comprobar tu límite de reservas diarias. Intenta nuevamente en unos segundos.' };
+    }
+    if (existingToday.bookings.length >= maxPerDay) {
+      return { ok: false, msg: maxPerDay === 1
+        ? 'Ya tienes una reserva para este día. Solo se permite 1 reserva diaria por jugador.'
+        : 'Ya alcanzaste el máximo de ' + maxPerDay + ' reservas para este día.' };
+    }
+  }
+
+  // ── Regla: Anticipación máxima según tipo de usuario (configurable) ──
+  var MAX_ADVANCE_MS_BACKEND = {
+    admin:       7 * 24 * 60 * 60 * 1000,
+    socio:       7 * 24 * 60 * 60 * 1000,
+    funcionario: 48 * 60 * 60 * 1000
+  };
+  if (dynamicConfig && dynamicConfig.maxAdvanceDays) {
+    ['admin', 'socio', 'funcionario'].forEach(function(key) {
+      var dias = Number(dynamicConfig.maxAdvanceDays[key]);
+      if (dias > 0) MAX_ADVANCE_MS_BACKEND[key] = dias * 24 * 60 * 60 * 1000;
+    });
+  }
+  var userType = isVerifiedAdmin ? 'admin' : (isFuncionario ? 'funcionario' : 'socio');
+  var maxAdvanceMs = MAX_ADVANCE_MS_BACKEND[userType] || MAX_ADVANCE_MS_BACKEND.socio;
+  var bookingDate = makeLocalDate(dateStr, slot);
+  var msUntilBooking = bookingDate.getTime() - Date.now();
+  if (msUntilBooking < 4 * 60 * 60 * 1000) {
+    return { ok: false, msg: 'Las reservas deben realizarse con al menos 4 horas de anticipación.' };
+  }
+  if (msUntilBooking > maxAdvanceMs) {
+    var maxDiasLabel = Math.round(maxAdvanceMs / (24 * 60 * 60 * 1000) * 10) / 10;
+    var maxDiasTexto = maxDiasLabel < 1 ? Math.round(maxAdvanceMs / (60 * 60 * 1000)) + ' horas' : maxDiasLabel + ' días';
+    return { ok: false, msg: 'No puedes reservar con más de ' + maxDiasTexto + ' de anticipación.' };
+  }
+
+  var noonUTC = new Date(data.date + 'T12:00:00Z');
+  var dayOfWeek = parseInt(Utilities.formatDate(noonUTC, 'America/Santiago', 'u'), 10) % 7;
+  if ((dayOfWeek === 2 || dayOfWeek === 3) && data.slot === '18:00' && data.courtId.startsWith('cjp')) {
+    return { ok: false, msg: "Este horario está reservado para Clases UCTenis." };
+  }
+
+  // Fuente única de verdad: vuelve a comprobar horario regular, fechas
+  // especiales y ocupación real dentro del lock, justo antes de crear.
+  const liveAvailability = getAvailableSlots(dateStr, data.idToken, courtId);
+  const liveCourtSlots = liveAvailability && liveAvailability.courts && liveAvailability.courts[courtId];
+  if (!liveAvailability.ok || !Array.isArray(liveCourtSlots) || liveCourtSlots.indexOf(slot) < 0) {
+    return { ok: false, msg: 'Este horario ya no está disponible. Actualiza la agenda y elige otro.' };
+  }
+
+  let calId = CONFIG.MAIN_CALENDAR_ID || CONFIG.CALENDARS[courtId] || CONFIG.CALENDARS['cec1'];
+  let calendar = CalendarApp.getCalendarById(calId);
+  if (!calendar) return { ok: false, msg: 'Calendario de la cancha no encontrado.' };
+
+  let startTime = makeLocalDate(data.date, data.slot);
+  let endTime = new Date(startTime.getTime() + 90 * 60000);
+  // (El chequeo de conflicto en Calendar ya lo hizo getAvailableSlots arriba
+  // para esta misma cancha/horario; repetirlo aquí era una segunda llamada
+  // a Calendar redundante.)
+
+  const bookingId = bookingDocumentId(courtId, dateStr, slot);
+  const currentBooking = getBookingDocument(bookingId, data.idToken);
+  if (!currentBooking.ok) return { ok: false, msg: currentBooking.msg || 'No se pudo comprobar la reserva en la base de datos.' };
+  if (currentBooking.booking && isActiveBookingStatus(currentBooking.booking.status)) {
+    return { ok: false, msg: 'Este horario acaba de ser reservado. Actualiza la agenda y elige otro.' };
+  }
+
+  const now = new Date().toISOString();
+  var tipoLabel = isFuncionario ? 'Funcionario UCT' : 'Socio UCTenis';
+  let booking = {
+    id: bookingId,
+    courtId: courtId,
+    date: dateStr,
+    slot: slot,
+    userId: text(data.userId),
+    email: requestedEmail,
+    emailLower: requestedEmail,
+    name: text(data.name) || (memberCheck.player && text(memberCheck.player.nombre)) || requestedEmail,
+    rut: text(data.rut),
+    userType: userType,
+    userTypeLabel: tipoLabel,
+    status: 'pending_calendar',
+    calendarEventId: '',
+    syncAttempts: 0,
+    lastSyncAttemptAt: '',
+    lastSuccessfulSyncAt: '',
+    syncAlertedAt: '',
+    createdAt: now,
+    updatedAt: now,
+    createdBy: verifiedBookingEmail
+  };
+
+  const reserved = saveBookingDocument(booking, data.idToken);
+  if (!reserved.ok) {
+    return { ok: false, msg: 'No se pudo asegurar el horario en la base de datos. ' + reserved.msg };
+  }
+
+  try {
+    let event = createBookingCalendarEvent(booking);
+    booking.calendarEventId = event.getId();
+    booking.status = 'confirmed';
+    booking.updatedAt = new Date().toISOString();
+    booking.calendarSyncedAt = booking.updatedAt;
+    booking.lastSuccessfulSyncAt = booking.updatedAt;
+    booking.syncError = '';
+    const confirmed = saveBookingDocument(booking, data.idToken);
+    if (!confirmed.ok) {
+      try { event.deleteEvent(); } catch (rollbackError) { console.warn('No se pudo revertir Calendar:', rollbackError.message); }
+      booking.status = 'calendar_retry';
+      booking.calendarEventId = '';
+      booking.syncError = confirmed.msg;
+      booking.updatedAt = new Date().toISOString();
+      saveBookingDocument(booking, data.idToken);
+      return {
+        ok: true,
+        pending: true,
+        msg: 'La reserva quedó asegurada, pero su confirmación en Google Calendar está pendiente.',
+        booking: publicBooking(booking),
+        eventId: ''
+      };
+    }
+    return {
+      ok: true,
+      msg: '¡Reserva confirmada y agendada en Google Calendar!',
+      booking: publicBooking(booking),
+      eventId: booking.calendarEventId
+    };
+  } catch (e) {
+    booking.status = 'calendar_retry';
+    booking.syncError = e.message;
+    booking.updatedAt = new Date().toISOString();
+    saveBookingDocument(booking, data.idToken);
+    return {
+      ok: true,
+      pending: true,
+      msg: 'La reserva quedó asegurada. Google Calendar se sincronizará automáticamente.',
+      booking: publicBooking(booking),
+      eventId: ''
+    };
+  }
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function cancelBooking(data) {
+  const verifiedEmail = verifyGoogleIdToken(data.idToken);
+  if (!verifiedEmail) return { ok: false, msg: 'Tu sesión de Google venció. Vuelve a ingresar antes de cancelar.' };
+
+  const bookingId = text(data.bookingId || data.eventId);
+
+  // saveBookingDocument hace un PATCH ciego del documento completo (sin
+  // updateMask), así que leer-modificar-escribir sin lock puede perder una
+  // escritura concurrente (p.ej. el cron de sincronización terminando de
+  // confirmar el mismo booking justo cuando el usuario lo cancela). Se
+  // serializa con el mismo LockService global que usan createBooking y
+  // retryPendingBookingSync.
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  try {
+    const stored = getBookingDocument(bookingId, data.idToken);
+    if (!stored.ok) return { ok: false, msg: stored.msg || 'No se pudo leer la reserva.' };
+
+    if (stored.booking) {
+      const booking = stored.booking;
+      const ownerEmail = text(booking.email).toLowerCase();
+      if (verifiedEmail !== ownerEmail && !isAdminRequest(data)) {
+        return { ok: false, msg: 'No tienes permiso para cancelar esta reserva.' };
+      }
+
+      const now = new Date().toISOString();
+      booking.status = 'cancelled';
+      booking.cancelledAt = now;
+      booking.cancelledBy = verifiedEmail;
+      booking.updatedAt = now;
+      booking.calendarCleanupPending = Boolean(booking.calendarEventId);
+      const cancelled = saveBookingDocument(booking, data.idToken);
+      if (!cancelled.ok) return { ok: false, msg: 'No se pudo liberar la reserva en la base de datos. ' + cancelled.msg };
+
+      // El horario ya quedó libre: 'cancelled' en Firestore es la fuente de
+      // verdad que usa getAvailableSlots, así que el usuario no necesita
+      // esperar a Calendar para eso. Borrar el evento es solo limpieza — se
+      // deja pendiente (calendarCleanupPending) y lo resuelve el trigger
+      // periódico retryPendingBookingSync, igual que ya hace con la creación
+      // cuando Calendar queda pendiente de sincronizar.
+      return {
+        ok: true,
+        msg: 'Reserva cancelada y horario liberado.',
+        booking: publicBooking(booking)
+      };
+    }
+    return cancelLegacyCalendarBooking(data, bookingId, verifiedEmail);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function cancelLegacyCalendarBooking(data, bookingId, verifiedEmail) {
+
+  // Compatibilidad temporal con reservas antiguas cuyo ID era el de Calendar.
+  const calId = CONFIG.MAIN_CALENDAR_ID || CONFIG.CALENDARS[text(data.courtId)] || CONFIG.CALENDARS['cec1'];
+  if (!calId) return { ok: false, msg: 'Reserva no encontrada.' };
+  try {
+    const calendar = CalendarApp.getCalendarById(calId);
+    const event = calendar && calendar.getEventById(bookingId);
+    if (event) {
+      const description = (event.getDescription() || '').toLowerCase();
+      if (description.indexOf(verifiedEmail) < 0 && !isAdminRequest(data)) {
+        return { ok: false, msg: 'No tienes permiso para cancelar esta reserva.' };
+      }
+      try {
+        event.deleteEvent();
+      } catch (deleteError) {
+        console.warn('cancelBooking (legacy): el evento ya no existía al borrarlo:', deleteError.message);
+      }
+    }
+    return { ok: true, msg: 'Reserva antigua cancelada y horario liberado.' };
+  } catch (error) {
+    return { ok: false, msg: 'Error al cancelar la reserva antigua: ' + error.message };
+  }
+}
+
+function getUserBookings(data) {
+  const email = text(data && data.email).toLowerCase();
+  const verifiedEmail = verifyGoogleIdToken(data && data.idToken);
+  if (!email) return { ok: false, msg: 'Correo no proporcionado.' };
+  if (!verifiedEmail || (verifiedEmail !== email && !isAdminRequest(data))) {
+    return { ok: false, msg: 'No tienes permiso para consultar estas reservas.' };
+  }
+
+  const bookings = [];
+  const now = new Date();
+  const endRange = new Date();
+  endRange.setDate(now.getDate() + 15);
+  const startRange = new Date();
+  startRange.setHours(0, 0, 0, 0);
+
+  try {
+    const databaseResult = queryBookingDocuments('emailLower', email, data.idToken);
+    if (!databaseResult.ok) return { ok: false, msg: databaseResult.msg };
+    databaseResult.bookings.forEach(function(booking) {
+      if (!isActiveBookingStatus(booking.status)) return;
+      const bookingStart = makeLocalDate(booking.date, booking.slot);
+      if (bookingStart >= startRange && bookingStart <= endRange) bookings.push(publicBooking(booking));
+    });
+
+    const occupiedKeys = {};
+    bookings.forEach(function(booking) {
+      occupiedKeys[booking.courtId + '|' + booking.fecha + '|' + booking.slot] = true;
+    });
+
+    // Durante la transición también se muestran reservas antiguas existentes
+    // únicamente en Calendar. Las nuevas siempre salen de Firestore.
+    const mainCalId = CONFIG.MAIN_CALENDAR_ID || CONFIG.CALENDARS['cec1'];
+    let calendar = CalendarApp.getCalendarById(mainCalId);
+    if (calendar) {
+      let events = calendar.getEvents(startRange, endRange);
+      events.forEach(e => {
+        const desc = e.getDescription() || "";
+        const title = e.getTitle() || "";
+        const matchesEmail = desc.toLowerCase().includes(email.toLowerCase()) ||
+                             title.toLowerCase().includes(email.toLowerCase());
+        if (matchesEmail) {
+          const courtKey = detectCourtFromEvent(e);
+          const start = e.getStartTime();
+          const date = Utilities.formatDate(start, 'America/Santiago', 'yyyy-MM-dd');
+          const slot = Utilities.formatDate(start, 'America/Santiago', 'HH:mm');
+          const key = courtKey + '|' + date + '|' + slot;
+          if (!occupiedKeys[key]) {
+            bookings.push({ id: e.getId(), courtId: courtKey, fecha: date, date: date, slot: slot, status: 'legacy_confirmed', calendarEventId: e.getId() });
+            occupiedKeys[key] = true;
+          }
+        }
+      });
+    }
+    bookings.sort(function(a, b) { return a.fecha.localeCompare(b.fecha) || a.slot.localeCompare(b.slot); });
+    return { ok: true, bookings: bookings };
+  } catch (e) {
+    return { ok: false, msg: "Error al leer reservas de Google Calendar: " + e.message };
+  }
+}
+
+// =======================================================
+// 👤 JUGADORES, ADMINISTRACIÓN Y RANKING
+// =======================================================
+
+const PLAYER_HEADERS = ['ID','Nombre','Genero','Fecha nac','Categoria','Mano Habil','Reves','Foto','Ranking','Pos. Anterior','Correo','Rut'];
+const RANKING_HEADERS = ['Posicion','Nombre','Pos. Anterior','','','ID'];
+
+function adminSavePlayer(data) {
+  if (!isAdminRequest(data)) return { ok: false, msg: 'Acceso reservado al administrador.' };
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const ss = getSpreadsheet();
+    const index = getPlayersIndex(ss);
+    const requestedId = text(data.id);
+    const existing = requestedId ? index.byId[requestedId] : null;
+    const player = normalizePlayerPayload(data, existing);
+    if (!player.nombre) return { ok: false, msg: 'El nombre del jugador es obligatorio.' };
+    if (!player.genero) return { ok: false, msg: 'Selecciona ranking masculino o femenino.' };
+    if (!player.id) player.id = generatePlayerId(index, player.genero);
+    if (data.photoDataUrl) player.foto = savePlayerPhoto(data, player);
+    const duplicate = index.players.find(item =>
+      item.id !== player.id &&
+      ((player.email && item.email && item.email.toLowerCase() === player.email.toLowerCase()) ||
+       norm(item.nombre) === norm(player.nombre))
+    );
+    if (duplicate) return { ok: false, msg: 'Ya existe un jugador con ese nombre o correo.' };
+    const rowNumber = existing ? existing.rowNumber : index.sheet.getLastRow() + 1;
+    index.sheet.getRange(rowNumber, 1, 1, PLAYER_HEADERS.length).setValues([playerToRow(player)]);
+    if (player.activo) {
+      ensurePlayerInRanking(ss, player, numberOrBlank(data.posicion));
+    } else {
+      removePlayerFromRankings(ss, player);
+    }
+    return { ok: true, player: publicPlayer(player), ranking: getRanking() };
+  } finally { lock.releaseLock(); }
+}
+
+function adminDeletePlayer(data) {
+  if (!isAdminRequest(data)) return { ok: false, msg: 'Acceso reservado al administrador.' };
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const ss = getSpreadsheet();
+    const index = getPlayersIndex(ss);
+    const player = findPlayerReference(index, { id: text(data.id), nombre: text(data.nombre), email: text(data.email) });
+    if (!player) return { ok: false, msg: 'Jugador no encontrado.' };
+    index.sheet.deleteRow(player.rowNumber);
+    removePlayerFromRankings(ss, player);
+    return { ok: true, deletedId: player.id, ranking: getRanking() };
+  } finally { lock.releaseLock(); }
+}
+
+function adminReorderRanking(data) {
+  if (!isAdminRequest(data)) return { ok: false, msg: 'Acceso reservado al administrador.' };
+  const genero = normalizeGender(data.genero);
+  if (!genero) return { ok: false, msg: 'Género no válido.' };
+  const orderedIds = data.orderedIds;
+  if (!Array.isArray(orderedIds) || !orderedIds.length) {
+    return { ok: false, msg: 'Falta la lista ordenada de jugadores.' };
+  }
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  try {
+    const ss = getSpreadsheet();
+    const entries = readRankingEntries(ss, genero);
+    const previousMap = buildPreviousPositionMap(entries);
+    const entryMap = {};
+    entries.forEach(entry => { const key = entry.id || entry.nombre; if (key) entryMap[key] = entry; });
+    const reorderedEntries = [];
+    orderedIds.forEach(id => { if (entryMap[id]) { reorderedEntries.push(entryMap[id]); delete entryMap[id]; } });
+    Object.values(entryMap).forEach(remaining => { reorderedEntries.push(remaining); });
+    const finalEntries = reorderedEntries.map((entry, index) => ({ ...entry, posicion: index + 1 }));
+    writeRankingEntries(ss, genero, finalEntries, previousMap);
+    syncPlayerRankingColumns(ss, genero, finalEntries, previousMap);
+    return { ok: true, ranking: getRanking() };
+  } finally { lock.releaseLock(); }
+}
+
+function updateOwnProfile(data) {
+  const actorEmail = text(data.actorEmail || data.email);
+  const validation = actorEmail ? validateMember(actorEmail) : { ok: false };
+  if (!validation.ok) return { ok: false, msg: 'Debes ingresar con una cuenta validada para editar tu ficha.' };
+  if (validation.readOnly) return { ok: false, msg: 'Tu cuenta @uct.cl tiene acceso de solo lectura. Escribe a un administrador de UCTenis para activarte como socio o funcionario.' };
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const ss = getSpreadsheet();
+    const index = getPlayersIndex(ss);
+    const player = findPlayerReference(index, {
+      id: text(data.actorId || data.id),
+      nombre: text(data.actorName || data.actorNombre || data.nombre),
+      email: actorEmail
+    });
+    if (!player) {
+      const base = validation.player || {};
+      const created = normalizePlayerPayload({ ...base, ...data,
+        id: text(data.actorId || data.id || base.id),
+        nombre: text(data.nombre || data.actorName || data.actorNombre || base.nombre),
+        email: actorEmail,
+        genero: text(data.genero || data.gender || base.genero || base.gender)
+      }, null);
+      if (!created.nombre) return { ok: false, msg: 'Ingresa tu nombre para crear tu ficha.' };
+      if (!created.genero) return { ok: false, msg: 'Selecciona ranking masculino o femenino.' };
+      if (!created.id) created.id = generatePlayerId(index, created.genero);
+      if (data.photoDataUrl) created.foto = savePlayerPhoto(data, created);
+      const duplicate = index.players.find(item =>
+        item.id !== created.id &&
+        ((created.email && item.email && item.email.toLowerCase() === created.email.toLowerCase()) ||
+         norm(item.nombre) === norm(created.nombre))
+      );
+      if (duplicate) return { ok: false, msg: 'Ya existe un jugador con ese nombre o correo.' };
+      index.sheet.getRange(index.sheet.getLastRow() + 1, 1, 1, PLAYER_HEADERS.length).setValues([playerToRow(created)]);
+      ensurePlayerInRanking(ss, created, numberOrBlank(data.posicion || created.ranking));
+      return { ok: true, player: publicPlayer(created), ranking: getRanking() };
+    }
+    const updated = {
+      ...player,
+      fechaNacimiento: payloadField(data, ['fechaNacimiento','fechaNac','birthDate'], player.fechaNacimiento),
+      categoria: normalizeCategory(payloadField(data, ['categoria','category'], player.categoria)),
+      manoHabil: payloadField(data, ['manoHabil','mano','hand'], player.manoHabil),
+      reves: payloadField(data, ['reves','backhand'], player.reves),
+      foto: payloadField(data, ['foto','photo','avatar'], player.foto),
+      email: player.email || actorEmail
+    };
+    if (data.photoDataUrl) updated.foto = savePlayerPhoto(data, updated);
+    index.sheet.getRange(player.rowNumber, 1, 1, PLAYER_HEADERS.length).setValues([playerToRow(updated)]);
+    return { ok: true, player: publicPlayer(updated), ranking: getRanking() };
+  } finally { lock.releaseLock(); }
+}
+
+function applyChallengeResultToRanking(challenge) {
+  if (text(challenge.tipo) === 'amistoso') return { ok: true, moved: false, msg: 'Partido amistoso: no se altera el ranking.' };
+  if (text(challenge.tipo) === 'campeonato') return { ok: true, moved: false, msg: 'Partido de campeonato: no se altera el ranking.' };
+  if (challenge.status === 'resultado_pendiente') return { ok: true, moved: false, msg: 'Resultado pendiente de confirmación: no se altera el ranking.' };
+  if (challenge.status === 'wo_retador') return { ok: true, moved: false, msg: 'W.O. del retador: gana el retado y no cambia la escalerilla.' };
+  if (['completado','wo_retado'].indexOf(challenge.status) < 0) return { ok: true, moved: false, msg: 'Estado sin movimiento de ranking.' };
+
+  const genero = normalizeGender(challenge.genero);
+  const ganadorId = text(challenge.ganadorId);
+  if (!genero) return { ok: false, msg: 'Genero de desafio no valido.' };
+  if (!ganadorId) return { ok: false, msg: 'Ganador no informado.' };
+
+  const winner = ganadorId === challenge.retadorId
+    ? { id: challenge.retadorId, nombre: challenge.retadorNombre }
+    : { id: challenge.retadoId, nombre: challenge.retadoNombre };
+  const loser = ganadorId === challenge.retadorId
+    ? { id: challenge.retadoId, nombre: challenge.retadoNombre }
+    : { id: challenge.retadorId, nombre: challenge.retadorNombre };
+
+  const ss = getSpreadsheet();
+  const entries = readRankingEntries(ss, genero);
+  const winnerIndex = findRankingEntryIndex(entries, winner);
+  const loserIndex = findRankingEntryIndex(entries, loser);
+
+  if (winnerIndex < 0 || loserIndex < 0) return { ok: false, msg: 'No se pudo ubicar a ambos jugadores en el ranking.' };
+  if (winnerIndex < loserIndex) return { ok: true, moved: false, msg: 'El ganador ya estaba por encima; el ranking mantiene sus posiciones.' };
+
+  const previousMap = buildPreviousPositionMap(entries);
+  const oldWinnerPos = entries[winnerIndex].posicion;
+  const oldLoserPos = entries[loserIndex].posicion;
+  const moved = entries.splice(winnerIndex, 1)[0];
+  entries.splice(loserIndex, 0, moved);
+
+  writeRankingEntries(ss, genero, entries, previousMap);
+  syncPlayerRankingColumns(ss, genero, entries, previousMap);
+
+  return { ok: true, moved: true, ganadorId: winner.id, perdedorId: loser.id, from: oldWinnerPos, to: oldLoserPos };
+}
+
+function ensurePlayerInRanking(ss, player, desiredPosition) {
+  const genders = ['M', 'F'];
+  genders.forEach(genero => {
+    let entries = readRankingEntries(ss, genero);
+    const previousMap = buildPreviousPositionMap(entries);
+    const existingIndex = findRankingEntryIndex(entries, player);
+    if (existingIndex >= 0) entries.splice(existingIndex, 1);
+    if (genero === player.genero) {
+      const position = Number.isFinite(desiredPosition) && desiredPosition > 0
+        ? Math.min(desiredPosition, entries.length + 1) : entries.length + 1;
+      const key = player.id || norm(player.nombre);
+      previousMap[key] = existingIndex >= 0 ? previousMap[key] : '';
+      entries.splice(position - 1, 0, { id: player.id, nombre: player.nombre, posicion: position, posicionAnterior: existingIndex >= 0 ? previousMap[key] : '', genero: player.genero });
+    }
+    writeRankingEntries(ss, genero, entries, previousMap);
+    syncPlayerRankingColumns(ss, genero, entries, previousMap);
+  });
+}
+
+function removePlayerFromRankings(ss, player) {
+  ['M','F'].forEach(genero => {
+    const entries = readRankingEntries(ss, genero);
+    const filtered = entries.filter(entry => !matchesPlayerReference(entry, player));
+    if (filtered.length !== entries.length) {
+      const previousMap = {};
+      filtered.forEach((entry, index) => { previousMap[rankingEntryKey(entry)] = index + 1; });
+      writeRankingEntries(ss, genero, filtered, previousMap);
+      syncPlayerRankingColumns(ss, genero, filtered, previousMap);
+    }
+  });
+}
+
+function getSpreadsheet() { return SpreadsheetApp.openById(CONFIG.SHEET_MIEMBROS_ID); }
+
+function getPlayersSheet(ss) {
+  const spreadsheet = ss || getSpreadsheet();
+  let sheet = spreadsheet.getSheetByName('jugadores');
+  if (!sheet) sheet = spreadsheet.insertSheet('jugadores');
+  ensureSheetHeaders(sheet, PLAYER_HEADERS);
+  return sheet;
+}
+
+function getRankingSheet(ss, genero) {
+  const spreadsheet = ss || getSpreadsheet();
+  const name = normalizeGender(genero) === 'F' ? 'rankingfem' : 'rankingmas';
+  let sheet = spreadsheet.getSheetByName(name);
+  if (!sheet && name === 'rankingfem') sheet = spreadsheet.getSheetByName('rankinfem');
+  if (!sheet) sheet = spreadsheet.insertSheet(name);
+  ensureSheetHeaders(sheet, RANKING_HEADERS);
+  return sheet;
+}
+
+function ensureSheetHeaders(sheet, headers) {
+  const width = headers.length;
+  const first = sheet.getRange(1, 1, 1, width).getValues()[0];
+  if (!text(first[0])) sheet.getRange(1, 1, 1, width).setValues([headers]);
+}
+
+function getPlayersIndex(ss) {
+  const sheet = getPlayersSheet(ss);
+  const values = sheet.getDataRange().getValues();
+  const players = [], byId = {}, byName = {}, byEmail = {};
+  for (let i = 1; i < values.length; i++) {
+    const player = playerFromRow(values[i], i + 1);
+    if (!player.id && !player.nombre) continue;
+    players.push(player);
+    if (player.id) byId[player.id] = player;
+    if (player.nombre) byName[norm(player.nombre)] = player;
+    if (player.email) byEmail[player.email.toLowerCase()] = player;
+  }
+  return { sheet: sheet, players: players, byId: byId, byName: byName, byEmail: byEmail };
+}
+
+function playerFromRow(row, rowNumber) {
+  return {
+    rowNumber: rowNumber,
+    id: text(row[0]), nombre: text(row[1]),
+    genero: normalizeGender(row[2]),
+    fechaNacimiento: formatSheetDate(row[3]),
+    edad: calculateAge(row[3]),
+    categoria: normalizeCategory(row[4]),
+    manoHabil: text(row[5]), mano: text(row[5]),
+    reves: text(row[6]), foto: text(row[7]),
+    ranking: numberOrBlank(row[8]),
+    posicionAnterior: numberOrBlank(row[9]),
+    email: text(row[10]), rut: text(row[11])
+  };
+}
+
+function normalizePlayerPayload(data, existing) {
+  const base = existing || {};
+  const genero = normalizeGender(payloadField(data, ['genero','gender'], base.genero));
+  const activo = data.activo !== false && data.activo !== 'false';
+  return {
+    id: payloadField(data, ['id','codigo','uid'], base.id),
+    nombre: payloadField(data, ['nombre','name','jugador'], base.nombre),
+    genero: genero,
+    fechaNacimiento: payloadField(data, ['fechaNacimiento','fechaNac','birthDate'], base.fechaNacimiento),
+    categoria: normalizeCategory(payloadField(data, ['categoria','category'], base.categoria)),
+    manoHabil: payloadField(data, ['manoHabil','mano','hand'], base.manoHabil || base.mano),
+    reves: payloadField(data, ['reves','backhand'], base.reves),
+    foto: payloadField(data, ['foto','photo','avatar'], base.foto),
+    ranking: numberOrBlank(payloadField(data, ['ranking','posicion'], base.ranking)),
+    posicionAnterior: numberOrBlank(payloadField(data, ['posicionAnterior','prev'], base.posicionAnterior)),
+    email: payloadField(data, ['email','correo'], base.email),
+    rut: payloadField(data, ['rut'], base.rut),
+    activo: activo
+  };
+}
+
+function payloadField(data, keys, fallback) {
+  for (let i = 0; i < keys.length; i++) {
+    if (Object.prototype.hasOwnProperty.call(data, keys[i]) && data[keys[i]] !== undefined && data[keys[i]] !== null) {
+      return text(data[keys[i]]);
+    }
+  }
+  return text(fallback);
+}
+
+function playerToRow(player) {
+  return [
+    player.id, player.nombre, player.genero, player.fechaNacimiento,
+    normalizeCategory(player.categoria), player.manoHabil || player.mano,
+    player.reves, player.foto, player.ranking || '', player.posicionAnterior || '',
+    player.email, player.rut || ''
+  ];
+}
+
+function publicPlayer(player) {
+  return {
+    id: player.id, nombre: player.nombre, genero: player.genero,
+    fechaNacimiento: player.fechaNacimiento,
+    edad: player.edad || calculateAge(player.fechaNacimiento),
+    categoria: normalizeCategory(player.categoria),
+    manoHabil: player.manoHabil || player.mano,
+    mano: player.mano || player.manoHabil,
+    reves: player.reves, foto: photoFor(player.id, player.foto),
+    ranking: player.ranking, posicionAnterior: player.posicionAnterior,
+    email: player.email, rut: player.rut || ''
+  };
+}
+
+function savePlayerPhoto(data, player) {
+  const dataUrl = (data.photoDataUrl || '').toString();
+  if (!dataUrl) return '';
+  const match = dataUrl.match(/^data:(image\/(?:png|jpeg|jpg|webp));base64,([A-Za-z0-9+/=]+)$/);
+  if (!match) throw new Error('La foto debe ser JPG, PNG o WEBP.');
+  const mime = match[1] === 'image/jpg' ? 'image/jpeg' : match[1];
+  const bytes = Utilities.base64Decode(match[2]);
+  if (bytes.length > 3500000) throw new Error('La foto es demasiado pesada.');
+  const extMap = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
+  const ext = extMap[mime] || 'jpg';
+  const safeName = fileSafeName((player.id || player.nombre || 'jugador') + '-' + new Date().getTime()) + '.' + ext;
+  const blob = Utilities.newBlob(bytes, mime, safeName);
+  const file = getPhotoFolder().createFile(blob);
+  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  return 'https://drive.google.com/thumbnail?id=' + file.getId() + '&sz=w600';
+}
+
+function getPhotoFolder() {
+  const name = CONFIG.PHOTO_FOLDER_NAME || 'UCTenis fotos jugadores';
+  const folders = DriveApp.getFoldersByName(name);
+  if (folders.hasNext()) return folders.next();
+  return DriveApp.createFolder(name);
+}
+
+function fileSafeName(value) {
+  return norm(value).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'jugador';
+}
+
+function generatePlayerId(index, genero) {
+  const prefix = normalizeGender(genero) === 'F' ? 'f' : 'm';
+  let max = 0;
+  index.players.forEach(player => {
+    const match = text(player.id).match(new RegExp('^' + prefix + '(\\d+)$', 'i'));
+    if (match) max = Math.max(max, Number(match[1]));
+  });
+  return prefix + String(max + 1).padStart(3, '0');
+}
+
+function readRankingEntries(ss, genero) {
+  const sheet = getRankingSheet(ss, genero);
+  const playerIndex = getPlayersIndex(ss);
+  const values = sheet.getDataRange().getValues();
+  const out = [];
+  for (let i = 1; i < values.length; i++) {
+    const row = values[i];
+    const id = text(row[5]);
+    const name = text(row[1]);
+    const meta = findPlayerReference(playerIndex, { id: id, nombre: name });
+    const resolvedId = id || (meta ? meta.id : '');
+    const resolvedName = name || (meta ? meta.nombre : '');
+    if (!resolvedName) continue;
+    out.push({
+      id: resolvedId, nombre: resolvedName, genero: normalizeGender(genero),
+      posicion: numberOrBlank(row[0]) || out.length + 1,
+      posicionAnterior: numberOrBlank(row[2]) || (meta ? meta.posicionAnterior : '')
+    });
+  }
+  if (!out.length) {
+    playerIndex.players
+      .filter(player => player.genero === normalizeGender(genero))
+      .sort((a, b) => (numberOrBlank(a.ranking) || 9999) - (numberOrBlank(b.ranking) || 9999) || a.nombre.localeCompare(b.nombre, 'es'))
+      .forEach((player, index) => {
+        out.push({ id: player.id, nombre: player.nombre, genero: player.genero,
+          posicion: numberOrBlank(player.ranking) || index + 1, posicionAnterior: player.posicionAnterior || '' });
+      });
+  }
+  out.sort((a, b) => Number(a.posicion) - Number(b.posicion) || a.nombre.localeCompare(b.nombre, 'es'));
+  return out.map((entry, index) => ({ ...entry, posicion: index + 1 }));
+}
+
+function writeRankingEntries(ss, genero, entries, previousMap) {
+  const sheet = getRankingSheet(ss, genero);
+  const rows = entries.map((entry, index) => {
+    const key = rankingEntryKey(entry);
+    const hasPrevious = previousMap && Object.prototype.hasOwnProperty.call(previousMap, key);
+    const previous = hasPrevious ? previousMap[key] : (entry.posicionAnterior || entry.posicion || index + 1);
+    return [index + 1, entry.nombre, previous, '', '', entry.id || ''];
+  });
+  const lastRow = sheet.getLastRow();
+  if (lastRow > 1) sheet.getRange(2, 1, lastRow - 1, RANKING_HEADERS.length).clearContent();
+  if (rows.length) sheet.getRange(2, 1, rows.length, RANKING_HEADERS.length).setValues(rows);
+}
+
+function syncPlayerRankingColumns(ss, genero, entries, previousMap) {
+  const index = getPlayersIndex(ss);
+  entries.forEach((entry, indexNumber) => {
+    const player = findPlayerReference(index, entry);
+    if (!player) return;
+    const key = rankingEntryKey(entry);
+    const hasPrevious = previousMap && Object.prototype.hasOwnProperty.call(previousMap, key);
+    const previous = hasPrevious ? previousMap[key] : (entry.posicionAnterior || '');
+    index.sheet.getRange(player.rowNumber, 9, 1, 2).setValues([[indexNumber + 1, previous]]);
+  });
+}
+
+function buildPreviousPositionMap(entries) {
+  const map = {};
+  entries.forEach(entry => { map[rankingEntryKey(entry)] = entry.posicion; });
+  return map;
+}
+
+function findRankingEntryIndex(entries, ref) {
+  return entries.findIndex(entry => matchesPlayerReference(entry, ref));
+}
+
+function findPlayerReference(index, ref) {
+  const id = text(ref && ref.id);
+  const email = text(ref && ref.email).toLowerCase();
+  const nombre = norm(ref && ref.nombre);
+  if (id && index.byId[id]) return index.byId[id];
+  if (email && index.byEmail[email]) return index.byEmail[email];
+  if (nombre && index.byName[nombre]) return index.byName[nombre];
+  return null;
+}
+
+function matchesPlayerReference(player, ref) {
+  if (!player || !ref) return false;
+  const playerId = text(player.id), refId = text(ref.id);
+  if (playerId && refId && playerId === refId) return true;
+  const playerEmail = text(player.email).toLowerCase(), refEmail = text(ref.email).toLowerCase();
+  if (playerEmail && refEmail && playerEmail === refEmail) return true;
+  const playerName = norm(player.nombre), refName = norm(ref.nombre);
+  return Boolean(playerName && refName && playerName === refName);
+}
+
+function rankingEntryKey(entry) { return text(entry.id) || norm(entry.nombre); }
+
+function normalizeGender(value) {
+  const raw = text(value).toUpperCase();
+  if (raw === 'M' || raw.indexOf('MASC') === 0 || raw === 'HOMBRE' || raw === 'HOMBRES') return 'M';
+  if (raw === 'F' || raw.indexOf('FEM') === 0 || raw === 'MUJER' || raw === 'MUJERES') return 'F';
+  return '';
+}
+
+function normalizeCategory(value) {
+  const raw = text(value);
+  return norm(raw) === 'abierta' ? 'Principiante' : raw;
+}
+
+/**
+ * Verifica un ID token de Firebase Auth (Google Sign-In) contra el endpoint
+ * público de Identity Toolkit y devuelve el correo verificado por Google,
+ * o null si el token es inválido, expiró o no corresponde a este proyecto.
+ *
+ * Esto es necesario porque un `adminEmail`/`adminName` enviado directamente
+ * en el POST no prueba nada por sí solo: cualquiera que conozca la URL del
+ * Apps Script (visible en db.js) y un correo de administrador podría
+ * falsificarlo. El idToken sólo lo puede generar Firebase tras un login
+ * real de Google, y Google lo firma — por eso se verifica aquí en el server.
+ */
+function verifyGoogleIdToken(idToken) {
+  const token = text(idToken);
+  if (!token || !CONFIG.FIREBASE_API_KEY) return null;
+  try {
+    const url = 'https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=' + encodeURIComponent(CONFIG.FIREBASE_API_KEY);
+    const response = UrlFetchApp.fetch(url, {
+      method: 'post',
+      contentType: 'application/json',
+      payload: JSON.stringify({ idToken: token }),
+      muteHttpExceptions: true
+    });
+    if (response.getResponseCode() !== 200) return null;
+    const body = JSON.parse(response.getContentText());
+    const account = body.users && body.users[0];
+    if (!account || !account.email) return null;
+    return text(account.email).toLowerCase();
+  } catch (error) {
+    console.warn('Error verificando idToken de Google:', error.message);
+    return null;
+  }
+}
+
+function isAdminRequest(data) {
+  const verifiedEmail = verifyGoogleIdToken(data && data.idToken);
+  if (!verifiedEmail) return false;
+  if (CONFIG.ADMIN_PIN && text(data.adminPin || data.pin) !== text(CONFIG.ADMIN_PIN)) return false;
+  const emails = (CONFIG.ADMINS.emails || []).map(email => text(email).toLowerCase()).filter(Boolean);
+  if (emails.indexOf(verifiedEmail) >= 0) return true;
+
+  // Administradores delegados: el propietario asigna isAdmin=true desde la
+  // ficha del usuario. El token garantiza que se consulta el correo real.
+  const playerResult = findFirebasePlayerByEmail(verifiedEmail);
+  if (playerResult && playerResult.player && playerResult.player.isAdmin === true) return true;
+  const staffResult = findFirebaseStaffByEmail(verifiedEmail);
+  return Boolean(staffResult && staffResult.staff && staffResult.staff.isAdmin === true);
+}
+
+// =======================================================
+// 🏆 RANKING — LECTURA PÚBLICA
+// =======================================================
+
+function getRanking() {
+  try {
+    const ss = SpreadsheetApp.openById(CONFIG.SHEET_MIEMBROS_ID);
+    const maleSheet = ss.getSheetByName('rankingmas');
+    const femaleSheet = ss.getSheetByName('rankingfem') || ss.getSheetByName('rankinfem');
+    const playersSheet = ss.getSheetByName('jugadores');
+    const statsById = getChallengeStatsByPlayer();
+
+    const playersMap = {}, playersByName = {};
+    if (playersSheet) {
+      const pdata = playersSheet.getDataRange().getValues();
+      for (let i = 1; i < pdata.length; i++) {
+        const row = pdata[i];
+        const id = text(row[0]);
+        if (!id) continue;
+        const player = {
+          id: id, nombre: text(row[1]), genero: text(row[2]),
+          fechaNacimiento: formatSheetDate(row[3]), edad: calculateAge(row[3]),
+          categoria: normalizeCategory(row[4]), manoHabil: text(row[5]), mano: text(row[5]),
+          reves: text(row[6]), foto: photoFor(id, row[7]),
+          ranking: numberOrBlank(row[8]), posicionAnterior: numberOrBlank(row[9]),
+          email: text(row[10])
+        };
+        playersMap[id] = player;
+        if (player.nombre) playersByName[norm(player.nombre)] = player;
+      }
+    }
+
+    function parseRankingSheet(sheet, genero) {
+      const out = [];
+      if (!sheet) return out;
+      const data = sheet.getDataRange().getValues();
+      for (let i = 1; i < data.length; i++) {
+        const r = data[i];
+        const posicion = numberOrBlank(r[0]);
+        const nombreRanking = text(r[1]);
+        const posicionAnterior = numberOrBlank(r[2]);
+        const id = r[5] ? r[5].toString().trim() : '';
+        const meta = playersMap[id] || playersByName[norm(nombreRanking)] || {};
+        const resolvedId = id || meta.id || '';
+        const nombre = nombreRanking || meta.nombre || '';
+        const stats = statsById[resolvedId] || { pts: 0, pj: 0, pg: 0, pp: 0 };
+        if (!nombre || !posicion) continue;
+        out.push({
+          id: resolvedId, nombre: nombre, posicion: posicion,
+          posicionAnterior: posicionAnterior || meta.posicionAnterior || '',
+          genero: genero, fechaNacimiento: meta.fechaNacimiento || '',
+          edad: meta.edad || '', categoria: normalizeCategory(meta.categoria || ''),
+          manoHabil: meta.manoHabil || '', mano: meta.mano || meta.manoHabil || '',
+          reves: meta.reves || '', foto: resolvedId ? photoFor(resolvedId, meta.foto) : '',
+          email: meta.email || '', pts: stats.pts, pj: stats.pj, pg: stats.pg, pp: stats.pp
+        });
+      }
+      out.sort((a, b) => Number(a.posicion) - Number(b.posicion));
+      return out;
+    }
+
+    const male = parseRankingSheet(maleSheet, 'M');
+    const female = parseRankingSheet(femaleSheet, 'F');
+    return { ok: true, male: male, female: female, hombres: male, mujeres: female, updatedAt: new Date().toISOString() };
+  } catch (e) {
+    return { ok: false, msg: 'No se pudo leer el ranking: ' + e.message };
+  }
+}
+
+function getChallengeStatsByPlayer() {
+  const stats = {};
+  const sheet = getChallengesSheet();
+  const values = sheet.getDataRange().getValues();
+  function ensure(id) {
+    if (!id) return null;
+    if (!stats[id]) stats[id] = { pts: 0, pj: 0, pg: 0, pp: 0 };
+    return stats[id];
+  }
+  for (let i = 1; i < values.length; i++) {
+    const challenge = challengeFromRow(values[i]);
+    if (['completado','wo_retador','wo_retado'].indexOf(challenge.status) < 0) continue;
+    const retador = ensure(challenge.retadorId);
+    const retado = ensure(challenge.retadoId);
+    const ganador = ensure(challenge.ganadorId);
+    if (!retador || !retado || !ganador) continue;
+    retador.pj += 1; retado.pj += 1;
+    if (challenge.tipo !== 'amistoso') ganador.pts += 3;
+    ganador.pg += 1;
+    if (challenge.ganadorId === challenge.retadorId) retado.pp += 1;
+    if (challenge.ganadorId === challenge.retadoId) retador.pp += 1;
+  }
+  return stats;
+}
+
+// =======================================================
+// 🛠️ UTILIDADES GENERALES
+// =======================================================
+
+function text(value) {
+  if (value === null || value === undefined) return '';
+  return value.toString().replace(/\s+/g, ' ').trim();
+}
+
+/** Lee una celda de fecha como 'yyyy-MM-dd', tolerando que Sheets la haya
+ * auto-convertido a un objeto Date (ocurre al escribir texto ISO en una
+ * celda sin formato de texto forzado). */
+function dateCellToStr(value, ss) {
+  if (value instanceof Date) {
+    return Utilities.formatDate(value, ss.getSpreadsheetTimeZone(), 'yyyy-MM-dd');
+  }
+  return text(value);
+}
+
+function norm(value) {
+  return text(value).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+function numberOrBlank(value) {
+  if (value === null || value === undefined || value === '') return '';
+  const n = Number(value);
+  return Number.isFinite(n) ? n : '';
+}
+
+function formatSheetDate(value) {
+  if (!value) return '';
+  if (Object.prototype.toString.call(value) === '[object Date]' && !isNaN(value)) {
+    return Utilities.formatDate(value, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  }
+  return text(value);
+}
+
+function calculateAge(value) {
+  if (!value) return '';
+  let birth = null;
+  if (Object.prototype.toString.call(value) === '[object Date]' && !isNaN(value)) {
+    birth = value;
+  } else {
+    const raw = text(value).replace(/-/g, '/');
+    const parts = raw.split('/');
+    if (parts.length === 3) {
+      const day = Number(parts[0]), month = Number(parts[1]) - 1, year = Number(parts[2]);
+      if (day && month >= 0 && year) birth = new Date(year, month, day);
+    }
+  }
+  if (!birth || isNaN(birth)) return '';
+  const today = new Date();
+  let age = today.getFullYear() - birth.getFullYear();
+  const monthDelta = today.getMonth() - birth.getMonth();
+  if (monthDelta < 0 || (monthDelta === 0 && today.getDate() < birth.getDate())) age--;
+  return age > 0 ? age : '';
+}
+
+function photoFor(id, value) {
+  const raw = text(value);
+  if (/^https?:\/\//i.test(raw)) return raw;
+  if (raw && raw.indexOf('fotos/') === 0) return raw;
+  return id ? 'fotos/' + id + '.png' : '';
+}
+
+// =======================================================
+// 🔔 TRIGGERS AUTOMÁTICOS DE NOTIFICACIONES
+// =======================================================
+
+/**
+ * Recordatorio 24h antes del partido para ambos jugadores.
+ * Instalar como trigger: Tiempo → Día → entre 8 y 9 AM
+ */
+function sendChallengeReminders() {
+  const sheet = getChallengesSheet();
+  const values = sheet.getDataRange().getValues();
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowStr = Utilities.formatDate(tomorrow, 'America/Santiago', 'yyyy-MM-dd');
+  const RANKING_URL = 'https://uctenis.github.io/reservas-canchas/ranking.html#desafios';
+
+  for (let i = 1; i < values.length; i++) {
+    const challenge = challengeFromRow(values[i]);
+    if (challenge.status !== 'aceptado') continue;
+    if (!challenge.fecha || challenge.fecha.substring(0, 10) !== tomorrowStr) continue;
+
+    [
+      { email: challenge.retadorEmail, nombre: challenge.retadorNombre, rival: challenge.retadoNombre },
+      { email: challenge.retadoEmail, nombre: challenge.retadoNombre, rival: challenge.retadorNombre }
+    ].forEach(function(j) {
+      if (!j.email) return;
+      try {
+        const tipoLabel = text(challenge.tipo) === 'amistoso' ? 'amistoso' : 'desafío de ranking';
+        const htmlBody = [
+          '<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;border:1px solid #e0e0e0;border-radius:10px;overflow:hidden;">',
+          '<div style="background:#1a6b3a;padding:24px;text-align:center;"><h1 style="color:#fff;margin:0;font-size:22px;">🎾 UCTenis</h1>',
+          '<p style="color:#c8e6c9;margin:6px 0 0;">⏰ Recordatorio: ¡Mañana juegas!</p></div>',
+          '<div style="padding:24px;">',
+          '<p style="font-size:16px;margin:0 0 16px;">Hola <strong>' + j.nombre + '</strong>,</p>',
+          '<p style="margin:0 0 16px;">Mañana tienes un <strong>' + tipoLabel + '</strong> programado.</p>',
+          '<table style="width:100%;border-collapse:collapse;margin-bottom:20px;">',
+          '<tr style="background:#f5f5f5;"><td style="padding:6px 12px;color:#555;">Rival</td><td style="padding:6px 12px;font-weight:600;">' + j.rival + '</td></tr>',
+          challenge.fecha ? '<tr><td style="padding:6px 12px;color:#555;">Fecha</td><td style="padding:6px 12px;font-weight:600;">' + challenge.fecha + '</td></tr>' : '',
+          challenge.slot ? '<tr style="background:#f5f5f5;"><td style="padding:6px 12px;color:#555;">Hora</td><td style="padding:6px 12px;font-weight:600;">' + challenge.slot + '</td></tr>' : '',
+          challenge.cancha ? '<tr><td style="padding:6px 12px;color:#555;">Cancha</td><td style="padding:6px 12px;font-weight:600;">' + challenge.cancha + '</td></tr>' : '',
+          '</table>',
+          '<p style="margin:0 0 16px;color:#555;">Recuerda llevar pelotas y presentarte 5 minutos antes. ¡Buena suerte! 🎾</p>',
+          '<div style="text-align:center;margin:20px 0;"><a href="' + RANKING_URL + '" style="background:#1a6b3a;color:#fff;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px;">Ver mis desafíos</a></div>',
+          '<p style="color:#888;font-size:12px;margin:16px 0 0;">UCTenis — Plataforma de ranking universitario</p>',
+          '</div></div>'
+        ].join('');
+        MailApp.sendEmail({ to: j.email, subject: '⏰ UCTenis: Mañana juegas vs ' + j.rival + ' — ' + (challenge.slot || challenge.fecha), htmlBody: htmlBody, name: 'UCTenis Club' });
+      } catch(e) { console.warn('sendChallengeReminders error:', e.message); }
+    });
+  }
+}
+
+/**
+ * Alerta cuando quedan menos de 12h para que venza el plazo de respuesta.
+ * Instalar como trigger: Tiempo → Día → entre 12 y 13 PM (además del de las 8 AM)
+ */
+function sendExpiringChallengeAlerts() {
+  const sheet = getChallengesSheet();
+  const values = sheet.getDataRange().getValues();
+  const now = new Date().getTime();
+  const WARN_BEFORE_MS = 12 * 60 * 60 * 1000;
+  const RANKING_URL = 'https://uctenis.github.io/reservas-canchas/ranking.html#desafios';
+
+  for (let i = 1; i < values.length; i++) {
+    const challenge = challengeFromRow(values[i]);
+    if (challenge.status !== 'pendiente' || !challenge.retadoEmail) continue;
+    const createdAt = challengeTime(challenge.creado || challenge.actualizado);
+    if (!createdAt) continue;
+    const remaining = CHALLENGE_RESPONSE_MS - (now - createdAt);
+    if (remaining <= 0 || remaining > WARN_BEFORE_MS) continue;
+    const horas = Math.ceil(remaining / (60 * 60 * 1000));
+    const tipoLabel = text(challenge.tipo) === 'amistoso' ? 'amistoso' : 'desafío';
+    try {
+      const htmlBody = [
+        '<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;border:1px solid #e0e0e0;border-radius:10px;overflow:hidden;">',
+        '<div style="background:#e67e22;padding:24px;text-align:center;"><h1 style="color:#fff;margin:0;font-size:22px;">🎾 UCTenis</h1>',
+        '<p style="color:#fdebd0;margin:6px 0 0;">⏳ ¡Te quedan ' + horas + ' hora(s) para responder!</p></div>',
+        '<div style="padding:24px;">',
+        '<p style="font-size:16px;margin:0 0 16px;">Hola <strong>' + (challenge.retadoNombre || 'jugador') + '</strong>,</p>',
+        '<p style="margin:0 0 16px;"><strong>' + (challenge.retadorNombre || 'Un jugador') + '</strong> te envió un ' + tipoLabel + ' y te quedan <strong>' + horas + ' hora(s)</strong> para responder.</p>',
+        '<div style="text-align:center;margin:20px 0;"><a href="' + RANKING_URL + '" style="background:#e67e22;color:#fff;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px;">Responder ahora</a></div>',
+        '<p style="color:#888;font-size:12px;margin:16px 0 0;">UCTenis — Plataforma de ranking universitario</p>',
+        '</div></div>'
+      ].join('');
+      MailApp.sendEmail({ to: challenge.retadoEmail, subject: '⏳ UCTenis: ' + horas + 'h para responder el ' + tipoLabel + ' de ' + (challenge.retadorNombre || 'tu rival'), htmlBody: htmlBody, name: 'UCTenis Club' });
+    } catch(e) { console.warn('sendExpiringChallengeAlerts error:', e.message); }
+  }
+}
+
+/**
+ * Función unificada para el trigger diario.
+ * Instalar como trigger: Tiempo → Día → entre 8 y 9 AM
+ */
+function runDailyTrigger() {
+  try { retryPendingBookingSync(); } catch(e) { console.error('retryPendingBookingSync:', e.message); }
+  try { sendChallengeReminders(); } catch(e) { console.error('sendChallengeReminders:', e.message); }
+  try { sendExpiringChallengeAlerts(); } catch(e) { console.error('sendExpiringChallengeAlerts:', e.message); }
+  try { sendDailyCourtDigest(); } catch(e) { console.error('sendDailyCourtDigest:', e.message); }
+}
+
+/**
+ * Resumen semanal de desafíos para los admins.
+ * Instalar como trigger: Tiempo → Semana → Lunes → entre 8 y 9 AM
+ */
+function sendWeeklyChallengesSummary() {
+  const sheet = getChallengesSheet();
+  const values = sheet.getDataRange().getValues();
+  const adminEmails = (CONFIG.ADMINS.emails || []).filter(Boolean).join(',');
+  if (!adminEmails) return;
+  const now = new Date();
+  const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const RANKING_URL = 'https://uctenis.github.io/reservas-canchas/ranking.html#desafios';
+
+  const completados = [], activos = [], disputados = [];
+  for (let i = 1; i < values.length; i++) {
+    const c = challengeFromRow(values[i]);
+    if (!c.id) continue;
+    const tipo = text(c.tipo) === 'amistoso' ? '[Amistoso]' : '[Ranking]';
+    if (['completado','wo_retado','wo_retador'].indexOf(c.status) >= 0) {
+      const at = new Date(c.fechaConfirmacion || c.actualizado || '');
+      if (!isNaN(at) && at >= weekAgo) completados.push(tipo + ' ' + (c.retadorNombre||'?') + ' vs ' + (c.retadoNombre||'?') + ' — ' + (c.marcador||'W.O.'));
+    }
+    if (['pendiente','aceptado','resultado_pendiente'].indexOf(c.status) >= 0)
+      activos.push(tipo + ' ' + (c.retadorNombre||'?') + ' vs ' + (c.retadoNombre||'?') + ' [' + c.status + ']');
+    if (c.resultadoReclamado)
+      disputados.push((c.retadorNombre||'?') + ' vs ' + (c.retadoNombre||'?') + ' — ' + (c.marcador||'?'));
+  }
+
+  function section(title, items, empty) {
+    return '<h3 style="color:#2c3e50;border-bottom:1px solid #eee;padding-bottom:4px;">' + title + ' (' + items.length + ')</h3>'
+      + (items.length ? '<ul style="padding-left:20px;margin:0 0 16px;">' + items.map(function(x){ return '<li>' + x + '</li>'; }).join('') + '</ul>'
+                      : '<p style="color:#999;font-style:italic;">' + empty + '</p>');
+  }
+
+  try {
+    const htmlBody = [
+      '<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;border:1px solid #e0e0e0;border-radius:10px;overflow:hidden;">',
+      '<div style="background:#1a6b3a;padding:24px;text-align:center;"><h1 style="color:#fff;margin:0;font-size:22px;">🎾 UCTenis</h1>',
+      '<p style="color:#c8e6c9;margin:6px 0 0;">📊 Resumen Semanal de Desafíos</p></div>',
+      '<div style="padding:24px;">',
+      section('✅ Completados esta semana', completados, 'Sin partidos completados.'),
+      section('⚡ Desafíos activos', activos, 'No hay desafíos activos.'),
+      section('⚠️ Disputas pendientes', disputados, 'Sin disputas.'),
+      '<div style="text-align:center;margin:20px 0;"><a href="' + RANKING_URL + '" style="background:#1a6b3a;color:#fff;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;">Ver Ranking</a></div>',
+      '<p style="color:#888;font-size:12px;">UCTenis — Notificación automática semanal</p>',
+      '</div></div>'
+    ].join('');
+    MailApp.sendEmail({ to: adminEmails, subject: '📊 UCTenis — Resumen Semanal ' + Utilities.formatDate(now, 'America/Santiago', 'dd/MM/yyyy'), htmlBody: htmlBody, name: 'UCTenis Club' });
+  } catch(e) { console.error('sendWeeklyChallengesSummary:', e.message); }
+}
+
+/**
+ * Estadísticas mensuales personalizadas por jugador.
+ * Instalar como trigger: Tiempo → Mes → Día 1 → entre 8 y 9 AM
+ */
+function sendMonthlyPlayerStats() {
+  const sheet = getChallengesSheet();
+  const values = sheet.getDataRange().getValues();
+  const now = new Date();
+  const firstOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const firstOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const months = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const mesLabel = months[firstOfLastMonth.getMonth()] + ' ' + firstOfLastMonth.getFullYear();
+  const RANKING_URL = 'https://uctenis.github.io/reservas-canchas/ranking.html';
+
+  const stats = {};
+  function ensure(email, nombre) {
+    if (!email) return;
+    if (!stats[email]) stats[email] = { nombre: nombre || email, pj: 0, pg: 0, pp: 0 };
+  }
+
+  for (let i = 1; i < values.length; i++) {
+    const c = challengeFromRow(values[i]);
+    if (['completado','wo_retado','wo_retador'].indexOf(c.status) < 0) continue;
+    const at = new Date(c.fechaConfirmacion || c.actualizado || '');
+    if (isNaN(at) || at < firstOfLastMonth || at >= firstOfThisMonth) continue;
+    ensure(c.retadorEmail, c.retadorNombre);
+    ensure(c.retadoEmail, c.retadoNombre);
+    if (c.retadorEmail) stats[c.retadorEmail].pj++;
+    if (c.retadoEmail) stats[c.retadoEmail].pj++;
+    const ganEmail = c.ganadorId === c.retadorId ? c.retadorEmail : c.retadoEmail;
+    const perEmail = ganEmail === c.retadorEmail ? c.retadoEmail : c.retadorEmail;
+    if (ganEmail && stats[ganEmail]) stats[ganEmail].pg++;
+    if (perEmail && stats[perEmail]) stats[perEmail].pp++;
+  }
+
+  const rankingData = getRanking();
+  const rkMap = {};
+  [(rankingData.male||[]), (rankingData.female||[])].forEach(function(list) {
+    list.forEach(function(p) { if (p.email) rkMap[p.email.toLowerCase()] = p; });
+  });
+
+  Object.keys(stats).forEach(function(email) {
+    const s = stats[email];
+    const rk = rkMap[email.toLowerCase()] || {};
+    const pos = rk.posicion || '—';
+    const mov = (rk.posicion && rk.posicionAnterior)
+      ? (rk.posicion < rk.posicionAnterior ? '⬆️ +' + (rk.posicionAnterior - rk.posicion)
+       : rk.posicion > rk.posicionAnterior ? '⬇️ -' + (rk.posicion - rk.posicionAnterior) : '➡️ Sin cambios')
+      : '—';
+    try {
+      const htmlBody = [
+        '<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;border:1px solid #e0e0e0;border-radius:10px;overflow:hidden;">',
+        '<div style="background:#1a6b3a;padding:24px;text-align:center;"><h1 style="color:#fff;margin:0;font-size:22px;">🎾 UCTenis</h1>',
+        '<p style="color:#c8e6c9;margin:6px 0 0;">📈 Tu resumen de ' + mesLabel + '</p></div>',
+        '<div style="padding:24px;">',
+        '<p style="font-size:16px;margin:0 0 16px;">Hola <strong>' + s.nombre + '</strong>,</p>',
+        '<table style="width:100%;border-collapse:collapse;margin-bottom:20px;">',
+        '<tr style="background:#f5f5f5;"><td style="padding:6px 12px;color:#555;">Partidos jugados</td><td style="padding:6px 12px;font-weight:600;">' + s.pj + '</td></tr>',
+        '<tr><td style="padding:6px 12px;color:#555;">Victorias</td><td style="padding:6px 12px;font-weight:600;color:#1a6b3a;">✅ ' + s.pg + '</td></tr>',
+        '<tr style="background:#f5f5f5;"><td style="padding:6px 12px;color:#555;">Derrotas</td><td style="padding:6px 12px;font-weight:600;">' + s.pp + '</td></tr>',
+        '<tr><td style="padding:6px 12px;color:#555;">Posición actual</td><td style="padding:6px 12px;font-weight:600;">#' + pos + '</td></tr>',
+        '<tr style="background:#f5f5f5;"><td style="padding:6px 12px;color:#555;">Movimiento del mes</td><td style="padding:6px 12px;font-weight:600;">' + mov + '</td></tr>',
+        '</table>',
+        '<div style="text-align:center;margin:20px 0;"><a href="' + RANKING_URL + '" style="background:#1a6b3a;color:#fff;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;">Ver Ranking</a></div>',
+        '<p style="color:#888;font-size:12px;">UCTenis — Resumen mensual automático</p>',
+        '</div></div>'
+      ].join('');
+      MailApp.sendEmail({ to: email, subject: '📈 UCTenis — Tu resumen de ' + mesLabel, htmlBody: htmlBody, name: 'UCTenis Club' });
+    } catch(e) { console.warn('sendMonthlyPlayerStats error ' + email + ':', e.message); }
+  });
+}
+
+// =======================================================
+// 📅 AGENDA DIARIA Y FIN DE SEMANA — CORREOS DE CANCHAS
+// =======================================================
+
+/**
+ * Obtiene todas las reservas UCTenis de un día específico desde los calendarios de canchas.
+ * Devuelve un array de objetos { courtKey, courtName, slot, nombre, email } ordenado por hora.
+ * @param {string} dateStr - Fecha en formato 'yyyy-MM-dd'
+ * @returns {Array}
+ */
+function getBookingsForDate(dateStr) {
+  const offsetStr = getChileOffsetStr(dateStr);
+  const startOfDay = new Date(dateStr + 'T00:00:00' + offsetStr);
+  const endOfDay   = new Date(dateStr + 'T23:59:59' + offsetStr);
+
+  const bookings = [];
+  const occupiedKeys = {};
+  const databaseResult = getDatabaseBookingsForDate(dateStr);
+  if (databaseResult.ok) {
+    databaseResult.bookings.forEach(function(booking) {
+      const key = booking.courtId + '|' + booking.slot;
+      bookings.push({
+        id: booking.id,
+        courtKey: booking.courtId,
+        courtName: getCourtName(booking.courtId),
+        slot: booking.slot,
+        nombre: booking.name || 'Jugador/a',
+        email: booking.email || '',
+        rut: booking.rut || '',
+        userTypeLabel: booking.userTypeLabel || '',
+        status: booking.status
+      });
+      occupiedKeys[key] = true;
+    });
+  }
+
+  const mainCalId = CONFIG.MAIN_CALENDAR_ID || CONFIG.CALENDARS['cec1'];
+  try {
+    const calendar = CalendarApp.getCalendarById(mainCalId);
+    if (calendar) {
+      const events = calendar.getEvents(startOfDay, endOfDay);
+      events.forEach(function(ev) {
+        const title = ev.getTitle() || '';
+        const titleLower = title.toLowerCase();
+        // Incluir reservas UCTenis, desafíos y amistosos
+        if (!titleLower.includes('reserva uctenis') && !titleLower.includes('desafio') && !titleLower.includes('amistoso')) return;
+
+        const courtKey = detectCourtFromEvent(ev);
+        const desc = ev.getDescription() || '';
+        const emailMatch = desc.match(/correo:\s*([^\n\r]+)/i);
+        const rutMatch = desc.match(/rut:\s*([^\n\r]+)/i);
+        const tipoMatch = desc.match(/tipo:\s*([^\n\r]+)/i);
+        const userMatch = desc.match(/usuario:\s*([^\n\r]+)/i);
+
+        const cleanTitle = title.replace(/^\[[^\]]+\]\s*/i, '').replace(/^reserva uctenis\s*-\s*/i, '').trim();
+        const nombre = (userMatch && userMatch[1].trim()) || cleanTitle || 'Jugador/a';
+        const email = emailMatch ? emailMatch[1].trim() : '';
+        const rut = rutMatch ? rutMatch[1].trim() : '';
+        const userTypeLabel = tipoMatch ? tipoMatch[1].trim() : '';
+        const start = ev.getStartTime();
+        const slot = Utilities.formatDate(start, 'America/Santiago', 'HH:mm');
+        const bookingKey = courtKey + '|' + slot;
+        if (occupiedKeys[bookingKey]) return;
+
+        bookings.push({
+          courtKey: courtKey,
+          courtName: getCourtName(courtKey),
+          slot: slot,
+          nombre: nombre,
+          email: email,
+          rut: rut,
+          userTypeLabel: userTypeLabel,
+          status: 'confirmed'
+        });
+        occupiedKeys[bookingKey] = true;
+      });
+    }
+  } catch(e) {
+    console.warn('getBookingsForDate error en calendar maestro: ' + e.message);
+  }
+
+  // Ordenar por hora, luego por cancha
+  bookings.sort(function(a, b) {
+    if (a.slot !== b.slot) return a.slot < b.slot ? -1 : 1;
+    return a.courtKey < b.courtKey ? -1 : 1;
+  });
+
+  return bookings;
+}
+
+/**
+ * Genera el HTML de la tabla de reservas para el correo (administradores y seguridad).
+ * @param {Array} bookings - Array de reservas
+ * @returns {string} HTML de la tabla
+ */
+function buildCourtDigestTable(bookings) {
+  const rows = bookings.map(function(b, i) {
+    const bg = i % 2 === 0 ? 'background:#f9f9f9;' : '';
+    const rutLabel = b.rut ? ('<br><span style="color:#666;font-size:12px;">RUT: ' + b.rut + '</span>') : '';
+    const tipoBadge = b.userTypeLabel ? (' <span style="font-size:11px;background:#e8f5e9;color:#2e7d32;padding:2px 6px;border-radius:4px;font-weight:600;">' + b.userTypeLabel + '</span>') : '';
+    return '<tr style="' + bg + '">' +
+      '<td style="padding:8px 12px;font-weight:600;color:#1a6b3a;white-space:nowrap;">' + b.slot + '</td>' +
+      '<td style="padding:8px 12px;font-weight:600;">' + b.courtName + '</td>' +
+      '<td style="padding:8px 12px;">' + b.nombre + tipoBadge + rutLabel + '</td>' +
+      '</tr>';
+  }).join('');
+
+  return '<table style="width:100%;border-collapse:collapse;margin-bottom:20px;font-size:14px;">' +
+    '<thead><tr style="background:#1a6b3a;color:#fff;">' +
+    '<th style="padding:8px 12px;text-align:left;">Hora</th>' +
+    '<th style="padding:8px 12px;text-align:left;">Cancha</th>' +
+    '<th style="padding:8px 12px;text-align:left;">Reservado por / Acceso</th>' +
+    '</tr></thead>' +
+    '<tbody>' + rows + '</tbody>' +
+    '</table>';
+}
+
+/**
+ * Correo de agenda diaria de canchas para los admins.
+ * ✅ Solo se envía si hay al menos una reserva en el día.
+ * Instalar como trigger: Tiempo → Día → entre 7 y 8 AM
+ */
+function sendDailyCourtDigest() {
+  const adminEmails = (CONFIG.ADMINS.emails || []).filter(Boolean).join(',');
+  if (!adminEmails) return;
+
+  const today = new Date();
+  const dateStr = Utilities.formatDate(today, 'America/Santiago', 'yyyy-MM-dd');
+  const dateLabel = Utilities.formatDate(today, 'America/Santiago', "EEEE dd'/'MM'/'yyyy");
+
+  const bookings = getBookingsForDate(dateStr);
+
+  // ✅ Solo enviar si hay reservas
+  if (bookings.length === 0) {
+    console.log('sendDailyCourtDigest: Sin reservas para ' + dateStr + '. No se envía correo.');
+    return;
+  }
+
+  const table = buildCourtDigestTable(bookings);
+  const RESERVAS_URL = 'https://uctenis.github.io/reservas-canchas/reservas.html';
+
+  const htmlBody = [
+    '<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;border:1px solid #e0e0e0;border-radius:10px;overflow:hidden;">',
+    '<div style="background:#1a6b3a;padding:24px;text-align:center;">',
+    '<h1 style="color:#fff;margin:0;font-size:22px;">🎾 UCTenis</h1>',
+    '<p style="color:#c8e6c9;margin:6px 0 0;">📅 Agenda de canchas — Hoy</p>',
+    '</div>',
+    '<div style="padding:24px;">',
+    '<p style="font-size:15px;margin:0 0 16px;">Reservas confirmadas para el día de hoy <strong>' + dateLabel + '</strong>:</p>',
+    table,
+    '<div style="text-align:center;margin:20px 0;"><a href="' + RESERVAS_URL + '" style="background:#1a6b3a;color:#fff;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;">Ver reservas en línea</a></div>',
+    '<p style="color:#888;font-size:12px;">UCTenis — Notificación automática diaria</p>',
+    '</div></div>'
+  ].join('');
+
+  try {
+    MailApp.sendEmail({
+      to: adminEmails,
+      subject: '📅 UCTenis — Agenda de hoy ' + Utilities.formatDate(today, 'America/Santiago', 'dd/MM/yyyy') + ' (' + bookings.length + ' reserva' + (bookings.length !== 1 ? 's' : '') + ')',
+      htmlBody: htmlBody,
+      name: 'UCTenis Club'
+    });
+    console.log('sendDailyCourtDigest: Correo enviado con ' + bookings.length + ' reservas.');
+  } catch(e) {
+    console.error('sendDailyCourtDigest error al enviar: ' + e.message);
+  }
+}
+
+/**
+ * Correo de agenda del fin de semana para los admins.
+ * ✅ Solo se envía si hay al menos una reserva el sábado o el domingo.
+ * Instalar como trigger: Tiempo → Semana → Viernes → entre 7 y 8 AM
+ */
+function sendWeekendCourtDigest() {
+  const adminEmails = (CONFIG.ADMINS.emails || []).filter(Boolean).join(',');
+  if (!adminEmails) return;
+
+  // Calcular sábado y domingo de este fin de semana
+  const now = new Date();
+  const dayOfWeek = now.getDay(); // 0=Dom, 1=Lun ... 5=Vie, 6=Sab
+  const daysUntilSat = (6 - dayOfWeek + 7) % 7 || 7;
+  const saturday = new Date(now);
+  saturday.setDate(now.getDate() + daysUntilSat);
+  const sunday = new Date(saturday);
+  sunday.setDate(saturday.getDate() + 1);
+
+  const satStr = Utilities.formatDate(saturday, 'America/Santiago', 'yyyy-MM-dd');
+  const sunStr = Utilities.formatDate(sunday, 'America/Santiago', 'yyyy-MM-dd');
+  const satLabel = Utilities.formatDate(saturday, 'America/Santiago', 'dd/MM/yyyy');
+  const sunLabel = Utilities.formatDate(sunday, 'America/Santiago', 'dd/MM/yyyy');
+
+  const satBookings = getBookingsForDate(satStr);
+  const sunBookings = getBookingsForDate(sunStr);
+
+  // ✅ Solo enviar si hay reservas en al menos uno de los dos días
+  if (satBookings.length === 0 && sunBookings.length === 0) {
+    console.log('sendWeekendCourtDigest: Sin reservas para el fin de semana ' + satStr + '/' + sunStr + '. No se envía correo.');
+    return;
+  }
+
+  const RESERVAS_URL = 'https://uctenis.github.io/reservas-canchas/reservas.html';
+
+  function daySection(label, dayBookings) {
+    if (dayBookings.length === 0) {
+      return '<h3 style="color:#2c3e50;border-bottom:1px solid #eee;padding-bottom:4px;margin-bottom:8px;">' + label + '</h3>' +
+             '<p style="color:#999;font-style:italic;margin:0 0 20px;">Sin reservas agendadas.</p>';
+    }
+    return '<h3 style="color:#2c3e50;border-bottom:1px solid #eee;padding-bottom:4px;margin-bottom:8px;">' + label + ' (' + dayBookings.length + ' reserva' + (dayBookings.length !== 1 ? 's' : '') + ')</h3>' +
+           buildCourtDigestTable(dayBookings);
+  }
+
+  const totalReservas = satBookings.length + sunBookings.length;
+
+  const htmlBody = [
+    '<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;border:1px solid #e0e0e0;border-radius:10px;overflow:hidden;">',
+    '<div style="background:#1a6b3a;padding:24px;text-align:center;">',
+    '<h1 style="color:#fff;margin:0;font-size:22px;">🎾 UCTenis</h1>',
+    '<p style="color:#c8e6c9;margin:6px 0 0;">🏖️ Agenda del fin de semana</p>',
+    '</div>',
+    '<div style="padding:24px;">',
+    '<p style="font-size:15px;margin:0 0 20px;">Reservas confirmadas para el próximo fin de semana:</p>',
+    daySection('📅 Sábado ' + satLabel, satBookings),
+    daySection('📅 Domingo ' + sunLabel, sunBookings),
+    '<div style="text-align:center;margin:20px 0;"><a href="' + RESERVAS_URL + '" style="background:#1a6b3a;color:#fff;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;">Ver reservas en línea</a></div>',
+    '<p style="color:#888;font-size:12px;">UCTenis — Notificación automática semanal</p>',
+    '</div></div>'
+  ].join('');
+
+  try {
+    MailApp.sendEmail({
+      to: adminEmails,
+      subject: '🏖️ UCTenis — Agenda fin de semana ' + satLabel + ' (' + totalReservas + ' reserva' + (totalReservas !== 1 ? 's' : '') + ')',
+      htmlBody: htmlBody,
+      name: 'UCTenis Club'
+    });
+    console.log('sendWeekendCourtDigest: Correo enviado con ' + totalReservas + ' reservas.');
+  } catch(e) {
+    console.error('sendWeekendCourtDigest error al enviar: ' + e.message);
+  }
+}
+
+// =======================================================
+// 👤 FUNCIONARIOS UCT
+// =======================================================
+
+/**
+ * Helper: retorna las reservas de un usuario en un día específico.
+ * Usado por createBooking para la regla de 1 reserva/día.
+ *
+ * Solo consulta Firestore (fuente principal de reservas desde hace tiempo).
+ * Antes también barría los 4 calendarios buscando reservas "legacy" hechas
+ * directamente en Calendar antes de la migración — un costo de 4 llamadas a
+ * Calendar en cada intento de reserva. Como esta función solo se usa para
+ * fechas futuras, cualquier reserva legítima ya está en Firestore; el caso
+ * de una reserva legacy sin migrar para una fecha futura es prácticamente
+ * inexistente meses después de la migración.
+ */
+function getUserBookingsForDate(email, dateStr, idToken) {
+  if (!email || !dateStr) return { ok: true, bookings: [] };
+  const normalizedEmail = text(email).toLowerCase();
+  const databaseResult = getDatabaseBookingsForDate(dateStr, idToken);
+  // Antes esto devolvía [] si Firestore fallaba, y createBooking lo leía
+  // como "0 reservas hoy" — un hiccup transitorio de Firestore dejaba
+  // pasar una segunda reserva del mismo día sin que nadie lo notara. Ahora
+  // se propaga el error para que el llamador falle cerrado.
+  if (!databaseResult.ok) return { ok: false, msg: databaseResult.msg, bookings: [] };
+  return {
+    ok: true,
+    bookings: databaseResult.bookings
+      .filter(function(booking) { return text(booking.email).toLowerCase() === normalizedEmail; })
+      .map(function(booking) { return { courtId: booking.courtId, bookingId: booking.id, eventId: booking.calendarEventId || '' }; })
+  };
+}
+
+/**
+ * Admin: crea un nuevo funcionario UCT en Firebase y le envía email de bienvenida.
+ * Requiere: { adminEmail, adminPin, nombre, email, genero?, unidad?, telefono? }
+ */
+function adminCreateStaff(data) {
+  if (!checkAdminAccess(data)) return { ok: false, msg: 'Acceso restringido al administrador.' };
+  const requesterEmail = verifyGoogleIdToken(data && data.idToken);
+  const canManageAdminRoles = (CONFIG.ADMINS.emails || []).map(function(value) {
+    return text(value).toLowerCase();
+  }).indexOf(requesterEmail) >= 0;
+  let nombre  = text(data.nombre);
+  const email   = text(data.email).toLowerCase().trim();
+  const genero  = text(data.genero) || '';
+  const unidad  = text(data.unidad) || '';
+  const telefono = text(data.telefono) || '';
+  const isAdmin = canManageAdminRoles && (data.isAdmin === true || data.isAdmin === 'true');
+  if (!email)  return { ok: false, msg: 'El correo del funcionario es obligatorio.' };
+  if (!email.endsWith('@uct.cl')) return { ok: false, msg: 'El correo debe ser institucional (@uct.cl).' };
+
+  if (!nombre) {
+    const username = email.split('@')[0];
+    const parts = username.split('.');
+    nombre = parts.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
+  }
+
+  // Verificar que no exista ya en Firebase (via REST para Apps Script)
+  const fbResult = firebaseCreateStaff({
+    nombre, email, emailLower: email, genero, unidad, telefono,
+    activo: true, isAdmin: isAdmin, userType: 'funcionario',
+    creadoPor: text(data.adminEmail),
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  });
+
+  if (!fbResult.ok) return fbResult;
+
+  // Email de bienvenida al funcionario
+  try {
+    const appUrl = 'https://uctenis.github.io/reservas-canchas/reservas.html';
+    const htmlBody = [
+      '<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;border:1px solid #e0e0e0;border-radius:10px;overflow:hidden;">',
+      '<div style="background:#1a6b3a;padding:24px;text-align:center;">',
+      '<h1 style="color:#fff;margin:0;font-size:22px;">🎾 UCTenis</h1>',
+      '<p style="color:#c8e6c9;margin:6px 0 0;">Bienvenido/a al sistema de canchas UCT</p>',
+      '</div>',
+      '<div style="padding:24px;">',
+      '<p style="font-size:16px;margin:0 0 16px;">Hola <strong>' + nombre + '</strong>,</p>',
+      '<p style="margin:0 0 16px;">El administrador de UCTenis te ha habilitado para reservar canchas de tenis en la UCT.</p>',
+      '<table style="width:100%;border-collapse:collapse;margin-bottom:20px;">',
+      '<tr style="background:#f5f5f5;"><td style="padding:6px 12px;color:#555;">Tipo de acceso</td><td style="padding:6px 12px;font-weight:600;">Funcionario UCT</td></tr>',
+      '<tr><td style="padding:6px 12px;color:#555;">Correo registrado</td><td style="padding:6px 12px;font-weight:600;">' + email + '</td></tr>',
+      '<tr style="background:#f5f5f5;"><td style="padding:6px 12px;color:#555;">Anticipación máxima</td><td style="padding:6px 12px;font-weight:600;">48 horas</td></tr>',
+      '<tr><td style="padding:6px 12px;color:#555;">Límite diario</td><td style="padding:6px 12px;font-weight:600;">1 reserva por día</td></tr>',
+      '</table>',
+      '<p style="margin:0 0 16px;">Para reservar, ingresa con tu correo institucional UCT usando Google:</p>',
+      '<div style="text-align:center;margin:20px 0;"><a href="' + appUrl + '" style="background:#1a6b3a;color:#fff;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px;">Reservar Cancha</a></div>',
+      '<p style="color:#888;font-size:12px;margin:16px 0 0;">UCTenis — Sistema de reservas UCT</p>',
+      '</div></div>'
+    ].join('');
+    MailApp.sendEmail({
+      to: email,
+      subject: '🎾 UCTenis: Acceso habilitado para reservar canchas',
+      htmlBody: htmlBody,
+      name: 'UCTenis Club',
+      replyTo: (CONFIG.ADMINS.emails || [])[0] || ''
+    });
+  } catch(e) {
+    console.warn('adminCreateStaff: no se pudo enviar email de bienvenida:', e.message);
+  }
+
+  return { ok: true, msg: 'Funcionario creado y notificado por correo.', staff: fbResult.staff };
+}
+
+/**
+ * Admin: lista todos los funcionarios en Firestore.
+ */
+function adminListStaff(data) {
+  if (!checkAdminAccess(data)) return { ok: false, msg: 'Acceso restringido al administrador.' };
+  const fbResult = firebaseListStaff();
+  return fbResult;
+}
+
+/**
+ * Admin: actualiza datos de un funcionario.
+ * Puede activar/desactivar y cambiar nombre, unidad, teléfono, genero.
+ */
+function adminUpdateStaff(data) {
+  if (!checkAdminAccess(data)) return { ok: false, msg: 'Acceso restringido al administrador.' };
+  const requesterEmail = verifyGoogleIdToken(data && data.idToken);
+  const canManageAdminRoles = (CONFIG.ADMINS.emails || []).map(function(value) {
+    return text(value).toLowerCase();
+  }).indexOf(requesterEmail) >= 0;
+  const staffId = text(data.staffId);
+  if (!staffId) return { ok: false, msg: 'ID del funcionario requerido.' };
+  const patch = {};
+  if (data.nombre   !== undefined) patch.nombre   = text(data.nombre);
+  if (data.unidad   !== undefined) patch.unidad   = text(data.unidad);
+  if (data.telefono !== undefined) patch.telefono = text(data.telefono);
+  if (data.genero   !== undefined) patch.genero   = text(data.genero);
+  if (data.activo   !== undefined) patch.activo   = Boolean(data.activo);
+  if (canManageAdminRoles && data.isAdmin !== undefined) {
+    patch.isAdmin = data.isAdmin === true || data.isAdmin === 'true';
+  }
+  patch.updatedAt = new Date().toISOString();
+  patch.updatedBy = text(data.adminEmail);
+  const fbResult = firebasePatchStaff(staffId, patch);
+  return fbResult;
+}
+
+/**
+ * Admin: migra un usuario entre tipos (socio ↔ funcionario).
+ * Requiere: { adminEmail, adminPin, email, fromType, toType }
+ * ADVERTENCIA: fromType='socio' → toType='funcionario' es destructivo (se pierde posición ranking).
+ */
+function adminMigrateUser(data) {
+  if (!checkAdminAccess(data)) return { ok: false, msg: 'Acceso restringido al administrador.' };
+  const email    = text(data.email).toLowerCase().trim();
+  const fromType = text(data.fromType);
+  const toType   = text(data.toType);
+  if (!email)    return { ok: false, msg: 'Correo del usuario requerido.' };
+  if (!fromType || !toType) return { ok: false, msg: 'fromType y toType son requeridos.' };
+  if (fromType === toType)  return { ok: false, msg: 'El usuario ya es de ese tipo.' };
+
+  // La migración real en Firestore la ejecuta el cliente (db.migrateUserType).
+  // Este endpoint sólo valida el acceso de admin y envía notificación por email.
+  const nombreUsuario = text(data.nombre) || email;
+  const esAscenso = (fromType === 'funcionario' && toType === 'socio');
+  const tipoDestino = esAscenso ? 'Socio UCTenis' : 'Funcionario UCT';
+  const mensajeEmail = esAscenso
+    ? 'Ahora eres parte del Club UCTenis y tienes acceso al ranking y la escalerilla.'
+    : 'Tu perfil ha sido actualizado a Funcionario UCT. Puedes seguir reservando canchas.';
+
+  try {
+    MailApp.sendEmail({
+      to: email,
+      subject: '🎾 UCTenis: Tu perfil fue actualizado a ' + tipoDestino,
+      htmlBody: '<div style="font-family:Arial,sans-serif;max-width:520px;"><div style="background:#1a6b3a;padding:20px;text-align:center;"><h1 style="color:#fff;margin:0;">🎾 UCTenis</h1></div><div style="padding:20px;"><p>Hola <strong>' + nombreUsuario + '</strong>,</p><p>' + mensajeEmail + '</p><p style="color:#888;font-size:12px;">UCTenis — Sistema de reservas UCT</p></div></div>',
+      name: 'UCTenis Club'
+    });
+  } catch(e) { console.warn('adminMigrateUser email error:', e.message); }
+
+  return { ok: true, msg: nombreUsuario + ' migrado a ' + tipoDestino + '. Email de notificación enviado.', adminValidated: true };
+}
+
+/**
+ * Funcionario: actualiza sus propios datos opcionales (teléfono, unidad, foto).
+ * Requiere: { email, userType:'funcionario', ... campos editables }
+ */
+function updateOwnStaffProfile(data) {
+  const email = text(data.email).toLowerCase().trim();
+  if (!email) return { ok: false, msg: 'Correo requerido.' };
+  // La operación real ocurre en Firestore desde el cliente (DB.saveStaffCloud).
+  // Este endpoint sólo sirve como punto de registro y puede extenderse.
+  return { ok: true, msg: 'Perfil actualizado.' };
+}
+
+// ── Helpers Firebase REST para Apps Script (sin SDK) ──────────────────────
+
+function firebaseCreateStaff(staffData) {
+  try {
+    const projectId = CONFIG.FIREBASE_PROJECT_ID;
+    const apiKey    = CONFIG.FIREBASE_API_KEY;
+    const docId     = 'stf_' + staffData.emailLower.replace(/[^a-z0-9]/g, '_');
+    const url = 'https://firestore.googleapis.com/v1/projects/' + projectId +
+                '/databases/(default)/documents/uct_staff/' + docId + '?key=' + apiKey;
+    const fields = {};
+    Object.entries(staffData).forEach(([k, v]) => {
+      if (v === undefined) return;
+      if (typeof v === 'boolean') fields[k] = { booleanValue: v };
+      else fields[k] = { stringValue: String(v) };
+    });
+    const payload = JSON.stringify({ fields });
+    const response = UrlFetchApp.fetch(url, {
+      method: 'PATCH',
+      contentType: 'application/json',
+      payload,
+      muteHttpExceptions: true
+    });
+    if (response.getResponseCode() >= 400) {
+      return { ok: false, msg: 'Firebase error: ' + response.getContentText().substring(0, 200) };
+    }
+    return { ok: true, staff: { id: docId, ...staffData } };
+  } catch(e) {
+    return { ok: false, msg: 'Error al guardar en Firebase: ' + e.message };
+  }
+}
+
+function firebaseListStaff() {
+  try {
+    const projectId = CONFIG.FIREBASE_PROJECT_ID;
+    const apiKey    = CONFIG.FIREBASE_API_KEY;
+    const url = 'https://firestore.googleapis.com/v1/projects/' + projectId +
+                '/databases/(default)/documents/uct_staff?pageSize=200&key=' + apiKey;
+    const response = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+    if (response.getResponseCode() >= 400) return { ok: false, msg: 'Firebase error.' };
+    const raw = JSON.parse(response.getContentText());
+    const staff = (raw.documents || []).map(doc => {
+      const fields = doc.fields || {};
+      const out = { id: (doc.name || '').split('/').pop() };
+      Object.entries(fields).forEach(([k, v]) => {
+        out[k] = v.stringValue ?? v.booleanValue ?? v.integerValue ?? v.doubleValue ?? null;
+      });
+      return out;
+    });
+    return { ok: true, staff };
+  } catch(e) {
+    return { ok: false, msg: 'Error al leer funcionarios: ' + e.message };
+  }
+}
+
+function firebasePatchStaff(docId, patch) {
+  try {
+    const projectId = CONFIG.FIREBASE_PROJECT_ID;
+    const apiKey    = CONFIG.FIREBASE_API_KEY;
+    const fields = {};
+    Object.entries(patch).forEach(([k, v]) => {
+      if (v === undefined) return;
+      if (typeof v === 'boolean') fields[k] = { booleanValue: v };
+      else fields[k] = { stringValue: String(v) };
+    });
+    const updateMask = Object.keys(patch).map(k => 'updateMask.fieldPaths=' + k).join('&');
+    const url = 'https://firestore.googleapis.com/v1/projects/' + projectId +
+                '/databases/(default)/documents/uct_staff/' + docId + '?' + updateMask + '&key=' + apiKey;
+    const response = UrlFetchApp.fetch(url, {
+      method: 'PATCH', contentType: 'application/json',
+      payload: JSON.stringify({ fields }), muteHttpExceptions: true
+    });
+    if (response.getResponseCode() >= 400) return { ok: false, msg: 'Firebase patch error.' };
+    return { ok: true, msg: 'Funcionario actualizado.' };
+  } catch(e) {
+    return { ok: false, msg: 'Error al actualizar: ' + e.message };
+  }
+}
+
+/** Verifica que la petición venga de un admin válido */
+function checkAdminAccess(data) {
+  // Reutiliza la misma verificación de idToken que isAdminRequest: el correo
+  // debe venir confirmado por Google, no simplemente declarado por el cliente.
+  return isAdminRequest(data);
+}
