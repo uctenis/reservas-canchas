@@ -2418,6 +2418,10 @@ function challengeCard(challenge, users, session, compact) {
     }
     if (isChallengeResultDisputed(challenge)) {
       actions += `<span class="chal-status" style="align-self:center;">Reclamo enviado</span>`;
+      if (isAdmin) {
+        actions += `
+        <button class="btn-accept" type="button" data-action="resolve-dispute" data-challenge-id="${escapeAttr(challenge.id)}">Resolver disputa</button>`;
+      }
     }
   } else {
     if (canRespond) {
@@ -2537,6 +2541,7 @@ function handleChallengeAction(event) {
   if (button.dataset.action === 'confirm-result') completeChallengeResult(id, { button });
   if (button.dataset.action === 'dispute-result') disputeChallenge(id, button);
   if (button.dataset.action === 'dispute-challenge') disputeChallenge(id, button);
+  if (button.dataset.action === 'resolve-dispute') resolveChallengeDisputeAsAdmin(id, button);
   if (button.dataset.action === 'wo-retador') setChallengeWalkover(id, 'wo_retador', button);
   if (button.dataset.action === 'wo-retado') setChallengeWalkover(id, 'wo_retado', button);
   if (button.dataset.action === 'edit-challenge') openEditChallengeModal(id);
@@ -2705,6 +2710,76 @@ async function setChallengeWalkover(id, status, button) {
     refreshLocalRankingIfNeeded();
     renderAll();
     alert(`${label} registrado.`);
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.innerHTML = originalHtml;
+    }
+  }
+}
+
+// Antes un resultado reclamado no tenía ninguna salida: quedaba bloqueando
+// para siempre el cupo de "un desafío activo" de ambos jugadores. Esto le
+// da al admin una vía real para resolverlo (backend: admin_resolve_challenge_dispute).
+async function resolveChallengeDisputeAsAdmin(id, button) {
+  const challenge = DB.getChallenges().find(c => c.id === id);
+  if (!challenge) return;
+
+  const retadorLabel = challenge.retadorNombre || 'Retador';
+  const retadoLabel = challenge.retadoNombre || 'Retado';
+  const choice = prompt(
+    `¿Quién ganó realmente este partido?\n\n1 = ${retadorLabel} (retador)\n2 = ${retadoLabel} (retado)\n\nEscribe 1 o 2:`
+  );
+  if (choice !== '1' && choice !== '2') return;
+  const ganadorId = choice === '1' ? challenge.retadorId : challenge.retadoId;
+
+  const session = DB.getSession() || {};
+  const now = new Date().toISOString();
+  const patch = {
+    status: 'completado',
+    ganadorId,
+    fechaConfirmacion: now,
+    confirmadoPor: session.id || session.email || 'admin',
+    confirmadoPorEmail: session.email || '',
+    resultadoReclamado: false,
+    reclamoResultado: '',
+    fechaReclamo: '',
+    reclamadoPor: '',
+    actualizado: now
+  };
+
+  const originalHtml = button ? button.innerHTML : '';
+  if (button) {
+    button.disabled = true;
+    button.innerHTML = 'Resolviendo...';
+  }
+
+  try {
+    const updated = await persistChallengePatch(id, patch);
+
+    if (window.CONFIG?.API_URL) {
+      const idToken = await DB.getIdTokenOrReauth();
+      if (!idToken) throw new Error(DB.lastAuthError || 'Tu sesión venció.');
+      await fetch(window.CONFIG.API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: 'admin_resolve_challenge_dispute', id, ganadorId, idToken })
+      }).catch(err => console.warn('No se pudo resolver la disputa en Google Sheets:', err));
+    }
+
+    if (!updated.rankingAplicado && shouldChallengeMoveRanking(updated)) {
+      if (DB.isCloudConfigured()) {
+        await applyChallengeResultToCloudRanking(updated);
+      }
+      await persistChallengePatch(id, {
+        rankingAplicado: true,
+        rankingAplicadoAt: new Date().toISOString()
+      });
+    }
+
+    refreshLocalRankingIfNeeded();
+    renderAll();
+    alert('Disputa resuelta. La escalerilla fue actualizada.');
   } finally {
     if (button) {
       button.disabled = false;
@@ -4368,6 +4443,10 @@ async function submitScore(event) {
     const opponent = getAllPlayers().find(p => p.id === opponentId);
     if (!opponent) {
       error.textContent = 'Oponente no seleccionado o no válido.';
+      return;
+    }
+    if (opponent.id === playerA.id) {
+      error.textContent = 'El Jugador A y el oponente no pueden ser la misma persona.';
       return;
     }
     const dateVal = document.getElementById('scoreDate').value;

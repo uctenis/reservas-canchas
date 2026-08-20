@@ -101,9 +101,15 @@ function getCourtName(courtId) {
 /**
  * Detecta a qué cancha pertenece un evento del calendario unificado
  * analizando el título, descripción o ubicación.
+ *
+ * En modo `strict` (usado donde una mala detección podría dejar una cancha
+ * doblemente reservada) devuelve null cuando no hay coincidencia, en vez de
+ * asumir 'cec1' — así el llamador puede fallar cerrado (tratar el evento
+ * como ocupado en las 4 canchas) en lugar de liberar 3 canchas por error.
  */
-function detectCourtFromEvent(event) {
-  if (!event) return 'cec1';
+function detectCourtFromEvent(event, strict) {
+  const fallback = strict ? null : 'cec1';
+  if (!event) return fallback;
   const title = (event.getTitle() || '').toLowerCase();
   const desc = (event.getDescription() || '').toLowerCase();
   const loc = (event.getLocation() || '').toLowerCase();
@@ -120,7 +126,7 @@ function detectCourtFromEvent(event) {
   if (title.includes('cjp 1') || title.includes('cjp-1') || loc.includes('cjp 1')) return 'cjp1';
   if (title.includes('cjp 2') || title.includes('cjp-2') || loc.includes('cjp 2')) return 'cjp2';
 
-  return 'cec1';
+  return fallback;
 }
 
 // =======================================================
@@ -177,6 +183,7 @@ function handleRequest(data) {
       case "submit_challenge_result":  response = submitChallengeResult(data); break;
       case "confirm_challenge_result": response = confirmChallengeResult(data); break;
       case "dispute_challenge_result": response = disputeChallengeResult(data); break;
+      case "admin_resolve_challenge_dispute": response = adminResolveChallengeDispute(data); break;
       case "set_challenge_walkover":   response = setChallengeWalkover(data); break;
       case "admin_save_player":      response = adminSavePlayer(data); break;
       case "admin_delete_player":    response = adminDeletePlayer(data); break;
@@ -877,6 +884,23 @@ function challengeTime(value) {
   return isNaN(time) ? 0 : time;
 }
 
+/**
+ * Indica si ya llegó (o pasó) la fecha/hora agendada del partido. Sin fecha
+ * registrada se considera "pasada" para no bloquear registros legados que
+ * no la tengan — el resguardo es sólo para evitar reportar/confirmar un
+ * resultado o W.O. antes de que el partido pueda haber ocurrido.
+ */
+function challengeMatchTimeHasPassed(challenge) {
+  const fecha = text(challenge && challenge.fecha);
+  if (!fecha) return true;
+  try {
+    const slot = text(challenge.slot) || '23:59';
+    return Date.now() >= makeLocalDate(fecha, slot).getTime();
+  } catch (e) {
+    return true;
+  }
+}
+
 function isChallengeResultDisputed(challenge) {
   return Boolean(
     challenge &&
@@ -923,11 +947,45 @@ function getChallenges() {
       sheet.getRange(i + 1, 15).setValue(updatedAt);
       if (challenge.fechaConfirmacion) sheet.getRange(i + 1, 24).setValue(challenge.fechaConfirmacion);
       if (challenge.confirmadoPor) sheet.getRange(i + 1, 25).setValue(challenge.confirmadoPor);
+
       if (challenge.status === 'completado' && rowStatus === 'resultado_pendiente' && !challenge.rankingAplicado) {
-        const rankingUpdate = applyChallengeResultToRanking(challenge);
-        if (rankingUpdate.ok) {
-          sheet.getRange(i + 1, 30).setValue(new Date().toISOString());
-          challenge.rankingAplicado = new Date().toISOString();
+        // El ciclo leer-modificar-escribir de applyChallengeResultToRanking
+        // reescribe toda la hoja de ranking. confirmChallengeResult y
+        // setChallengeWalkover ya lo hacen bajo LockService; este disparador
+        // automático (auto-confirmación a las 48h) también debe serializarse
+        // con ellos o dos resoluciones casi simultáneas pueden pisarse y
+        // perder un movimiento de ranking en silencio.
+        const rankingLock = LockService.getScriptLock();
+        rankingLock.waitLock(15000);
+        try {
+          // Se relee el estado del "aplicado" bajo el lock por si otro
+          // proceso ya lo resolvió mientras se esperaba el candado.
+          const rankingAplicadoNow = text(sheet.getRange(i + 1, 30).getValue());
+          if (!rankingAplicadoNow) {
+            const rankingUpdate = applyChallengeResultToRanking(challenge);
+            if (rankingUpdate.ok) {
+              const appliedAt = new Date().toISOString();
+              sheet.getRange(i + 1, 30).setValue(appliedAt);
+              challenge.rankingAplicado = appliedAt;
+            }
+          } else {
+            challenge.rankingAplicado = rankingAplicadoNow;
+          }
+        } finally {
+          rankingLock.releaseLock();
+        }
+      }
+
+      if (challenge.status === 'vencido' && rowStatus === 'pendiente') {
+        // Una invitación sin responder pasa a vencido tras 48h; hasta ahora
+        // eso no liberaba la cancha reservada y el horario quedaba
+        // bloqueado indefinidamente pese a que el partido nunca se aceptó.
+        try {
+          if (challenge.bookingId && challenge.courtId) {
+            releaseChallengeBooking(challenge.bookingId, challenge.courtId);
+          }
+        } catch (e) {
+          console.warn('Error liberando cancha de desafío vencido: ' + e.message);
         }
       }
     }
@@ -1041,7 +1099,23 @@ function createChallenge(data) {
   sheet.appendRow(challengeToRow(challenge));
 
   if (challenge.status === 'completado') {
-    applyChallengeResultToRanking(challenge);
+    // Mismo LockService que usan confirmChallengeResult/setChallengeWalkover:
+    // un registro directo de resultado (p.ej. "Registrar amistoso") no debe
+    // pisarse con otra resolución de ranking que esté en curso al mismo
+    // tiempo para otro desafío.
+    const rankingLock = LockService.getScriptLock();
+    rankingLock.waitLock(15000);
+    try {
+      const rankingUpdate = applyChallengeResultToRanking(challenge);
+      if (rankingUpdate.ok) {
+        const appliedAt = new Date().toISOString();
+        challenge.rankingAplicado = appliedAt;
+        const appended = findChallengeRow(challenge.id);
+        if (appended) setChallengeRowPatch(appended.sheet, appended.rowNumber, { rankingAplicado: appliedAt });
+      }
+    } finally {
+      rankingLock.releaseLock();
+    }
   }
 
   return { ok: true, challenge: publicChallenge(challenge), notification: notificationResult };
@@ -1070,6 +1144,11 @@ function respondChallenge(data) {
       status: 'vencido',
       actualizado: challenge.actualizado || new Date().toISOString()
     });
+    try {
+      if (challenge.bookingId && challenge.courtId) {
+        releaseChallengeBooking(challenge.bookingId, challenge.courtId);
+      }
+    } catch (e) { console.warn('Error liberando cancha de desafío vencido: ' + e.message); }
     return { ok: false, msg: 'El plazo de 48 horas para responder este desafío ya venció.', challenge: publicChallenge(challenge) };
   }
   if (challenge.status !== 'pendiente' && status !== 'eliminado') {
@@ -1122,8 +1201,21 @@ function submitChallengeResult(data) {
     const previous = challengeFromRow(found.sheet.getRange(found.rowNumber, 1, 1, 30).getValues()[0]);
     const authorization = authorizeChallengeParticipant(data, previous);
     if (!authorization.ok) return authorization;
+    const requesterIsAdmin = isAdminRequest(data);
     if (['completado', 'wo_retador', 'wo_retado'].indexOf(previous.status) >= 0 && previous.rankingAplicado) {
       return { ok: false, msg: 'El resultado ya fue confirmado.' };
+    }
+    // Reenviar un marcador borraba en silencio cualquier reclamo activo,
+    // permitiendo que el mismo bug de auto-confirmación (ver
+    // confirmChallengeResult) se usara para pisar la disputa del rival.
+    if (isChallengeResultDisputed(previous) && !requesterIsAdmin) {
+      return { ok: false, msg: 'Este resultado está reclamado; un administrador debe resolverlo antes de reportar un nuevo marcador.' };
+    }
+    if (['aceptado', 'resultado_pendiente'].indexOf(previous.status) < 0 && !requesterIsAdmin) {
+      return { ok: false, msg: 'Solo se puede reportar un resultado para un desafío aceptado.' };
+    }
+    if (!requesterIsAdmin && !challengeMatchTimeHasPassed(previous)) {
+      return { ok: false, msg: 'Aún no llega la fecha del partido; no se puede reportar un resultado por adelantado.' };
     }
 
     const now = new Date().toISOString();
@@ -1202,6 +1294,18 @@ function confirmChallengeResult(data) {
     }
     if (['resultado_pendiente', 'completado'].indexOf(challenge.status) < 0) {
       return { ok: false, msg: 'El desafío no está esperando confirmación.' };
+    }
+    // Quien reportó el marcador no puede confirmárselo a sí mismo — eso
+    // debe hacerlo el rival. Se exceptúa la auto-confirmación automática de
+    // 48h (que igualmente ya aplica getChallenges() al leer), pero sólo si
+    // el plazo realmente se cumplió — nunca confiando ciegamente en un
+    // data.automatic que envía el propio cliente.
+    const submitterEmail = text(challenge.resultadoIngresadoPorEmail).toLowerCase();
+    const isSelfConfirm = Boolean(submitterEmail) && authorization.email === submitterEmail;
+    const resultAgeMs = Date.now() - challengeTime(challenge.fechaResultado || challenge.actualizado);
+    const autoConfirmEligible = resultAgeMs >= CHALLENGE_RESULT_CONFIRM_MS;
+    if (isSelfConfirm && !isAdminRequest(data) && !autoConfirmEligible) {
+      return { ok: false, msg: 'El resultado debe confirmarlo el rival, no quien lo reportó.' };
     }
 
     const now = new Date().toISOString();
@@ -1288,6 +1392,77 @@ function disputeChallengeResult(data) {
   }
 }
 
+/**
+ * Admin: resuelve un resultado reclamado — hasta ahora un resultado
+ * disputado no tenía ninguna vía de salida y dejaba a ambos jugadores
+ * bloqueados indefinidamente (resultado_pendiente cuenta como desafío
+ * activo). Requiere { id, ganadorId, marcador? } y admin verificado.
+ */
+function adminResolveChallengeDispute(data) {
+  if (!isAdminRequest(data)) return { ok: false, msg: 'Acceso reservado al administrador.' };
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  try {
+    const found = findChallengeRow(text(data.id));
+    if (!found) return { ok: false, msg: 'Desafío no encontrado.' };
+
+    const challenge = challengeFromRow(found.sheet.getRange(found.rowNumber, 1, 1, 30).getValues()[0]);
+    if (challenge.status !== 'resultado_pendiente') {
+      return { ok: false, msg: 'Solo se puede resolver un resultado pendiente de confirmación.' };
+    }
+    const ganadorId = text(data.ganadorId);
+    if (ganadorId !== challenge.retadorId && ganadorId !== challenge.retadoId) {
+      return { ok: false, msg: 'El ganador indicado no pertenece a este desafío.' };
+    }
+
+    const verifiedEmail = verifyGoogleIdToken(data.idToken);
+    const now = new Date().toISOString();
+    const patch = {
+      status: 'completado',
+      marcador: text(data.marcador) || challenge.marcador,
+      ganadorId: ganadorId,
+      fechaConfirmacion: now,
+      confirmadoPor: verifiedEmail || 'admin',
+      resultadoReclamado: false,
+      reclamoResultado: '',
+      fechaReclamo: '',
+      reclamadoPor: '',
+      actualizado: now
+    };
+
+    const updated = normalizeChallengeCompletion({ ...challenge, ...patch });
+    let rankingUpdate = { ok: true, skipped: true, msg: 'Ranking ya aplicado previamente.' };
+    if (!challenge.rankingAplicado) {
+      rankingUpdate = applyChallengeResultToRanking(updated);
+      if (rankingUpdate.ok) {
+        patch.rankingAplicado = now;
+        updated.rankingAplicado = now;
+      }
+    }
+
+    setChallengeRowPatch(found.sheet, found.rowNumber, patch);
+    updateChallengeInFirebase(challenge.id, {
+      status: 'completado',
+      marcador: patch.marcador,
+      ganadorId: patch.ganadorId,
+      fechaConfirmacion: patch.fechaConfirmacion,
+      confirmadoPor: patch.confirmadoPor,
+      resultadoReclamado: 'false',
+      reclamoResultado: '',
+      fechaReclamo: '',
+      reclamadoPor: '',
+      actualizado: now,
+      rankingAplicado: patch.rankingAplicado || challenge.rankingAplicado || ''
+    });
+
+    const saved = challengeFromRow(found.sheet.getRange(found.rowNumber, 1, 1, 30).getValues()[0]);
+    return { ok: true, challenge: publicChallenge(saved), rankingUpdate: rankingUpdate };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 function setChallengeWalkover(data) {
   const lock = LockService.getScriptLock();
   lock.waitLock(15000);
@@ -1306,6 +1481,13 @@ function setChallengeWalkover(data) {
     if (!authorization.ok) return authorization;
     if (challenge.status !== 'aceptado') {
       return { ok: false, msg: 'Solo se puede marcar W.O. en un desafío aceptado.' };
+    }
+    // Un W.O. declara que el rival no se presentó — no puede reclamarse
+    // antes de que siquiera empiece el horario agendado del partido. Un
+    // admin puede resolverlo en cualquier momento (p.ej. con evidencia
+    // aportada fuera del sistema).
+    if (!isAdminRequest(data) && !challengeMatchTimeHasPassed(challenge)) {
+      return { ok: false, msg: 'Aún no llega la hora agendada del partido; no se puede declarar W.O. por adelantado.' };
     }
 
     const now = new Date().toISOString();
@@ -1403,8 +1585,45 @@ function hasActiveChallengeInRole(sheet, role, ref, excludeId) {
   return false;
 }
 
+function isSamePlayerReference(a, b) {
+  const idA = text(a && a.id), idB = text(b && b.id);
+  const emailA = text(a && a.email).toLowerCase(), emailB = text(b && b.email).toLowerCase();
+  const nameA = norm(a && a.nombre), nameB = norm(b && b.nombre);
+  return Boolean((idA && idA === idB) || (emailA && emailA === emailB) || (nameA && nameA === nameB));
+}
+
+function hasUnresolvedChallengeBetween(sheet, refA, refB, excludeId) {
+  const values = sheet.getDataRange().getValues();
+  for (let i = 1; i < values.length; i++) {
+    const c = challengeFromRow(values[i]);
+    if (!c.id || c.id === excludeId) continue;
+    if (['pendiente', 'aceptado'].indexOf(c.status) < 0) continue;
+    const matchesA = challengePlayerMatchesRole(c, 'retador', refA) || challengePlayerMatchesRole(c, 'retado', refA);
+    const matchesB = challengePlayerMatchesRole(c, 'retador', refB) || challengePlayerMatchesRole(c, 'retado', refB);
+    if (matchesA && matchesB) return true;
+  }
+  return false;
+}
+
 function validateChallengeCreation(challenge) {
-  if (text(challenge.tipo) === 'amistoso' || text(challenge.tipo) === 'campeonato') return { ok: true };
+  const retadorRef = { id: challenge.retadorId, nombre: challenge.retadorNombre, email: challenge.retadorEmail };
+  const retadoRef  = { id: challenge.retadoId,  nombre: challenge.retadoNombre,  email: challenge.retadoEmail };
+
+  if (isSamePlayerReference(retadorRef, retadoRef)) {
+    return { ok: false, msg: 'No puedes desafiarte a ti mismo.' };
+  }
+
+  if (text(challenge.tipo) === 'amistoso' || text(challenge.tipo) === 'campeonato') {
+    // Amistoso/campeonato no tienen el límite de "un desafío activo" del
+    // ranking, pero antes tampoco tenían ningún resguardo: se podían crear
+    // invitaciones ilimitadas entre los mismos dos jugadores, cada una
+    // generando un evento real de Calendar y una reserva real en Firestore.
+    const sheet = getChallengesSheet();
+    if (challenge.status === 'pendiente' && hasUnresolvedChallengeBetween(sheet, retadorRef, retadoRef, challenge.id)) {
+      return { ok: false, msg: 'Ya existe una invitación sin resolver entre estos dos jugadores.' };
+    }
+    return { ok: true };
+  }
   if (challenge.status !== 'pendiente') return { ok: true };
 
   const genero = normalizeGender(challenge.genero);
@@ -1412,8 +1631,6 @@ function validateChallengeCreation(challenge) {
 
   const ss = getSpreadsheet();
   const entries = readRankingEntries(ss, genero);
-  const retadorRef = { id: challenge.retadorId, nombre: challenge.retadorNombre, email: challenge.retadorEmail };
-  const retadoRef  = { id: challenge.retadoId,  nombre: challenge.retadoNombre,  email: challenge.retadoEmail };
   const retadorIndex = findRankingEntryIndex(entries, retadorRef);
   const retadoIndex  = findRankingEntryIndex(entries, retadoRef);
 
@@ -2292,10 +2509,21 @@ function retryPendingBookingSync(idToken) {
     return result;
   }
   const nowMs = Date.now();
-  let confirmed = 0, cleaned = 0, failed = 0;
+  let confirmed = 0, cleaned = 0, failed = 0, deferred = 0;
 
-  result.bookings.slice(0, 500).forEach(function(booking) {
+  result.bookings.slice(0, 500).forEach(function(staleBooking) {
+    // Lock corto por reserva (no por todo el batch, para no bloquear al
+    // resto de la app durante todo el run) y relectura fresca justo antes
+    // de escribir: la reserva que trajo la consulta en bloque puede estar
+    // desactualizada si el usuario la canceló mientras tanto, y un PATCH a
+    // ciegas sobre esa copia vieja resucitaría la cancelación.
+    const lock = LockService.getScriptLock();
+    if (!lock.tryLock(5000)) { deferred++; return; }
     try {
+      const fresh = getBookingDocument(staleBooking.id, idToken);
+      if (!fresh.ok || !fresh.booking) return;
+      const booking = fresh.booking;
+
       if (booking.status === 'cancelled' && booking.calendarCleanupPending) {
         booking.syncAttempts = Number(booking.syncAttempts || 0) + 1;
         booking.lastSyncAttemptAt = new Date().toISOString();
@@ -2325,6 +2553,7 @@ function retryPendingBookingSync(idToken) {
       if (saveBookingDocument(booking, idToken).ok) confirmed++;
       else failed++;
     } catch (error) {
+      const booking = staleBooking;
       booking.syncAttempts = Number(booking.syncAttempts || 0) + (booking.lastSyncAttemptAt ? 0 : 1);
       booking.lastSyncAttemptAt = booking.lastSyncAttemptAt || new Date().toISOString();
       booking.status = booking.status === 'cancelled' ? 'cancelled' : 'calendar_retry';
@@ -2333,9 +2562,11 @@ function retryPendingBookingSync(idToken) {
       booking.updatedAt = new Date().toISOString();
       saveBookingDocument(booking, idToken);
       failed++;
+    } finally {
+      lock.releaseLock();
     }
   });
-  const summary = { ok: true, confirmed: confirmed, cleaned: cleaned, failed: failed, scanned: result.bookings.length };
+  const summary = { ok: true, confirmed: confirmed, cleaned: cleaned, failed: failed, deferred: deferred, scanned: result.bookings.length };
   summary.runStatus = recordBookingSyncRun(summary);
   return summary;
 }
@@ -2409,7 +2640,7 @@ function migrateCalendarBookingsInternal(data, actorEmail) {
   const start = new Date();
   start.setHours(0, 0, 0, 0);
   const end = new Date(start.getTime() + days * 24 * 60 * 60 * 1000);
-  let imported = 0, skipped = 0, failed = 0;
+  let imported = 0, skipped = 0, failed = 0, ambiguous = 0;
 
   const mainCalId = CONFIG.MAIN_CALENDAR_ID || CONFIG.CALENDARS['cec1'];
   try {
@@ -2418,7 +2649,12 @@ function migrateCalendarBookingsInternal(data, actorEmail) {
       calendar.getEvents(start, end).forEach(function(event) {
         const title = event.getTitle() || '';
         if (!/reserva uctenis/i.test(title) && !/desafio/i.test(title) && !/amistoso/i.test(title)) return;
-        const courtId = detectCourtFromEvent(event);
+        // No adivinar la cancha: importar un evento bajo la cancha
+        // equivocada puede "liberar" en Firestore una cancha que en
+        // realidad sigue ocupada por este mismo evento. Se deja para
+        // revisión manual del admin en vez de migrarlo mal.
+        const courtId = detectCourtFromEvent(event, true);
+        if (!courtId) { ambiguous++; return; }
         const eventStart = event.getStartTime();
         const dateStr = Utilities.formatDate(eventStart, 'America/Santiago', 'yyyy-MM-dd');
         const slot = Utilities.formatDate(eventStart, 'America/Santiago', 'HH:mm');
@@ -2462,7 +2698,7 @@ function migrateCalendarBookingsInternal(data, actorEmail) {
     console.warn('Migración Calendar maestro:', error.message);
     failed++;
   }
-  return { ok: failed === 0, imported: imported, skipped: skipped, failed: failed, days: days };
+  return { ok: failed === 0, imported: imported, skipped: skipped, failed: failed, ambiguous: ambiguous, days: days };
 }
 
 // =======================================================
@@ -2543,14 +2779,19 @@ function getAvailableSlots(dateStr, idToken, courtIdFilter) {
     const isClass = title.includes('clases uctenis') || title.includes('clase uctenis');
     if (isClass) busyLabel = 'Clases UCTenis';
 
-    const eventCourt = detectCourtFromEvent(e);
+    // Modo estricto: un evento cuya cancha no se puede determinar con
+    // certeza NO debe asumirse como 'cec1' — eso liberaría las otras 3
+    // canchas para ese horario aunque el evento real las esté ocupando.
+    // Se trata como ocupado en las 4 canchas (falla cerrado) hasta que un
+    // admin lo etiquete correctamente.
+    const eventCourt = detectCourtFromEvent(e, true);
     const timeItem = { start: e.getStartTime().getTime(), end: e.getEndTime().getTime(), label: busyLabel };
 
     if (isClass) {
-      if (title.includes('cjp') || eventCourt.startsWith('cjp')) {
+      if (title.includes('cjp') || (eventCourt && eventCourt.startsWith('cjp'))) {
         busyTimesByCourt['cjp1'].push(timeItem);
         busyTimesByCourt['cjp2'].push(timeItem);
-      } else if (title.includes('cec') || eventCourt.startsWith('cec')) {
+      } else if (title.includes('cec') || (eventCourt && eventCourt.startsWith('cec'))) {
         busyTimesByCourt['cec1'].push(timeItem);
         busyTimesByCourt['cec2'].push(timeItem);
       } else {
@@ -2559,6 +2800,11 @@ function getAvailableSlots(dateStr, idToken, courtIdFilter) {
           busyTimesByCourt[c].push(timeItem);
         });
       }
+    } else if (!eventCourt) {
+      ['cec1', 'cec2', 'cjp1', 'cjp2'].forEach(c => {
+        if (!busyTimesByCourt[c]) busyTimesByCourt[c] = [];
+        busyTimesByCourt[c].push(timeItem);
+      });
     } else {
       if (!busyTimesByCourt[eventCourt]) busyTimesByCourt[eventCourt] = [];
       busyTimesByCourt[eventCourt].push(timeItem);
@@ -2669,7 +2915,13 @@ function createBooking(data) {
     ? Number(dynamicConfig.maxBookingsPerDay) : 1;
   if (!isVerifiedAdmin && data.email && data.date) {
     const existingToday = getUserBookingsForDate(data.email, data.date, data.idToken);
-    if (existingToday.length >= maxPerDay) {
+    // Falla cerrado: si no se pudo comprobar el límite diario, no se debe
+    // asumir que el usuario no tiene reservas — eso saltaría la regla de
+    // negocio justo cuando Firestore está inestable.
+    if (!existingToday.ok) {
+      return { ok: false, msg: 'No se pudo comprobar tu límite de reservas diarias. Intenta nuevamente en unos segundos.' };
+    }
+    if (existingToday.bookings.length >= maxPerDay) {
       return { ok: false, msg: maxPerDay === 1
         ? 'Ya tienes una reserva para este día. Solo se permite 1 reserva diaria por jugador.'
         : 'Ya alcanzaste el máximo de ' + maxPerDay + ' reservas para este día.' };
@@ -2815,37 +3067,54 @@ function cancelBooking(data) {
   if (!verifiedEmail) return { ok: false, msg: 'Tu sesión de Google venció. Vuelve a ingresar antes de cancelar.' };
 
   const bookingId = text(data.bookingId || data.eventId);
-  const stored = getBookingDocument(bookingId, data.idToken);
-  if (!stored.ok) return { ok: false, msg: stored.msg || 'No se pudo leer la reserva.' };
 
-  if (stored.booking) {
-    const booking = stored.booking;
-    const ownerEmail = text(booking.email).toLowerCase();
-    if (verifiedEmail !== ownerEmail && !isAdminRequest(data)) {
-      return { ok: false, msg: 'No tienes permiso para cancelar esta reserva.' };
+  // saveBookingDocument hace un PATCH ciego del documento completo (sin
+  // updateMask), así que leer-modificar-escribir sin lock puede perder una
+  // escritura concurrente (p.ej. el cron de sincronización terminando de
+  // confirmar el mismo booking justo cuando el usuario lo cancela). Se
+  // serializa con el mismo LockService global que usan createBooking y
+  // retryPendingBookingSync.
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  try {
+    const stored = getBookingDocument(bookingId, data.idToken);
+    if (!stored.ok) return { ok: false, msg: stored.msg || 'No se pudo leer la reserva.' };
+
+    if (stored.booking) {
+      const booking = stored.booking;
+      const ownerEmail = text(booking.email).toLowerCase();
+      if (verifiedEmail !== ownerEmail && !isAdminRequest(data)) {
+        return { ok: false, msg: 'No tienes permiso para cancelar esta reserva.' };
+      }
+
+      const now = new Date().toISOString();
+      booking.status = 'cancelled';
+      booking.cancelledAt = now;
+      booking.cancelledBy = verifiedEmail;
+      booking.updatedAt = now;
+      booking.calendarCleanupPending = Boolean(booking.calendarEventId);
+      const cancelled = saveBookingDocument(booking, data.idToken);
+      if (!cancelled.ok) return { ok: false, msg: 'No se pudo liberar la reserva en la base de datos. ' + cancelled.msg };
+
+      // El horario ya quedó libre: 'cancelled' en Firestore es la fuente de
+      // verdad que usa getAvailableSlots, así que el usuario no necesita
+      // esperar a Calendar para eso. Borrar el evento es solo limpieza — se
+      // deja pendiente (calendarCleanupPending) y lo resuelve el trigger
+      // periódico retryPendingBookingSync, igual que ya hace con la creación
+      // cuando Calendar queda pendiente de sincronizar.
+      return {
+        ok: true,
+        msg: 'Reserva cancelada y horario liberado.',
+        booking: publicBooking(booking)
+      };
     }
-
-    const now = new Date().toISOString();
-    booking.status = 'cancelled';
-    booking.cancelledAt = now;
-    booking.cancelledBy = verifiedEmail;
-    booking.updatedAt = now;
-    booking.calendarCleanupPending = Boolean(booking.calendarEventId);
-    const cancelled = saveBookingDocument(booking, data.idToken);
-    if (!cancelled.ok) return { ok: false, msg: 'No se pudo liberar la reserva en la base de datos. ' + cancelled.msg };
-
-    // El horario ya quedó libre: 'cancelled' en Firestore es la fuente de
-    // verdad que usa getAvailableSlots, así que el usuario no necesita
-    // esperar a Calendar para eso. Borrar el evento es solo limpieza — se
-    // deja pendiente (calendarCleanupPending) y lo resuelve el trigger
-    // periódico retryPendingBookingSync, igual que ya hace con la creación
-    // cuando Calendar queda pendiente de sincronizar.
-    return {
-      ok: true,
-      msg: 'Reserva cancelada y horario liberado.',
-      booking: publicBooking(booking)
-    };
+    return cancelLegacyCalendarBooking(data, bookingId, verifiedEmail);
+  } finally {
+    lock.releaseLock();
   }
+}
+
+function cancelLegacyCalendarBooking(data, bookingId, verifiedEmail) {
 
   // Compatibilidad temporal con reservas antiguas cuyo ID era el de Calendar.
   const calId = CONFIG.MAIN_CALENDAR_ID || CONFIG.CALENDARS[text(data.courtId)] || CONFIG.CALENDARS['cec1'];
@@ -4069,13 +4338,20 @@ function sendWeekendCourtDigest() {
  * inexistente meses después de la migración.
  */
 function getUserBookingsForDate(email, dateStr, idToken) {
-  if (!email || !dateStr) return [];
+  if (!email || !dateStr) return { ok: true, bookings: [] };
   const normalizedEmail = text(email).toLowerCase();
   const databaseResult = getDatabaseBookingsForDate(dateStr, idToken);
-  if (!databaseResult.ok) return [];
-  return databaseResult.bookings
-    .filter(function(booking) { return text(booking.email).toLowerCase() === normalizedEmail; })
-    .map(function(booking) { return { courtId: booking.courtId, bookingId: booking.id, eventId: booking.calendarEventId || '' }; });
+  // Antes esto devolvía [] si Firestore fallaba, y createBooking lo leía
+  // como "0 reservas hoy" — un hiccup transitorio de Firestore dejaba
+  // pasar una segunda reserva del mismo día sin que nadie lo notara. Ahora
+  // se propaga el error para que el llamador falle cerrado.
+  if (!databaseResult.ok) return { ok: false, msg: databaseResult.msg, bookings: [] };
+  return {
+    ok: true,
+    bookings: databaseResult.bookings
+      .filter(function(booking) { return text(booking.email).toLowerCase() === normalizedEmail; })
+      .map(function(booking) { return { courtId: booking.courtId, bookingId: booking.id, eventId: booking.calendarEventId || '' }; })
+  };
 }
 
 /**

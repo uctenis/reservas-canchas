@@ -34,7 +34,7 @@ const context = {
   },
   Session: { getActiveUser() { return { getEmail() { return 'uctenisclub@gmail.com'; } }; } },
   ScriptApp: { getOAuthToken() { return 'server-token'; } },
-  LockService: { getScriptLock() { return { waitLock() {}, releaseLock() {} }; } },
+  LockService: { getScriptLock() { return { waitLock() {}, tryLock() { return true; }, releaseLock() {} }; } },
   ContentService: {
     MimeType: { JSON: 'json' },
     createTextOutput(value) { return { value, setMimeType() { return this; } }; }
@@ -42,6 +42,7 @@ const context = {
 };
 vm.createContext(context);
 vm.runInContext(fs.readFileSync('apps_script_backend.js', 'utf8'), context);
+const originalChallengeFromRow = context.challengeFromRow;
 
 function testSharedCalendarInvitation() {
   sentEmails.length = 0;
@@ -111,6 +112,7 @@ function testRetryCounterAndAdminAlert() {
   const saved = [];
   const origCreateBookingCalendarEvent = context.createBookingCalendarEvent;
   context.queryBookingDocuments = () => ({ ok: true, bookings: [booking] });
+  context.getBookingDocument = () => ({ ok: true, booking: { ...booking } });
   context.findCalendarEventForBooking = () => null;
   context.createBookingCalendarEvent = () => { throw new Error('Calendar temporalmente no disponible'); };
   context.saveBookingDocument = value => { saved.push({ ...value }); return { ok: true, booking: value }; };
@@ -257,6 +259,183 @@ function testCourtDigestTableAndSecurityFormat() {
   assert.match(htmlTable, /Funcionario UCT/);
 }
 
+function testConfirmResultBlocksSelfConfirmationButAllowsRival() {
+  const baseChallenge = {
+    id: 'chal-self', status: 'resultado_pendiente', tipo: 'ranking',
+    retadorEmail: 'ana@uct.cl', retadorNombre: 'Ana', retadorId: 'p1',
+    retadoEmail: 'bea@uct.cl', retadoNombre: 'Beatriz', retadoId: 'p2',
+    marcador: '6-4,6-3', ganadorId: 'p1',
+    resultadoIngresadoPorEmail: 'ana@uct.cl',
+    fechaResultado: new Date().toISOString(),
+    actualizado: new Date().toISOString(),
+    rankingAplicado: ''
+  };
+  const range = { getValues() { return [[]]; }, setValue() {} };
+  const sheet = { getRange() { return range; } };
+  context.findChallengeRow = () => ({ sheet, rowNumber: 2 });
+  context.challengeFromRow = () => ({ ...baseChallenge });
+  context.isAdminRequest = () => false;
+  let rankingApplied = false;
+  context.applyChallengeResultToRanking = () => { rankingApplied = true; return { ok: true, moved: true }; };
+  context.updateChallengeInFirebase = () => {};
+
+  context.verifyGoogleIdToken = () => 'ana@uct.cl'; // quien reportó el marcador
+  const selfResult = context.confirmChallengeResult({ id: 'chal-self', idToken: 'tok' });
+  assert.equal(selfResult.ok, false);
+  assert.match(selfResult.msg, /rival/i);
+  assert.equal(rankingApplied, false, 'no debe aplicar ranking si se auto-confirma');
+
+  context.verifyGoogleIdToken = () => 'bea@uct.cl'; // el rival
+  const rivalResult = context.confirmChallengeResult({ id: 'chal-self', idToken: 'tok' });
+  assert.equal(rivalResult.ok, true);
+  assert.equal(rankingApplied, true, 'el rival sí puede confirmar y mover el ranking');
+}
+
+function testWalkoverBlockedBeforeMatchTimeUnlessAdmin() {
+  const futureDate = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000);
+  const fecha = futureDate.toISOString().slice(0, 10);
+  const challenge = {
+    id: 'chal-wo', status: 'aceptado', tipo: 'ranking',
+    retadorEmail: 'ana@uct.cl', retadorNombre: 'Ana', retadorId: 'p1',
+    retadoEmail: 'bea@uct.cl', retadoNombre: 'Beatriz', retadoId: 'p2',
+    fecha: fecha, slot: '18:00'
+  };
+  const range = { getValues() { return [[]]; }, setValue() {} };
+  const sheet = { getRange() { return range; } };
+  context.findChallengeRow = () => ({ sheet, rowNumber: 2 });
+  context.challengeFromRow = () => ({ ...challenge });
+  context.verifyGoogleIdToken = () => 'ana@uct.cl';
+  context.updateChallengeInFirebase = () => {};
+  let rankingApplied = false;
+  context.applyChallengeResultToRanking = () => { rankingApplied = true; return { ok: true }; };
+
+  context.isAdminRequest = () => false;
+  const denied = context.setChallengeWalkover({ id: 'chal-wo', status: 'wo_retado', idToken: 'tok' });
+  assert.equal(denied.ok, false);
+  assert.match(denied.msg, /hora agendada/i);
+  assert.equal(rankingApplied, false);
+
+  context.isAdminRequest = () => true;
+  const allowed = context.setChallengeWalkover({ id: 'chal-wo', status: 'wo_retado', idToken: 'tok' });
+  assert.equal(allowed.ok, true);
+  assert.equal(rankingApplied, true, 'un admin sí puede declarar W.O. antes de la hora agendada');
+}
+
+function testSubmitResultBlocksResubmissionWhileDisputed() {
+  const challenge = {
+    id: 'chal-disputed', status: 'resultado_pendiente', tipo: 'ranking',
+    retadorEmail: 'ana@uct.cl', retadorNombre: 'Ana', retadorId: 'p1',
+    retadoEmail: 'bea@uct.cl', retadoNombre: 'Beatriz', retadoId: 'p2',
+    fecha: '2026-01-01', slot: '18:00',
+    resultadoReclamado: true, reclamoResultado: 'Marcador incorrecto.'
+  };
+  const range = { getValues() { return [[]]; }, setValue() {} };
+  const sheet = { getRange() { return range; } };
+  context.findChallengeRow = () => ({ sheet, rowNumber: 2 });
+  context.challengeFromRow = () => ({ ...challenge });
+  context.verifyGoogleIdToken = () => 'ana@uct.cl';
+  context.isAdminRequest = () => false;
+
+  const result = context.submitChallengeResult({ id: 'chal-disputed', marcador: '6-0,6-0', ganadorId: 'p1', idToken: 'tok' });
+  assert.equal(result.ok, false);
+  assert.match(result.msg, /reclamado/i);
+}
+
+function testAdminResolveChallengeDisputeAppliesRanking() {
+  const challenge = {
+    id: 'chal-resolve', status: 'resultado_pendiente', tipo: 'ranking',
+    retadorEmail: 'ana@uct.cl', retadorNombre: 'Ana', retadorId: 'p1',
+    retadoEmail: 'bea@uct.cl', retadoNombre: 'Beatriz', retadoId: 'p2',
+    marcador: '6-4,6-3', ganadorId: 'p1',
+    resultadoReclamado: true, reclamoResultado: 'Marcador incorrecto.',
+    rankingAplicado: ''
+  };
+  const range = { getValues() { return [[]]; }, setValue() {} };
+  const sheet = { getRange() { return range; } };
+  context.findChallengeRow = () => ({ sheet, rowNumber: 2 });
+  context.challengeFromRow = () => ({ ...challenge });
+  context.verifyGoogleIdToken = () => 'uctenisclub@gmail.com';
+  context.updateChallengeInFirebase = () => {};
+  let rankingApplied = false;
+  context.applyChallengeResultToRanking = () => { rankingApplied = true; return { ok: true }; };
+
+  context.isAdminRequest = () => false;
+  const denied = context.adminResolveChallengeDispute({ id: 'chal-resolve', ganadorId: 'p2', idToken: 'tok' });
+  assert.equal(denied.ok, false, 'no admin no puede resolver disputas');
+
+  context.isAdminRequest = () => true;
+  const resolved = context.adminResolveChallengeDispute({ id: 'chal-resolve', ganadorId: 'p2', idToken: 'tok' });
+  assert.equal(resolved.ok, true);
+  assert.equal(rankingApplied, true, 'resolver la disputa debe mover el ranking con el ganador definido por el admin');
+}
+
+function testExpiredChallengeReleasesCourtBooking() {
+  const challenge = {
+    id: 'chal-vencido', status: 'vencido', tipo: 'ranking',
+    bookingId: 'cec1_2026-01-05_1800', courtId: 'cec1', eventId: '',
+    retadorEmail: 'ana@uct.cl', retadorNombre: 'Ana',
+    retadoEmail: 'bea@uct.cl', retadoNombre: 'Beatriz',
+    actualizado: new Date().toISOString()
+  };
+  const range = { getValues() { return [[]]; }, setValue() {} };
+  const sheet = { getRange() { return range; }, deleteRow() {} };
+  context.verifyGoogleIdToken = () => 'bea@uct.cl';
+  context.findChallengeRow = () => ({ sheet, rowNumber: 2 });
+  context.challengeFromRow = () => ({ ...challenge });
+  let released = false;
+  context.releaseChallengeBooking = () => { released = true; return true; };
+
+  const result = context.respondChallenge({ id: challenge.id, accept: true, idToken: 'valid-token' });
+  assert.equal(result.ok, false);
+  assert.match(result.msg, /venció/i);
+  assert.equal(released, true, 'un desafío vencido debe liberar la cancha reservada');
+}
+
+function testDailyBookingLimitFailsClosedOnFirestoreError() {
+  context.getDatabaseBookingsForDate = () => ({ ok: false, msg: 'Firestore no disponible' });
+  const result = context.getUserBookingsForDate('jugador@uct.cl', '2026-08-20', 'tok');
+  assert.equal(result.ok, false, 'un error de Firestore debe propagarse, no interpretarse como 0 reservas');
+}
+
+function testValidateChallengeCreationRejectsSelfChallenge() {
+  const result = context.validateChallengeCreation({
+    tipo: 'amistoso',
+    status: 'pendiente',
+    retadorId: 'p1', retadorNombre: 'Ana', retadorEmail: 'ana@uct.cl',
+    retadoId: 'p1', retadoNombre: 'Ana', retadoEmail: 'ana@uct.cl'
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.msg, /a ti mismo/i);
+}
+
+function testValidateChallengeCreationBlocksDuplicateFriendlyInvite() {
+  const existing = {
+    id: 'chal-existing', status: 'pendiente', tipo: 'amistoso',
+    retadorId: 'p1', retadorNombre: 'Ana', retadorEmail: 'ana@uct.cl',
+    retadoId: 'p2', retadoNombre: 'Beatriz', retadoEmail: 'bea@uct.cl',
+    genero: 'F', fecha: '2026-08-25', cancha: 'CEC 1', marcador: '', ganadorId: '',
+    creado: new Date().toISOString(), actualizado: new Date().toISOString()
+  };
+  const headers = ['id','retadorId','retadorNombre','retadorEmail','retadoId','retadoNombre','retadoEmail','genero','fecha','cancha','status','marcador','ganadorId','creado','actualizado','slot','courtId','eventId','bookingId','tipo','fechaResultado','resultadoIngresadoPor','resultadoIngresadoPorEmail','fechaConfirmacion','confirmadoPor','resultadoReclamado','reclamoResultado','fechaReclamo','reclamadoPor','rankingAplicado'];
+  const row = context.challengeToRow(existing);
+  context.challengeFromRow = originalChallengeFromRow; // tests previas dejan un mock activo
+  context.getChallengesSheet = () => ({ getDataRange() { return { getValues() { return [headers, row]; } }; } });
+
+  const result = context.validateChallengeCreation({
+    id: 'chal-new', tipo: 'amistoso', status: 'pendiente',
+    retadorId: 'p1', retadorNombre: 'Ana', retadorEmail: 'ana@uct.cl',
+    retadoId: 'p2', retadoNombre: 'Beatriz', retadoEmail: 'bea@uct.cl'
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.msg, /invitación sin resolver/i);
+}
+
+function testDetectCourtFromEventStrictModeFailsClosed() {
+  const ambiguousEvent = { getTitle() { return 'Mantenimiento de cancha'; }, getDescription() { return ''; }, getLocation() { return ''; } };
+  assert.equal(context.detectCourtFromEvent(ambiguousEvent), 'cec1', 'modo no-estricto conserva el fallback histórico para vistas de solo lectura');
+  assert.equal(context.detectCourtFromEvent(ambiguousEvent, true), null, 'modo estricto no debe adivinar la cancha para no liberar otras 3 por error');
+}
+
 assert.equal(context.bookingDocumentId('CEC1', '2026-08-20', '18:00'), 'cec1_2026-08-20_1800');
 testSharedCalendarInvitation();
 testPendingCalendarCarriesBothGuests();
@@ -267,4 +446,13 @@ testRejectedChallengeReleasesCourtAndNotifiesChallenger();
 testSingleCalendarTaggingAndDetection();
 testCreateBookingCalendarEventFormat();
 testCourtDigestTableAndSecurityFormat();
+testConfirmResultBlocksSelfConfirmationButAllowsRival();
+testWalkoverBlockedBeforeMatchTimeUnlessAdmin();
+testSubmitResultBlocksResubmissionWhileDisputed();
+testAdminResolveChallengeDisputeAppliesRanking();
+testExpiredChallengeReleasesCourtBooking();
+testDailyBookingLimitFailsClosedOnFirestoreError();
+testValidateChallengeCreationRejectsSelfChallenge();
+testValidateChallengeCreationBlocksDuplicateFriendlyInvite();
+testDetectCourtFromEventStrictModeFailsClosed();
 console.log('backend_logic.test.js: OK');
