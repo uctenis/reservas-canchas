@@ -452,13 +452,17 @@ const DB = {
     if (user.isAdmin) return true; // El admin principal no requiere completar ranking
     if (user.userType === 'invitado') return true; // Acceso de solo lectura, no requiere ficha de jugador
 
-    // Campos comunes requeridos para todos (Socio y Funcionario)
-    if (!user.nombre || !user.email || !user.genero || !user.telefono || !user.rut) {
+    // Campos mínimos requeridos para todos (Socio y Funcionario)
+    // Nota: rut y telefono son deseables pero no son bloqueantes — muchos
+    // jugadores fueron registrados antes de que se añadieran esos campos
+    // a Firebase. Se piden en el formulario de completar perfil, pero no
+    // impiden el acceso si ya tienen nombre+email+genero válidos.
+    if (!user.nombre || !user.email || !user.genero) {
       return false;
     }
-    
-    // Limpieza de espacios
-    if (!String(user.nombre).trim() || !String(user.telefono).trim() || !String(user.rut).trim()) {
+
+    // Limpieza de espacios mínima
+    if (!String(user.nombre).trim()) {
       return false;
     }
 
