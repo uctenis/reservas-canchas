@@ -503,6 +503,23 @@ async function saveStaff() {
   
   if (!email)  { showModalMsg('El correo es obligatorio.','error'); return; }
   if (!email.endsWith('@uct.cl')) { showModalMsg('El correo debe terminar en @uct.cl.','error'); return; }
+
+  // ── Validación anti-duplicado (solo al crear, no al editar) ──
+  if (!sid) {
+    var dupSocio = allSocios.find(function(x){ return (x.email||'').toLowerCase() === email; });
+    var dupStaff = allStaff.find(function(x){ return (x.email||'').toLowerCase() === email; });
+    var dup = dupSocio || dupStaff;
+    if (dup) {
+      var tipo = dupSocio ? 'Socio UCTenis' : 'Funcionario UCT';
+      showModalMsg(
+        '⚠️ Ya existe un usuario con ese correo: ' + (dup.nombre || email) + ' (' + tipo + '). ' +
+        'Usa el botón "Editar" en la tabla para modificar sus datos.',
+        'error'
+      );
+      return;
+    }
+  }
+
   if (!nombre) {
     var username = email.split('@')[0];
     var parts = username.split('.');

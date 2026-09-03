@@ -949,9 +949,26 @@ const DB = {
 
   async savePlayerCloud(player, actor = {}) {
     if (!this.isCloudConfigured()) throw new Error('Firestore no está disponible.');
-    const id = player.id || makeFirebaseDocId(player.nombre || player.email, 'player');
+    let id = player.id || makeFirebaseDocId(player.nombre || player.email, 'player');
     const now = new Date().toISOString();
     const emailLower = normalizeEmailForDb(player.email);
+
+    // ── Anti-duplicado: si es un jugador nuevo (no tiene ID previo en Firestore),
+    //    buscar si ya existe un doc con ese email. Si existe, reutilizar su ID. ──
+    if (!player.id && emailLower) {
+      try {
+        const snap = await firebaseDb.collection(FIREBASE_COLLECTIONS.players)
+          .where('emailLower', '==', emailLower).limit(1).get();
+        if (!snap.empty) {
+          const existing = snap.docs[0];
+          id = existing.id; // reutilizar ID existente → merge en vez de crear duplicado
+          console.info('[DB] savePlayerCloud: email ya existe, actualizando doc', id, 'en vez de crear duplicado.');
+        }
+      } catch (dupCheckErr) {
+        console.warn('[DB] savePlayerCloud: no se pudo verificar duplicados:', dupCheckErr);
+      }
+    }
+
     const isActivo = player.activo !== undefined ? (player.activo !== false && player.activo !== 'false') : 
                      (player.participaRanking !== undefined ? (player.participaRanking !== false && player.participaRanking !== 'false') : true);
     const isParticipa = player.participaRanking !== undefined ? (player.participaRanking !== false && player.participaRanking !== 'false') : isActivo;
