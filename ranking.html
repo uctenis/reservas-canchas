@@ -1118,6 +1118,7 @@ function setupEvents() {
 
     const editAdminPlayer = event.target.closest('[data-action="admin-edit-player"]');
     if (editAdminPlayer) {
+      closeAdminRowMenu();
       fillAdminForm(editAdminPlayer.dataset.playerKey);
       document.getElementById('adminFormTitle').textContent = 'Editar jugador';
       document.getElementById('btnAdminDeletePlayerPhysical').style.display = 'inline-flex';
@@ -1125,8 +1126,17 @@ function setupEvents() {
       document.getElementById('adminFormView').classList.remove('hidden');
     }
 
+    const viewAdminProfile = event.target.closest('[data-action="show-profile"]');
+    if (viewAdminProfile && viewAdminProfile.dataset.playerKey) {
+      closeAdminRowMenu();
+      showPlayerProfile(viewAdminProfile.dataset.playerKey);
+    }
+
     const deleteAdminPlayer = event.target.closest('[data-action="admin-delete-player"]');
-    if (deleteAdminPlayer) deletePlayerFromAdmin(deleteAdminPlayer.dataset.playerKey);
+    if (deleteAdminPlayer) {
+      closeAdminRowMenu();
+      deletePlayerFromAdmin(deleteAdminPlayer.dataset.playerKey);
+    }
 
     const pagePrev = event.target.closest('[data-action="admin-page-prev"]');
     if (pagePrev) { adminPlayerListState.page--; renderAdminPlayerList(); }
@@ -5304,14 +5314,20 @@ function toggleAdminRowMenu(triggerBtn) {
   closeAdminRowMenu();
   if (alreadyOpenForThis) return;
 
-  const player = getAllPlayers().find(p => p.id === playerKey);
+  const player = getPlayerByKey(playerKey) || getAllPlayers().find(p => String(p.id) === String(playerKey));
   if (!player) return;
   const active = isPlayerActive(player);
 
   const menu = document.createElement('div');
   menu.className = 'admin-row-menu';
   menu.dataset.forKey = playerKey;
-  menu.innerHTML = `<button type="button" data-action="admin-delete-player" data-player-key="${escapeAttr(playerKey)}" class="${active ? 'danger' : ''}">${active ? 'Inactivar' : 'Mantener inactivo'}</button>`;
+  menu.innerHTML = `
+    <button type="button" data-action="admin-edit-player" data-player-key="${escapeAttr(player.id || playerKey)}">✏️ Editar datos</button>
+    <button type="button" data-action="show-profile" data-player-key="${escapeAttr(player.id || playerKey)}">👁️ Ver perfil</button>
+    <button type="button" data-action="admin-delete-player" data-player-key="${escapeAttr(player.id || playerKey)}" class="${active ? 'danger' : ''}">
+      ${active ? '🚫 Inactivar jugador' : '✅ Reactivar jugador'}
+    </button>
+  `;
   triggerBtn.closest('.admin-row-actions').appendChild(menu);
 
   document.addEventListener('keydown', closeAdminRowMenuOnEscape, { once: true });
@@ -5609,19 +5625,25 @@ async function deletePlayerFromAdmin(playerKey) {
   const player = getPlayerByKey(playerKey);
   const error = document.getElementById('adminErr');
   if (!player || !isPlayerAdminSession(session)) return;
-  if (!confirm(`Marcar a ${player.nombre} como inactivo en la escalerilla?`)) return;
+  const currentlyActive = isPlayerActive(player);
+  const newActive = !currentlyActive;
+  const msg = currentlyActive
+    ? `¿Marcar a ${player.nombre} como inactivo en la escalerilla?`
+    : `¿Deseas reactivar a ${player.nombre} en la escalerilla?`;
+  if (!confirm(msg)) return;
 
   try {
-    await DB.setPlayerActiveCloud(player, false, adminPayload(session));
+    await DB.setPlayerActiveCloud(player, newActive, adminPayload(session));
     await refreshRankingPage();
     resetAdminForm();
     renderAdminPlayerList();
   } catch (err) {
-    const inactivePlayer = { ...player, activo: false, participaRanking: false, posicion: '' };
-    savePlayerEditLocally(inactivePlayer);
+    const updatedPlayer = { ...player, activo: newActive, participaRanking: newActive };
+    savePlayerEditLocally(updatedPlayer);
     applyLocalPlayerEdits(rankingState.lists, rankingState.inactive);
     renderAll();
-    error.textContent = err.message || 'No se pudo actualizar Firebase; quedó inactivo solo localmente.';
+    renderAdminPlayerList();
+    if (error) error.textContent = err.message || 'No se pudo actualizar Firebase; se guardó cambio local.';
   }
 }
 

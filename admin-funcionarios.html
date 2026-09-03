@@ -80,9 +80,16 @@
     .msg-box.success{background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.25);color:#86efac;display:block}
     .msg-box.error{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.25);color:#fca5a5;display:block}
     .stats-row{display:flex;gap:16px;margin-bottom:24px;flex-wrap:wrap}
-    .stat-card{flex:1;min-width:140px;background:rgba(255,255,255,.04);border:var(--glass-border);border-radius:14px;padding:16px 20px;text-align:center}
-    .stat-number{font-size:2rem;font-weight:800;color:var(--accent-tennis)}
+    .stat-card{flex:1;min-width:140px;background:rgba(255,255,255,.04);border:var(--glass-border);border-radius:14px;padding:16px 20px;text-align:center;transition:all .3s;cursor:default}
+    .stat-card:hover{background:rgba(255,255,255,.07);transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.2)}
+    .stat-number{font-size:2rem;font-weight:800;color:var(--accent-tennis);transition:transform .2s}
+    .stat-card:hover .stat-number{transform:scale(1.08)}
     .stat-label{font-size:.8rem;color:var(--text-secondary);margin-top:2px}
+    .stat-card.ranking{background:rgba(198,211,0,.07);border-color:rgba(198,211,0,.2)}
+    .filter-row{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center}
+    .filter-chip{padding:5px 14px;border-radius:20px;border:1px solid rgba(255,255,255,.12);background:transparent;color:var(--text-secondary);cursor:pointer;font-size:.8rem;font-weight:600;transition:all .2s}
+    .filter-chip.active{background:rgba(198,211,0,.12);color:var(--accent-tennis);border-color:rgba(198,211,0,.3)}
+    .filter-chip:hover:not(.active){background:rgba(255,255,255,.06);color:var(--text-primary)}
     .user-info{display:flex;align-items:center;gap:10px}
     .user-avatar{width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0}
     .user-name{font-weight:600;font-size:.9rem}
@@ -210,8 +217,9 @@
   <div class="stats-row">
     <div class="stat-card"><div class="stat-number" id="statSocios">-</div><div class="stat-label">Socios UCTenis</div></div>
     <div class="stat-card"><div class="stat-number" id="statFuncionarios">-</div><div class="stat-label">Funcionarios UCT</div></div>
+    <div class="stat-card ranking"><div class="stat-number" id="statEnRanking">-</div><div class="stat-label">🏆 En Ranking</div></div>
     <div class="stat-card"><div class="stat-number" id="statActivos">-</div><div class="stat-label">Activos total</div></div>
-    <div class="stat-card"><div class="stat-number" id="statInactivos">-</div><div class="stat-label">Inactivos total</div></div>
+    <div class="stat-card" style="background:rgba(239,68,68,.06);border-color:rgba(239,68,68,.18);"><div class="stat-number" id="statInactivos" style="color:#f87171;">-</div><div class="stat-label">Inactivos total</div></div>
   </div>
 
   <div class="tabs-nav">
@@ -225,11 +233,20 @@
   <div id="panelSocios" class="glass-card">
     <div class="section-header">
       <div><h2 class="section-title">Socios UCTenis</h2><p class="section-sub">Jugadores con acceso al ranking, escalerilla y desafios. Anticipacion maxima: 7 dias.</p></div>
-      <a href="ranking.html#admin" class="btn-primary" style="text-decoration:none;">Editar Ranking</a>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <a href="ranking.html#admin" class="btn-primary" style="text-decoration:none;">✏️ Editar Ranking</a>
+        <button class="btn-primary" style="background:rgba(59,130,246,.2);color:#93c5fd;border:1px solid rgba(59,130,246,.3);" onclick="openNewSocioModal()">+ Agregar Socio</button>
+      </div>
     </div>
-    <input type="search" id="searchSocios" class="search-box" placeholder="Buscar socio..." oninput="filterTable('tableSocios',this.value)">
+    <div class="filter-row">
+      <input type="search" id="searchSocios" class="search-box" placeholder="Buscar socio..." oninput="applyFilterSocios()" style="margin-bottom:0;flex:1;min-width:180px;">
+      <button class="filter-chip active" id="fSocioTodos" onclick="setFilterSocios('todos')">Todos</button>
+      <button class="filter-chip" id="fSocioActivos" onclick="setFilterSocios('activos')">Activos</button>
+      <button class="filter-chip" id="fSocioRanking" onclick="setFilterSocios('ranking')">🏆 En Ranking</button>
+      <button class="filter-chip" id="fSocioInactivos" onclick="setFilterSocios('inactivos')">Inactivos</button>
+    </div>
     <div id="loadingSocios" style="text-align:center;color:var(--text-secondary);padding:20px;">Cargando socios...</div>
-    <div style="overflow-x:auto;"><table class="staff-table" id="tableSocios" style="display:none;"><thead><tr><th>Jugador</th><th>Genero</th><th>Categoria</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="tbodySocios"></tbody></table></div>
+    <div style="overflow-x:auto;"><table class="staff-table" id="tableSocios" style="display:none;"><thead><tr><th>Jugador</th><th>Genero</th><th>Categoria</th><th>Ranking</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="tbodySocios"></tbody></table></div>
   </div>
 
   <div id="panelFuncionarios" class="glass-card" style="display:none;">
@@ -237,7 +254,12 @@
       <div><h2 class="section-title">Funcionarios UCT</h2><p class="section-sub">Solo acceso a reservas de canchas. Anticipacion maxima: 48 horas. Max 1 reserva/dia.</p></div>
       <button class="btn-primary" onclick="openNewStaffModal()">+ Agregar Funcionario</button>
     </div>
-    <input type="search" id="searchFuncionarios" class="search-box" placeholder="Buscar funcionario..." oninput="filterTable('tableFuncionarios',this.value)">
+    <div class="filter-row">
+      <input type="search" id="searchFuncionarios" class="search-box" placeholder="Buscar funcionario..." oninput="applyFilterFuncionarios()" style="margin-bottom:0;flex:1;min-width:180px;">
+      <button class="filter-chip active" id="fFuncTodos" onclick="setFilterFuncionarios('todos')">Todos</button>
+      <button class="filter-chip" id="fFuncActivos" onclick="setFilterFuncionarios('activos')">Activos</button>
+      <button class="filter-chip" id="fFuncInactivos" onclick="setFilterFuncionarios('inactivos')">Inactivos</button>
+    </div>
     <div id="loadingFuncionarios" style="text-align:center;color:var(--text-secondary);padding:20px;">Cargando funcionarios...</div>
     <div style="overflow-x:auto;"><table class="staff-table" id="tableFuncionarios" style="display:none;"><thead><tr><th>Funcionario</th><th>Unidad</th><th>Telefono</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="tbodyFuncionarios"></tbody></table></div>
   </div>
@@ -311,54 +333,109 @@ async function loadFuncionarios() {
   catch(e) { document.getElementById('loadingFuncionarios').textContent = 'Error: '+e.message; }
 }
 
+function setFilterSocios(f) {
+  _filtroSocios = f;
+  document.querySelectorAll('#panelSocios .filter-chip').forEach(function(b){b.classList.remove('active');});
+  var ids = {todos:'fSocioTodos',activos:'fSocioActivos',ranking:'fSocioRanking',inactivos:'fSocioInactivos'};
+  if (ids[f]) document.getElementById(ids[f]).classList.add('active');
+  applyFilterSocios();
+}
+
+function applyFilterSocios() {
+  var q = (document.getElementById('searchSocios').value||'').toLowerCase().trim();
+  document.querySelectorAll('#tableSocios tbody tr').forEach(function(tr) {
+    var matchQ = !q || (tr.dataset.search||'').includes(q);
+    var matchF = true;
+    if (_filtroSocios==='activos') matchF = tr.dataset.activo==='true';
+    else if (_filtroSocios==='inactivos') matchF = tr.dataset.activo!=='true';
+    else if (_filtroSocios==='ranking') matchF = tr.dataset.ranking==='true';
+    tr.style.display = (matchQ && matchF) ? '' : 'none';
+  });
+}
+
+function setFilterFuncionarios(f) {
+  _filtroFuncionarios = f;
+  document.querySelectorAll('#panelFuncionarios .filter-chip').forEach(function(b){b.classList.remove('active');});
+  var ids = {todos:'fFuncTodos',activos:'fFuncActivos',inactivos:'fFuncInactivos'};
+  if (ids[f]) document.getElementById(ids[f]).classList.add('active');
+  applyFilterFuncionarios();
+}
+
+function applyFilterFuncionarios() {
+  var q = (document.getElementById('searchFuncionarios').value||'').toLowerCase().trim();
+  document.querySelectorAll('#tableFuncionarios tbody tr').forEach(function(tr) {
+    var matchQ = !q || (tr.dataset.search||'').includes(q);
+    var matchF = true;
+    if (_filtroFuncionarios==='activos') matchF = tr.dataset.activo==='true';
+    else if (_filtroFuncionarios==='inactivos') matchF = tr.dataset.activo!=='true';
+    tr.style.display = (matchQ && matchF) ? '' : 'none';
+  });
+}
+
 function renderSocios(list) {
   var tbody = document.getElementById('tbodySocios'), table = document.getElementById('tableSocios');
   document.getElementById('loadingSocios').style.display = 'none';
   tbody.innerHTML = '';
-  if (!list.length) { tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-secondary);padding:32px;">No hay socios registrados.</td></tr>'; table.style.display = 'table'; return; }
-  list.forEach(function(s) {
+  if (!list.length) { tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-secondary);padding:32px;">No hay socios registrados.</td></tr>'; table.style.display = 'table'; return; }
+  var sorted = list.slice().sort(function(a,b) {
+    var aA = a.activo!==false, bA = b.activo!==false;
+    var aR = aA && a.participaRanking!==false, bR = bA && b.participaRanking!==false;
+    if (aR !== bR) return aR ? -1 : 1;
+    if (aA !== bA) return aA ? -1 : 1;
+    return (a.nombre||'').localeCompare(b.nombre||'');
+  });
+  sorted.forEach(function(s) {
     var activo = s.activo !== false;
     var enRanking = activo && s.participaRanking !== false;
+    var posRanking = s.rankPos || s.pos || null;
     var tr = document.createElement('tr');
     tr.dataset.search = ((s.nombre||'')+' '+(s.email||'')).toLowerCase();
+    tr.dataset.activo = activo ? 'true' : 'false';
+    tr.dataset.ranking = enRanking ? 'true' : 'false';
+    var generoText = s.genero==='F' ? '&#9792; Femenino' : s.genero==='M' ? '&#9794; Masculino' : '&mdash;';
     tr.innerHTML = '<td><div class="user-info"><img src="'+(s.foto||'logo_uctenis_v03.png')+'" class="user-avatar" onerror="this.src=\'logo_uctenis_v03.png\'"><div><div class="user-name">'+e(s.nombre)+'</div><div class="user-email">'+e(s.email)+'</div></div></div></td>'
-      +'<td>'+(s.genero==='F'?'Femenino':s.genero==='M'?'Masculino':'-')+'</td>'
-      +'<td>'+e(s.categoria||'-')+'</td>'
-      +'<td style="min-width:130px"><div style="display:flex;flex-direction:column;gap:5px">'
-        +'<span class="badge '+(activo?'badge-activo':'badge-inactivo')+'">'+(activo?'✓ Activo':'✗ Inactivo')+'</span>'
-        +'<span class="badge '+(enRanking?'badge-ranking':'badge-sin-ranking')+'">'+(enRanking?'🏆 En ranking':'– Sin ranking')+'</span>'
-      +'</div></td>'
+      +'<td style="font-size:.85rem;color:var(--text-secondary);">'+generoText+'</td>'
+      +'<td>'+e(s.categoria||'&mdash;')+'</td>'
+      +'<td>'+(enRanking ? '<span class="badge badge-ranking">'+(posRanking ? '#'+posRanking : '&#127942; S&iacute;')+'</span>' : '<span class="badge badge-sin-ranking">&ndash; No</span>')+'</td>'
+      +'<td><span class="badge '+(activo?'badge-activo':'badge-inactivo')+'">'+(activo?'&#10003; Activo':'&#10007; Inactivo')+'</span></td>'
       +'<td><div style="display:flex;gap:6px;flex-wrap:wrap;">'
-        +'<button class="action-btn" onclick="openEditUserModal(\''+s.id+'\')">Editar</button>'
-        +'<button class="action-btn warning" onclick="openMigrateModal(\''+e(s.email)+'\',\''+e(s.nombre)+'\',\'socio\',\'funcionario\')">→ Funcionario</button>'
-        +(activo
-          ? '<button class="action-btn" style="'+(enRanking?'border-color:rgba(239,68,68,.35);color:#fca5a5':'border-color:rgba(198,211,0,.4);color:var(--accent-tennis)')+'" onclick="toggleSocioRanking(\''+s.id+'\',\''+e(s.nombre)+'\',' +(!enRanking)+')">'+(enRanking?'🏆 Quitar ranking':'🏆 Al ranking')+'</button>'
-          : '')
+        +'<button class="action-btn" onclick="openEditUserModal(\''+s.id+'\')">&#9998; Editar</button>'
+        +'<button class="action-btn warning" onclick="openMigrateModal(\''+e(s.email)+'\',\''+e(s.nombre)+'\',\'socio\',\'funcionario\')">Func.</button>'
+        +(activo ? '<button class="action-btn" style="'+(enRanking?'border-color:rgba(239,68,68,.35);color:#fca5a5':'border-color:rgba(198,211,0,.4);color:var(--accent-tennis)')+'" onclick="toggleSocioRanking(\''+s.id+'\',\''+e(s.nombre)+'\',' +(!enRanking)+')">'+( enRanking?'&#8855; Rank':'&#8854; Rank')+'</button>' : '')
         +'<button class="action-btn '+(activo?'danger':'success')+'" onclick="toggleSocioActive(\''+s.id+'\',\''+e(s.nombre)+'\',' +(!activo)+')">'+( activo?'Desactivar':'Activar')+'</button>'
       +'</div></td>';
     tbody.appendChild(tr);
   });
   table.style.display = 'table';
+  applyFilterSocios();
 }
 
 function renderFuncionarios(list) {
   var tbody = document.getElementById('tbodyFuncionarios'), table = document.getElementById('tableFuncionarios');
   document.getElementById('loadingFuncionarios').style.display = 'none';
   tbody.innerHTML = '';
-  if (!list.length) { tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-secondary);padding:32px;">No hay funcionarios. Usa el boton + Agregar Funcionario.</td></tr>'; table.style.display = 'table'; return; }
-  list.forEach(function(s) {
+  if (!list.length) { tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-secondary);padding:32px;">No hay funcionarios. Usa el bot&oacute;n + Agregar Funcionario.</td></tr>'; table.style.display = 'table'; return; }
+  var sorted = list.slice().sort(function(a,b) {
+    var aA = a.activo!==false, bA = b.activo!==false;
+    if (aA !== bA) return aA ? -1 : 1;
+    return (a.nombre||'').localeCompare(b.nombre||'');
+  });
+  sorted.forEach(function(s) {
     var activo = s.activo !== false, tr = document.createElement('tr');
     tr.dataset.search = ((s.nombre||'')+' '+(s.email||'')+' '+(s.unidad||'')).toLowerCase();
-    tr.innerHTML = '<td><div class="user-info"><div style="width:36px;height:36px;border-radius:50%;background:rgba(198,211,0,.12);display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0;">F</div><div><div class="user-name">'+e(s.nombre)+'</div><div class="user-email">'+e(s.email)+'</div></div></div></td>'
-      +'<td style="font-size:.85rem;color:var(--text-secondary);">'+e(s.unidad||'-')+'</td>'
-      +'<td style="font-size:.85rem;color:var(--text-secondary);">'+e(s.telefono||'-')+'</td>'
-      +'<td><span class="badge '+(activo?'badge-activo':'badge-inactivo')+'">'+(activo?'Activo':'Inactivo')+'</span></td>'
-      +'<td><div style="display:flex;gap:6px;flex-wrap:wrap;"><button class="action-btn" onclick="openEditUserModal(\''+s.id+'\')" >Editar</button>'
-      +'<button class="action-btn success" onclick="openMigrateModal(\''+e(s.email)+'\',\''+e(s.nombre)+'\',\'funcionario\',\'socio\')">-> Socio UCTenis</button>'
-      +'<button class="action-btn '+(activo?'danger':'success')+'" onclick="toggleStaffActive(\''+s.id+'\',\''+e(s.nombre)+'\','+(!activo)+')">'+( activo?'Desactivar':'Activar')+'</button></div></td>';
+    tr.dataset.activo = activo ? 'true' : 'false';
+    var initials = (s.nombre||'F').split(' ').map(function(p){return p[0]||'';}).slice(0,2).join('').toUpperCase() || 'F';
+    tr.innerHTML = '<td><div class="user-info"><div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,rgba(198,211,0,.25),rgba(198,211,0,.08));display:flex;align-items:center;justify-content:center;font-size:.85rem;font-weight:700;flex-shrink:0;color:var(--accent-tennis);border:1px solid rgba(198,211,0,.2);">'+initials+'</div><div><div class="user-name">'+e(s.nombre)+'</div><div class="user-email">'+e(s.email)+'</div></div></div></td>'
+      +'<td style="font-size:.85rem;color:var(--text-secondary);">'+e(s.unidad||'&mdash;')+'</td>'
+      +'<td style="font-size:.85rem;color:var(--text-secondary);">'+e(s.telefono||'&mdash;')+'</td>'
+      +'<td><span class="badge '+(activo?'badge-activo':'badge-inactivo')+'">'+(activo?'&#10003; Activo':'&#10007; Inactivo')+'</span></td>'
+      +'<td><div style="display:flex;gap:6px;flex-wrap:wrap;"><button class="action-btn" onclick="openEditUserModal(\''+s.id+'\')">&#9998; Editar</button>'
+      +'<button class="action-btn success" onclick="openMigrateModal(\''+e(s.email)+'\',\''+e(s.nombre)+'\',\'funcionario\',\'socio\')">&#8594; Socio</button>'
+      +'<button class="action-btn '+(activo?'danger':'success')+'" onclick="toggleStaffActive(\''+s.id+'\',\''+e(s.nombre)+'\',' +(!activo)+')">'+( activo?'Desactivar':'Activar')+'</button></div></td>';
     tbody.appendChild(tr);
   });
   table.style.display = 'table';
+  applyFilterFuncionarios();
 }
 
 function renderTodos() {
@@ -379,12 +456,26 @@ function renderTodos() {
   });
 }
 
+function animCount(el, target) {
+  var start = parseInt(el.textContent) || 0;
+  if (isNaN(start)) start = 0;
+  if (start === target) { el.textContent = target; return; }
+  var dur = 500, steps = 20, inc = (target - start) / steps, cur = start, i = 0;
+  var t = setInterval(function() {
+    i++; cur += inc;
+    el.textContent = Math.round(i >= steps ? target : cur);
+    if (i >= steps) clearInterval(t);
+  }, dur / steps);
+}
+
 function updateStats() {
   var tot = allSocios.concat(allStaff), act = tot.filter(function(u){return u.activo!==false;}).length;
-  document.getElementById('statSocios').textContent = allSocios.length;
-  document.getElementById('statFuncionarios').textContent = allStaff.length;
-  document.getElementById('statActivos').textContent = act;
-  document.getElementById('statInactivos').textContent = tot.length - act;
+  var enRanking = allSocios.filter(function(s){return s.activo!==false && s.participaRanking!==false;}).length;
+  animCount(document.getElementById('statSocios'), allSocios.length);
+  animCount(document.getElementById('statFuncionarios'), allStaff.length);
+  animCount(document.getElementById('statEnRanking'), enRanking);
+  animCount(document.getElementById('statActivos'), act);
+  animCount(document.getElementById('statInactivos'), tot.length - act);
 }
 
 function filterTable(tid, q) {
@@ -420,11 +511,11 @@ function onActivoChange(chk) {
   }
 }
 
-function openNewStaffModal() {
+function openNewStaffModal(preset) {
   document.getElementById('modalStaffTitle').textContent = 'Agregar Nuevo Usuario';
   document.getElementById('modalStaffSub').textContent = 'El usuario será registrado y completará su perfil al iniciar sesión.';
   document.getElementById('staffUserTypeRow').style.display = 'block';
-  document.getElementById('staffUserType').value = 'funcionario';
+  document.getElementById('staffUserType').value = preset || 'funcionario';
   ['staffDocId','staffNombre','staffEmail','staffUnidad','staffTelefono'].forEach(function(id){document.getElementById(id).value='';});
   document.getElementById('staffEmail').disabled = false;
   document.getElementById('staffGenero').value = '';
@@ -437,6 +528,8 @@ function openNewStaffModal() {
   toggleModalFields();
   document.getElementById('modalStaff').classList.add('open');
 }
+
+function openNewSocioModal() { openNewStaffModal('socio'); }
 
 function openEditUserModal(uid) {
   var s = allStaff.find(function(x){return x.id===uid;}) || allSocios.find(function(x){return x.id===uid;});
