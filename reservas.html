@@ -1130,8 +1130,8 @@ async function loadFriendlyOpponents() {
     const sortedPlayers = allPlayers
       .filter(p => {
         const isMe = (p.email && p.email.toLowerCase() === meEmail) || (p.nombre && p.nombre.toLowerCase() === meNombre) || p.id === session.id;
-        const isActive = p.activo !== false;
-        return !isMe && isActive;
+        // Jugadores inactivos del ranking igual pueden reservar canchas y aparecer como compañeros
+        return !isMe;
       })
       .sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '', 'es'));
 

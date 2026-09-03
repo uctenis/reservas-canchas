@@ -159,8 +159,15 @@
 
     <div class="form-group" id="staffActivoGroup" style="display:none;">
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
-        <input type="checkbox" id="staffActivo" style="width:16px;height:16px;" checked> Activo (puede reservar canchas)
+        <input type="checkbox" id="staffActivo" style="width:16px;height:16px;" checked
+          onchange="onActivoChange(this)"> Activo (puede reservar canchas)
       </label>
+    </div>
+    <div class="form-group" id="staffRankingGroup" style="display:none;">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+        <input type="checkbox" id="staffParticipaRanking" style="width:16px;height:16px;" checked> Participa en el ranking
+      </label>
+      <small style="display:block;margin-top:4px;color:var(--text-secondary);">Si el jugador está inactivo, no participará en el ranking automáticamente.</small>
     </div>
     <div class="form-group" style="padding:12px 14px;border:1px solid rgba(163,230,53,.3);border-radius:10px;background:rgba(163,230,53,.07);">
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
@@ -386,6 +393,21 @@ function toggleModalFields() {
   }
 }
 
+function onActivoChange(chk) {
+  var rankingChk = document.getElementById('staffParticipaRanking');
+  if (!rankingChk) return;
+  if (!chk.checked) {
+    // Al desactivar: quitar del ranking automáticamente y deshabilitar el control
+    rankingChk.checked = false;
+    rankingChk.disabled = true;
+    rankingChk.parentElement.style.opacity = '0.45';
+  } else {
+    // Al reactivar: habilitar el control (el admin decide si vuelve al ranking)
+    rankingChk.disabled = false;
+    rankingChk.parentElement.style.opacity = '1';
+  }
+}
+
 function openNewStaffModal() {
   document.getElementById('modalStaffTitle').textContent = 'Agregar Nuevo Usuario';
   document.getElementById('modalStaffSub').textContent = 'El usuario será registrado y completará su perfil al iniciar sesión.';
@@ -395,6 +417,7 @@ function openNewStaffModal() {
   document.getElementById('staffEmail').disabled = false;
   document.getElementById('staffGenero').value = '';
   document.getElementById('staffActivoGroup').style.display = 'none';
+  document.getElementById('staffRankingGroup').style.display = 'none';
   document.getElementById('staffEsAdmin').checked = false;
   document.getElementById('staffEsAdmin').disabled = !canManageAdminRoles();
   document.getElementById('btnSaveStaff').textContent = 'Crear y Notificar';
@@ -422,6 +445,16 @@ function openEditUserModal(uid) {
   document.getElementById('staffEsAdmin').checked = s.isAdmin === true || ADMIN_EMAILS.includes((s.email || '').toLowerCase());
   document.getElementById('staffEsAdmin').disabled = !canManageAdminRoles();
   document.getElementById('staffActivoGroup').style.display = 'block';
+  if (userType === 'socio') {
+    var rankingChk = document.getElementById('staffParticipaRanking');
+    var isActivo = s.activo !== false;
+    rankingChk.checked = isActivo && s.participaRanking !== false;
+    rankingChk.disabled = !isActivo;
+    rankingChk.parentElement.style.opacity = isActivo ? '1' : '0.45';
+    document.getElementById('staffRankingGroup').style.display = 'block';
+  } else {
+    document.getElementById('staffRankingGroup').style.display = 'none';
+  }
   document.getElementById('btnSaveStaff').textContent = 'Guardar Cambios';
   document.getElementById('modalMsg').innerHTML = '';
   
@@ -481,7 +514,7 @@ async function saveStaff() {
         reves: document.getElementById('staffReves').value,
         telefono: tel,
         activo: activo,
-        participaRanking: activo,
+        participaRanking: document.getElementById('staffParticipaRanking').checked,
         isAdmin: isAdmin,
         userType: 'socio'
       });
