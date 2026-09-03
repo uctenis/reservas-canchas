@@ -47,6 +47,8 @@
     .badge-func{background:rgba(198,211,0,.12);color:var(--accent-tennis);border:1px solid rgba(198,211,0,.25)}
     .badge-activo{background:rgba(34,197,94,.15);color:#86efac;border:1px solid rgba(34,197,94,.25)}
     .badge-inactivo{background:rgba(239,68,68,.12);color:#fca5a5;border:1px solid rgba(239,68,68,.2)}
+    .badge-ranking{background:rgba(198,211,0,.13);color:var(--accent-tennis);border:1px solid rgba(198,211,0,.3)}
+    .badge-sin-ranking{background:rgba(100,116,139,.13);color:#94a3b8;border:1px solid rgba(100,116,139,.25)}
     .action-btn{padding:5px 12px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.06);color:#f8fafc;cursor:pointer;font-size:.78rem;font-weight:600;transition:all .2s;white-space:nowrap}
     .action-btn:hover{background:rgba(255,255,255,.14);transform:translateY(-1px)}
     .action-btn.danger{border-color:rgba(239,68,68,.35);color:#fca5a5}
@@ -315,15 +317,25 @@ function renderSocios(list) {
   tbody.innerHTML = '';
   if (!list.length) { tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-secondary);padding:32px;">No hay socios registrados.</td></tr>'; table.style.display = 'table'; return; }
   list.forEach(function(s) {
-    var activo = s.activo !== false, tr = document.createElement('tr');
+    var activo = s.activo !== false;
+    var enRanking = activo && s.participaRanking !== false;
+    var tr = document.createElement('tr');
     tr.dataset.search = ((s.nombre||'')+' '+(s.email||'')).toLowerCase();
     tr.innerHTML = '<td><div class="user-info"><img src="'+(s.foto||'logo_uctenis_v03.png')+'" class="user-avatar" onerror="this.src=\'logo_uctenis_v03.png\'"><div><div class="user-name">'+e(s.nombre)+'</div><div class="user-email">'+e(s.email)+'</div></div></div></td>'
       +'<td>'+(s.genero==='F'?'Femenino':s.genero==='M'?'Masculino':'-')+'</td>'
       +'<td>'+e(s.categoria||'-')+'</td>'
-      +'<td><span class="badge '+(activo?'badge-activo':'badge-inactivo')+'">'+(activo?'Activo':'Inactivo')+'</span></td>'
-      +'<td><div style="display:flex;gap:6px;flex-wrap:wrap;"><button class="action-btn" onclick="openEditUserModal(\''+s.id+'\')">Editar</button>'
-      +'<button class="action-btn warning" onclick="openMigrateModal(\''+e(s.email)+'\',\''+e(s.nombre)+'\',\'socio\',\'funcionario\')">-> Funcionario</button>'
-      +'<button class="action-btn '+(activo?'danger':'success')+'" onclick="toggleSocioActive(\''+s.id+'\',\''+e(s.nombre)+'\','+(!activo)+')">'+( activo?'Desactivar':'Activar')+'</button></div></td>';
+      +'<td style="min-width:130px"><div style="display:flex;flex-direction:column;gap:5px">'
+        +'<span class="badge '+(activo?'badge-activo':'badge-inactivo')+'">'+(activo?'✓ Activo':'✗ Inactivo')+'</span>'
+        +'<span class="badge '+(enRanking?'badge-ranking':'badge-sin-ranking')+'">'+(enRanking?'🏆 En ranking':'– Sin ranking')+'</span>'
+      +'</div></td>'
+      +'<td><div style="display:flex;gap:6px;flex-wrap:wrap;">'
+        +'<button class="action-btn" onclick="openEditUserModal(\''+s.id+'\')">Editar</button>'
+        +'<button class="action-btn warning" onclick="openMigrateModal(\''+e(s.email)+'\',\''+e(s.nombre)+'\',\'socio\',\'funcionario\')">→ Funcionario</button>'
+        +(activo
+          ? '<button class="action-btn" style="'+(enRanking?'border-color:rgba(239,68,68,.35);color:#fca5a5':'border-color:rgba(198,211,0,.4);color:var(--accent-tennis)')+'" onclick="toggleSocioRanking(\''+s.id+'\',\''+e(s.nombre)+'\',' +(!enRanking)+')">'+(enRanking?'🏆 Quitar ranking':'🏆 Al ranking')+'</button>'
+          : '')
+        +'<button class="action-btn '+(activo?'danger':'success')+'" onclick="toggleSocioActive(\''+s.id+'\',\''+e(s.nombre)+'\',' +(!activo)+')">'+( activo?'Desactivar':'Activar')+'</button>'
+      +'</div></td>';
     tbody.appendChild(tr);
   });
   table.style.display = 'table';
@@ -546,6 +558,13 @@ async function toggleStaffActive(sid,nombre,newA){
 async function toggleSocioActive(pid,nombre,newA){
   if (!confirm((newA?'Activar':'Desactivar')+' a '+nombre+'?')) return;
   try { await DB.setPlayerActiveCloud({id:pid},newA,{email:currentAdmin&&currentAdmin.email}); showGlobalMsg(nombre+' '+(newA?'activado':'desactivado')+'.','success'); await loadSocios();updateStats();renderTodos(); }
+  catch(er){showGlobalMsg('Error: '+er.message,'error');}
+}
+
+async function toggleSocioRanking(pid,nombre,newR){
+  var accion = newR ? 'agregar al ranking a' : 'quitar del ranking a';
+  if (!confirm('¿Deseas '+accion+' '+nombre+'?')) return;
+  try { await DB.setPlayerRankingCloud({id:pid},newR,{email:currentAdmin&&currentAdmin.email}); showGlobalMsg(nombre+' '+(newR?'agregado al ranking':'quitado del ranking')+'.','success'); await loadSocios();updateStats();renderTodos(); }
   catch(er){showGlobalMsg('Error: '+er.message,'error');}
 }
 

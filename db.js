@@ -1051,11 +1051,27 @@ const DB = {
       ...(typeof player === 'string' ? {} : player),
       id,
       activo: Boolean(active),
-      participaRanking: Boolean(active),
       updatedAt: new Date().toISOString(),
       updatedBy: actor.email || actor.adminEmail || actor.actorEmail || ''
     };
+    // Al desactivar: también se quita del ranking.
+    // Al activar: participaRanking NO se toca; el admin lo gestiona por separado.
+    if (!active) patch.participaRanking = false;
     if (!active) patch.posicion = '';
+    return this.savePlayerCloud(patch, actor);
+  },
+
+  async setPlayerRankingCloud(player, participaRanking, actor = {}) {
+    const id = typeof player === 'string' ? player : player?.id;
+    if (!id) throw new Error('Jugador sin ID.');
+    const patch = {
+      ...(typeof player === 'string' ? {} : player),
+      id,
+      participaRanking: Boolean(participaRanking),
+      updatedAt: new Date().toISOString(),
+      updatedBy: actor.email || actor.adminEmail || actor.actorEmail || ''
+    };
+    if (!participaRanking) patch.posicion = '';
     return this.savePlayerCloud(patch, actor);
   },
 
