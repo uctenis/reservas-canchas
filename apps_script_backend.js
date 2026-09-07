@@ -185,6 +185,13 @@ function handleRequest(data) {
       case "get_player_rut":         response = getPlayerRut(data); break;
       case "save_player_rut":        response = savePlayerRut(data); break;
       case "save_schedule_config":   response = saveScheduleConfig(data); break;
+      case "get_tournaments":        response = getTournaments(data); break;
+      case "get_tournament":         response = getTournament(data); break;
+      case "admin_save_tournament":  response = adminSaveTournament(data); break;
+      case "admin_generate_bracket": response = adminGenerateTournamentBracket(data); break;
+      case "admin_schedule_match":   response = adminScheduleTournamentMatch(data); break;
+      case "admin_record_match":     response = adminRecordTournamentMatch(data); break;
+      case "admin_delete_tournament": response = adminDeleteTournament(data); break;
       case "debug_firebase":         response = debugFirebaseConnection(data.email || 'gcuraqueo@uct.cl'); break;
       // ── Funcionarios UCT ──
       case "admin_create_staff":     response = adminCreateStaff(data); break;
@@ -4678,4 +4685,466 @@ function checkAdminAccess(data) {
   // Reutiliza la misma verificación de idToken que isAdminRequest: el correo
   // debe venir confirmado por Google, no simplemente declarado por el cliente.
   return isAdminRequest(data);
+}
+
+// =======================================================
+// 🏆 CAMPEONATOS — ELIMINACIÓN DIRECTA
+// =======================================================
+// Firestore: tournament_championships/{id}. Apps Script es la única capa
+// autorizada para escribir; la salida pública omite datos de contacto.
+
+const TOURNAMENT_COLLECTION = 'tournament_championships';
+const TOURNAMENT_SIZES = [8, 16, 32];
+const TOURNAMENT_STATUSES = ['draft', 'registration', 'draw', 'in_progress', 'finished', 'archived'];
+
+function tournamentFirestoreUrl(id) {
+  return 'https://firestore.googleapis.com/v1/projects/'
+    + encodeURIComponent(CONFIG.FIREBASE_PROJECT_ID)
+    + '/databases/(default)/documents/' + TOURNAMENT_COLLECTION
+    + (id ? '/' + encodeURIComponent(id) : '')
+    + '?key=' + encodeURIComponent(CONFIG.FIREBASE_API_KEY);
+}
+
+function tournamentFromDocument(doc) {
+  if (!doc || !doc.fields) return null;
+  const item = firestoreValueToJs({ mapValue: { fields: doc.fields } }) || {};
+  item.id = text(item.id) || text(doc.name).split('/').pop();
+  item.participants = Array.isArray(item.participants) ? item.participants : [];
+  item.matches = Array.isArray(item.matches) ? item.matches : [];
+  item.news = Array.isArray(item.news) ? item.news : [];
+  return item;
+}
+
+function readTournament(id, idToken) {
+  try {
+    const response = UrlFetchApp.fetch(tournamentFirestoreUrl(id), bookingFetchOptions('get', undefined, idToken));
+    const code = response.getResponseCode();
+    if (code === 404) return { ok: true, tournament: null };
+    if (code !== 200) return { ok: false, msg: 'Firestore GET ' + code };
+    return { ok: true, tournament: tournamentFromDocument(JSON.parse(response.getContentText())) };
+  } catch (error) {
+    return { ok: false, msg: 'No se pudo leer el campeonato: ' + error.message };
+  }
+}
+
+function listTournamentDocuments(idToken) {
+  try {
+    const url = 'https://firestore.googleapis.com/v1/projects/'
+      + encodeURIComponent(CONFIG.FIREBASE_PROJECT_ID)
+      + '/databases/(default)/documents:runQuery?key=' + encodeURIComponent(CONFIG.FIREBASE_API_KEY);
+    const payload = { structuredQuery: { from: [{ collectionId: TOURNAMENT_COLLECTION }] } };
+    const response = UrlFetchApp.fetch(url, bookingFetchOptions('post', payload, idToken));
+    if (response.getResponseCode() !== 200) return { ok: false, tournaments: [], msg: 'No se pudieron consultar los campeonatos.' };
+    const rows = JSON.parse(response.getContentText()) || [];
+    return { ok: true, tournaments: rows.map(function(row) { return tournamentFromDocument(row.document); }).filter(Boolean) };
+  } catch (error) {
+    return { ok: false, tournaments: [], msg: error.message };
+  }
+}
+
+function writeTournament(tournament, idToken) {
+  const response = UrlFetchApp.fetch(
+    tournamentFirestoreUrl(tournament.id),
+    bookingFetchOptions('patch', { fields: jsToFirestoreValue(tournament).mapValue.fields }, idToken)
+  );
+  const code = response.getResponseCode();
+  if (code < 200 || code >= 300) {
+    return { ok: false, msg: 'No se pudo guardar el campeonato (' + code + '): ' + response.getContentText().substring(0, 180) };
+  }
+  return { ok: true, tournament: tournamentFromDocument(JSON.parse(response.getContentText())) };
+}
+
+function publicTournament(tournament) {
+  if (!tournament) return null;
+  const output = JSON.parse(JSON.stringify(tournament));
+  output.participants = output.participants.map(function(player) {
+    return {
+      id: text(player.id), name: text(player.name), seed: Number(player.seed) || '',
+      clubMember: player.clubMember === true, clubPlayerId: text(player.clubPlayerId),
+      category: text(player.category), city: text(player.city), status: text(player.status) || 'active'
+    };
+  });
+  (output.matches || []).forEach(function(match) {
+    ['player1', 'player2', 'winner'].forEach(function(key) {
+      if (match[key]) {
+        delete match[key].email;
+        delete match[key].phone;
+        delete match[key].rut;
+      }
+    });
+  });
+  return output;
+}
+
+function getTournaments(data) {
+  const result = listTournamentDocuments(data && data.idToken);
+  if (!result.ok) return result;
+  const admin = isAdminRequest(data || {});
+  const list = result.tournaments
+    .filter(function(item) { return admin || item.published === true; })
+    .sort(function(a, b) {
+      if (a.featured !== b.featured) return a.featured ? -1 : 1;
+      return text(b.startDate || b.updatedAt).localeCompare(text(a.startDate || a.updatedAt));
+    })
+    .map(function(item) { return admin ? item : publicTournament(item); });
+  return { ok: true, tournaments: list };
+}
+
+function getTournament(data) {
+  const result = readTournament(text(data && data.id), data && data.idToken);
+  if (!result.ok || !result.tournament) return result.ok ? { ok: false, msg: 'Campeonato no encontrado.' } : result;
+  if (result.tournament.published !== true && !isAdminRequest(data || {})) {
+    return { ok: false, msg: 'Campeonato no publicado.' };
+  }
+  return { ok: true, tournament: isAdminRequest(data || {}) ? result.tournament : publicTournament(result.tournament) };
+}
+
+function tournamentSlug(value) {
+  return norm(value).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').substring(0, 54);
+}
+
+function normalizeTournamentParticipant(player, index) {
+  const name = text(player && (player.name || player.nombre));
+  return {
+    id: text(player && player.id) || ('p_' + Utilities.getUuid().substring(0, 8)),
+    name: name,
+    email: text(player && player.email).toLowerCase(),
+    phone: text(player && (player.phone || player.telefono)),
+    clubMember: Boolean(player && (player.clubMember === true || player.clubMember === 'true')),
+    clubPlayerId: text(player && player.clubPlayerId),
+    category: text(player && (player.category || player.categoria)),
+    city: text(player && player.city),
+    seed: Number(player && player.seed) || index + 1,
+    status: text(player && player.status) || 'active'
+  };
+}
+
+function adminSaveTournament(data) {
+  if (!isAdminRequest(data)) return { ok: false, msg: 'Acceso reservado al administrador.' };
+  const payload = data.tournament || {};
+  const requestedSize = Number(payload.size) || 8;
+  if (TOURNAMENT_SIZES.indexOf(requestedSize) < 0) return { ok: false, msg: 'El cuadro debe ser de 8, 16 o 32 jugadores.' };
+  if (!text(payload.name)) return { ok: false, msg: 'El nombre del campeonato es obligatorio.' };
+  const existingResult = payload.id ? readTournament(text(payload.id), data.idToken) : { ok: true, tournament: null };
+  if (!existingResult.ok) return existingResult;
+  const existing = existingResult.tournament || {};
+  const now = new Date().toISOString();
+  const participants = Array.isArray(payload.participants)
+    ? payload.participants.map(normalizeTournamentParticipant).filter(function(p) { return p.name; })
+    : (existing.participants || []);
+  if (participants.length > requestedSize) return { ok: false, msg: 'Hay mas inscritos que cupos disponibles.' };
+  const id = text(payload.id) || (tournamentSlug(payload.name) + '-' + new Date().getTime().toString(36));
+  const status = TOURNAMENT_STATUSES.indexOf(text(payload.status)) >= 0 ? text(payload.status) : (text(existing.status) || 'draft');
+  const tournament = {
+    id: id,
+    name: text(payload.name),
+    edition: text(payload.edition),
+    tagline: text(payload.tagline),
+    description: text(payload.description),
+    venue: text(payload.venue),
+    surface: text(payload.surface) || 'Mixta',
+    category: text(payload.category) || 'Todo competidor',
+    gender: text(payload.gender) || 'Abierto',
+    startDate: text(payload.startDate),
+    endDate: text(payload.endDate),
+    registrationDeadline: text(payload.registrationDeadline),
+    registrationInfo: text(payload.registrationInfo),
+    rules: text(payload.rules),
+    prize: text(payload.prize),
+    organizer: text(payload.organizer) || 'UCTenis Club',
+    contact: text(payload.contact),
+    accent: text(payload.accent) || '#d8ff3e',
+    size: requestedSize,
+    status: status,
+    published: payload.published === true || payload.published === 'true',
+    featured: payload.featured === true || payload.featured === 'true',
+    participants: participants,
+    matches: existing.matches || [],
+    news: existing.news || [],
+    champion: existing.champion || null,
+    createdAt: existing.createdAt || now,
+    updatedAt: now,
+    updatedBy: verifyGoogleIdToken(data.idToken) || ''
+  };
+  return writeTournament(tournament, data.idToken);
+}
+
+function seededPositions(size) {
+  let order = [1, 2];
+  while (order.length < size) {
+    const max = order.length * 2 + 1;
+    const next = [];
+    order.forEach(function(seed) { next.push(seed, max - seed); });
+    order = next;
+  }
+  return order;
+}
+
+function tournamentPlayerSnapshot(player) {
+  if (!player) return null;
+  return { id: player.id, name: player.name, email: player.email || '', phone: player.phone || '', seed: player.seed || '' };
+}
+
+function buildTournamentBracket(tournament) {
+  const size = Number(tournament.size);
+  const players = (tournament.participants || []).filter(function(p) { return p.status !== 'withdrawn'; }).slice();
+  players.sort(function(a, b) { return (Number(a.seed) || 999) - (Number(b.seed) || 999) || a.name.localeCompare(b.name); });
+  if (players.length < 2) return { ok: false, msg: 'Se necesitan al menos 2 inscritos para generar el cuadro.' };
+  const bySeed = {};
+  players.forEach(function(player, index) { bySeed[index + 1] = player; });
+  const slots = seededPositions(size).map(function(seed) { return tournamentPlayerSnapshot(bySeed[seed]); });
+  const rounds = Math.log(size) / Math.log(2);
+  const matches = [];
+  for (let round = 1; round <= rounds; round++) {
+    const count = size / Math.pow(2, round);
+    for (let index = 1; index <= count; index++) {
+      matches.push({
+        id: 'R' + round + 'M' + index,
+        round: round,
+        roundName: round === rounds ? 'Final' : (round === rounds - 1 ? 'Semifinal' : (round === rounds - 2 ? 'Cuartos de final' : 'Ronda de ' + (size / Math.pow(2, round - 1)))),
+        position: index,
+        player1: round === 1 ? slots[(index - 1) * 2] : null,
+        player2: round === 1 ? slots[(index - 1) * 2 + 1] : null,
+        winner: null,
+        score: [],
+        status: 'pending',
+        date: '', slot: '', courtId: '', bookingId: '',
+        nextMatchId: round < rounds ? ('R' + (round + 1) + 'M' + Math.ceil(index / 2)) : ''
+      });
+    }
+  }
+  autoAdvanceTournamentByes(matches);
+  return { ok: true, matches: matches };
+}
+
+function setTournamentNextPlayer(matches, match, winner) {
+  if (!match.nextMatchId || !winner) return;
+  const next = matches.find(function(item) { return item.id === match.nextMatchId; });
+  if (!next) return;
+  const side = match.position % 2 === 1 ? 'player1' : 'player2';
+  next[side] = tournamentPlayerSnapshot(winner);
+}
+
+function autoAdvanceTournamentByes(matches) {
+  let changed = true;
+  while (changed) {
+    changed = false;
+    matches.forEach(function(match) {
+      if (match.status === 'completed' || match.status === 'bye' || match.status === 'void') return;
+      const only = match.player1 && !match.player2 ? match.player1 : (!match.player1 && match.player2 ? match.player2 : null);
+      if (match.round > 1) {
+        const feeders = matches.filter(function(source) { return source.nextMatchId === match.id; });
+        const allFeedersSettled = feeders.length === 2 && feeders.every(function(source) { return source.status === 'completed' || source.status === 'bye' || source.status === 'void'; });
+        if (!allFeedersSettled) return;
+      }
+      if (!match.player1 && !match.player2) {
+        match.status = 'void';
+        changed = true;
+        return;
+      }
+      if (!only) return;
+      match.winner = tournamentPlayerSnapshot(only);
+      match.status = 'bye';
+      match.scoreLabel = 'BYE';
+      setTournamentNextPlayer(matches, match, only);
+      changed = true;
+    });
+  }
+}
+
+function adminGenerateTournamentBracket(data) {
+  if (!isAdminRequest(data)) return { ok: false, msg: 'Acceso reservado al administrador.' };
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  try {
+    const stored = readTournament(text(data.id), data.idToken);
+    if (!stored.ok || !stored.tournament) return stored.ok ? { ok: false, msg: 'Campeonato no encontrado.' } : stored;
+    if (stored.tournament.matches.length && data.confirmReplace !== true) {
+      return { ok: false, needsConfirmation: true, msg: 'El cuadro ya existe. Regenerarlo elimina resultados y horarios actuales.' };
+    }
+    const bracket = buildTournamentBracket(stored.tournament);
+    if (!bracket.ok) return bracket;
+    stored.tournament.matches = bracket.matches;
+    stored.tournament.status = 'draw';
+    stored.tournament.champion = null;
+    stored.tournament.updatedAt = new Date().toISOString();
+    return writeTournament(stored.tournament, data.idToken);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function parseTournamentSets(raw) {
+  const sets = Array.isArray(raw) ? raw : [];
+  return sets.map(function(set) {
+    return { a: Number(set.a), b: Number(set.b), tiebreakA: text(set.tiebreakA), tiebreakB: text(set.tiebreakB) };
+  }).filter(function(set) { return Number.isFinite(set.a) && Number.isFinite(set.b); });
+}
+
+function validateTournamentScore(sets, walkoverWinnerId, player1, player2) {
+  if (walkoverWinnerId) {
+    if (walkoverWinnerId !== text(player1 && player1.id) && walkoverWinnerId !== text(player2 && player2.id)) {
+      return { ok: false, msg: 'El ganador por W.O. no pertenece al partido.' };
+    }
+    return { ok: true, winnerId: walkoverWinnerId, label: 'W.O.' };
+  }
+  if (sets.length < 2 || sets.length > 3) return { ok: false, msg: 'Ingresa 2 o 3 sets.' };
+  let winsA = 0, winsB = 0;
+  for (let i = 0; i < sets.length; i++) {
+    const a = sets[i].a, b = sets[i].b;
+    const regular = (Math.max(a, b) === 6 && Math.abs(a - b) >= 2) ||
+      (Math.max(a, b) === 7 && (Math.min(a, b) === 5 || Math.min(a, b) === 6));
+    const matchTieBreak = i === 2 && Math.max(a, b) >= 10 && Math.abs(a - b) >= 2;
+    if (!regular && !matchTieBreak) return { ok: false, msg: 'El set ' + (i + 1) + ' no tiene un marcador valido.' };
+    if (a > b) winsA++; else winsB++;
+  }
+  if (winsA < 2 && winsB < 2) return { ok: false, msg: 'El partido debe tener un ganador de 2 sets.' };
+  if (winsA === winsB) return { ok: false, msg: 'El marcador no define un ganador.' };
+  return {
+    ok: true,
+    winnerId: winsA > winsB ? player1.id : player2.id,
+    label: sets.map(function(set) { return set.a + '-' + set.b; }).join(', ')
+  };
+}
+
+function releaseTournamentBooking(bookingId, idToken) {
+  if (!bookingId) return;
+  const stored = getBookingDocument(bookingId, idToken);
+  if (!stored.ok || !stored.booking) return;
+  const booking = stored.booking;
+  booking.status = 'cancelled';
+  booking.cancelledAt = new Date().toISOString();
+  booking.cancelledBy = 'tournament_reschedule';
+  booking.calendarCleanupPending = Boolean(booking.calendarEventId);
+  booking.updatedAt = booking.cancelledAt;
+  saveBookingDocument(booking, idToken);
+  if (booking.calendarEventId) {
+    try {
+      const calendar = CalendarApp.getCalendarById(CONFIG.MAIN_CALENDAR_ID);
+      const event = calendar && calendar.getEventById(booking.calendarEventId);
+      if (event) event.deleteEvent();
+      booking.calendarCleanupPending = false;
+      saveBookingDocument(booking, idToken);
+    } catch (error) { console.warn('Limpieza de partido reprogramado:', error.message); }
+  }
+}
+
+function adminScheduleTournamentMatch(data) {
+  if (!isAdminRequest(data)) return { ok: false, msg: 'Acceso reservado al administrador.' };
+  const dateStr = text(data.date), slot = text(data.slot), courtId = text(data.courtId);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr) || !/^\d{1,2}:\d{2}$/.test(slot) || !CONFIG.CALENDARS[courtId]) {
+    return { ok: false, msg: 'Fecha, hora o cancha no valida.' };
+  }
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  try {
+    const stored = readTournament(text(data.id), data.idToken);
+    if (!stored.ok || !stored.tournament) return { ok: false, msg: 'Campeonato no encontrado.' };
+    const tournament = stored.tournament;
+    const match = tournament.matches.find(function(item) { return item.id === text(data.matchId); });
+    if (!match) return { ok: false, msg: 'Partido no encontrado.' };
+    if (!match.player1 || !match.player2) return { ok: false, msg: 'El partido aun no tiene ambos jugadores definidos.' };
+    const newBookingId = bookingDocumentId(courtId, dateStr, slot);
+    const availability = getAvailableSlots(dateStr, data.idToken, courtId);
+    const available = availability.ok && Array.isArray(availability.courts[courtId]) && availability.courts[courtId].indexOf(slot) >= 0;
+    const existing = getBookingDocument(newBookingId, data.idToken);
+    const ownsExisting = existing.ok && existing.booking && existing.booking.tournamentId === tournament.id && existing.booking.matchId === match.id;
+    if (!available && !ownsExisting) return { ok: false, msg: 'La cancha ya no esta disponible en ese horario.' };
+    if (match.bookingId && match.bookingId !== newBookingId) releaseTournamentBooking(match.bookingId, data.idToken);
+    const now = new Date().toISOString();
+    const booking = ownsExisting ? existing.booking : {
+      id: newBookingId, courtId: courtId, date: dateStr, slot: slot,
+      userId: 'tournament:' + tournament.id, email: verifyGoogleIdToken(data.idToken) || '',
+      emailLower: verifyGoogleIdToken(data.idToken) || '', name: tournament.name,
+      userType: 'admin', userTypeLabel: 'Campeonato UCTenis',
+      status: 'pending_calendar', calendarEventId: '', syncAttempts: 0,
+      createdAt: now, tournamentId: tournament.id, matchId: match.id
+    };
+    booking.guestEmails = [match.player1.email, match.player2.email].filter(Boolean);
+    booking.matchTitle = '[' + getCourtName(courtId) + '] ' + tournament.name + ': ' + match.player1.name + ' vs ' + match.player2.name;
+    booking.updatedAt = now;
+    const reserved = saveBookingDocument(booking, data.idToken);
+    if (!reserved.ok) return reserved;
+    try {
+      const event = findCalendarEventForBooking(booking) || createBookingCalendarEvent(booking);
+      booking.calendarEventId = event.getId();
+      booking.status = 'confirmed';
+      booking.calendarSyncedAt = new Date().toISOString();
+      booking.updatedAt = booking.calendarSyncedAt;
+      booking.syncError = '';
+      saveBookingDocument(booking, data.idToken);
+    } catch (error) {
+      booking.status = 'calendar_retry';
+      booking.syncError = error.message;
+      saveBookingDocument(booking, data.idToken);
+    }
+    match.date = dateStr; match.slot = slot; match.courtId = courtId; match.bookingId = booking.id;
+    match.status = match.status === 'completed' ? 'completed' : 'scheduled';
+    tournament.status = tournament.status === 'finished' ? 'finished' : 'in_progress';
+    tournament.updatedAt = new Date().toISOString();
+    const saved = writeTournament(tournament, data.idToken);
+    if (!saved.ok) return saved;
+    return { ok: true, tournament: saved.tournament, calendarPending: booking.status !== 'confirmed' };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function tournamentNewsForResult(tournament, match, winner, scoreLabel) {
+  const isFinal = match.roundName === 'Final';
+  return {
+    id: 'news_' + new Date().getTime().toString(36),
+    type: isFinal ? 'champion' : 'result',
+    title: isFinal ? winner.name + ' es campeon/a de ' + tournament.name : winner.name + ' avanza a la siguiente ronda',
+    summary: match.player1.name + ' vs ' + match.player2.name + ' termino ' + scoreLabel + '.',
+    matchId: match.id,
+    publishedAt: new Date().toISOString()
+  };
+}
+
+function adminRecordTournamentMatch(data) {
+  if (!isAdminRequest(data)) return { ok: false, msg: 'Acceso reservado al administrador.' };
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  try {
+    const stored = readTournament(text(data.id), data.idToken);
+    if (!stored.ok || !stored.tournament) return { ok: false, msg: 'Campeonato no encontrado.' };
+    const tournament = stored.tournament;
+    const match = tournament.matches.find(function(item) { return item.id === text(data.matchId); });
+    if (!match || !match.player1 || !match.player2) return { ok: false, msg: 'Partido incompleto o no encontrado.' };
+    const sets = parseTournamentSets(data.sets);
+    const score = validateTournamentScore(sets, text(data.walkoverWinnerId), match.player1, match.player2);
+    if (!score.ok) return score;
+    const winner = score.winnerId === match.player1.id ? match.player1 : match.player2;
+    match.score = sets;
+    match.scoreLabel = score.label;
+    match.winner = tournamentPlayerSnapshot(winner);
+    match.status = 'completed';
+    match.completedAt = new Date().toISOString();
+    match.recordedBy = verifyGoogleIdToken(data.idToken) || '';
+    setTournamentNextPlayer(tournament.matches, match, winner);
+    autoAdvanceTournamentByes(tournament.matches);
+    if (match.roundName === 'Final') {
+      tournament.champion = tournamentPlayerSnapshot(winner);
+      tournament.status = 'finished';
+    } else if (tournament.status === 'draw') {
+      tournament.status = 'in_progress';
+    }
+    tournament.news = [tournamentNewsForResult(tournament, match, winner, score.label)].concat(tournament.news || []).slice(0, 40);
+    tournament.updatedAt = new Date().toISOString();
+    return writeTournament(tournament, data.idToken);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function adminDeleteTournament(data) {
+  if (!isAdminRequest(data)) return { ok: false, msg: 'Acceso reservado al administrador.' };
+  const stored = readTournament(text(data.id), data.idToken);
+  if (!stored.ok || !stored.tournament) return { ok: false, msg: 'Campeonato no encontrado.' };
+  stored.tournament.status = 'archived';
+  stored.tournament.published = false;
+  stored.tournament.featured = false;
+  stored.tournament.updatedAt = new Date().toISOString();
+  return writeTournament(stored.tournament, data.idToken);
 }

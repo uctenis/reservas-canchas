@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Administrar campeonatos | UCTenis</title>
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="logo_uctenis_v03.png" type="image/png">
+  <link rel="stylesheet" href="tournament.css?v=20260907_v1">
+</head>
+<body class="tournament-page">
+  <div class="tour-shell">
+    <nav class="tour-nav">
+      <a class="tour-brand" href="ranking.html"><img src="logo_uctenis_v03.png" alt="UCTenis"><span>Mesa de campeonatos</span></a>
+      <div class="tour-nav-links"><a class="tour-link" href="ranking.html?openAdmin=players">Panel general</a><a class="tour-link" href="campeonato.html">Vista p&uacute;blica</a></div>
+    </nav>
+    <div id="adminGate" class="tour-card login-gate"><h1>Verificando acceso</h1><p>Este m&oacute;dulo es exclusivo para administradores.</p></div>
+    <main id="adminApp" class="admin-layout" hidden>
+      <aside class="tour-card admin-sidebar">
+        <button class="tour-btn primary" id="newTournamentBtn" type="button">+ Nuevo campeonato</button>
+        <div class="admin-list" id="tournamentList"></div>
+      </aside>
+      <section class="tour-card">
+        <div class="tour-section-head">
+          <div><span class="tour-kicker">Mesa de control</span><h1 id="editorTitle">Nuevo campeonato</h1><p class="tour-section-copy" id="editorSubtitle">Configura, publica y opera el torneo desde aqu&iacute;.</p></div>
+          <a id="publicPreviewLink" class="tour-link" href="campeonato.html" target="_blank" rel="noopener">Abrir sitio</a>
+        </div>
+        <div class="admin-alert" id="adminAlert" role="status"></div>
+        <div class="admin-tabs">
+          <button class="admin-tab active" data-tab="details">1. Informaci&oacute;n</button>
+          <button class="admin-tab" data-tab="players">2. Inscritos</button>
+          <button class="admin-tab" data-tab="bracket">3. Cuadro y partidos</button>
+        </div>
+
+        <section class="admin-panel active" data-panel="details">
+          <form id="tournamentForm">
+            <div class="form-grid">
+              <div class="field full"><label>Nombre del campeonato *</label><input id="tourName" required placeholder="Open UCTenis Primavera 2026"></div>
+              <div class="field"><label>Edici&oacute;n</label><input id="tourEdition" placeholder="1&ordf; edici&oacute;n"></div>
+              <div class="field"><label>Cupos del cuadro</label><select id="tourSize"><option>8</option><option>16</option><option>32</option></select></div>
+              <div class="field"><label>Categor&iacute;a</label><input id="tourCategory" value="Todo competidor"></div>
+              <div class="field"><label>Rama</label><select id="tourGender"><option>Abierto</option><option>Masculino</option><option>Femenino</option><option>Dobles</option></select></div>
+              <div class="field"><label>Inicio</label><input id="tourStart" type="date"></div>
+              <div class="field"><label>T&eacute;rmino</label><input id="tourEnd" type="date"></div>
+              <div class="field"><label>Cierre de inscripciones</label><input id="tourDeadline" type="datetime-local"></div>
+              <div class="field"><label>Sede</label><input id="tourVenue" placeholder="Canchas CEC / CJP"></div>
+              <div class="field"><label>Superficie</label><select id="tourSurface"><option>Mixta</option><option>Arcilla</option><option>Asfalto</option></select></div>
+              <div class="field"><label>Estado</label><select id="tourStatus"><option value="draft">Borrador</option><option value="registration">Inscripciones abiertas</option><option value="draw">Cuadro publicado</option><option value="in_progress">En juego</option><option value="finished">Finalizado</option></select></div>
+              <div class="field"><label>Premiaci&oacute;n</label><input id="tourPrize" placeholder="Copa y medallas"></div>
+              <div class="field full"><label>Frase publicitaria</label><input id="tourTagline" placeholder="Una semana. Un cuadro. Un campe&oacute;n."></div>
+              <div class="field full"><label>Descripci&oacute;n</label><textarea id="tourDescription"></textarea></div>
+              <div class="field full"><label>Bases y formato</label><textarea id="tourRules" placeholder="Al mejor de 3 sets; match tie-break a 10 en el tercer set..."></textarea></div>
+              <div class="field"><label>Organiza</label><input id="tourOrganizer" value="UCTenis Club"></div>
+              <div class="field"><label>Contacto</label><input id="tourContact" placeholder="uctenisclub@gmail.com"></div>
+            </div>
+            <div class="check-row">
+              <label><input id="tourPublished" type="checkbox"> Publicado en el sitio</label>
+              <label><input id="tourFeatured" type="checkbox"> Destacado con publicidad en el home</label>
+            </div>
+            <div class="admin-actions"><button class="tour-btn primary" type="submit">Guardar campeonato</button><button class="tour-btn danger" id="archiveTournamentBtn" type="button">Archivar</button></div>
+          </form>
+        </section>
+
+        <section class="admin-panel" data-panel="players">
+          <div class="tour-section-head"><div><h2>Inscritos <span id="capacityLabel"></span></h2><p class="tour-section-copy">Pueden ser socios del club o jugadores externos.</p></div></div>
+          <form id="participantForm" class="participant-form">
+            <div class="field"><label>Jugador *</label><input id="participantName" list="clubPlayers" required placeholder="Nombre completo"><datalist id="clubPlayers"></datalist></div>
+            <div class="field"><label>Correo</label><input id="participantEmail" type="email"></div>
+            <div class="field"><label>Tel&eacute;fono</label><input id="participantPhone" type="tel" placeholder="+569..."></div>
+            <button class="tour-btn primary" type="submit">Inscribir</button>
+          </form>
+          <div class="check-row"><label><input id="participantMember" type="checkbox"> Es socio/a UCTenis</label></div>
+          <div style="overflow-x:auto"><table class="participant-table"><thead><tr><th>Siembra</th><th>Jugador</th><th>Origen</th><th>Contacto</th><th></th></tr></thead><tbody id="participantBody"></tbody></table></div>
+          <div class="admin-actions"><button class="tour-btn primary" id="saveParticipantsBtn" type="button">Guardar inscritos</button><button class="tour-btn" id="generateBracketBtn" type="button">Sortear / generar cuadro</button></div>
+        </section>
+
+        <section class="admin-panel" data-panel="bracket">
+          <div class="tour-section-head"><div><h2>Programaci&oacute;n y resultados</h2><p class="tour-section-copy">Cada horario bloquea la cancha y cada marcador completa autom&aacute;ticamente la ronda siguiente.</p></div><button class="tour-btn" id="regenerateBracketBtn" type="button">Regenerar cuadro</button></div>
+          <div id="adminMatches"></div>
+        </section>
+      </section>
+    </main>
+  </div>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+  <script src="db.js?v=20260907_tournaments"></script>
+  <script src="admin-campeonatos.js?v=20260907_v1"></script>
+</body>
+</html>
+

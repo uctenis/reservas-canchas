@@ -9,7 +9,11 @@
     loss: 1,
     played: 2,
     weeklyBonus: 1,
-    weeks: 4
+    weeks: 6,
+    // Jugadores poco motivados no siempre llegan a jugar las 6 semanas del
+    // ciclo; exigir el 100% para el bono descartaba a casi todos. Con 4 de
+    // 6 alcanza para seguir premiando la constancia sin ser todo-o-nada.
+    weeklyBonusMinWeeks: 4
   });
 
   function mergeRules(rules) {
@@ -130,7 +134,7 @@
     });
 
     rows.forEach(row => {
-      if (row.weeks.size === resolved.weeks) row.pts += resolved.weeklyBonus;
+      if (row.weeks.size >= resolved.weeklyBonusMinWeeks) row.pts += resolved.weeklyBonus;
       row.semanas = row.weeks.size;
       delete row.weeks;
       row.diffSets = row.setsFor - row.setsAgainst;
