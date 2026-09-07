@@ -333,7 +333,6 @@
         <button type="button" class="admin-tab-btn active" id="tabPlayers" onclick="switchAdminSubSection('players')">👥 Jugadores</button>
         <button type="button" class="admin-tab-btn" id="tabNews" onclick="switchAdminSubSection('news')">📢 Novedades</button>
         <button type="button" class="admin-tab-btn" id="tabSchedules" onclick="switchAdminSubSection('schedules')">🗓️ Horarios</button>
-        <button type="button" class="admin-tab-btn" id="tabSync" onclick="switchAdminSubSection('sync')">🔄 Sincronización</button>
         <a class="admin-tab-btn" href="admin-campeonatos.html" style="text-decoration:none;display:inline-flex;align-items:center;">&#127942; Campeonatos</a>
       </div>
     </div>
@@ -786,36 +785,9 @@
       </div>
     </div>
 
-    <!-- Estado de sincronización Firestore ↔ Google Calendar -->
-    <div id="adminSyncSection" class="hidden" style="padding:0 20px 24px;">
-      <div class="admin-section-header" style="align-items:flex-start;gap:16px;">
-        <div class="admin-section-heading">
-          <p class="modal-kicker">Centro de operaciones</p>
-          <h3>Sincronización de reservas</h3>
-          <p class="admin-section-subtitle">Estado de Firestore, Google Calendar y reintentos automáticos.</p>
-        </div>
-        <div class="admin-section-actions" style="display:flex;gap:8px;flex-wrap:wrap;">
-          <button type="button" class="btn-secondary" onclick="loadBookingSyncStatus()">Actualizar</button>
-          <button type="button" class="btn-primary" id="btnRetryBookingSync" onclick="retryBookingSyncNow()">Reintentar pendientes</button>
-        </div>
-      </div>
-      <div id="bookingSyncAlert" class="alert-box" style="display:none;padding:12px;border-radius:8px;margin-bottom:14px;"></div>
-      <div id="bookingSyncSummary" class="schedule-param-grid" style="margin-bottom:18px;"></div>
-      <div class="schedule-panel schedule-panel-card">
-        <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:12px;flex-wrap:wrap;">
-          <div><strong>Operaciones que requieren atención</strong><div id="bookingSyncLastRun" style="font-size:.78rem;color:var(--text-secondary);margin-top:4px;"></div></div>
-        </div>
-        <div class="admin-table-wrap">
-          <table class="admin-table">
-            <thead><tr><th>Reserva</th><th>Fecha</th><th>Estado</th><th>Intentos</th><th>Último error</th></tr></thead>
-            <tbody id="bookingSyncIssues"><tr><td colspan="5">Cargando...</td></tr></tbody>
-          </table>
-        </div>
-      </div>
-    </div>
     </div>
   </div>
-</div> 
+</div>
 
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
@@ -2431,6 +2403,7 @@ function challengeCard(challenge, users, session, compact) {
   const canRespond = isRetado && challenge.status === 'pendiente';
   const canScore = (involved && challenge.status === 'aceptado') || (isAdmin && ['aceptado', 'pendiente'].includes(challenge.status));
   const canManage = (involved && ['pendiente', 'aceptado'].includes(challenge.status)) || isAdmin;
+  const canCancelLeague = involved && challenge.tipo === 'liga' && ['pendiente', 'aceptado'].includes(challenge.status);
   const canReviewResult = challenge.status === 'resultado_pendiente' &&
     (isAdmin || (involved && !isSessionResultSubmitter(session, challenge)));
   const status = statusLabel(challenge.status);
@@ -2439,6 +2412,7 @@ function challengeCard(challenge, users, session, compact) {
   const needsScoreBadge = challenge.fecha < todayIso && challenge.status === 'aceptado';
   const expiredBadge = needsScoreBadge ? `<span class="badge-expired" style="background:rgba(251,191,36,0.12); border:1px solid rgba(251,191,36,0.3); color:#fbbf24; padding:2px 6px; border-radius:4px; font-size:0.72rem; font-weight:900; text-transform:uppercase;">Sin resultado</span>` : '';
   const friendlyBadge = challenge.tipo === 'amistoso' ? `<span class="badge-friendly" style="background:rgba(99,102,241,0.15); border:1px solid rgba(99,102,241,0.3); color:#a5b4fc; padding:2px 6px; border-radius:4px; font-size:0.72rem; font-weight:900; text-transform:uppercase; margin-left:6px;">Amistoso</span>` : '';
+  const leagueBadge = challenge.tipo === 'liga' ? `<span class="badge-friendly" style="background:rgba(34,197,94,0.15); border:1px solid rgba(34,197,94,0.3); color:#86efac; padding:2px 6px; border-radius:4px; font-size:0.72rem; font-weight:900; text-transform:uppercase; margin-left:6px;">Liga</span>` : '';
   const campeonatoBadge = challenge.tipo === 'campeonato' ? `<span class="badge-campeonato" style="background:rgba(251,191,36,0.15); border:1px solid rgba(251,191,36,0.3); color:#fcd34d; padding:2px 6px; border-radius:4px; font-size:0.72rem; font-weight:900; text-transform:uppercase; margin-left:6px;">Campeonato</span>` : '';
 
   let actions = '';
@@ -2492,6 +2466,10 @@ function challengeCard(challenge, users, session, compact) {
     if (canManage) {
       actions += `
         <button class="btn-edit" type="button" data-action="edit-challenge" data-challenge-id="${escapeAttr(challenge.id)}">Editar</button>`;
+      if (canCancelLeague) {
+        actions += `
+        <button class="btn-reject" type="button" data-action="cancel-challenge" data-challenge-id="${escapeAttr(challenge.id)}">Cancelar liga</button>`;
+      }
       // Solo admin puede eliminar
       if (isAdmin) {
         actions += `
@@ -2567,6 +2545,7 @@ function challengeCard(challenge, users, session, compact) {
         <span>${escapeHTML(challenge.cancha || 'Cancha por definir')}${challenge.slot ? ` · ${escapeHTML(challenge.slot)}` : ''}</span>
         <span class="chal-status">${escapeHTML(status)}</span>
         ${friendlyBadge}
+        ${leagueBadge}
         ${campeonatoBadge}
         ${expiredBadge}
         ${challenge.marcador ? `<span>${escapeHTML(challenge.marcador)} · ${ganadorName ? `Ganó ${escapeHTML(ganadorName)}` : '🤝 Empate'}</span>` : ''}
@@ -2592,6 +2571,7 @@ function handleChallengeAction(event) {
   if (button.dataset.action === 'wo-retador') setChallengeWalkover(id, 'wo_retador', button);
   if (button.dataset.action === 'wo-retado') setChallengeWalkover(id, 'wo_retado', button);
   if (button.dataset.action === 'edit-challenge') openEditChallengeModal(id);
+  if (button.dataset.action === 'cancel-challenge') cancelChallenge(id, button);
   if (button.dataset.action === 'delete-challenge') {
     deleteChallenge(id);
   }
@@ -2757,6 +2737,44 @@ async function setChallengeWalkover(id, status, button) {
     refreshLocalRankingIfNeeded();
     renderAll();
     alert(`${label} registrado.`);
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.innerHTML = originalHtml;
+    }
+  }
+}
+
+// Un partido de liga pendiente/aceptado ocupa el único cupo de liga de
+// ambos jugadores (hasActiveLeagueMatch), así que si no logran coordinarlo
+// cualquiera de los dos debe poder liberarlo sin depender del admin.
+async function cancelChallenge(id, button) {
+  const challenge = DB.getChallenges().find(c => c.id === id);
+  if (!challenge) return;
+
+  const session = DB.getSession() || {};
+  if (challenge.tipo !== 'liga' || !isUserInChallenge(session, challenge)) return;
+  if (!['pendiente', 'aceptado'].includes(challenge.status)) return;
+
+  if (!confirm('¿Cancelar este partido de liga? Quedará libre para agendar otro.')) return;
+
+  const originalHtml = button ? button.innerHTML : '';
+  if (button) {
+    button.disabled = true;
+    button.innerHTML = 'Cancelando...';
+  }
+
+  try {
+    await persistChallengePatch(id, { status: 'rechazado' });
+
+    if (challenge.bookingId && challenge.courtId) {
+      DB.cancelBookingAPI(challenge.bookingId, challenge.courtId).catch(err => {
+        console.warn('No se pudo liberar la reserva de cancha del partido de liga cancelado:', err);
+      });
+    }
+
+    closeModal('profileModal');
+    renderAll();
   } finally {
     if (button) {
       button.disabled = false;
@@ -7035,18 +7053,15 @@ window.switchAdminSubSection = function(section) {
   const tabPlayers = document.getElementById('tabPlayers');
   const tabNews = document.getElementById('tabNews');
   const tabSchedules = document.getElementById('tabSchedules');
-  const tabSync = document.getElementById('tabSync');
-  
+
   const secPlayers = document.getElementById('adminPlayersSection');
   const secNews = document.getElementById('adminNewsSection');
   const secSchedules = document.getElementById('adminSchedulesSection');
-  const secSync = document.getElementById('adminSyncSection');
-  
+
   tabPlayers.classList.toggle('active', section === 'players');
   tabNews.classList.toggle('active', section === 'news');
   if (tabSchedules) tabSchedules.classList.toggle('active', section === 'schedules');
-  if (tabSync) tabSync.classList.toggle('active', section === 'sync');
-  
+
   if (secPlayers) secPlayers.style.display = section === 'players' ? 'block' : 'none';
   if (secNews) {
     secNews.style.display = section === 'news' ? 'block' : 'none';
@@ -7056,100 +7071,14 @@ window.switchAdminSubSection = function(section) {
     secSchedules.style.display = section === 'schedules' ? 'block' : 'none';
     secSchedules.classList.toggle('hidden', section !== 'schedules');
   }
-  if (secSync) {
-    secSync.style.display = section === 'sync' ? 'block' : 'none';
-    secSync.classList.toggle('hidden', section !== 'sync');
-  }
-  
+
   if (section === 'news') {
     renderAdminNewsList();
   } else if (section === 'schedules') {
     loadSpecialDatesList();
     loadScheduleConfig();
-  } else if (section === 'sync') {
-    loadBookingSyncStatus();
   }
 }
-
-function formatSyncTimestamp(value) {
-  if (!value) return 'Sin registros todavía';
-  const date = new Date(value);
-  return isNaN(date) ? value : date.toLocaleString('es-CL', { dateStyle: 'short', timeStyle: 'medium' });
-}
-
-function showBookingSyncAlert(message, type = 'success') {
-  const box = document.getElementById('bookingSyncAlert');
-  if (!box) return;
-  box.style.display = 'block';
-  box.style.background = type === 'error' ? 'rgba(239,68,68,.15)' : (type === 'warn' ? 'rgba(245,158,11,.15)' : 'rgba(16,185,129,.15)');
-  box.style.color = type === 'error' ? '#fca5a5' : (type === 'warn' ? '#fcd34d' : '#86efac');
-  box.textContent = message;
-}
-
-window.loadBookingSyncStatus = async function() {
-  const summary = document.getElementById('bookingSyncSummary');
-  const issuesBody = document.getElementById('bookingSyncIssues');
-  if (!summary || !issuesBody) return;
-  summary.innerHTML = '<div class="schedule-param-card">Consultando estado...</div>';
-  try {
-    const idToken = await DB.getIdTokenOrReauth();
-    if (!idToken) throw new Error(DB.lastAuthError || 'Tu sesión venció.');
-    const response = await fetch(window.CONFIG.API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ action: 'admin_get_booking_sync_status', idToken })
-    });
-    const data = await response.json().catch(() => null);
-    if (!data || data.ok !== true) throw new Error(data?.msg || 'No se pudo consultar la sincronización.');
-    const counts = data.counts || {};
-    const cards = [
-      ['✅ Confirmadas', counts.confirmed || 0, '#86efac'],
-      ['⏳ Pendientes', counts.pending || 0, '#fcd34d'],
-      ['🔁 En reintento', counts.retry || 0, '#fca5a5'],
-      ['🧹 Limpieza pendiente', counts.cleanupPending || 0, '#c4b5fd']
-    ];
-    summary.innerHTML = cards.map(([label, value, color]) => `<div class="schedule-param-card"><div style="font-size:.78rem;color:var(--text-secondary);">${label}</div><div style="font-size:1.65rem;font-weight:900;color:${color};margin-top:5px;">${value}</div></div>`).join('');
-    const run = data.runStatus || {};
-    document.getElementById('bookingSyncLastRun').textContent = `Última ejecución: ${formatSyncTimestamp(run.lastRunAt)} · Última sincronización exitosa: ${formatSyncTimestamp(run.lastSuccessfulSyncAt)}`;
-    const issues = data.issues || [];
-    issuesBody.innerHTML = issues.length ? issues.map(item => `
-      <tr>
-        <td><strong>${escapeHTML(item.courtId || '')} ${escapeHTML(item.slot || '')}</strong><br><small>${escapeHTML(item.name || item.email || item.id || '')}</small></td>
-        <td>${escapeHTML(item.date || '')}</td>
-        <td>${escapeHTML(item.status || '')}</td>
-        <td>${Number(item.attempts || 0)}</td>
-        <td style="max-width:300px;white-space:normal;">${escapeHTML(item.error || 'Sin detalle')}</td>
-      </tr>`).join('') : '<tr><td colspan="5" style="text-align:center;color:#86efac;">✓ No hay operaciones pendientes ni errores.</td></tr>';
-    showBookingSyncAlert(issues.length ? `Hay ${issues.length} operación(es) que requieren seguimiento.` : 'Firestore y Google Calendar están sincronizados.', issues.length ? 'warn' : 'success');
-  } catch (error) {
-    summary.innerHTML = '';
-    issuesBody.innerHTML = '<tr><td colspan="5">No se pudo cargar el estado.</td></tr>';
-    showBookingSyncAlert(error.message || 'Error consultando sincronización.', 'error');
-  }
-};
-
-window.retryBookingSyncNow = async function() {
-  const button = document.getElementById('btnRetryBookingSync');
-  const original = button?.textContent || '';
-  if (button) { button.disabled = true; button.textContent = 'Reintentando...'; }
-  try {
-    const idToken = await DB.getIdTokenOrReauth();
-    if (!idToken) throw new Error(DB.lastAuthError || 'Tu sesión venció.');
-    const response = await fetch(window.CONFIG.API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ action: 'admin_retry_booking_sync', idToken })
-    });
-    const data = await response.json().catch(() => null);
-    if (!data || data.ok !== true) throw new Error(data?.msg || 'No se pudo ejecutar el reintento.');
-    showBookingSyncAlert(`Proceso terminado: ${data.confirmed || 0} confirmada(s), ${data.cleaned || 0} limpieza(s), ${data.failed || 0} error(es).`, data.failed ? 'warn' : 'success');
-    await loadBookingSyncStatus();
-  } catch (error) {
-    showBookingSyncAlert(error.message || 'Error ejecutando reintentos.', 'error');
-  } finally {
-    if (button) { button.disabled = false; button.textContent = original; }
-  }
-};
 
 window.adminNewsListCache = [];
 

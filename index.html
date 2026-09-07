@@ -2674,6 +2674,7 @@ async function loadLiveData() {
       const photoR   = getPlayerPhoto(retadorName);
       const photoRet = getPlayerPhoto(retadoName);
       const isFriendly    = c.tipo === 'amistoso';
+      const isLeague      = c.tipo === 'liga';
       const isPending     = c.status === 'pendiente';
       const isAccepted    = c.status === 'aceptado';
       const isMine        = isMyChallenge(c);
@@ -2685,10 +2686,10 @@ async function loadLiveData() {
       // Has the proposed date already passed? (only relevant for pendiente)
       const proposedDatePassed = isPending && isChallengeExpiredByDateTime(c);
 
-      const typeBadgeClass = isAccepted ? 'is-accepted' : (isFriendly ? 'is-friendly' : 'is-challenge');
+      const typeBadgeClass = isLeague ? 'is-challenge' : (isAccepted ? 'is-accepted' : (isFriendly ? 'is-friendly' : 'is-challenge'));
       const typeBadgeText  = isAccepted
-        ? (isFriendly ? '✅ Amistoso Confirmado' : '✅ Desafío Aceptado')
-        : (isFriendly ? '🤝 Amistoso Enviado' : '⚔️ Desafío Enviado');
+        ? (isLeague ? '✅ Liga Confirmada' : (isFriendly ? '✅ Amistoso Confirmado' : '✅ Desafío Aceptado'))
+        : (isLeague ? '🏆 Liga Enviada' : (isFriendly ? '🤝 Amistoso Enviado' : '⚔️ Desafío Enviado'));
       const vsClass    = isFriendly ? 'friendly-vs' : '';
       const avatarClass = isFriendly ? 'is-friendly-avatar' : '';
       const rankBadgeClass = isFriendly ? 'friendly-badge' : '';
@@ -2707,7 +2708,7 @@ async function loadLiveData() {
 
       const rankRetador = posRetador ? `<div class="ce-rank-badge ${rankBadgeClass}">#${posRetador}</div>` : '';
       const rankRetado  = posRetado  ? `<div class="ce-rank-badge ${rankBadgeClass}">#${posRetado}</div>` : '';
-      const mineLabel   = isMine ? `<div class="my-match-label" style="top:10px;right:10px;">Tu ${isFriendly ? 'Amistoso' : 'Desafío'}</div>` : '';
+      const mineLabel   = isMine ? `<div class="my-match-label" style="top:10px;right:10px;">Tu ${isLeague ? 'Liga' : (isFriendly ? 'Amistoso' : 'Desafío')}</div>` : '';
 
       return `<div class="challenge-event-card ${cardAcceptedClass}" style="${mineHighlight}">
         ${mineLabel}
@@ -2764,7 +2765,9 @@ async function loadLiveData() {
 
   // Latest results (completado)
   const results = challenges
-    .filter(c => c.status === 'completado' && c.ganadorId)
+    // El home solo muestra resultados recientes; el historial completo queda
+    // disponible en ranking.html.
+    .filter(c => c.status === 'completado' && c.ganadorId && isChallengeRecentOrFuture(c.fecha, 14))
     .filter(c => {
       const retador = String(c.retadorNombre || '').toLowerCase();
       const retado = String(c.retadoNombre || '').toLowerCase();
