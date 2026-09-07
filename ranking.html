@@ -7636,6 +7636,13 @@ window.switchScheduleSection = function(section) {
 };
 
 // ── Fecha única vs rango de fechas ──
+function normalizeAdminDate(value) {
+  const raw = String(value || '').trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const match = raw.match(/^(\d{2})-(\d{2})-(\d{4})$/);
+  return match ? `${match[3]}-${match[2]}-${match[1]}` : raw;
+}
+
 window.setSpecialDateMode = function(mode) {
   document.querySelectorAll('#specialDateModeToggle .segmented-btn').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.mode === mode);
@@ -7649,9 +7656,9 @@ window.saveAdminSpecialDate = async function(event) {
   if (event) event.preventDefault();
 
   const isRange = document.querySelector('#specialDateModeToggle .segmented-btn.active')?.dataset.mode === 'range';
-  const fecha = document.getElementById('adminSpecialDate').value;
-  const fechaInicio = document.getElementById('adminSpecialDateStart').value;
-  const fechaFin = document.getElementById('adminSpecialDateEnd').value;
+  const fecha = normalizeAdminDate(document.getElementById('adminSpecialDate').value);
+  const fechaInicio = normalizeAdminDate(document.getElementById('adminSpecialDateStart').value);
+  const fechaFin = normalizeAdminDate(document.getElementById('adminSpecialDateEnd').value);
 
   if (isRange) {
     if (!fechaInicio || !fechaFin) { showAdminScheduleAlert('Selecciona la fecha de inicio y de término del período.', 'error'); return; }

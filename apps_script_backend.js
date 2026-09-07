@@ -586,8 +586,8 @@ function adminFreeSpecialSlots(data) {
     return { ok: false, msg: 'Debes proporcionar al menos una cancha.' };
   }
 
-  const fechaInicio = text(data.fechaInicio || data.fecha);
-  const fechaFin = text(data.fechaFin || data.fecha);
+  const fechaInicio = normalizeAdminDateInput(data.fechaInicio || data.fecha);
+  const fechaFin = normalizeAdminDateInput(data.fechaFin || data.fecha);
   if (!fechaInicio || !/^\d{4}-\d{2}-\d{2}$/.test(fechaInicio) || !fechaFin || !/^\d{4}-\d{2}-\d{2}$/.test(fechaFin)) {
     return { ok: false, msg: 'Fecha inválida. Usa formato YYYY-MM-DD.' };
   }
@@ -662,6 +662,13 @@ function adminFreeSpecialSlots(data) {
   }
 
   return { ok: true, saved: updated + rowsToAppend.length, groupId: groupId, dias: totalDays, calendar: calendarEvents };
+}
+
+function normalizeAdminDateInput(value) {
+  const raw = text(value);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const match = raw.match(/^(\d{2})-(\d{2})-(\d{4})$/);
+  return match ? match[3] + '-' + match[2] + '-' + match[1] : raw;
 }
 
 function createSpecialPeriodCalendarEvents(period) {
