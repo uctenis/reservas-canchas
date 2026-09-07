@@ -3737,14 +3737,22 @@ function normalizeGender(value) {
   return '';
 }
 
+// Todas las categorias se escriben en palabras (Primera...Quinta), nunca
+// como numero/abreviatura. Normaliza en caliente cualquier ficha vieja que
+// aun tenga "3ra"/"4ta"/"5ta" o el retirado "Principiante"/"abierta".
+var CATEGORY_LABELS_GAS = {
+  primera: 'Primera', '1ra': 'Primera',
+  segunda: 'Segunda', '2da': 'Segunda',
+  tercera: 'Tercera', '3ra': 'Tercera',
+  cuarta: 'Cuarta', '4ta': 'Cuarta',
+  quinta: 'Quinta', '5ta': 'Quinta',
+  abierta: 'Quinta', principiante: 'Quinta'
+};
+
 function normalizeCategory(value) {
   const raw = text(value);
   const key = norm(raw);
-  // La categoria "Principiante" se retiro: las fichas viejas que aun la
-  // tengan guardada se normalizan a "5ta". "abierta" es un alias historico
-  // de la misma categoria.
-  if (key === 'abierta' || key === 'principiante') return '5ta';
-  return raw;
+  return CATEGORY_LABELS_GAS[key] || raw;
 }
 
 /**

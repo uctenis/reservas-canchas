@@ -93,33 +93,33 @@ function normalizeEmailForDb(email) {
 }
 
 const DB_STATIC_ACCESS_PLAYERS = [
-  { id: 'm001', nombre: 'David Silva', email: 'dsilva@uct.cl', genero: 'M', categoria: '3ra', foto: 'fotos/m001.png' },
-  { id: 'm002', nombre: 'Ismael Devia', email: 'idevia@uct.cl', genero: 'M', categoria: '3ra', foto: 'fotos/m002.png' },
-  { id: 'm005', nombre: 'Miguel Escalona', email: 'mescalon@uct.cl', genero: 'M', categoria: '4ta', foto: 'fotos/m005.png' },
-  { id: 'm004', nombre: 'Luis Otth', email: 'lotth@uct.cl', genero: 'M', categoria: '4ta', foto: 'fotos/m004.png' },
-  { id: 'm009', nombre: 'Gustavo Curaqueo', email: 'gcuraqueo@uct.cl', genero: 'M', categoria: '5ta', foto: 'fotos/m009.png' },
-  { id: 'm011', nombre: 'Jaime Castillo', email: 'jcastill@uct.cl', genero: 'M', categoria: '4ta', foto: 'fotos/m011.png' },
-  { id: 'm007', nombre: 'Matias Caceres', email: 'mcaceres@uct.cl', genero: 'M', categoria: '4ta', foto: 'fotos/m007.png' },
-  { id: 'm006', nombre: 'Rodrigo Castro', email: 'rcastro@uct.cl', genero: 'M', categoria: '4ta', foto: 'fotos/m006.png' },
-  { id: 'm017', nombre: 'Klaus Hennicke', email: 'khennicke@uct.cl', genero: 'M', categoria: '4ta', foto: 'fotos/m017.png' },
-  { id: 'm016', nombre: 'Jose Melgarejo', email: 'jmelgarejo@uct.cl', genero: 'M', categoria: '3ra', foto: 'fotos/m016.png' },
+  { id: 'm001', nombre: 'David Silva', email: 'dsilva@uct.cl', genero: 'M', categoria: 'Tercera', foto: 'fotos/m001.png' },
+  { id: 'm002', nombre: 'Ismael Devia', email: 'idevia@uct.cl', genero: 'M', categoria: 'Tercera', foto: 'fotos/m002.png' },
+  { id: 'm005', nombre: 'Miguel Escalona', email: 'mescalon@uct.cl', genero: 'M', categoria: 'Cuarta', foto: 'fotos/m005.png' },
+  { id: 'm004', nombre: 'Luis Otth', email: 'lotth@uct.cl', genero: 'M', categoria: 'Cuarta', foto: 'fotos/m004.png' },
+  { id: 'm009', nombre: 'Gustavo Curaqueo', email: 'gcuraqueo@uct.cl', genero: 'M', categoria: 'Quinta', foto: 'fotos/m009.png' },
+  { id: 'm011', nombre: 'Jaime Castillo', email: 'jcastill@uct.cl', genero: 'M', categoria: 'Cuarta', foto: 'fotos/m011.png' },
+  { id: 'm007', nombre: 'Matias Caceres', email: 'mcaceres@uct.cl', genero: 'M', categoria: 'Cuarta', foto: 'fotos/m007.png' },
+  { id: 'm006', nombre: 'Rodrigo Castro', email: 'rcastro@uct.cl', genero: 'M', categoria: 'Cuarta', foto: 'fotos/m006.png' },
+  { id: 'm017', nombre: 'Klaus Hennicke', email: 'khennicke@uct.cl', genero: 'M', categoria: 'Cuarta', foto: 'fotos/m017.png' },
+  { id: 'm016', nombre: 'Jose Melgarejo', email: 'jmelgarejo@uct.cl', genero: 'M', categoria: 'Tercera', foto: 'fotos/m016.png' },
   { id: 'm008', nombre: 'Juan Maripillan', email: 'jmaripillan@uct.cl', genero: 'M', categoria: '', foto: 'fotos/m008.png' },
-  { id: 'm010', nombre: 'Cristian Rebolledo', email: 'crebolledo@uct.cl', genero: 'M', categoria: '5ta', foto: 'fotos/m010.png' },
-  { id: 'm003', nombre: 'Francisco Encina', email: 'fencina@uct.cl', genero: 'M', categoria: '4ta', foto: 'fotos/m003.png' },
-  { id: 'm012', nombre: 'Cristian Farias', email: 'cristian.farias@uct.cl', genero: 'M', categoria: '4ta', foto: 'fotos/m012.png' },
-  { id: 'm015', nombre: 'Miguel Angulo', email: 'miguel.angulo@uct.cl', genero: 'M', categoria: '3ra', foto: 'fotos/m015.png' },
-  { id: 'm018', nombre: 'Roberto Bermudez', email: 'profesorbermudez@gmail.com', genero: 'M', categoria: '1ra', foto: 'fotos/m018.png' },
+  { id: 'm010', nombre: 'Cristian Rebolledo', email: 'crebolledo@uct.cl', genero: 'M', categoria: 'Quinta', foto: 'fotos/m010.png' },
+  { id: 'm003', nombre: 'Francisco Encina', email: 'fencina@uct.cl', genero: 'M', categoria: 'Cuarta', foto: 'fotos/m003.png' },
+  { id: 'm012', nombre: 'Cristian Farias', email: 'cristian.farias@uct.cl', genero: 'M', categoria: 'Cuarta', foto: 'fotos/m012.png' },
+  { id: 'm015', nombre: 'Miguel Angulo', email: 'miguel.angulo@uct.cl', genero: 'M', categoria: 'Tercera', foto: 'fotos/m015.png' },
+  { id: 'm018', nombre: 'Roberto Bermudez', email: 'profesorbermudez@gmail.com', genero: 'M', categoria: 'Primera', foto: 'fotos/m018.png' },
   { id: 'm013', nombre: 'Francisco Munoz', email: 'francisco.munoz@uct.cl', genero: 'M', categoria: '', foto: 'fotos/m013.png' },
-  { id: 'm014', nombre: 'Pablo Lagos', email: 'pablo.lagos@uct.cl', genero: 'M', categoria: '4ta', foto: 'fotos/m014.png' },
-  { id: 'm031', nombre: 'Paulo Garrido', email: 'pgarrido@uct.cl', genero: 'M', categoria: '4ta', foto: 'fotos/m031.png' },
-  { id: 'f002', nombre: 'Violeta Moreno', email: 'vmoreno@uct.cl', genero: 'F', categoria: '5ta', foto: 'fotos/f002.png' },
-  { id: 'f001', nombre: 'Sofia Silva', email: 'ssilvacastillo08@gmail.com', genero: 'F', categoria: '5ta', foto: 'fotos/f001.png' },
-  { id: 'f006', nombre: 'Rocio Hernandez', email: 'rocio.hernandez@uct.cl', genero: 'F', categoria: '5ta', foto: 'fotos/f006.png' },
-  { id: 'f003', nombre: 'Fernanda Silva', email: 'ferniwendy@gmail.com', genero: 'F', categoria: '5ta', foto: 'fotos/f003.png' },
-  { id: 'f005', nombre: 'Baleria Schatter', email: 'vschatter@uct.cl', genero: 'F', categoria: '5ta', foto: 'fotos/f005.png' },
+  { id: 'm014', nombre: 'Pablo Lagos', email: 'pablo.lagos@uct.cl', genero: 'M', categoria: 'Cuarta', foto: 'fotos/m014.png' },
+  { id: 'm031', nombre: 'Paulo Garrido', email: 'pgarrido@uct.cl', genero: 'M', categoria: 'Cuarta', foto: 'fotos/m031.png' },
+  { id: 'f002', nombre: 'Violeta Moreno', email: 'vmoreno@uct.cl', genero: 'F', categoria: 'Quinta', foto: 'fotos/f002.png' },
+  { id: 'f001', nombre: 'Sofia Silva', email: 'ssilvacastillo08@gmail.com', genero: 'F', categoria: 'Quinta', foto: 'fotos/f001.png' },
+  { id: 'f006', nombre: 'Rocio Hernandez', email: 'rocio.hernandez@uct.cl', genero: 'F', categoria: 'Quinta', foto: 'fotos/f006.png' },
+  { id: 'f003', nombre: 'Fernanda Silva', email: 'ferniwendy@gmail.com', genero: 'F', categoria: 'Quinta', foto: 'fotos/f003.png' },
+  { id: 'f005', nombre: 'Baleria Schatter', email: 'vschatter@uct.cl', genero: 'F', categoria: 'Quinta', foto: 'fotos/f005.png' },
   { id: 'f004', nombre: 'Sandra Arenas', email: 'sarenas@uct.cl', genero: 'F', categoria: '', foto: 'fotos/f004.png' },
-  { id: 'f008', nombre: 'Carolina Cardenas', email: 'ccardeneas@uct.cl', genero: 'F', categoria: '5ta', foto: 'fotos/f008.png' },
-  { id: 'f011', nombre: 'Carla Iglesias', email: 'ciglesias@uct.cl', genero: 'F', categoria: '5ta', foto: 'fotos/f011.png' }
+  { id: 'f008', nombre: 'Carolina Cardenas', email: 'ccardeneas@uct.cl', genero: 'F', categoria: 'Quinta', foto: 'fotos/f008.png' },
+  { id: 'f011', nombre: 'Carla Iglesias', email: 'ciglesias@uct.cl', genero: 'F', categoria: 'Quinta', foto: 'fotos/f011.png' }
 ];
 
 function isAccessPlayerActive(player) {
@@ -250,7 +250,7 @@ function playerToSessionUser(player, current = {}) {
     nombre: player.nombre || current.nombre || '',
     email,
     genero: player.genero || player.gender || current.genero || '',
-    categoria: normalizeCategoryForDb(player.categoria || current.categoria || '5ta'),
+    categoria: normalizeCategoryForDb(player.categoria || current.categoria || 'Quinta'),
     mano: player.mano || player.manoHabil || current.mano || 'Derecha',
     reves: player.reves || current.reves || 'Dos manos',
     foto: player.foto || current.foto || '',
@@ -266,14 +266,22 @@ function playerToSessionUser(player, current = {}) {
   };
 }
 
+// Todas las categorias se escriben en palabras (Primera...Quinta), nunca
+// como numero/abreviatura. Normaliza en caliente cualquier ficha vieja que
+// aun tenga "3ra"/"4ta"/"5ta" o el retirado "Principiante"/"abierta".
+const CATEGORY_LABELS_DB = {
+  primera: 'Primera', '1ra': 'Primera',
+  segunda: 'Segunda', '2da': 'Segunda',
+  tercera: 'Tercera', '3ra': 'Tercera',
+  cuarta: 'Cuarta', '4ta': 'Cuarta',
+  quinta: 'Quinta', '5ta': 'Quinta',
+  abierta: 'Quinta', principiante: 'Quinta'
+};
+
 function normalizeCategoryForDb(value) {
   const raw = String(value || '').trim();
   const key = raw.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  // La categoria "Principiante" se retiro: las fichas viejas que aun la
-  // tengan guardada se normalizan a "5ta". "abierta" es un alias historico
-  // de la misma categoria.
-  if (key === 'abierta' || key === 'principiante') return '5ta';
-  return raw;
+  return CATEGORY_LABELS_DB[key] || raw;
 }
 
 // ──────────────── VARIABLES GLOBALES PARA LISTENERS ────────────────
@@ -297,7 +305,7 @@ const DB = {
   // ──────────────── USUARIOS ────────────────
   getUsers() {
     return JSON.parse(localStorage.getItem('uctenis_users') || '[]')
-      .map(user => ({ ...user, categoria: normalizeCategoryForDb(user.categoria || '5ta') }));
+      .map(user => ({ ...user, categoria: normalizeCategoryForDb(user.categoria || 'Quinta') }));
   },
   saveUsers(users) {
     localStorage.setItem('uctenis_users', JSON.stringify(users));
@@ -358,7 +366,7 @@ const DB = {
       email: data.email,
       password: data.password || 'google-auth-no-pass',
       genero: data.genero, // 'M' o 'F'
-      categoria: normalizeCategoryForDb(data.categoria || '5ta'),
+      categoria: normalizeCategoryForDb(data.categoria || 'Quinta'),
       mano: data.mano || 'Derecha',
       reves: data.reves || 'Dos manos',
       foto: data.foto || '',
@@ -1257,7 +1265,7 @@ const DB = {
         email: staff.email,
         emailLower: normalized,
         genero: staff.genero || '',
-        categoria: staff.categoria || '5ta',
+        categoria: staff.categoria || 'Quinta',
         telefono: staff.telefono || '',
         foto: staff.foto || '',
         activo: true,
@@ -1955,8 +1963,8 @@ const DB = {
         { nombre: 'Ismael Devia', email: 'idevia@uct.cl', genero: 'M', categoria: 'Primera' },
         { nombre: 'Paulo Garrido', email: 'pgarrido@uct.cl', genero: 'M', categoria: 'Segunda' },
         { nombre: 'Roberto Bermudez', email: 'roberto@uct.cl', genero: 'M', categoria: 'Segunda' },
-        { nombre: 'Francisco Encina', email: 'fencina@uct.cl', genero: 'M', categoria: '5ta' },
-        { nombre: 'Gustavo Curaqueo', email: 'gcuraqueo@uct.cl', genero: 'M', categoria: '5ta' },
+        { nombre: 'Francisco Encina', email: 'fencina@uct.cl', genero: 'M', categoria: 'Quinta' },
+        { nombre: 'Gustavo Curaqueo', email: 'gcuraqueo@uct.cl', genero: 'M', categoria: 'Quinta' },
         { nombre: 'Cristian Henriquez', email: 'chenriquez@uct.cl', genero: 'M', categoria: 'Primera' },
         { nombre: 'Matías Cáceres', email: 'mcaceres@uct.cl', genero: 'M', categoria: 'Segunda' },
       ];
@@ -1964,7 +1972,7 @@ const DB = {
         { nombre: 'Carolina Cárdenas', email: 'ccardenas@uct.cl', genero: 'F', categoria: 'Primera' },
         { nombre: 'Angélica Encina', email: 'aencina@uct.cl', genero: 'F', categoria: 'Primera' },
         { nombre: 'Violeta Moreno', email: 'vmoreno@uct.cl', genero: 'F', categoria: 'Segunda' },
-        { nombre: 'Valeria Schatter', email: 'vschatter@uct.cl', genero: 'F', categoria: '5ta' },
+        { nombre: 'Valeria Schatter', email: 'vschatter@uct.cl', genero: 'F', categoria: 'Quinta' },
         { nombre: 'María José', email: 'mjose@uct.cl', genero: 'F', categoria: 'Segunda' },
       ];
       [...hombres, ...mujeres].forEach(u => {
