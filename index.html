@@ -107,6 +107,10 @@
     .club-sport-launch strong { color:#fde68a; display:block; font-size:.9rem; }
     .club-sport-launch span { color:var(--text-secondary); font-size:.8rem; }
     .club-sport-launch a { flex-shrink:0; color:#111827; background:#f59e0b; border-radius:8px; padding:8px 13px; font-size:.78rem; font-weight:900; text-decoration:none; }
+    /* Estado especial durante la Semana 1 del ciclo: más llamativo que el resto de la temporada */
+    .club-sport-launch.is-launch-week { border-color:rgba(245,158,11,.7); background:linear-gradient(90deg, rgba(220,38,38,.16), rgba(245,158,11,.16)); box-shadow:0 8px 26px rgba(245,158,11,.16); }
+    .club-sport-launch.is-launch-week strong::before { content:''; display:inline-block; width:8px; height:8px; border-radius:50%; background:#ef4444; margin-right:7px; animation:launch-pulse 1.4s ease-in-out infinite; }
+    @keyframes launch-pulse { 0%,100% { box-shadow:0 0 0 0 rgba(239,68,68,.55); } 50% { box-shadow:0 0 0 5px rgba(239,68,68,0); } }
     @media (max-width: 900px) { .actions-hero-grid { grid-template-columns:1fr 1fr; } .hero-card:first-child { grid-column:1 / -1; } }
     @media (max-width: 600px) { .actions-hero-grid { grid-template-columns:1fr; } .hero-card:first-child { grid-column:auto; } .club-sport-launch { align-items:flex-start; flex-direction:column; } .club-sport-launch a { width:100%; text-align:center; } }
 
@@ -1269,10 +1273,10 @@
     </div>
 
     <!-- ── LANZAMIENTO DEPORTIVO ── -->
-    <div class="club-sport-launch" role="status">
+    <div class="club-sport-launch" id="clubSportLaunch" role="status">
       <div>
-        <strong>🎾 Nueva Liga semanal UCTenis</strong>
-        <span>Juega una vez por semana, suma puntos y obtén un bono para la escalerilla al cerrar el ciclo.</span>
+        <strong id="clubSportLaunchTitle">🎾 Nueva Liga semanal UCTenis</strong>
+        <span id="clubSportLaunchText">Juega una vez por semana, suma puntos y obtén un bono para la escalerilla al cerrar el ciclo.</span>
       </div>
       <a href="liga.html">Conocer la liga</a>
     </div>
@@ -1464,6 +1468,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
 
 <script src="db.js?v=20260817_sync_admin_v2"></script>
+<script src="liga.js?v=20260907_v1"></script>
 <script src="script.js?v=20260602_v2"></script>
 <script>
 // Admin emails (must match db.js)
@@ -1934,6 +1939,28 @@ function renderIndexUserBar() {
     </div>`;
   }
   renderProfileBanner();
+}
+
+function renderClubSportLaunchBanner() {
+  if (typeof UCTennisLeague === 'undefined') return;
+  const wrap = document.getElementById('clubSportLaunch');
+  const title = document.getElementById('clubSportLaunchTitle');
+  const text = document.getElementById('clubSportLaunchText');
+  if (!wrap || !title || !text) return;
+  const cycle = UCTennisLeague.getCycle(new Date());
+  const cycleStart = new Date(`${cycle.start}T00:00:00Z`);
+  const today = new Date();
+  const elapsedDays = Math.max(0, Math.floor((Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()) - cycleStart.getTime()) / 86400000));
+  const currentWeek = Math.floor(elapsedDays / 7);
+  const isLaunchWeek = currentWeek === 0;
+  wrap.classList.toggle('is-launch-week', isLaunchWeek);
+  if (isLaunchWeek) {
+    title.textContent = '🎾 ¡Hoy arranca la Liga UCTenis!';
+    text.textContent = `Semana 1 de ${cycle.weeks} · Del ${cycle.start} al ${cycle.end}. Propón tu primer partido esta semana.`;
+  } else {
+    title.textContent = '🎾 Liga semanal UCTenis en curso';
+    text.textContent = `Semana ${currentWeek + 1} de ${cycle.weeks} · Juega, suma puntos y obtén un bono para la escalerilla al cerrar el ciclo.`;
+  }
 }
 
 function openHomeAuthModal() {
@@ -3011,6 +3038,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   DB.seed();
   renderIndexUserBar();
+  renderClubSportLaunchBanner();
 
   // Listen to real-time events to reload UI
   if (typeof DB !== 'undefined') {

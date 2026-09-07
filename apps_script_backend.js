@@ -3873,9 +3873,12 @@ function getChallengeStatsByPlayer() {
     if (['completado','wo_retador','wo_retado'].indexOf(challenge.status) < 0) continue;
     const retador = ensure(challenge.retadorId);
     const retado = ensure(challenge.retadoId);
-    const ganador = ensure(challenge.ganadorId);
-    if (!retador || !retado || !ganador) continue;
+    if (!retador || !retado) continue;
     retador.pj += 1; retado.pj += 1;
+    // Un amistoso puede terminar en empate (sin ganadorId): cuenta como
+    // partido jugado para ambos, pero no suma victoria ni derrota a nadie.
+    const ganador = ensure(challenge.ganadorId);
+    if (!ganador) continue;
     if (challenge.tipo !== 'amistoso' && challenge.tipo !== 'liga') ganador.pts += 3;
     ganador.pg += 1;
     if (challenge.ganadorId === challenge.retadorId) retado.pp += 1;

@@ -194,6 +194,17 @@ body {
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  gap: 10px 14px;
+  flex-wrap: wrap;
+}
+
+/* Agrupa los botones de admin y los de crear partido para que, si el ancho
+   no alcanza, la fila se parta por grupo completo en vez de dejar un botón
+   suelto colgando en su propia línea. */
+.rank-actions-group {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
   gap: 8px;
   flex-wrap: wrap;
 }
@@ -2000,6 +2011,7 @@ tr.drag-over-bottom {
   }
 
   .rank-actions,
+  .rank-actions-group,
   .btn-admin-panel,
   .btn-challenge-new {
     width: 100%;

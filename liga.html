@@ -9,6 +9,14 @@
 </head>
 <body>
   <main class="league-page">
+    <div class="league-launch-banner" id="leagueLaunchBanner" role="status" aria-live="polite">
+      <div class="league-launch-copy">
+        <div class="league-launch-badge">🎾 ¡Hoy arranca la temporada!</div>
+        <h2>Semana 1 de 6 &mdash; Liga UCTenis ya está en juego</h2>
+        <p id="leagueLaunchText">La liga corre del 7 de septiembre al 18 de octubre. Propón tu primer partido esta semana y súmate a la clasificación desde el arranque.</p>
+      </div>
+      <a class="league-launch-cta" href="ranking.html?liga=1">Proponer mi primer partido &rarr;</a>
+    </div>
     <header class="league-hero">
       <div>
         <div class="league-kicker">Competencia continua UCTenis</div>
@@ -66,6 +74,12 @@
       const progress = Math.min(100, Math.round(((elapsedDays + 1) / (leagueCycle.weeks * 7)) * 100));
       document.getElementById('leagueProgress').style.width = `${progress}%`;
       document.getElementById('leagueProgressText').textContent = `${progress}% del ciclo · Semana ${currentWeek + 1} de ${leagueCycle.weeks}`;
+      const launchBanner = document.getElementById('leagueLaunchBanner');
+      if (launchBanner) {
+        launchBanner.classList.toggle('show', currentWeek === 0);
+        const launchText = document.getElementById('leagueLaunchText');
+        if (launchText) launchText.textContent = `La liga corre del ${leagueCycle.start} al ${leagueCycle.end}. Propón tu primer partido esta semana y súmate a la clasificación desde el arranque.`;
+      }
       document.getElementById('leagueWeeks').innerHTML = Array.from({ length: leagueCycle.weeks }, (_, index) => `<div class="league-week ${index === currentWeek ? 'is-current' : ''}">Semana ${index + 1}<strong>${leagueState.matches.filter(match => UCTennisLeague.isLeagueMatch(match, leagueCycle) && Math.floor((new Date(`${(match.fechaResultado || match.fecha || match.actualizado).slice(0, 10)}T00:00:00Z`) - cycleStart) / 86400000 / 7) === index).length} partidos</strong></div>`).join('');
       const rows = UCTennisLeague.calculateStandings(leagueState.players, leagueState.matches, leagueCycle)
         .filter(row => !leagueState.gender || row.genero === leagueState.gender)

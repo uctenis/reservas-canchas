@@ -6,7 +6,7 @@
 .league-cycle { text-align:right; color:#fde68a; font-weight:800; white-space:nowrap; }
 .league-progress { height:8px; margin-top:10px; background:rgba(255,255,255,.1); border-radius:99px; overflow:hidden; }
 .league-progress span { display:block; height:100%; background:#f59e0b; border-radius:inherit; transition:width .3s ease; }
-.league-week-grid { display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; margin:14px 0 20px; }
+.league-week-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(78px, 1fr)); gap:8px; margin:14px 0 20px; }
 .league-week { padding:10px 6px; border:1px solid rgba(255,255,255,.1); border-radius:10px; text-align:center; color:var(--text-secondary); font-size:.72rem; }
 .league-week.is-current { border-color:#f59e0b; color:#fde68a; background:rgba(245,158,11,.1); }
 .league-week strong { display:block; color:#fff; font-size:.85rem; margin-top:3px; }
@@ -34,3 +34,51 @@
 .league-secondary-copy { color:var(--text-secondary); font-size:.82rem; line-height:1.45; margin-top:12px; }
 .league-empty { color:var(--text-secondary); padding:20px 0; text-align:center; }
 @media (max-width: 760px) { .league-hero { display:block; padding:22px; } .league-cycle { text-align:left; margin-top:16px; } .league-grid { grid-template-columns:1fr; } .league-table th:nth-child(6), .league-table td:nth-child(6) { display:none; } }
+
+/* ── Banner de lanzamiento de temporada (solo visible en la Semana 1) ── */
+.league-launch-banner {
+  display: none;
+  position: relative;
+  overflow: hidden;
+  margin-bottom: 20px;
+  padding: 22px 26px;
+  border-radius: 20px;
+  border: 1px solid rgba(245, 158, 11, .55);
+  background: linear-gradient(120deg, rgba(120,53,15,.55), rgba(245,158,11,.18) 55%, rgba(15,23,42,.9));
+  box-shadow: 0 18px 46px rgba(245,158,11,.16);
+}
+.league-launch-banner.show { display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap; animation: league-launch-in .5s ease; }
+.league-launch-banner::after {
+  content: "";
+  position: absolute; inset: 0;
+  background: radial-gradient(circle at 85% 10%, rgba(253,230,138,.28), transparent 55%);
+  pointer-events: none;
+}
+.league-launch-copy { position: relative; z-index: 1; }
+.league-launch-badge {
+  display: inline-flex; align-items: center; gap: 8px;
+  color: #fff7ed; background: #dc2626; border-radius: 999px;
+  padding: 5px 14px 5px 10px; font-size: .72rem; font-weight: 900;
+  letter-spacing: .06em; text-transform: uppercase; margin-bottom: 10px;
+}
+.league-launch-badge::before {
+  content: ""; width: 9px; height: 9px; border-radius: 50%; background: #fff;
+  animation: league-launch-pulse 1.4s ease-in-out infinite;
+}
+.league-launch-copy h2 { margin: 0 0 6px; font-size: clamp(1.35rem, 3vw, 2.1rem); color: #fff; line-height: 1.1; }
+.league-launch-copy p { margin: 0; color: #fde68a; font-size: .92rem; max-width: 560px; }
+.league-launch-cta {
+  position: relative; z-index: 1; flex-shrink: 0;
+  background: #f59e0b; color: #111827; font-weight: 900;
+  padding: 13px 22px; border-radius: 12px; text-decoration: none;
+  white-space: nowrap; box-shadow: 0 8px 20px rgba(245,158,11,.35);
+}
+@keyframes league-launch-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255,255,255,.6); }
+  50% { box-shadow: 0 0 0 6px rgba(255,255,255,0); }
+}
+@keyframes league-launch-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (max-width: 640px) { .league-launch-banner.show { flex-direction: column; align-items: flex-start; } .league-launch-cta { width: 100%; text-align: center; } }

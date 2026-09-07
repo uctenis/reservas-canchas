@@ -46,11 +46,15 @@
       </div>
       <div class="rank-actions">
         <button class="btn-primary pulse-confirm" id="btnConfirmRankingOrder" type="button" style="display:none; background:#10b981; border:none; border-radius:8px; font-weight:800; padding:8px 16px; font-size:0.85rem; width:auto; min-height:auto; cursor:pointer; color:#0f172a; align-items:center; justify-content:center; gap:6px;">💾 Guardar Orden</button>
-        <button class="btn-admin-panel" id="btnModoEdicion" type="button" style="display:none; background:rgba(99, 102, 241, 0.15); border-color:rgba(99, 102, 241, 0.35); color:#a5b4fc; font-weight:800;">✏️ Modo Edición</button>
-        <button class="btn-admin-panel" id="btnAdminPlayers" type="button" data-action="open-admin" style="display:none">Panel Administrador</button>
-        <button class="btn-challenge-new" id="btnNuevoDesafio" type="button" style="display:none">Nuevo desafío</button>
-        <button class="btn-challenge-new" id="btnNuevaLiga" type="button" style="display:none; background:#f59e0b; color:#111827; border-color:#f59e0b;">Partido de liga</button>
-        <button class="btn-challenge-new" id="btnNuevoAmistoso" type="button" style="display:none; background:#64748b; color:#fff; border-color:#64748b;">Registrar Amistoso</button>
+        <div class="rank-actions-group">
+          <button class="btn-admin-panel" id="btnModoEdicion" type="button" style="display:none; background:rgba(99, 102, 241, 0.15); border-color:rgba(99, 102, 241, 0.35); color:#a5b4fc; font-weight:800;">✏️ Modo Edición</button>
+          <button class="btn-admin-panel" id="btnAdminPlayers" type="button" data-action="open-admin" style="display:none">Panel Administrador</button>
+        </div>
+        <div class="rank-actions-group">
+          <button class="btn-challenge-new" id="btnNuevoDesafio" type="button" style="display:none">Nuevo desafío</button>
+          <button class="btn-challenge-new" id="btnNuevaLiga" type="button" style="display:none; background:#f59e0b; color:#111827; border-color:#f59e0b;">Partido de liga</button>
+          <button class="btn-challenge-new" id="btnNuevoAmistoso" type="button" style="display:none; background:#64748b; color:#fff; border-color:#64748b;">Registrar Amistoso</button>
+        </div>
       </div>
     </div>
 
@@ -2560,7 +2564,7 @@ function challengeCard(challenge, users, session, compact) {
         ${friendlyBadge}
         ${campeonatoBadge}
         ${expiredBadge}
-        ${challenge.marcador ? `<span>${escapeHTML(challenge.marcador)} · Ganó ${escapeHTML(ganadorName || '-')}</span>` : ''}
+        ${challenge.marcador ? `<span>${escapeHTML(challenge.marcador)} · ${ganadorName ? `Ganó ${escapeHTML(ganadorName)}` : '🤝 Empate'}</span>` : ''}
       </div>
       ${compactStats}
       ${commentHtml}
@@ -4219,7 +4223,7 @@ function applyScoreModalMode(isFriendly) {
     if (tieRow1) tieRow1.classList.add('hidden');
     if (tieRow2) tieRow2.classList.add('hidden');
     if (tieRow3) tieRow3.classList.add('hidden');
-    if (summaryInfo) summaryInfo.innerHTML = '🤝 <strong>Amistoso:</strong> Ingresa el marcador del set jugado (ej: 9-7, 6-3). Sets 2 y 3 son opcionales si jugaron más.';
+    if (summaryInfo) summaryInfo.innerHTML = '🤝 <strong>Amistoso:</strong> Ingresa el marcador del set jugado (ej: 9-7, 6-3). Sets 2 y 3 son opcionales si jugaron más. Si el resultado queda parejo (ej: 1 set cada uno), se registra como empate.';
   } else {
     // Desafío oficial: todos los controles estrictos
     if (hdr2) hdr2.style.opacity = '';
@@ -4351,7 +4355,8 @@ function buildScoreResult() {
     const winsA = wins[ids[0]] || 0;
     const winsB = wins[ids[1]] || 0;
     if (completed.length > 1 && winsA === winsB) {
-      return { valid: false, error: 'El amistoso debe tener un ganador claro (no puede terminar en empate de sets).' };
+      // Empate: no hay ganador, pero el marcador (sets/juegos) queda registrado igual.
+      return { valid: true, marcador: results.join(', '), winnerId: '', isDraw: true, sets: completed, wins };
     }
     const winnerId = winsA >= winsB ? ids[0] : ids[1];
     return { valid: true, marcador: results.join(', '), winnerId, sets: completed, wins };
@@ -4417,9 +4422,12 @@ function updateScoreMatchState() {
   }
 
   const winnerId = scoreResult.winnerId || '';
+  const isDraw = Boolean(scoreResult.isDraw);
   let winnerName = '';
 
-  if (isDirectFriendly) {
+  if (isDraw) {
+    hiddenWinner.value = '';
+  } else if (isDirectFriendly) {
     const adminPlayerAGroup = document.getElementById('scoreAdminPlayerAGroup');
     const isAdminMode = adminPlayerAGroup && adminPlayerAGroup.style.display !== 'none';
     let playerA;
@@ -4443,7 +4451,9 @@ function updateScoreMatchState() {
     hiddenWinner.value = winnerId;
   }
 
-  winnerText.innerHTML = `Ganador: <strong>${escapeHTML(winnerName || 'Jugador')}</strong> (${scoreResult.marcador})`;
+  winnerText.innerHTML = isDraw
+    ? `Resultado: <strong>🤝 Empate</strong> (${scoreResult.marcador})`
+    : `Ganador: <strong>${escapeHTML(winnerName || 'Jugador')}</strong> (${scoreResult.marcador})`;
   submitButton.disabled = false;
 }
 
@@ -4499,8 +4509,8 @@ async function submitScore(event) {
     const courtSelect = document.getElementById('scoreCourt');
     const courtLabel = courtSelect.options[courtSelect.selectedIndex]?.text || courtVal;
 
-    const winnerOption = scoreResult.winnerId; // 'A' or 'B'
-    const ganadorId = winnerOption === 'A' ? playerA.id : opponent.id;
+    const winnerOption = scoreResult.winnerId; // 'A', 'B' o '' si es empate
+    const ganadorId = winnerOption === 'A' ? playerA.id : (winnerOption === 'B' ? opponent.id : '');
     const challengeId = Date.now().toString();
 
     // If admin is registering on behalf of others, add adminEmail to payload
@@ -4809,6 +4819,7 @@ function showPlayerProfile(playerKey) {
   const leagueLosses = leagueMatches.filter(c => c.ganadorId && !playerMatchesChallengeRef(player, c.ganadorId)).length;
   const friendlyWins   = friendlyMatches.filter(c => playerMatchesChallengeRef(player, c.ganadorId)).length;
   const friendlyLosses = friendlyMatches.filter(c => c.ganadorId && !playerMatchesChallengeRef(player, c.ganadorId)).length;
+  const friendlyDraws  = friendlyMatches.filter(c => !c.ganadorId).length;
   const currentLeagueCycle = typeof UCTennisLeague !== 'undefined' ? UCTennisLeague.getCycle(new Date()) : null;
   const currentLeagueRow = currentLeagueCycle && typeof UCTennisLeague !== 'undefined'
     ? UCTennisLeague.calculateStandings(getAllPlayers(), DB.getChallenges(), currentLeagueCycle).find(row => String(row.id) === String(player.id))
@@ -4832,19 +4843,22 @@ function showPlayerProfile(playerKey) {
             const oppName = playerMatchesChallengeRef(player, c.retadorId)
               ? (c.retadoNombre || users.find(u=>u.id===c.retadoId)?.nombre || 'Jugador')
               : (c.retadorNombre || users.find(u=>u.id===c.retadorId)?.nombre || 'Jugador');
-            const won = playerMatchesChallengeRef(player, c.ganadorId);
+            const isDrawMatch = !c.ganadorId;
+            const won = !isDrawMatch && playerMatchesChallengeRef(player, c.ganadorId);
+            const resultColor = isDrawMatch ? '#94a3b8' : (won ? '#4ade80' : '#f87171');
+            const resultMark = isDrawMatch ? '🤝 ' : (won ? '✓ ' : '✗ ');
             const isFriendly = c.tipo === 'amistoso';
             const isLeague = c.tipo === 'liga';
             const typeIcon = isFriendly ? '🤝' : (isLeague ? '🏆' : '⚔️');
             const typeLabel = isFriendly ? 'Amistoso' : (isLeague ? 'Liga semanal' : 'Escalerilla');
             const dateStr = c.fechaResultado ? formatShortDate(c.fechaResultado.split('T')[0]) : formatShortDate(c.fecha);
             return `
-              <li class="profile-match-item" style="--match-color:${won ? '#4ade80' : '#f87171'};">
+              <li class="profile-match-item" style="--match-color:${resultColor};">
                 <span style="display:flex; flex-direction:column; gap:1px;">
                   <span style="color:var(--text-primary); font-weight:600;">${typeIcon} vs ${escapeHTML(oppName)}</span>
                   <span style="color:var(--text-secondary); font-size:0.72rem;">${typeLabel} · ${escapeHTML(dateStr || '')}</span>
                 </span>
-                <strong style="color:${won ? '#4ade80' : '#f87171'}; font-variant-numeric:tabular-nums; white-space:nowrap;">${won ? '✓ ' : '✗ '}${escapeHTML(formatScoreForPlayer(c, player) || (c.status === 'wo_retador' || c.status === 'wo_retado' ? 'W.O.' : '-'))}</strong>
+                <strong style="color:${resultColor}; font-variant-numeric:tabular-nums; white-space:nowrap;">${resultMark}${escapeHTML(formatScoreForPlayer(c, player) || (c.status === 'wo_retador' || c.status === 'wo_retado' ? 'W.O.' : '-'))}</strong>
               </li>
             `;
           }).join('')}
@@ -4883,6 +4897,7 @@ function showPlayerProfile(playerKey) {
         <div class="profile-record-stats">
           <div><span class="stat-label" style="color:#4ade80;">Ganados</span><span class="stat-value">${friendlyWins}</span></div>
           <div><span class="stat-label" style="color:#f87171;">Perdidos</span><span class="stat-value">${friendlyLosses}</span></div>
+          ${friendlyDraws > 0 ? `<div><span class="stat-label" style="color:#94a3b8;">Empates</span><span class="stat-value">${friendlyDraws}</span></div>` : ''}
           <div><span class="stat-label" style="color:#94a3b8;">Total</span><span class="stat-value">${friendlyMatches.length}</span></div>
         </div>
       </div>
