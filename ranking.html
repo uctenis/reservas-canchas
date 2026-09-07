@@ -358,6 +358,9 @@
           <button type="button" class="admin-btn-ghost admin-btn-ghost-danger" id="btnResetSystem" onclick="resetSystemData(event)" title="Reiniciar temporada (requiere doble confirmación)">
             🔄 Reiniciar temporada
           </button>
+          <button type="button" class="admin-btn-ghost" id="btnMigratePrincipianteCategoria" onclick="migratePrincipianteCategoria(event)" title="Actualiza a '5ta' las fichas que aún tengan categoría 'Principiante'">
+            🔁 Migrar "Principiante" → 5ta
+          </button>
         </div>
       </div>
 
@@ -489,7 +492,7 @@
               <option value="Segunda">Segunda</option>
               <option value="Tercera">Tercera</option>
               <option value="Cuarta">Cuarta</option>
-              <option value="Principiante">Principiante</option>
+              <option value="5ta">5ta</option>
             </select>
           </div>
         </div>
@@ -850,14 +853,14 @@ const OFFICIAL_STATIC_RANKING = {
     { posicion: 2,  nombre: 'Ismael Devia',        posicionAnterior: 2,  id: 'm002', categoria: '3ra',         mano: 'Derecha',    reves: 'Dos manos', foto: 'fotos/m002.png', fechaNacimiento: '', email: 'idevia@uct.cl' },
     { posicion: 3,  nombre: 'Miguel Escalona',     posicionAnterior: 3,  id: 'm005', categoria: '4ta',         mano: 'Derecha',    reves: 'Dos Manos', foto: 'fotos/m005.png', fechaNacimiento: '', email: 'mescalon@uct.cl' },
     { posicion: 4,  nombre: 'Luis Otth',           posicionAnterior: 4,  id: 'm004', categoria: '4ta',         mano: 'Ninguna',    reves: 'Dos manos', foto: 'fotos/m004.png', fechaNacimiento: '', email: 'lotth@uct.cl' },
-    { posicion: 5,  nombre: 'Gustavo Curaqueo',    posicionAnterior: 5,  id: 'm009', categoria: 'Principiante', mano: 'Derecha',   reves: 'Dos manos', foto: 'fotos/m009.png', fechaNacimiento: '', email: 'gcuraqueo@uct.cl' },
+    { posicion: 5,  nombre: 'Gustavo Curaqueo',    posicionAnterior: 5,  id: 'm009', categoria: '5ta', mano: 'Derecha',   reves: 'Dos manos', foto: 'fotos/m009.png', fechaNacimiento: '', email: 'gcuraqueo@uct.cl' },
     { posicion: 6,  nombre: 'Jaime Castillo',      posicionAnterior: 6,  id: 'm011', categoria: '4ta',         mano: 'Ninguna',    reves: 'Una Mano',  foto: 'fotos/m011.png', fechaNacimiento: '', email: 'jcastill@uct.cl' },
     { posicion: 7,  nombre: 'Matías Cáceres',      posicionAnterior: 7,  id: 'm007', categoria: '4ta',         mano: 'Izquierda',  reves: 'Dos manos', foto: 'fotos/m007.png', fechaNacimiento: '', email: 'mcaceres@uct.cl' },
     { posicion: 8,  nombre: 'Rodrigo Castro',      posicionAnterior: 8,  id: 'm006', categoria: '4ta',         mano: 'Derecha',    reves: 'Una Mano',  foto: 'fotos/m006.png', fechaNacimiento: '', email: 'rcastro@uct.cl' },
     { posicion: 9,  nombre: 'Klaus Hennicke',      posicionAnterior: 9,  id: 'm017', categoria: '4ta',         mano: 'Derecha',    reves: 'Dos manos', foto: 'fotos/m017.png', fechaNacimiento: '', email: 'khennicke@uct.cl' },
     { posicion: 10, nombre: 'José Melgarejo',      posicionAnterior: 10, id: 'm016', categoria: '3ra',         mano: 'Derecha',    reves: 'Dos manos', foto: 'fotos/m016.png', fechaNacimiento: '', email: 'jmelgarejo@uct.cl' },
     { posicion: 11, nombre: 'Juan Maripillan',     posicionAnterior: 11, id: 'm008', categoria: '',            mano: 'Derecha',    reves: 'Dos manos', foto: 'fotos/m008.png', fechaNacimiento: '',          email: 'jmaripillan@uct.cl' },
-    { posicion: 12, nombre: 'Cristian Rebolledo',  posicionAnterior: 12, id: 'm010', categoria: 'Principiante', mano: 'Derecha',   reves: 'Una Mano',  foto: 'fotos/m010.png', fechaNacimiento: '', email: 'crebolledo@uct.cl' },
+    { posicion: 12, nombre: 'Cristian Rebolledo',  posicionAnterior: 12, id: 'm010', categoria: '5ta', mano: 'Derecha',   reves: 'Una Mano',  foto: 'fotos/m010.png', fechaNacimiento: '', email: 'crebolledo@uct.cl' },
     { posicion: 13, nombre: 'Francisco Encina',    posicionAnterior: 13, id: 'm003', categoria: '4ta',         mano: 'Derecha',    reves: 'Una Mano',  foto: 'fotos/m003.png', fechaNacimiento: '', email: 'fencina@uct.cl' },
     { posicion: 14, nombre: 'Cristian Farias',     posicionAnterior: 14, id: 'm012', categoria: '4ta',         mano: 'Derecha',    reves: 'Una Mano',  foto: 'fotos/m012.png', fechaNacimiento: '', email: 'cristian.farias@uct.cl' },
     { posicion: 15, nombre: 'Miguel Angulo',       posicionAnterior: 15, id: 'm015', categoria: '3ra',         mano: 'Derecha',    reves: 'Dos manos', foto: 'fotos/m015.png', fechaNacimiento: '', email: 'miguel.angulo@uct.cl' },
@@ -867,17 +870,17 @@ const OFFICIAL_STATIC_RANKING = {
     { posicion: 19, nombre: 'Paulo Garrido',       posicionAnterior: 19, id: 'm031', categoria: '4ta',         mano: 'Derecha',    reves: 'Una Mano',  foto: 'fotos/m031.png', fechaNacimiento: '', email: 'pgarrido@uct.cl' }
   ],
   F: [
-    { posicion: 1,  nombre: 'Violeta Moreno',      posicionAnterior: 2,  id: 'f002', categoria: 'Principiante', mano: 'Derecha',   reves: 'Dos manos', foto: 'fotos/f002.png', fechaNacimiento: '', email: 'vmoreno@uct.cl' },
-    { posicion: 2,  nombre: 'Sofía Silva',         posicionAnterior: 1,  id: 'f001', categoria: 'Principiante', mano: 'Derecha',   reves: 'Dos manos', foto: 'fotos/f001.png', fechaNacimiento: '', email: 'ssilvacastillo08@gmail.com' },
-    { posicion: 3,  nombre: 'Rocio Hernandez',     posicionAnterior: 3,  id: 'f006', categoria: 'Principiante', mano: 'Derecha',   reves: 'Dos manos', foto: 'fotos/f006.png', fechaNacimiento: '', email: 'rocio.hernandez@uct.cl' },
-    { posicion: 4,  nombre: 'Fernanda Silva',      posicionAnterior: 4,  id: 'f003', categoria: 'Principiante', mano: 'Derecha',   reves: 'Dos manos', foto: 'fotos/f003.png', fechaNacimiento: '', email: 'ferniwendy@gmail.com' },
-    { posicion: 5,  nombre: 'Doménica Vásquez',    posicionAnterior: 5,  id: 'f007', categoria: 'Principiante', mano: 'Derecha',   reves: 'Dos manos', foto: 'fotos/f007.png', fechaNacimiento: '', email: '' },
-    { posicion: 6,  nombre: 'Baleria Schatter',    posicionAnterior: 6,  id: 'f005', categoria: 'Principiante', mano: 'Derecha',   reves: 'Una Mano',  foto: 'fotos/f005.png', fechaNacimiento: '', email: 'vschatter@uct.cl' },
+    { posicion: 1,  nombre: 'Violeta Moreno',      posicionAnterior: 2,  id: 'f002', categoria: '5ta', mano: 'Derecha',   reves: 'Dos manos', foto: 'fotos/f002.png', fechaNacimiento: '', email: 'vmoreno@uct.cl' },
+    { posicion: 2,  nombre: 'Sofía Silva',         posicionAnterior: 1,  id: 'f001', categoria: '5ta', mano: 'Derecha',   reves: 'Dos manos', foto: 'fotos/f001.png', fechaNacimiento: '', email: 'ssilvacastillo08@gmail.com' },
+    { posicion: 3,  nombre: 'Rocio Hernandez',     posicionAnterior: 3,  id: 'f006', categoria: '5ta', mano: 'Derecha',   reves: 'Dos manos', foto: 'fotos/f006.png', fechaNacimiento: '', email: 'rocio.hernandez@uct.cl' },
+    { posicion: 4,  nombre: 'Fernanda Silva',      posicionAnterior: 4,  id: 'f003', categoria: '5ta', mano: 'Derecha',   reves: 'Dos manos', foto: 'fotos/f003.png', fechaNacimiento: '', email: 'ferniwendy@gmail.com' },
+    { posicion: 5,  nombre: 'Doménica Vásquez',    posicionAnterior: 5,  id: 'f007', categoria: '5ta', mano: 'Derecha',   reves: 'Dos manos', foto: 'fotos/f007.png', fechaNacimiento: '', email: '' },
+    { posicion: 6,  nombre: 'Baleria Schatter',    posicionAnterior: 6,  id: 'f005', categoria: '5ta', mano: 'Derecha',   reves: 'Una Mano',  foto: 'fotos/f005.png', fechaNacimiento: '', email: 'vschatter@uct.cl' },
     { posicion: 7,  nombre: 'Sandra Arenas',       posicionAnterior: 7,  id: 'f004', categoria: '',            mano: 'Derecha',    reves: 'Dos manos', foto: 'fotos/f004.png', fechaNacimiento: '',          email: 'sarenas@uct.cl' },
-    { posicion: 8,  nombre: 'Carolina Cárdenas',   posicionAnterior: 8,  id: 'f008', categoria: 'Principiante', mano: 'Derecha',   reves: 'Dos manos', foto: 'fotos/f008.png', fechaNacimiento: '',          email: 'ccardeneas@uct.cl' },
-    { posicion: 9,  nombre: 'Bianca Silva',        posicionAnterior: 9,  id: 'f009', categoria: 'Principiante', mano: 'Derecha',   reves: 'Dos manos', foto: 'fotos/f009.png', fechaNacimiento: '',          email: '' },
-    { posicion: 10, nombre: 'Natalia Cardenas',    posicionAnterior: 10, id: 'f010', categoria: 'Principiante', mano: 'Derecha',   reves: 'Dos manos', foto: 'fotos/f010.png', fechaNacimiento: '',          email: '' },
-    { posicion: 11, nombre: 'Carla Iglesias',      posicionAnterior: 11, id: 'f011', categoria: 'Principiante', mano: 'Derecha',   reves: 'Dos manos', foto: 'fotos/f011.png', fechaNacimiento: '',          email: 'ciglesias@uct.cl' }
+    { posicion: 8,  nombre: 'Carolina Cárdenas',   posicionAnterior: 8,  id: 'f008', categoria: '5ta', mano: 'Derecha',   reves: 'Dos manos', foto: 'fotos/f008.png', fechaNacimiento: '',          email: 'ccardeneas@uct.cl' },
+    { posicion: 9,  nombre: 'Bianca Silva',        posicionAnterior: 9,  id: 'f009', categoria: '5ta', mano: 'Derecha',   reves: 'Dos manos', foto: 'fotos/f009.png', fechaNacimiento: '',          email: '' },
+    { posicion: 10, nombre: 'Natalia Cardenas',    posicionAnterior: 10, id: 'f010', categoria: '5ta', mano: 'Derecha',   reves: 'Dos manos', foto: 'fotos/f010.png', fechaNacimiento: '',          email: '' },
+    { posicion: 11, nombre: 'Carla Iglesias',      posicionAnterior: 11, id: 'f011', categoria: '5ta', mano: 'Derecha',   reves: 'Dos manos', foto: 'fotos/f011.png', fechaNacimiento: '',          email: 'ciglesias@uct.cl' }
   ]
 };
 
@@ -3127,7 +3130,7 @@ async function handleMockLogin() {
       nombre: nombre || email.split('@')[0],
       email: email,
       genero: 'M',
-      categoria: 'Principiante',
+      categoria: '5ta',
       mano: 'Derecha',
       reves: 'Dos manos',
       foto: '',
@@ -5083,7 +5086,7 @@ function openOwnProfileEditor() {
         </div>
         <div class="form-group">
           <label for="ownCategoria">Categoría</label>
-          <select id="ownCategoria">${selectOptions(['Primera', 'Segunda', 'Tercera', 'Cuarta', 'Principiante'], player.categoria || 'Principiante')}</select>
+          <select id="ownCategoria">${selectOptions(['Primera', 'Segunda', 'Tercera', 'Cuarta', '5ta'], player.categoria || '5ta')}</select>
         </div>
       </div>
       <div class="form-row">
@@ -5373,6 +5376,54 @@ async function resetSystemData(event) {
 }
 window.resetSystemData = resetSystemData;
 
+// La categoria "Principiante" se retiro del club: normalizeCategory ya hace
+// que se VEA como "5ta" en toda la app aunque el dato viejo siga en
+// Firestore, pero esto reescribe el dato real en las fichas para que no
+// quede "Principiante" guardado en ningun lado.
+async function migratePrincipianteCategoria(event) {
+  if (event) event.preventDefault();
+  if (!isPlayerAdminSession()) {
+    alert('No tienes permisos de administrador para realizar esta acción.');
+    return;
+  }
+  if (!DB.isCloudConfigured() || typeof firebase === 'undefined') {
+    alert('Firestore no está inicializado o configurado.');
+    return;
+  }
+
+  const btn = document.getElementById('btnMigratePrincipianteCategoria');
+  const originalText = btn ? btn.innerHTML : '';
+
+  try {
+    const db = firebase.firestore();
+    const snapshot = await db.collection('ranking_players').get();
+    const matches = snapshot.docs.filter(doc => {
+      const key = normalizeKey(String(doc.data().categoria || '').trim());
+      return key === 'principiante' || key === 'abierta';
+    });
+
+    if (!matches.length) {
+      alert('No queda ninguna ficha con categoría "Principiante": ya están todas en 5ta.');
+      return;
+    }
+    if (!confirm(`Se actualizará la categoría de ${matches.length} jugador(es) de "Principiante" a "5ta". ¿Continuar?`)) return;
+
+    if (btn) { btn.disabled = true; btn.innerHTML = '🔁 Migrando...'; }
+    const batch = db.batch();
+    matches.forEach(doc => batch.update(doc.ref, { categoria: '5ta' }));
+    await batch.commit();
+
+    alert(`Listo: ${matches.length} ficha(s) actualizadas a categoría "5ta".`);
+    location.reload();
+  } catch (error) {
+    console.error('Error al migrar categorías:', error);
+    alert('Error al migrar categorías: ' + error.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = originalText; }
+  }
+}
+window.migratePrincipianteCategoria = migratePrincipianteCategoria;
+
 const adminPlayerListState = { page: 1, pageSize: 25 };
 
 function renderAdminPlayerStats(allPlayers) {
@@ -5520,7 +5571,7 @@ function resetAdminForm() {
   document.getElementById('adminEsAdministrador').disabled = !isPermanentAdminSession();
   document.getElementById('adminTelefono').value = '+569';
   document.getElementById('adminNotas').value = '';
-  document.getElementById('adminCategoria').value = 'Principiante';
+  document.getElementById('adminCategoria').value = '5ta';
   document.getElementById('adminMano').value = 'Derecha';
   document.getElementById('adminReves').value = 'Dos manos';
   document.getElementById('adminErr').textContent = '';
@@ -5558,7 +5609,7 @@ function fillAdminForm(playerKey) {
   });
   document.getElementById('adminNotas').value = player.notes || player.notas || '';
   document.getElementById('adminFechaNacimiento').value = dateForInput(player.fechaNacimiento);
-  document.getElementById('adminCategoria').value = player.categoria || 'Principiante';
+  document.getElementById('adminCategoria').value = player.categoria || '5ta';
   document.getElementById('adminMano').value = player.mano || 'Derecha';
   document.getElementById('adminReves').value = player.reves || 'Dos manos';
   document.getElementById('adminFoto').value = player.foto || '';
@@ -6200,7 +6251,7 @@ function syncLocalUsersFromPlayers(players) {
       email: player.email || existing?.email || `ranking+${slugify(id)}@uctenis.local`,
       password: existing?.password || 'ranking-only',
       genero: player.gender,
-      categoria: normalizeCategory(player.categoria || existing?.categoria || 'Principiante'),
+      categoria: normalizeCategory(player.categoria || existing?.categoria || '5ta'),
       mano: player.mano || existing?.mano || 'Derecha',
       reves: player.reves || existing?.reves || 'Dos manos',
       foto: player.foto || existing?.foto || '',
@@ -6226,7 +6277,7 @@ function ensureLocalUserForPlayer(player) {
     email: player.email || `ranking+${slugify(id)}@uctenis.local`,
     password: 'ranking-only',
     genero: player.gender,
-    categoria: normalizeCategory(player.categoria || 'Principiante'),
+    categoria: normalizeCategory(player.categoria || '5ta'),
     mano: player.mano || 'Derecha',
     reves: player.reves || 'Dos manos',
     foto: player.foto || '',
@@ -6265,7 +6316,7 @@ function syncSessionWithRankingPlayer() {
     nombre: player.nombre || session.nombre,
     email: session.email || player.email || '',
     genero: player.gender || session.genero,
-    categoria: normalizeCategory(player.categoria || session.categoria || 'Principiante'),
+    categoria: normalizeCategory(player.categoria || session.categoria || '5ta'),
     mano: player.mano || session.mano || 'Derecha',
     reves: player.reves || session.reves || 'Dos manos',
     foto: player.foto || session.foto || '',
@@ -6379,7 +6430,8 @@ function categoryDistance(first, second, fallback = 99) {
     '3ra': 2,
     cuarta: 3,
     '4ta': 3,
-    principiante: 4
+    quinta: 4,
+    '5ta': 4
   };
   const firstKey = normalizeKey(first);
   const secondKey = normalizeKey(second);
@@ -6491,7 +6543,7 @@ function profileToSessionUser(player, current = DB.getSession()) {
     nombre: player.nombre || current?.nombre || '',
     email: current?.email || player.email || '',
     genero: player.genero || player.gender || current?.genero || '',
-    categoria: normalizeCategory(player.categoria || current?.categoria || 'Principiante'),
+    categoria: normalizeCategory(player.categoria || current?.categoria || '5ta'),
     mano: player.mano || player.manoHabil || current?.mano || 'Derecha',
     reves: player.reves || current?.reves || 'Dos manos',
     foto: player.foto || current?.foto || '',
@@ -6687,7 +6739,12 @@ function extractPhotoStem(photo) {
 function normalizeCategory(value) {
   const raw = cleanText(value);
   if (!raw) return '';
-  return normalizeKey(raw) === 'abierta' ? 'Principiante' : raw;
+  const key = normalizeKey(raw);
+  // La categoria "Principiante" se retiro: las fichas viejas que aun la
+  // tengan guardada se muestran como "5ta" sin depender de que alguien
+  // las reedite. "abierta" es un alias historico de la misma categoria.
+  if (key === 'abierta' || key === 'principiante') return '5ta';
+  return raw;
 }
 
 function compactMeta(player) {

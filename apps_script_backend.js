@@ -3739,7 +3739,12 @@ function normalizeGender(value) {
 
 function normalizeCategory(value) {
   const raw = text(value);
-  return norm(raw) === 'abierta' ? 'Principiante' : raw;
+  const key = norm(raw);
+  // La categoria "Principiante" se retiro: las fichas viejas que aun la
+  // tengan guardada se normalizan a "5ta". "abierta" es un alias historico
+  // de la misma categoria.
+  if (key === 'abierta' || key === 'principiante') return '5ta';
+  return raw;
 }
 
 /**
