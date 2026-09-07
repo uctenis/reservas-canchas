@@ -1846,7 +1846,10 @@ function normalizePlayer(row, index, gender) {
     pj: toNumber(row?.pj ?? row?.partidos ?? row?.played, 0),
     pg: toNumber(row?.pg ?? row?.ganados ?? row?.wins, 0),
     pp: toNumber(row?.pp ?? row?.perdidos ?? row?.losses, 0),
-    edad: cleanText(row?.edad ?? row?.age) || calculateAge(fechaNacimiento),
+    // La edad siempre se calcula desde la fecha de nacimiento; un campo
+    // "edad"/"age" guardado en la ficha queda obsoleto en cuanto pasa el
+    // cumpleaños, así que solo se usa como último recurso si no hay fecha.
+    edad: calculateAge(fechaNacimiento) || cleanText(row?.edad ?? row?.age),
     categoria,
     mano,
     reves,
@@ -7368,10 +7371,14 @@ window.renderAdminNewsList = async function() {
   window.adminNewsListCache = finalNewsItems;
   
   const searchQuery = (document.getElementById('adminNewsSearch')?.value || '').trim().toLowerCase();
-  const filtered = finalNewsItems.filter(item => 
-    !searchQuery || 
-    (item.title || '').toLowerCase().includes(searchQuery) || 
-    (item.body || '').toLowerCase().includes(searchQuery)
+  const filtered = finalNewsItems.filter(item =>
+    // Una novedad automática "eliminada" no puede borrarse de verdad (se
+    // recalcula de datos en vivo), pero no debe quedar visible en la lista
+    // como un cadaver atenuado: para el admin, eliminar = desaparece.
+    !item.isAutoHidden &&
+    (!searchQuery ||
+    (item.title || '').toLowerCase().includes(searchQuery) ||
+    (item.body || '').toLowerCase().includes(searchQuery))
   );
   
   if (filtered.length === 0) {
@@ -7396,12 +7403,7 @@ window.renderAdminNewsList = async function() {
     let autoBadge = '';
     let rowStyle = 'padding: 12px; margin-bottom: 8px; background: rgba(255,255,255,0.03); border-radius: 8px; display: flex; justify-content: space-between; align-items: center; border: 1px solid rgba(255,255,255,0.05); cursor: grab; transition: all 0.2s ease;';
     if (item.isAutomatic) {
-      if (item.isAutoHidden) {
-        autoBadge = ` <span style="font-size: 0.72rem; padding: 2px 6px; border-radius: 4px; background: rgba(239, 68, 68, 0.2); color: #fca5a5; margin-left: 4px; font-weight: bold;">🤖 Auto (Oculta)</span>`;
-        rowStyle += ' opacity: 0.5;';
-      } else {
-        autoBadge = ` <span style="font-size: 0.72rem; padding: 2px 6px; border-radius: 4px; background: rgba(16, 185, 129, 0.2); color: #a7f3d0; margin-left: 4px; font-weight: bold;">🤖 Auto</span>`;
-      }
+      autoBadge = ` <span style="font-size: 0.72rem; padding: 2px 6px; border-radius: 4px; background: rgba(16, 185, 129, 0.2); color: #a7f3d0; margin-left: 4px; font-weight: bold;">🤖 Auto</span>`;
     }
     return `
       <article class="inactive-player-row" draggable="true" data-news-id="${escapeAttr(item.id)}" data-news-index="${index}" style="${rowStyle}" ondragstart="handleNewsDragStart(event)" ondragover="handleNewsDragOver(event)" ondrop="handleNewsDrop(event)" ondragend="handleNewsDragEnd(event)" ondragleave="handleNewsDragLeave(event)">
@@ -7523,7 +7525,7 @@ window.openAdminNewsForm = async function(id) {
     const isAuto = String(id).startsWith('auto-');
     titleEl.textContent = isAuto ? 'Editar novedad automática' : 'Editar novedad';
     deleteBtn.style.display = 'inline-flex';
-    deleteBtn.textContent = isAuto ? '🗑️ Ocultar Novedad' : '🗑️ Eliminar Novedad';
+    deleteBtn.textContent = '🗑️ Eliminar Novedad';
     
     const news = (window.adminNewsListCache || []).find(n => n.id === id) || DB.getNews().find(n => n.id === id);
     if (news) {
@@ -7665,11 +7667,7 @@ window.deleteNewsFromAdminClick = async function(event) {
   if (!id) return;
   
   const isAuto = String(id).startsWith('auto-');
-  const confirmMsg = isAuto 
-    ? '¿Estás seguro de que deseas ocultar esta novedad automática del sistema?'
-    : '¿Estás seguro de que deseas eliminar esta novedad de forma permanente?';
-  
-  if (!confirm(confirmMsg)) return;
+  if (!confirm('¿Estás seguro de que deseas eliminar esta novedad de forma permanente?')) return;
   
   const errEl = document.getElementById('adminNewsErr');
   const successEl = document.getElementById('adminNewsSuccess');
@@ -7707,7 +7705,7 @@ window.deleteNewsFromAdminClick = async function(event) {
       const currentList = DB.getNews().filter(n => n.id !== id);
       DB.saveNews(currentList);
     }
-    successEl.textContent = isAuto ? 'Novedad oculta exitosamente.' : 'Novedad eliminada exitosamente.';
+    successEl.textContent = 'Novedad eliminada exitosamente.';
     setTimeout(() => {
       closeAdminNewsForm();
       deleteBtn.disabled = false;

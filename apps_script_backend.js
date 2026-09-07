@@ -3593,7 +3593,7 @@ function publicPlayer(player) {
   return {
     id: player.id, nombre: player.nombre, genero: player.genero,
     fechaNacimiento: player.fechaNacimiento,
-    edad: player.edad || calculateAge(player.fechaNacimiento),
+    edad: calculateAge(player.fechaNacimiento) || player.edad,
     categoria: normalizeCategory(player.categoria),
     manoHabil: player.manoHabil || player.mano,
     mano: player.mano || player.manoHabil,
