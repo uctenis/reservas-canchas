@@ -37,11 +37,14 @@
     const day = date.getUTCDay();
     const mondayOffset = day === 0 ? -6 : 1 - day;
     const monday = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() + mondayOffset));
-    // Ancla de lanzamiento: lunes 7 de septiembre de 2026, arranque oficial
+    // Ancla de lanzamiento: lunes 14 de septiembre de 2026, arranque oficial
     // de la Liga UCTenis (Semana 1 del primer ciclo). Es lunes, así que
     // todos los ciclos futuros caen en múltiplos exactos de "weeks" semanas
-    // contados desde esta fecha.
-    const epoch = Date.UTC(2026, 8, 7);
+    // contados desde esta fecha. Fechas anteriores al lanzamiento se anclan
+    // al primer ciclo: no existen "ciclos fantasma" antes de que la liga
+    // exista.
+    const epoch = Date.UTC(2026, 8, 14);
+    if (monday.getTime() < epoch) return new Date(epoch).toISOString().slice(0, 10);
     const cycleDays = weeks * 7;
     const daysSinceEpoch = Math.floor((monday.getTime() - epoch) / 86400000);
     const cycleOffset = Math.floor(daysSinceEpoch / cycleDays) * cycleDays;

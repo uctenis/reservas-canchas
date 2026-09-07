@@ -1956,11 +1956,15 @@ function renderClubSportLaunchBanner() {
   const cycle = UCTennisLeague.getCycle(new Date());
   const cycleStart = new Date(`${cycle.start}T00:00:00Z`);
   const today = new Date();
+  const hasStarted = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()) >= cycleStart.getTime();
   const elapsedDays = Math.max(0, Math.floor((Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()) - cycleStart.getTime()) / 86400000));
   const currentWeek = Math.floor(elapsedDays / 7);
   const isLaunchWeek = currentWeek === 0;
   wrap.classList.toggle('is-launch-week', isLaunchWeek);
-  if (isLaunchWeek) {
+  if (!hasStarted) {
+    title.textContent = `🎾 La Liga UCTenis arranca el lunes ${formatDateShort(cycle.start)}`;
+    text.textContent = `Del ${cycle.start} al ${cycle.end}. Agenda tu partido para la Semana 1 y súmate a la clasificación desde el arranque.`;
+  } else if (isLaunchWeek) {
     title.textContent = '🎾 ¡Hoy arranca la Liga UCTenis!';
     text.textContent = `Semana 1 de ${cycle.weeks} · Del ${cycle.start} al ${cycle.end}. Agenda tu primer partido esta semana.`;
   } else {
