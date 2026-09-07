@@ -7693,7 +7693,11 @@ window.saveAdminSpecialDate = async function(event) {
     if (!data.ok) throw new Error(data.msg || 'Error en el servidor');
 
     const rango = isRange ? `del ${fechaInicio} al ${fechaFin}` : `el ${fecha}`;
-    showAdminScheduleAlert(`✅ Guardado para ${selectedCourts.length} cancha(s), ${rango}.`);
+    const calendarCount = Object.keys(data.calendar || {}).length;
+    const calendarText = calendarCount
+      ? ` También se reflejó en ${calendarCount} calendario(s) de cancha.`
+      : ' La agenda se guardó, pero el calendario está pendiente de sincronización.';
+    showAdminScheduleAlert(`✅ Guardado para ${selectedCourts.length} cancha(s), ${rango}.${calendarText}`);
     document.getElementById('adminSpecialDesc').value = '';
     loadSpecialDatesList();
   } catch (e) {
@@ -7717,7 +7721,7 @@ window.deleteSpecialPeriod = async function(groupId, label) {
     });
     const data = await res.json();
     if (!data.ok) throw new Error(data.msg || 'Error en el servidor');
-    showAdminScheduleAlert('Período eliminado.');
+    showAdminScheduleAlert(`Período eliminado${data.removed ? ` (${data.removed} registro(s))` : ''}. También se quitaron sus eventos del calendario.`);
   } catch (e) {
     console.warn('No se pudo eliminar el período:', e);
     showAdminScheduleAlert(`⚠️ No se pudo eliminar: ${e.message}`, 'error');

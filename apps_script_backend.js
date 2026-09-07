@@ -606,20 +606,26 @@ function adminFreeSpecialSlots(data) {
   const tipo = text(data.type) === 'closed' ? 'closed' : 'all_day';
   const desc = text(data.desc);
   const groupId = 'sp_' + new Date().getTime().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
+  const calendarEvents = createSpecialPeriodCalendarEvents({ groupId, courts, tipo, desc, fechaInicio, fechaFin });
 
   const ss = SpreadsheetApp.openById(CONFIG.SHEET_MIEMBROS_ID);
   let sheet = ss.getSheetByName('horarios_especiales');
   if (!sheet) {
     sheet = ss.insertSheet('horarios_especiales');
-    sheet.getRange(1, 1, 1, 5).setValues([['fecha', 'courtId', 'tipo', 'descripcion', 'groupId']]);
+    sheet.getRange(1, 1, 1, 6).setValues([['fecha', 'courtId', 'tipo', 'descripcion', 'groupId', 'calendarEventIds']]);
     // Forzar la columna de fecha a texto plano: si no, Sheets auto-convierte
     // el ISO string ('2026-08-20') a un valor Date y las comparaciones por
     // string (en getAvailableSlots, etc.) dejan de coincidir silenciosamente.
     // Solo hace falta al crear la hoja; reaplicarlo a toda la columna en cada
     // guardado (hasta 1000 filas) era el motivo de que esto fuera lento.
     sheet.getRange(2, 1, sheet.getMaxRows() - 1, 1).setNumberFormat('@');
-  } else if (sheet.getLastColumn() < 5) {
+  } else if (sheet.getLastColumn() < 6) {
     sheet.getRange(1, 5).setValue('groupId');
+    sheet.getRange(1, 6).setValue('calendarEventIds');
+  }
+
+  if (sheet.getLastColumn() >= 5 && sheet.getRange(1, 6).getValue() === '') {
+    sheet.getRange(1, 6).setValue('calendarEventIds');
   }
 
   const existing = sheet.getLastRow() > 1 ? sheet.getRange(2, 1, sheet.getLastRow() - 1, 5).getValues() : [];
@@ -641,10 +647,10 @@ function adminFreeSpecialSlots(data) {
         // Reafirma el formato de texto solo en esta celda puntual (por si la
         // hoja es anterior a este fix y la fecha original quedó como Date).
         sheet.getRange(rowNumber, 1).setNumberFormat('@');
-        sheet.getRange(rowNumber, 1, 1, 5).setValues([[fecha, courtId, tipo, desc, groupId]]);
+        sheet.getRange(rowNumber, 1, 1, 6).setValues([[fecha, courtId, tipo, desc, groupId, calendarEvents[courtId] || '']]);
         updated++;
       } else {
-        rowsToAppend.push([fecha, courtId, tipo, desc, groupId]);
+        rowsToAppend.push([fecha, courtId, tipo, desc, groupId, calendarEvents[courtId] || '']);
       }
     });
   }
@@ -652,10 +658,56 @@ function adminFreeSpecialSlots(data) {
   if (rowsToAppend.length > 0) {
     const startRow = sheet.getLastRow() + 1;
     sheet.getRange(startRow, 1, rowsToAppend.length, 1).setNumberFormat('@');
-    sheet.getRange(startRow, 1, rowsToAppend.length, 5).setValues(rowsToAppend);
+    sheet.getRange(startRow, 1, rowsToAppend.length, 6).setValues(rowsToAppend);
   }
 
-  return { ok: true, saved: updated + rowsToAppend.length, groupId: groupId, dias: totalDays };
+  return { ok: true, saved: updated + rowsToAppend.length, groupId: groupId, dias: totalDays, calendar: calendarEvents };
+}
+
+function createSpecialPeriodCalendarEvents(period) {
+  const result = {};
+  let calendar;
+  try { calendar = CalendarApp.getCalendarById(CONFIG.MAIN_CALENDAR_ID); } catch (error) {
+    console.warn('No se pudo abrir el calendario maestro para fechas especiales:', error.message);
+    return result;
+  }
+  if (!calendar) return result;
+  const start = new Date(period.fechaInicio + 'T00:00:00Z');
+  const endExclusive = new Date(period.fechaFin + 'T00:00:00Z');
+  endExclusive.setUTCDate(endExclusive.getUTCDate() + 1);
+  const typeLabel = period.tipo === 'closed' ? 'CERRADO' : 'DISPONIBILIDAD ESPECIAL';
+  const courtList = Array.isArray(period.courts) ? period.courts.map(text).filter(Boolean) : [];
+  courtList.forEach(function(courtId) {
+    const courtName = getCourtName(courtId);
+    const title = '[' + courtName + '] ' + typeLabel + ' - UCTenis';
+    const description = [
+      'Bloqueo administrativo de disponibilidad UCTenis.',
+      'Estado: ' + typeLabel,
+      'Cancha: ' + courtName + ' (' + courtId + ')',
+      'Período: ' + period.fechaInicio + ' al ' + period.fechaFin,
+      period.desc ? 'Motivo: ' + period.desc : '',
+      'Grupo: ' + period.groupId
+    ].filter(Boolean).join('\n');
+    try {
+      const event = calendar.createAllDayEvent(title, start, endExclusive, { description, location: courtName });
+      result[courtId] = event.getId();
+    } catch (error) {
+      console.warn('No se pudo crear evento para ' + courtId + ':', error.message);
+    }
+  });
+  return result;
+}
+
+function deleteSpecialPeriodCalendarEvents(eventIds) {
+  String(eventIds || '').split(',').map(text).filter(Boolean).forEach(function(eventId) {
+    try {
+      const calendar = CalendarApp.getCalendarById(CONFIG.MAIN_CALENDAR_ID);
+      const event = calendar && calendar.getEventById(eventId);
+      if (event) event.deleteEvent();
+    } catch (error) {
+      console.warn('No se pudo eliminar el evento de fecha especial:', error.message);
+    }
+  });
 }
 
 /** Elimina un período completo (por groupId) o, para entradas antiguas sin
@@ -676,15 +728,18 @@ function adminRemoveSpecialSlots(data) {
 
   const values = sheet.getDataRange().getValues();
   let removed = 0;
+  const eventIds = [];
   for (let i = values.length - 1; i >= 1; i--) {
     const matches = groupId
       ? text(values[i][4]) === groupId
       : (dateCellToStr(values[i][0], ss) === fecha && text(values[i][1]) === courtId);
     if (matches) {
+      if (values[i][5]) eventIds.push(values[i][5]);
       sheet.deleteRow(i + 1);
       removed++;
     }
   }
+  eventIds.forEach(deleteSpecialPeriodCalendarEvents);
   return { ok: true, removed: removed };
 }
 
