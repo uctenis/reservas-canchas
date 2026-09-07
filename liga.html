@@ -70,8 +70,15 @@
       return !PURE_ADMIN_EMAILS.has(email) && player?.activo !== false && player?.participaRanking !== false;
     }
 
+    // Chile siempre escribe las fechas en orden día-mes-año, nunca ISO (yyyy-mm-dd).
+    function formatLeagueDate(iso) {
+      const date = new Date(`${iso}T00:00:00Z`);
+      if (isNaN(date)) return iso;
+      return date.toLocaleDateString('es-CL', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+    }
+
     function renderLeague() {
-      document.getElementById('leagueCycle').textContent = `Ciclo: ${leagueCycle.start} al ${leagueCycle.end}`;
+      document.getElementById('leagueCycle').textContent = `Ciclo: ${formatLeagueDate(leagueCycle.start)} al ${formatLeagueDate(leagueCycle.end)}`;
       const cycleStart = new Date(`${leagueCycle.start}T00:00:00Z`);
       const today = new Date();
       const hasStarted = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()) >= cycleStart.getTime();
@@ -81,7 +88,7 @@
       document.getElementById('leagueProgress').style.width = `${progress}%`;
       document.getElementById('leagueProgressText').textContent = hasStarted
         ? `${progress}% del ciclo · Semana ${currentWeek + 1} de ${leagueCycle.weeks}`
-        : `Arranca el ${leagueCycle.start}`;
+        : `Arranca el ${formatLeagueDate(leagueCycle.start)}`;
       const launchBanner = document.getElementById('leagueLaunchBanner');
       if (launchBanner) {
         launchBanner.classList.toggle('show', currentWeek === 0);
@@ -89,10 +96,10 @@
         const launchTitle = document.getElementById('leagueLaunchTitle');
         const launchText = document.getElementById('leagueLaunchText');
         if (launchBadge) launchBadge.textContent = hasStarted ? '🎾 ¡Hoy arranca la temporada!' : '🎾 ¡Ya se puede agendar!';
-        if (launchTitle) launchTitle.textContent = hasStarted ? 'Semana 1 de 6 — Liga UCTenis ya está en juego' : `Liga UCTenis arranca el ${leagueCycle.start}`;
+        if (launchTitle) launchTitle.textContent = hasStarted ? 'Semana 1 de 6 — Liga UCTenis ya está en juego' : `Liga UCTenis arranca el ${formatLeagueDate(leagueCycle.start)}`;
         if (launchText) launchText.textContent = hasStarted
-          ? `La liga corre del ${leagueCycle.start} al ${leagueCycle.end}. Agenda tu primer partido esta semana y súmate a la clasificación desde el arranque.`
-          : `La liga corre del ${leagueCycle.start} al ${leagueCycle.end}. Agenda tu partido ahora para tenerlo listo para la Semana 1.`;
+          ? `La liga corre del ${formatLeagueDate(leagueCycle.start)} al ${formatLeagueDate(leagueCycle.end)}. Agenda tu primer partido esta semana y súmate a la clasificación desde el arranque.`
+          : `La liga corre del ${formatLeagueDate(leagueCycle.start)} al ${formatLeagueDate(leagueCycle.end)}. Agenda tu partido ahora para tenerlo listo para la Semana 1.`;
       }
       document.getElementById('leagueWeeks').innerHTML = Array.from({ length: leagueCycle.weeks }, (_, index) => `<div class="league-week ${index === currentWeek ? 'is-current' : ''}">Semana ${index + 1}<strong>${leagueState.matches.filter(match => UCTennisLeague.isLeagueMatch(match, leagueCycle) && Math.floor((new Date(`${(match.fechaResultado || match.fecha || match.actualizado).slice(0, 10)}T00:00:00Z`) - cycleStart) / 86400000 / 7) === index).length} partidos</strong></div>`).join('');
       const rows = UCTennisLeague.calculateStandings(leagueState.players, leagueState.matches, leagueCycle)
