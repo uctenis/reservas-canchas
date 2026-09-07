@@ -3359,14 +3359,43 @@ async function submitChallenge(event) {
   }
 }
 
+const CHAL_COURT_BASE_LABELS = {
+  cec1: 'CEC 1 (Arcilla)',
+  cec2: 'CEC 2 (Arcilla)',
+  cjp1: 'CJP 1 (Asfalto)',
+  cjp2: 'CJP 2 (Asfalto)'
+};
+
+/**
+ * Deshabilita en el selector de cancha las que estén bloqueadas o
+ * completamente ocupadas ese día (mismo criterio de disponibilidad real
+ * que usa reservas.html), para que un desafío o partido de liga no se
+ * proponga en una cancha que en la práctica no se puede jugar.
+ */
+function markUnavailableChallengeCourts(courtsAvailability) {
+  const selectCancha = document.getElementById('chal_cancha');
+  let hasSelectedDisabled = false;
+  Array.from(selectCancha.options).forEach(opt => {
+    const baseLabel = CHAL_COURT_BASE_LABELS[opt.value] || opt.value;
+    const freeSlots = (courtsAvailability && Array.isArray(courtsAvailability[opt.value])) ? courtsAvailability[opt.value] : [];
+    const isUnavailable = freeSlots.length === 0;
+    opt.disabled = isUnavailable;
+    opt.textContent = isUnavailable ? `${baseLabel} — No disponible` : baseLabel;
+    if (isUnavailable && opt.selected) hasSelectedDisabled = true;
+  });
+  if (hasSelectedDisabled) {
+    const firstFree = Array.from(selectCancha.options).find(opt => !opt.disabled);
+    if (firstFree) selectCancha.value = firstFree.value;
+  }
+}
+
 async function updateChallengeAvailableSlots() {
   const fecha = document.getElementById('chal_fecha').value;
-  const canchaId = document.getElementById('chal_cancha').value;
   const selectHora = document.getElementById('chal_hora');
   const submitBtn = document.getElementById('btnSubmitChallenge');
   const errorEl = document.getElementById('challengeError');
 
-  if (!fecha || !canchaId) {
+  if (!fecha) {
     selectHora.innerHTML = '<option value="">Selecciona fecha y cancha...</option>';
     selectHora.disabled = true;
     return;
@@ -3381,6 +3410,13 @@ async function updateChallengeAvailableSlots() {
     if (!apiData || !apiData.ok) {
       selectHora.innerHTML = '<option value="">Error al cargar horarios</option>';
       errorEl.textContent = 'Error al sincronizar con Google Calendar. Intenta nuevamente.';
+      return;
+    }
+
+    markUnavailableChallengeCourts(apiData.courts);
+    const canchaId = document.getElementById('chal_cancha').value;
+    if (!canchaId) {
+      selectHora.innerHTML = '<option value="">Selecciona fecha y cancha...</option>';
       return;
     }
 

@@ -496,6 +496,11 @@
       color: #d8b4fe;
       border: 1px solid rgba(168, 85, 247, 0.22);
     }
+    .badge-liga {
+      background: rgba(245, 158, 11, 0.14);
+      color: #fbbf24;
+      border: 1px solid rgba(245, 158, 11, 0.3);
+    }
     .news-card-title {
       font-size: 0.88rem;
       font-weight: 700;
@@ -1644,7 +1649,7 @@ function isChallengeRecentOrFuture(fecha) {
 }
 
 
-function renderNewsGrid(topMoverCard, latestMatchCard, nextMatchCard, birthdaysCard, customNews = []) {
+function renderNewsGrid(topMoverCard, latestMatchCard, nextMatchCard, birthdaysCard, customNews = [], leagueLeaderCard = null) {
   const newsGrid = document.getElementById('newsGrid');
   if (!newsGrid) return;
   
@@ -1788,6 +1793,7 @@ function renderNewsGrid(topMoverCard, latestMatchCard, nextMatchCard, birthdaysC
   if (topMoverCard) newsList.push(topMoverCard);
   if (latestMatchCard) newsList.push(latestMatchCard);
   if (nextMatchCard) newsList.push(nextMatchCard);
+  if (leagueLeaderCard) newsList.push(leagueLeaderCard);
   if (birthdaysCard) newsList.push(birthdaysCard);
   
   // 3. Fallbacks if list is empty (traditional hardcoded news)
@@ -2207,6 +2213,7 @@ async function loadLiveData() {
   let topMoverCard = null;
   let latestMatchCard = null;
   let nextMatchCard = null;
+  let leagueLeaderCard = null;
   let birthdaysCard = null;
   let customNews = [];
 
@@ -2271,22 +2278,27 @@ async function loadLiveData() {
       const genderText = latestMatch.genero === 'F' ? 'femenino' : 'masculino';
       const isFriendly = latestMatch.tipo === 'amistoso';
       const isCampeonato = latestMatch.tipo === 'campeonato';
-      
+      const isLeague = latestMatch.tipo === 'liga';
+
       const displayScore = formatScoreForWinner(latestMatch);
       latestMatchCard = {
         id: `auto-latest-match-${latestMatch.id}`,
-        badgeClass: isCampeonato ? 'badge-torneo' : (isFriendly ? 'badge-app' : 'badge-torneo'),
-        badgeText: isCampeonato ? 'Campeonato' : (isFriendly ? 'Amistoso' : 'Desafío'),
-        title: isCampeonato 
-          ? `¡Partido de Campeonato: ${winnerName} vence a ${loserName}!` 
-          : (isFriendly 
-            ? `¡Partido Amistoso: ${winnerName} vence a ${loserName}!` 
-            : `¡Gran Desafío: ${winnerName} vence a ${loserName}!`),
+        badgeClass: isCampeonato ? 'badge-torneo' : (isFriendly ? 'badge-app' : (isLeague ? 'badge-liga' : 'badge-torneo')),
+        badgeText: isCampeonato ? 'Campeonato' : (isFriendly ? 'Amistoso' : (isLeague ? 'Liga semanal' : 'Desafío')),
+        title: isCampeonato
+          ? `¡Partido de Campeonato: ${winnerName} vence a ${loserName}!`
+          : (isFriendly
+            ? `¡Partido Amistoso: ${winnerName} vence a ${loserName}!`
+            : (isLeague
+              ? `¡Partido de Liga: ${winnerName} vence a ${loserName}!`
+              : `¡Gran Desafío: ${winnerName} vence a ${loserName}!`)),
         body: isCampeonato
           ? `En un emocionante encuentro por el Campeonato jugado en ${latestMatch.cancha || 'UCTenis'} el ${formatDateShort(latestMatch.fecha)}, ${winnerName} superó a ${loserName} por un marcador de ${displayScore}. ¡Felicidades!`
           : (isFriendly
             ? `En el encuentro amistoso jugado en ${latestMatch.cancha || 'UCTenis'} el ${formatDateShort(latestMatch.fecha)}, ${winnerName} superó a ${loserName} por un marcador de ${displayScore}. ¡Buen juego!`
-            : `En el duelo oficial del ranking ${genderText} jugado en ${latestMatch.cancha || 'UCTenis'} el ${formatDateShort(latestMatch.fecha)}, ${winnerName} superó a ${loserName} por un marcador de ${displayScore}, escalando posiciones en la escalerilla. ¡Felicitaciones a ambos!`),
+            : (isLeague
+              ? `En el partido de Liga semanal jugado en ${latestMatch.cancha || 'UCTenis'} el ${formatDateShort(latestMatch.fecha)}, ${winnerName} superó a ${loserName} por un marcador de ${displayScore}, sumando puntos para el ciclo actual. ¡Buen partido!`
+              : `En el duelo oficial del ranking ${genderText} jugado en ${latestMatch.cancha || 'UCTenis'} el ${formatDateShort(latestMatch.fecha)}, ${winnerName} superó a ${loserName} por un marcador de ${displayScore}, escalando posiciones en la escalerilla. ¡Felicitaciones a ambos!`)),
         date: formatDateShort(latestMatch.actualizado || latestMatch.creado || latestMatch.fecha)
       };
     }
@@ -2305,23 +2317,56 @@ async function loadLiveData() {
       const slotStr = nextMatch.slot ? ` (Hora: ${nextMatch.slot})` : '';
       const isFriendly = nextMatch.tipo === 'amistoso';
       const isCampeonato = nextMatch.tipo === 'campeonato';
-      
+      const isLeague = nextMatch.tipo === 'liga';
+
       nextMatchCard = {
         id: `auto-next-match-${nextMatch.id}`,
-        badgeClass: isCampeonato ? 'badge-torneo' : (isFriendly ? 'badge-app' : 'badge-torneo'),
-        badgeText: isCampeonato ? 'Próximo Campeonato' : (isFriendly ? 'Próximo Amistoso' : 'Próximo Desafío'),
-        title: isCampeonato 
-          ? `¡Duelo de Campeonato: ${nextMatch.retadorNombre || 'Jugador'} vs ${nextMatch.retadoNombre || 'Jugador'}!` 
-          : (isFriendly 
-            ? `¡Amistoso agendado: ${nextMatch.retadorNombre || 'Jugador'} vs ${nextMatch.retadoNombre || 'Jugador'}!` 
-            : `¡Desafío en camino: ${nextMatch.retadorNombre || 'Jugador'} vs ${nextMatch.retadoNombre || 'Jugador'}!`),
+        badgeClass: isCampeonato ? 'badge-torneo' : (isFriendly ? 'badge-app' : (isLeague ? 'badge-liga' : 'badge-torneo')),
+        badgeText: isCampeonato ? 'Próximo Campeonato' : (isFriendly ? 'Próximo Amistoso' : (isLeague ? 'Próximo partido de Liga' : 'Próximo Desafío')),
+        title: isCampeonato
+          ? `¡Duelo de Campeonato: ${nextMatch.retadorNombre || 'Jugador'} vs ${nextMatch.retadoNombre || 'Jugador'}!`
+          : (isFriendly
+            ? `¡Amistoso agendado: ${nextMatch.retadorNombre || 'Jugador'} vs ${nextMatch.retadoNombre || 'Jugador'}!`
+            : (isLeague
+              ? `¡Partido de Liga en camino: ${nextMatch.retadorNombre || 'Jugador'} vs ${nextMatch.retadoNombre || 'Jugador'}!`
+              : `¡Desafío en camino: ${nextMatch.retadorNombre || 'Jugador'} vs ${nextMatch.retadoNombre || 'Jugador'}!`)),
         body: isCampeonato
           ? `Un encuentro por el Campeonato está agendado para el ${formatDateShort(nextMatch.fecha)} en ${nextMatch.cancha || 'UCTenis'}${slotStr}. ¡Mucho éxito a ambos competidores en este torneo!`
           : (isFriendly
             ? `Un encuentro amistoso está agendado para el ${formatDateShort(nextMatch.fecha)} en ${nextMatch.cancha || 'UCTenis'}${slotStr}. ¡Éxito a ambos en este partido de práctica!`
-            : `El encuentro oficial por el ranking ${genderText} está agendado para el ${formatDateShort(nextMatch.fecha)} en ${nextMatch.cancha || 'UCTenis'}${slotStr}. ¡Mucho éxito a ambos en este importante duelo que define cambios de posiciones en la escalerilla!`),
+            : (isLeague
+              ? `Un partido de Liga semanal está agendado para el ${formatDateShort(nextMatch.fecha)} en ${nextMatch.cancha || 'UCTenis'}${slotStr}. ¡Sumará puntos para el ciclo actual!`
+              : `El encuentro oficial por el ranking ${genderText} está agendado para el ${formatDateShort(nextMatch.fecha)} en ${nextMatch.cancha || 'UCTenis'}${slotStr}. ¡Mucho éxito a ambos en este importante duelo que define cambios de posiciones en la escalerilla!`)),
         date: formatDateShort(nextMatch.creado || nextMatch.fecha)
       };
+    }
+
+    // 2.5. Liga semanal: quién lidera el ciclo actual (solo si ya se jugó
+    // algo esta semana/ciclo). Al recalcularse siempre contra la fecha de
+    // hoy, la tarjeta "caduca" sola: quien no jugó nada en el ciclo nuevo
+    // deja de aparecer y el líder se recalcula apenas hay resultados.
+    if (typeof UCTennisLeague !== 'undefined') {
+      const leagueCycle = UCTennisLeague.getCycle(new Date());
+      const standings = UCTennisLeague.calculateStandings(playersList, challenges, leagueCycle)
+        .filter(row => row.pj > 0);
+      if (standings.length > 0) {
+        const leaderM = standings.filter(row => row.genero === 'M').sort((a, b) => b.pts - a.pts)[0];
+        const leaderF = standings.filter(row => row.genero === 'F').sort((a, b) => b.pts - a.pts)[0];
+        const cycleStartUTC = new Date(`${leagueCycle.start}T00:00:00Z`);
+        const todayUTC = Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate());
+        const currentWeek = Math.max(0, Math.floor((todayUTC - cycleStartUTC.getTime()) / 86400000 / 7)) + 1;
+        const leaderParts = [];
+        if (leaderM) leaderParts.push(`${escapeHTML(leaderM.nombre)} lidera el masculino con ${leaderM.pts} pts (${leaderM.pj} jugados)`);
+        if (leaderF) leaderParts.push(`${escapeHTML(leaderF.nombre)} lidera el femenino con ${leaderF.pts} pts (${leaderF.pj} jugados)`);
+        leagueLeaderCard = {
+          id: `auto-league-leader-${leagueCycle.id}`,
+          badgeClass: 'badge-liga',
+          badgeText: `Liga · Semana ${currentWeek} de ${leagueCycle.weeks}`,
+          title: '🏆 Así va la Liga semanal',
+          body: `${leaderParts.join(' · ')}. Ciclo del ${leagueCycle.start} al ${leagueCycle.end}.`,
+          date: new Date().toLocaleDateString('es-CL', { day: 'numeric', month: 'short', year: 'numeric' })
+        };
+      }
     }
 
     // 3. Birthdays: detect today's birthday AND month birthdays
@@ -2464,6 +2509,11 @@ async function loadLiveData() {
     ? applyOverride(birthdaysCard, overrideBirthdays)
     : null;
 
+  const overrideLeagueLeader = leagueLeaderCard ? (customNews || []).find(item => item.id === leagueLeaderCard.id) : null;
+  const filteredLeagueLeader = (leagueLeaderCard && !hiddenNewsIds.has(leagueLeaderCard.id))
+    ? applyOverride(leagueLeaderCard, overrideLeagueLeader)
+    : null;
+
   // Render the news section AFTER getPlayerPhoto is defined (see below)
   // This call is intentionally deferred — see renderNewsGrid call after window.getPlayerPhoto = getPlayerPhoto
 
@@ -2581,7 +2631,7 @@ async function loadLiveData() {
   window.getPlayerPhoto = getPlayerPhoto;
 
   // NOW render the news section — getPlayerPhoto is available so player photos will load correctly
-  renderNewsGrid(filteredTopMover, filteredLatestMatch, filteredNextMatch, filteredBirthdays, activeCustomNews);
+  renderNewsGrid(filteredTopMover, filteredLatestMatch, filteredNextMatch, filteredBirthdays, activeCustomNews, filteredLeagueLeader);
 
   // ── NEW CHALLENGES FEED: challenges created in the last 7 days (pendiente or aceptado) ──
   (function renderNewChallengesFeed() {
