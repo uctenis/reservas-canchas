@@ -3239,7 +3239,9 @@ function openChallengeModal(playerKey, mode = 'ranking') {
     select.innerHTML = rivals.map(({ player, user }) => {
       const selected = target && samePlayer(player, target) ? 'selected' : '';
       const suggestion = mode === 'liga'
-        ? `${player.leagueCategoryDistance === 0 ? '⭐ Misma categoría' : player.leagueCategoryDistance === 1 ? '↔ Categoría cercana' : '• Otra categoría'} · `
+        ? (player.leaguePlayedThisCycle
+          ? '🔁 Ya jugaron este ciclo · '
+          : `${player.leagueCategoryDistance === 0 ? '⭐ Misma categoría' : player.leagueCategoryDistance === 1 ? '↔ Categoría cercana' : '• Otra categoría'} · `)
         : '';
       return `<option value="${escapeAttr(user.id)}" ${selected}>${suggestion}${escapeHTML(user.nombre)} · ${escapeHTML(normalizeCategory(player.categoria) || 'Categoría por definir')}</option>`;
     }).join('');
@@ -6338,15 +6340,35 @@ function hasActiveLeagueMatch(player, ignoreId = '') {
   );
 }
 
+// Enfrentaron ya a este rival en el ciclo de liga vigente (partido con
+// resultado, no invitaciones activas: esas ya estan bloqueadas por
+// hasActiveLeagueMatch). Se usa para desincentivar -sin bloquear- que
+// alguien repita siempre al mismo rival mas debil.
+function hasPlayedLeagueOpponentThisCycle(playerA, playerB, ignoreId = '') {
+  if (typeof UCTennisLeague === 'undefined') return false;
+  const cycle = UCTennisLeague.getCycle(new Date());
+  return DB.getChallenges().some(match =>
+    match.id !== ignoreId &&
+    UCTennisLeague.isLeagueMatch(match, cycle) &&
+    ((playerMatchesChallengeSide(playerA, match, 'retador') && playerMatchesChallengeSide(playerB, match, 'retado')) ||
+     (playerMatchesChallengeSide(playerA, match, 'retado') && playerMatchesChallengeSide(playerB, match, 'retador')))
+  );
+}
+
 function getLeagueChallengeablePlayers(player, ignoreId = '') {
   if (!isPlayerActive(player) || hasActiveLeagueMatch(player, ignoreId)) return [];
   return (rankingState.lists[player.gender] || [])
     .filter(candidate => candidate.id !== player.id && isPlayerActive(candidate) && candidate.gender === player.gender && !hasActiveLeagueMatch(candidate, ignoreId))
     .map(candidate => ({
       ...candidate,
-      leagueCategoryDistance: categoryDistance(normalizeCategory(player.categoria), normalizeCategory(candidate.categoria))
+      leagueCategoryDistance: categoryDistance(normalizeCategory(player.categoria), normalizeCategory(candidate.categoria)),
+      leaguePlayedThisCycle: hasPlayedLeagueOpponentThisCycle(player, candidate, ignoreId)
     }))
-    .sort((a, b) => a.leagueCategoryDistance - b.leagueCategoryDistance || a.nombre.localeCompare(b.nombre, 'es'));
+    .sort((a, b) =>
+      (a.leaguePlayedThisCycle === b.leaguePlayedThisCycle ? 0 : a.leaguePlayedThisCycle ? 1 : -1) ||
+      a.leagueCategoryDistance - b.leagueCategoryDistance ||
+      a.nombre.localeCompare(b.nombre, 'es')
+    );
 }
 
 function categoryDistance(first, second, fallback = 99) {

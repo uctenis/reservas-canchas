@@ -116,7 +116,18 @@
       });
     });
 
-    (Array.isArray(matches) ? matches : []).filter(match => isLeagueMatch(match, cycle)).forEach(match => {
+    const leagueMatches = (Array.isArray(matches) ? matches : [])
+      .filter(match => isLeagueMatch(match, cycle))
+      .sort((a, b) => isoDate(a.fechaResultado || a.fecha || a.actualizado).localeCompare(isoDate(b.fechaResultado || b.fecha || b.actualizado)));
+
+    // Un jugador puede revanchar al mismo rival varias veces en el ciclo,
+    // pero solo el primer resultado entre ese par suma puntaje/estadisticas:
+    // evita que alguien farmee puntos jugando siempre contra el mismo rival
+    // mas debil. Las revanchas igual cuentan para el bono de constancia
+    // semanal (jugar es jugar), solo no duplican pts/pj/pg/sets.
+    const scoredPairs = new Set();
+
+    leagueMatches.forEach(match => {
       const winnerSide = getWinnerSide(match);
       if (!winnerSide) return;
       const loserSide = winnerSide === 'retador' ? 'retado' : 'retador';
@@ -127,17 +138,22 @@
 
       const winner = rows.get(winnerId);
       const loser = rows.get(loserId);
+      const date = parseIsoDate(match.fechaResultado || match.fecha || match.actualizado);
+      const week = date ? Math.floor((date - parseIsoDate(cycle.start)) / 86400000 / 7) : 0;
+      winner.weeks.add(week); loser.weeks.add(week);
+
+      const pairKey = [winnerId, loserId].sort().join('__');
+      if (scoredPairs.has(pairKey)) return;
+      scoredPairs.add(pairKey);
+
       const stats = getSetStats(match.marcador);
       const winnerSets = winnerSide === 'retador' ? stats.a : stats.b;
       const loserSets = winnerSide === 'retador' ? stats.b : stats.a;
-      const date = parseIsoDate(match.fechaResultado || match.fecha || match.actualizado);
-      const week = date ? Math.floor((date - parseIsoDate(cycle.start)) / 86400000 / 7) : 0;
 
       winner.pj++; winner.pg++; winner.pts += resolved.played + resolved.win;
       loser.pj++; loser.pp++; loser.pts += resolved.played + resolved.loss;
       winner.setsFor += winnerSets; winner.setsAgainst += loserSets;
       loser.setsFor += loserSets; loser.setsAgainst += winnerSets;
-      winner.weeks.add(week); loser.weeks.add(week);
     });
 
     rows.forEach(row => {
