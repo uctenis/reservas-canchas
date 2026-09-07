@@ -1626,9 +1626,9 @@ function isChallengeExpiredByDateTime(challenge) {
 }
 
 /**
- * Returns true if the challenge/news item's date is today, in the future, or in the past but recent (within the last 7 days).
+ * Returns true if the challenge/news item's date is today, in the future, or in the past but recent (within the last `maxDays` days, default 7).
  */
-function isChallengeRecentOrFuture(fecha) {
+function isChallengeRecentOrFuture(fecha, maxDays = 7) {
   if (!fecha) return false;
   const datePart = String(fecha).split('T')[0];
   if (!/^\d{4}-\d{2}-\d{2}$/.test(datePart)) return false;
@@ -1637,12 +1637,12 @@ function isChallengeRecentOrFuture(fecha) {
     const todayIso = new Date().toISOString().split('T')[0];
     if (datePart >= todayIso) return true; // Today or future
 
-    // Past: check if within the last 7 days
+    // Past: check if within the last `maxDays` days
     const matchDate = new Date(datePart + 'T23:59:59');
     const now = new Date();
     const diffTime = Math.abs(now.getTime() - matchDate.getTime());
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays <= 7;
+    return diffDays <= maxDays;
   } catch(e) {
     return false;
   }
@@ -2268,11 +2268,12 @@ async function loadLiveData() {
 
   // Generate Automatic News Cards
   try {
-    // 1. Latest completed match
+    // 1. Latest completed match (expires 14 days after the match date so stale results don't linger in the feed)
     const completed = challenges.filter(c => c.status === 'completado' && c.ganadorId && c.marcador);
-    if (completed.length > 0) {
-      completed.sort((a, b) => (b.actualizado || b.creado || b.id || '').localeCompare(a.actualizado || a.creado || a.id || ''));
-      const latestMatch = completed[0];
+    completed.sort((a, b) => (b.actualizado || b.creado || b.id || '').localeCompare(a.actualizado || a.creado || a.id || ''));
+    const latestMatchCandidate = completed[0];
+    if (latestMatchCandidate && isChallengeRecentOrFuture(latestMatchCandidate.fecha, 14)) {
+      const latestMatch = latestMatchCandidate;
       const winnerName = latestMatch.ganadorId === latestMatch.retadorId ? (latestMatch.retadorNombre || 'Jugador') : (latestMatch.retadoNombre || 'Jugador');
       const loserName = latestMatch.ganadorId === latestMatch.retadorId ? (latestMatch.retadoNombre || 'Jugador') : (latestMatch.retadorNombre || 'Jugador');
       const genderText = latestMatch.genero === 'F' ? 'femenino' : 'masculino';
