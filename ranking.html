@@ -201,7 +201,7 @@
             <label for="chal_fecha">Fecha propuesta</label>
             <input type="date" id="chal_fecha" required>
           </div>
-          <div class="form-group">
+          <div class="form-group" id="chalCanchaGroup">
             <label for="chal_cancha">Cancha</label>
             <select id="chal_cancha" required>
               <option value="cec1">CEC 1 (Arcilla)</option>
@@ -211,7 +211,11 @@
             </select>
           </div>
         </div>
-        <div class="form-group">
+        <label style="display:flex; align-items:center; gap:8px; margin:-6px 0 12px; font-size:0.85rem; color:var(--text-secondary,#94a3b8); cursor:pointer;">
+          <input type="checkbox" id="chal_otro_lugar" style="width:auto; margin:0;">
+          Van a jugar en otro lugar (fuera del club) — no reservar cancha
+        </label>
+        <div class="form-group" id="chalHoraGroup">
           <label for="chal_hora">Horario disponible</label>
           <select id="chal_hora" required disabled>
             <option value="">Selecciona fecha y cancha...</option>
@@ -1058,6 +1062,7 @@ function setupEvents() {
   document.getElementById('fChallenge').addEventListener('submit', submitChallenge);
   document.getElementById('chal_fecha').addEventListener('change', updateChallengeAvailableSlots);
   document.getElementById('chal_cancha').addEventListener('change', updateChallengeAvailableSlots);
+  document.getElementById('chal_otro_lugar').addEventListener('change', toggleChallengeElsewhere);
   document.getElementById('fScore').addEventListener('submit', submitScore);
   document.getElementById('scoreOpponent').addEventListener('change', updateScoreMatchState);
   document.getElementById('scoreType').addEventListener('change', () => {
@@ -3162,6 +3167,11 @@ function openChallengeModal(playerKey, mode = 'ranking') {
   document.getElementById('chal_id').value = '';
   document.getElementById('chal_fecha').min = todayISO();
   document.getElementById('chal_fecha').value = todayISO();
+  document.getElementById('chal_otro_lugar').checked = false;
+  document.getElementById('chalCanchaGroup').style.display = '';
+  document.getElementById('chalHoraGroup').style.display = '';
+  document.getElementById('chal_cancha').required = true;
+  document.getElementById('chal_hora').required = true;
   const submit = document.getElementById('btnSubmitChallenge');
   submit.disabled = false;
   submit.textContent = 'Enviar desafío';
@@ -3234,8 +3244,9 @@ async function submitChallenge(event) {
 
   const retadoId = document.getElementById('chal_retado').value;
   const fecha = document.getElementById('chal_fecha').value;
-  const courtId = document.getElementById('chal_cancha').value;
-  const slot = document.getElementById('chal_hora').value;
+  const jugarOtroLugar = document.getElementById('chal_otro_lugar').checked;
+  const courtId = jugarOtroLugar ? '' : document.getElementById('chal_cancha').value;
+  const slot = jugarOtroLugar ? '' : document.getElementById('chal_hora').value;
   const tipo = document.getElementById('chal_tipo').value || 'ranking';
   const error = document.getElementById('challengeError');
   const retado = DB.getUsers().find(user => user.id === retadoId);
@@ -3265,12 +3276,12 @@ async function submitChallenge(event) {
     error.textContent = 'Selecciona una fecha válida.';
     return;
   }
-  if (!slot) {
+  if (!jugarOtroLugar && !slot) {
     error.textContent = 'Selecciona un horario disponible.';
     return;
   }
   const courtObj = DB.COURTS.find(c => c.id === courtId);
-  const courtLabel = courtObj ? courtObj.label : courtId;
+  const courtLabel = jugarOtroLugar ? 'Cancha acordada entre jugadores' : (courtObj ? courtObj.label : courtId);
 
   const restoreButton = setButtonBusy(submitBtn, editId ? 'Guardando...' : 'Enviando...');
   let bookingEventId = null;
@@ -3308,14 +3319,17 @@ async function submitChallenge(event) {
     }
 
     // 1. Intentar reservar la cancha en Google Calendar (obligatorio para confirmar la disponibilidad real)
+    // — se salta por completo si van a jugar en otro lugar: no hay cancha del club que reservar.
     try {
-      const r = await DB.createBookingAPI(session.id, courtId, fecha, slot);
-      if (r.ok) {
-        bookingEventId = r.booking?.id || null;
-      } else {
-        error.textContent = `Tu desafío falló: ${r.msg}`;
-        restoreButton();
-        return;
+      if (!jugarOtroLugar) {
+        const r = await DB.createBookingAPI(session.id, courtId, fecha, slot);
+        if (r.ok) {
+          bookingEventId = r.booking?.id || null;
+        } else {
+          error.textContent = `Tu desafío falló: ${r.msg}`;
+          restoreButton();
+          return;
+        }
       }
     } catch (calErr) {
       error.textContent = 'Error al conectar con el servidor de reservas para asegurar la cancha.';
@@ -3356,6 +3370,33 @@ async function submitChallenge(event) {
     error.textContent = err.message || 'Error al procesar el desafío. Intenta nuevamente.';
   } finally {
     restoreButton();
+  }
+}
+
+/**
+ * Cuando ambos jugadores acuerdan jugar fuera del club, no tiene sentido
+ * buscar cancha ni horario disponible — el partido no reserva nada en el
+ * sistema, solo queda agendado con fecha para el desafío/liga.
+ */
+function toggleChallengeElsewhere() {
+  const checked = document.getElementById('chal_otro_lugar').checked;
+  const canchaGroup = document.getElementById('chalCanchaGroup');
+  const horaGroup = document.getElementById('chalHoraGroup');
+  const canchaSelect = document.getElementById('chal_cancha');
+  const horaSelect = document.getElementById('chal_hora');
+  const submitBtn = document.getElementById('btnSubmitChallenge');
+  const errorEl = document.getElementById('challengeError');
+
+  canchaGroup.style.display = checked ? 'none' : '';
+  horaGroup.style.display = checked ? 'none' : '';
+  canchaSelect.required = !checked;
+  horaSelect.required = !checked;
+
+  if (checked) {
+    errorEl.textContent = '';
+    submitBtn.disabled = false;
+  } else {
+    updateChallengeAvailableSlots();
   }
 }
 
@@ -3468,6 +3509,14 @@ function openEditChallengeModal(challengeId) {
   submitBtn.dataset.editChallengeId = challengeId;
   submitBtn.textContent = 'Guardar Cambios';
   document.getElementById('chal_fecha').value = challenge.fecha;
+
+  // El desafío se creó sin cancha del club (jugaron/jugarán en otro lugar)
+  if (!challenge.courtId) {
+    document.getElementById('chal_otro_lugar').checked = true;
+    toggleChallengeElsewhere();
+    return;
+  }
+
   // Match cancha selection
   const courtOption = Array.from(document.getElementById('chal_cancha').options)
     .find(opt => opt.value === challenge.courtId || opt.text === challenge.cancha);
