@@ -198,31 +198,6 @@ body {
   flex-wrap: wrap;
 }
 
-.rank-status {
-  display: inline-flex;
-  align-items: center;
-  min-height: 36px;
-  padding: 7px 11px;
-  border-radius: 8px;
-  border: 1px solid var(--muted-line);
-  color: var(--text-secondary);
-  background: rgba(255, 255, 255, 0.04);
-  font-size: 0.82rem;
-  font-weight: 800;
-}
-
-.rank-status.status-ok {
-  color: #d9f99d;
-  border-color: rgba(190, 242, 100, 0.3);
-  background: rgba(190, 242, 100, 0.08);
-}
-
-.rank-status.status-warn {
-  color: var(--warning);
-  border-color: rgba(251, 191, 36, 0.32);
-  background: rgba(251, 191, 36, 0.08);
-}
-
 .btn-challenge-new,
 .btn-admin-panel,
 .btn-primary,
@@ -2025,13 +2000,11 @@ tr.drag-over-bottom {
   }
 
   .rank-actions,
-  .rank-status,
   .btn-admin-panel,
   .btn-challenge-new {
     width: 100%;
   }
 
-  .rank-status,
   .btn-admin-panel,
   .btn-challenge-new {
     justify-content: center;
@@ -2862,9 +2835,31 @@ tr.drag-over-bottom {
 }
 
 @media (max-width: 560px) {
+  #adminModal .modal-content.admin-modal { padding-bottom: calc(34px + env(safe-area-inset-bottom)); }
+  .admin-page-header { position: sticky; top: 0; padding: 10px 12px; gap: 8px; }
+  .admin-back-btn { width: 100%; justify-content: center; min-height: 40px; }
+  .admin-tab-bar { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; width: 100%; overflow: visible; }
+  .admin-tab-btn { min-width: 0; min-height: 56px; padding: 7px 3px; justify-content: center; flex-direction: column; gap: 3px; font-size: .68rem; line-height: 1.1; white-space: normal; text-align: center; }
+  .admin-page-body { padding: 14px 10px 0; }
   .schedule-panel-card { padding:15px; border-radius:15px; }
   .schedule-param-grid { grid-template-columns:1fr; }
   .schedule-court-selector { grid-template-columns:1fr 1fr; }
+  .schedule-header { margin-bottom: 14px; padding: 16px; border-radius: 15px; }
+  .schedule-header h3 { font-size: 1.2rem; }
+  .schedule-header-copy { font-size: .78rem; }
+  .schedule-body { gap: 12px; }
+  .schedule-sidebar { padding: 4px; border-radius: 13px; }
+  .schedule-nav-item { min-width: 0; padding: 8px 4px; flex-direction: column; align-items: center; text-align: center; gap: 3px; }
+  .schedule-nav-icon { font-size: 1.05rem; }
+  .schedule-nav-text small { display: none; }
+  .schedule-nav-text strong { font-size: .68rem; line-height: 1.15; }
+  .schedule-form-grid { gap: 8px; }
+  .schedule-form-grid > .form-group { min-width: 0 !important; flex: 1 1 100% !important; }
+  .segmented-control { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
+  .segmented-btn { justify-content: center; padding: 9px 5px; font-size: .72rem; }
+  .period-list { grid-template-columns: minmax(0, 1fr); }
+  .period-card { align-items: flex-start; padding: 12px; }
+  .period-dates { font-size: .82rem; }
   .schedule-panel-actions { align-items:stretch; flex-direction:column-reverse; }
   .schedule-panel-actions button { width:100% !important; }
 }

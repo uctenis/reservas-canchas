@@ -254,6 +254,7 @@ function playerToSessionUser(player, current = {}) {
     mano: player.mano || player.manoHabil || current.mano || 'Derecha',
     reves: player.reves || current.reves || 'Dos manos',
     foto: player.foto || current.foto || '',
+    fechaNacimiento: player.fechaNacimiento || current.fechaNacimiento || '',
     telefono: player.telefono || current.telefono || '',
     rut: player.rut || current.rut || '',
     userType: player.userType || current.userType || 'socio',
@@ -468,7 +469,7 @@ const DB = {
 
     const userType = user.userType || 'socio';
     if (userType === 'socio') {
-      if (!user.categoria || !user.mano || !user.reves) {
+      if (!user.categoria || !user.mano || !user.reves || !user.fechaNacimiento) {
         return false;
       }
     } else if (userType === 'funcionario') {
@@ -665,6 +666,7 @@ const DB = {
       user.categoria = normalizeCategoryForDb(data.categoria);
       user.mano = data.mano || 'Derecha';
       user.reves = data.reves || 'Dos manos';
+      user.fechaNacimiento = data.fechaNacimiento || '';
       if (data.foto) user.foto = data.foto;
       user.telefono = data.telefono || '';
       user.rut = data.rut || '';
@@ -686,6 +688,7 @@ const DB = {
       categoria: normalizeCategoryForDb(data.categoria),
       mano: data.mano || 'Derecha',
       reves: data.reves || 'Dos manos',
+      fechaNacimiento: data.fechaNacimiento || '',
       foto: data.foto || '',
       telefono: data.telefono || '',
       rut: data.rut || '',
@@ -1496,7 +1499,8 @@ const DB = {
       ['completado', 'wo_retado'].includes(c.status) &&
       c.genero === genero &&
       c.tipo !== 'amistoso' &&
-      c.tipo !== 'campeonato'
+      c.tipo !== 'campeonato' &&
+      c.tipo !== 'liga'
     );
 
     // Build ladder baseline from users. If a user has an explicit position (pos or posicion), respect it.

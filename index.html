@@ -15,7 +15,7 @@
     /* ── Actions Hero Grid (Top Priority) ── */
     .actions-hero-grid {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: repeat(3, 1fr);
       gap: 20px;
       margin-bottom: 24px;
     }
@@ -96,6 +96,18 @@
       background: rgba(255, 255, 255, 0.1);
       transform: translateY(-1px);
     }
+    .hero-card-ranking { border-color: rgba(198,211,0,.28); }
+    .hero-card-league { border-color: rgba(245,158,11,.48); background: linear-gradient(135deg, rgba(120,53,15,.42) 0%, rgba(15,23,42,.78) 100%); }
+    .hero-card-league::before { background: radial-gradient(circle, rgba(245,158,11,.14) 0%, transparent 70%); }
+    .hero-card-league .hero-card-icon { color:#fbbf24; background:rgba(245,158,11,.12); border-color:rgba(245,158,11,.3); box-shadow:0 0 18px rgba(245,158,11,.14); }
+    .hero-card-kicker { display:inline-flex; align-items:center; gap:6px; color:#fbbf24; font-size:.68rem; font-weight:900; letter-spacing:.1em; text-transform:uppercase; margin-bottom:7px; }
+    .hero-card-kicker::before { content:''; width:6px; height:6px; border-radius:50%; background:#fbbf24; box-shadow:0 0 0 4px rgba(245,158,11,.12); }
+    .club-sport-launch { display:flex; align-items:center; justify-content:space-between; gap:18px; margin:0 0 20px; padding:14px 18px; border:1px solid rgba(245,158,11,.34); border-radius:14px; background:linear-gradient(90deg, rgba(245,158,11,.12), rgba(245,158,11,.03)); }
+    .club-sport-launch strong { color:#fde68a; display:block; font-size:.9rem; }
+    .club-sport-launch span { color:var(--text-secondary); font-size:.8rem; }
+    .club-sport-launch a { flex-shrink:0; color:#111827; background:#f59e0b; border-radius:8px; padding:8px 13px; font-size:.78rem; font-weight:900; text-decoration:none; }
+    @media (max-width: 900px) { .actions-hero-grid { grid-template-columns:1fr 1fr; } .hero-card:first-child { grid-column:1 / -1; } }
+    @media (max-width: 600px) { .actions-hero-grid { grid-template-columns:1fr; } .hero-card:first-child { grid-column:auto; } .club-sport-launch { align-items:flex-start; flex-direction:column; } .club-sport-launch a { width:100%; text-align:center; } }
 
     /* ── Dashboard Layout (70/30 Split) ── */
     .dashboard-layout {
@@ -588,13 +600,18 @@
       justify-content: center;
       gap: 8px;
       margin-top: 12px;
-      padding: 8px 14px;
+      max-width: 100%;
+      padding: 6px 12px;
       border: 1px solid rgba(198, 211, 0, 0.22);
       border-radius: 999px;
       background: rgba(198, 211, 0, 0.08);
       color: var(--text-primary);
-      font-size: 0.92rem;
+      font-size: 0.8rem;
       font-weight: 700;
+      line-height: 1.2;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
       box-shadow: 0 10px 24px rgba(198, 211, 0, 0.08);
     }
     .home-greeting strong {
@@ -1250,10 +1267,19 @@
       </div>
     </div>
 
-    <!-- ── ACTIONS HERO GRID (Reservar Cancha + Ver Ranking) ── -->
+    <!-- ── LANZAMIENTO DEPORTIVO ── -->
+    <div class="club-sport-launch" role="status">
+      <div>
+        <strong>🎾 Nueva Liga semanal UCTenis</strong>
+        <span>Juega una vez por semana, suma puntos y obtén un bono para la escalerilla al cerrar el ciclo.</span>
+      </div>
+      <a href="liga.html">Conocer la liga</a>
+    </div>
+
+    <!-- ── ACTIONS HERO GRID (Reservar Cancha + Escalerilla + Liga) ── -->
     <div class="actions-hero-grid">
       <!-- Reservar Cancha Card -->
-      <div class="hero-card">
+      <div class="hero-card hero-card-ranking">
         <div>
           <div class="hero-card-content">
             <div class="hero-card-icon">
@@ -1291,6 +1317,26 @@
         <a href="ranking.html" class="hero-card-btn hero-card-btn-primary">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M5 13h11.59l-5.29 5.29 1.41 1.41L20 12l-7.29-7.29-1.41 1.41L16.59 11H5v2z"/></svg>
           Ver Ranking
+        </a>
+      </div>
+
+      <!-- Nueva Liga semanal Card -->
+      <div class="hero-card hero-card-league">
+        <div>
+          <div class="hero-card-kicker">Nuevo formato · 4 semanas</div>
+          <div class="hero-card-content">
+            <div class="hero-card-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l2.4 6.9H22l-6.1 4.3 2.3 7-6.2-4.2-6.2 4.2 2.3-7L2 8.9h7.6L12 2z"/></svg>
+            </div>
+            <div>
+              <h2 class="hero-card-title">Liga semanal</h2>
+              <p class="hero-card-desc">Encuentra rivales de tu categoría, acuerda el horario y suma puntos por participar y ganar.</p>
+            </div>
+          </div>
+        </div>
+        <a href="liga.html" class="hero-card-btn hero-card-btn-primary" style="background:#f59e0b;color:#111827;box-shadow:0 4px 12px rgba(245,158,11,.24);">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M5 13h11.59l-5.29 5.29 1.41 1.41L20 12l-7.29-7.29-1.41 1.41L16.59 11H5v2z"/></svg>
+          Ver la Liga
         </a>
       </div>
     </div>
@@ -1802,8 +1848,8 @@ function firstName(value) {
 
 function homeRoleQualifier(session) {
   if (!session) return '';
-  if (session.isAdmin) return ' <span style="color:var(--accent-tennis);font-weight:600;">(Administrador)</span>';
-  if (session.userType === 'invitado' || session.readOnly) return ' <span style="color:var(--text-secondary);font-weight:600;">(Acceso de solo lectura)</span>';
+  if (session.isAdmin) return '<span style="color:var(--accent-tennis);font-weight:800;">· Administrador</span>';
+  if (session.userType === 'invitado' || session.readOnly) return '<span style="color:var(--text-secondary);font-weight:600;">· Solo lectura</span>';
   return '';
 }
 
@@ -1817,7 +1863,7 @@ function renderHomeGreeting(session) {
   }
   const name = firstName(session.nombre);
   greeting.style.display = 'inline-flex';
-  greeting.innerHTML = `Hola, <strong>${escapeHTML(name)}</strong>. Tu sesion UCTenis esta activa.${homeRoleQualifier(session)}`;
+  greeting.innerHTML = `Hola, <strong>${escapeHTML(name)}</strong> ${homeRoleQualifier(session)}`;
 }
 
 function renderProfileBanner() {

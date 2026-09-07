@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Liga semanal | UCTenis</title>
+  <link rel="stylesheet" href="style.css?v=20260813_v1">
+  <link rel="stylesheet" href="liga.css?v=20260907_v1">
+</head>
+<body>
+  <main class="league-page">
+    <header class="league-hero">
+      <div>
+        <div class="league-kicker">Competencia continua UCTenis</div>
+        <h1>Liga semanal</h1>
+        <p>Un partido por semana mantiene tu ritmo, suma puntos y te permite competir aunque no quieras entrar a la escalerilla.</p>
+      </div>
+      <div class="league-cycle"><span id="leagueCycle">Cargando ciclo...</span><div class="league-progress" aria-label="Progreso del ciclo"><span id="leagueProgress"></span></div><small id="leagueProgressText"></small></div>
+    </header>
+
+    <div class="league-grid">
+      <section class="league-panel">
+        <h2>Clasificación del ciclo</h2>
+        <div class="league-week-grid" id="leagueWeeks" aria-label="Progreso semanal"></div>
+        <div class="league-gender-tabs" role="tablist" aria-label="Categoría de liga">
+          <button type="button" class="active" data-gender="M">Masculino</button>
+          <button type="button" data-gender="F">Femenino</button>
+        </div>
+        <div id="leagueTable"><p class="league-empty">Cargando resultados...</p></div>
+      </section>
+      <aside class="league-panel">
+        <h2>Cómo se juega</h2>
+        <div class="league-stat-list">
+          <div class="league-stat"><span>Victoria</span><strong>5 pts</strong></div>
+          <div class="league-stat"><span>Derrota válida</span><strong>3 pts</strong></div>
+          <div class="league-stat"><span>Semana cumplida</span><strong>+1 pt</strong></div>
+        </div>
+        <p class="league-rules"><strong>Regla del club:</strong> cada jugador puede registrar los partidos que alcance. La liga acumula mérito durante las cuatro semanas y, al cerrar el ciclo, entrega un bono para la escalerilla oficial. No cambia posiciones después de cada partido.</p>
+        <p class="league-secondary-copy">La fecha, cancha y hora son una propuesta. El partido queda confirmado cuando el rival acepta. Si no pueden coordinar, se rechaza y la reserva se libera.</p>
+        <a class="league-cta" href="ranking.html?liga=1">Proponer partido de liga</a>
+        <a class="league-cta" href="index.html" style="margin-top:8px;background:rgba(255,255,255,.08);color:#fff;">Volver al inicio</a>
+      </aside>
+    </div>
+  </main>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+  <script src="db.js?v=20260817_sync_admin_v2"></script>
+  <script src="liga.js?v=20260907_v1"></script>
+  <script>
+    const leagueState = { gender: 'M', players: [], matches: [] };
+    const leagueCycle = UCTennisLeague.getCycle(new Date());
+    const PURE_ADMIN_EMAILS = new Set(['uctenisclub@gmail.com']);
+
+    function isLeaguePlayer(player) {
+      const email = String(player?.email || player?.correo || '').trim().toLowerCase();
+      return !PURE_ADMIN_EMAILS.has(email) && player?.activo !== false && player?.participaRanking !== false;
+    }
+
+    function renderLeague() {
+      document.getElementById('leagueCycle').textContent = `Ciclo: ${leagueCycle.start} al ${leagueCycle.end}`;
+      const cycleStart = new Date(`${leagueCycle.start}T00:00:00Z`);
+      const today = new Date();
+      const elapsedDays = Math.max(0, Math.min(leagueCycle.weeks * 7 - 1, Math.floor((Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()) - cycleStart.getTime()) / 86400000)));
+      const currentWeek = Math.floor(elapsedDays / 7);
+      const progress = Math.min(100, Math.round(((elapsedDays + 1) / (leagueCycle.weeks * 7)) * 100));
+      document.getElementById('leagueProgress').style.width = `${progress}%`;
+      document.getElementById('leagueProgressText').textContent = `${progress}% del ciclo · Semana ${currentWeek + 1} de ${leagueCycle.weeks}`;
+      document.getElementById('leagueWeeks').innerHTML = Array.from({ length: leagueCycle.weeks }, (_, index) => `<div class="league-week ${index === currentWeek ? 'is-current' : ''}">Semana ${index + 1}<strong>${leagueState.matches.filter(match => UCTennisLeague.isLeagueMatch(match, leagueCycle) && Math.floor((new Date(`${(match.fechaResultado || match.fecha || match.actualizado).slice(0, 10)}T00:00:00Z`) - cycleStart) / 86400000 / 7) === index).length} partidos</strong></div>`).join('');
+      const rows = UCTennisLeague.calculateStandings(leagueState.players, leagueState.matches, leagueCycle)
+        .filter(row => !leagueState.gender || row.genero === leagueState.gender)
+        .map((row, index) => ({ ...row, pos: index + 1 }));
+      const table = document.getElementById('leagueTable');
+      if (!rows.length) {
+        table.innerHTML = '<p class="league-empty">Aún no hay partidos de liga en este ciclo. Sé el primero en jugar.</p>';
+        return;
+      }
+      table.innerHTML = `<table class="league-table"><thead><tr><th>#</th><th>Jugador</th><th>Pts</th><th>PJ</th><th>PG</th><th>Sets</th></tr></thead><tbody>${rows.map(row => `<tr><td class="league-rank">${row.pos}</td><td><span class="league-player"><strong>${escapeLeague(row.nombre)}</strong><small>${escapeLeague(row.categoria || 'Jugador')}</small></span></td><td class="league-points">${row.pts}</td><td>${row.pj}</td><td>${row.pg}</td><td>${row.setsFor}-${row.setsAgainst}</td></tr>`).join('')}</tbody></table>`;
+    }
+
+    function escapeLeague(value) { return String(value || '').replace(/[&<>"']/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[char])); }
+
+    document.querySelectorAll('.league-gender-tabs button').forEach(button => {
+      button.addEventListener('click', () => {
+        leagueState.gender = button.dataset.gender;
+        document.querySelectorAll('.league-gender-tabs button').forEach(item => item.classList.toggle('active', item === button));
+        renderLeague();
+      });
+    });
+
+    async function loadLeague() {
+      DB.seed();
+      try { leagueState.players = (DB.isCloudConfigured() ? await DB.getPlayersCloud() : DB.getUsers()).filter(isLeaguePlayer); } catch (error) { leagueState.players = DB.getUsers().filter(isLeaguePlayer); }
+      try { leagueState.matches = DB.isCloudConfigured() ? await DB.getChallengesCloud() : DB.getChallenges(); } catch (error) { leagueState.matches = DB.getChallenges(); }
+      renderLeague();
+    }
+    loadLeague();
+  </script>
+</body>
+</html>

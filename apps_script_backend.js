@@ -1575,6 +1575,21 @@ function hasActiveChallengeInRole(sheet, role, ref, excludeId) {
   return false;
 }
 
+function hasActiveLeagueMatch(sheet, ref, excludeId) {
+  const values = sheet.getDataRange().getValues();
+  for (let i = 1; i < values.length; i++) {
+    const challenge = challengeFromRow(values[i]);
+    if (!challenge.id || challenge.id === excludeId || text(challenge.tipo) !== 'liga') continue;
+    if (!isActiveChallengeStatus(challenge.status)) continue;
+    if (challengePlayerMatchesRole(challenge, 'retador', ref) || challengePlayerMatchesRole(challenge, 'retado', ref)) return true;
+  }
+  return false;
+}
+
+function isPureAdminLeagueReference(ref) {
+  return text(ref && ref.email).toLowerCase() === 'uctenisclub@gmail.com';
+}
+
 function isSamePlayerReference(a, b) {
   const idA = text(a && a.id), idB = text(b && b.id);
   const emailA = text(a && a.email).toLowerCase(), emailB = text(b && b.email).toLowerCase();
@@ -1602,6 +1617,9 @@ function validateChallengeCreation(challenge) {
   if (isSamePlayerReference(retadorRef, retadoRef)) {
     return { ok: false, msg: 'No puedes desafiarte a ti mismo.' };
   }
+  if (text(challenge.tipo) === 'liga' && (isPureAdminLeagueReference(retadorRef) || isPureAdminLeagueReference(retadoRef))) {
+    return { ok: false, msg: 'La cuenta administradora no participa como jugador en la liga.' };
+  }
 
   if (text(challenge.tipo) === 'amistoso' || text(challenge.tipo) === 'campeonato') {
     // Amistoso/campeonato no tienen el límite de "un desafío activo" del
@@ -1611,6 +1629,20 @@ function validateChallengeCreation(challenge) {
     const sheet = getChallengesSheet();
     if (challenge.status === 'pendiente' && hasUnresolvedChallengeBetween(sheet, retadorRef, retadoRef, challenge.id)) {
       return { ok: false, msg: 'Ya existe una invitación sin resolver entre estos dos jugadores.' };
+    }
+    return { ok: true };
+  }
+  if (text(challenge.tipo) === 'liga') {
+    if (challenge.status !== 'pendiente') return { ok: true };
+    const sheet = getChallengesSheet();
+    if (hasActiveLeagueMatch(sheet, retadorRef, challenge.id)) {
+      return { ok: false, msg: 'El retador ya tiene una invitación de liga activa.' };
+    }
+    if (hasActiveLeagueMatch(sheet, retadoRef, challenge.id)) {
+      return { ok: false, msg: 'El rival ya tiene una invitación de liga activa.' };
+    }
+    if (hasUnresolvedChallengeBetween(sheet, retadorRef, retadoRef, challenge.id)) {
+      return { ok: false, msg: 'Ya existe una invitación de liga sin resolver entre estos jugadores.' };
     }
     return { ok: true };
   }
@@ -3323,6 +3355,7 @@ function updateOwnProfile(data) {
 function applyChallengeResultToRanking(challenge) {
   if (text(challenge.tipo) === 'amistoso') return { ok: true, moved: false, msg: 'Partido amistoso: no se altera el ranking.' };
   if (text(challenge.tipo) === 'campeonato') return { ok: true, moved: false, msg: 'Partido de campeonato: no se altera el ranking.' };
+  if (text(challenge.tipo) === 'liga') return { ok: true, moved: false, msg: 'Partido de liga registrado: el bono de escalerilla se procesa al cierre del ciclo.' };
   if (challenge.status === 'resultado_pendiente') return { ok: true, moved: false, msg: 'Resultado pendiente de confirmación: no se altera el ranking.' };
   if (challenge.status === 'wo_retador') return { ok: true, moved: false, msg: 'W.O. del retador: gana el retado y no cambia la escalerilla.' };
   if (['completado','wo_retado'].indexOf(challenge.status) < 0) return { ok: true, moved: false, msg: 'Estado sin movimiento de ranking.' };
@@ -3774,7 +3807,7 @@ function getChallengeStatsByPlayer() {
     const ganador = ensure(challenge.ganadorId);
     if (!retador || !retado || !ganador) continue;
     retador.pj += 1; retado.pj += 1;
-    if (challenge.tipo !== 'amistoso') ganador.pts += 3;
+    if (challenge.tipo !== 'amistoso' && challenge.tipo !== 'liga') ganador.pts += 3;
     ganador.pg += 1;
     if (challenge.ganadorId === challenge.retadorId) retado.pp += 1;
     if (challenge.ganadorId === challenge.retadoId) retador.pp += 1;

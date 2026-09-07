@@ -408,6 +408,17 @@ function testValidateChallengeCreationRejectsSelfChallenge() {
   assert.match(result.msg, /a ti mismo/i);
 }
 
+function testValidateLeagueRejectsPureAdmin() {
+  const result = context.validateChallengeCreation({
+    tipo: 'liga',
+    status: 'pendiente',
+    retadorId: 'admin', retadorNombre: 'UCTenis Club', retadorEmail: 'uctenisclub@gmail.com',
+    retadoId: 'p2', retadoNombre: 'Beatriz', retadoEmail: 'bea@uct.cl'
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.msg, /administradora.*participa/i);
+}
+
 function testValidateChallengeCreationBlocksDuplicateFriendlyInvite() {
   const existing = {
     id: 'chal-existing', status: 'pendiente', tipo: 'amistoso',
@@ -453,6 +464,7 @@ testAdminResolveChallengeDisputeAppliesRanking();
 testExpiredChallengeReleasesCourtBooking();
 testDailyBookingLimitFailsClosedOnFirestoreError();
 testValidateChallengeCreationRejectsSelfChallenge();
+testValidateLeagueRejectsPureAdmin();
 testValidateChallengeCreationBlocksDuplicateFriendlyInvite();
 testDetectCourtFromEventStrictModeFailsClosed();
 console.log('backend_logic.test.js: OK');
