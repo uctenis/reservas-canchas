@@ -6,6 +6,7 @@
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const courtNames = {cec1:'CEC Cancha 1',cec2:'CEC Cancha 2',cjp1:'CJP Cancha 1',cjp2:'CJP Cancha 2'};
   const slots = ['09:00','10:30','12:00','13:30','15:00','16:30','18:00','19:30','20:00','21:00'];
+  const statusLabels = {draft:'Borrador',registration:'Inscripciones abiertas',draw:'Cuadro generado',in_progress:'En juego',finished:'Finalizado',archived:'Archivado'};
 
   function isAdmin(session) {
     return Boolean(session && (session.isAdmin === true || ADMIN_EMAILS.includes(String(session.email || '').toLowerCase())));
@@ -45,7 +46,7 @@
       name:$('tourName').value.trim(), edition:$('tourEdition').value.trim(), size:Number($('tourSize').value),
       category:$('tourCategory').value.trim(), gender:$('tourGender').value, startDate:$('tourStart').value,
       endDate:$('tourEnd').value, registrationDeadline:$('tourDeadline').value, venue:$('tourVenue').value.trim(),
-      surface:$('tourSurface').value, status:$('tourStatus').value, prize:$('tourPrize').value.trim(),
+      surface:$('tourSurface').value, status:$('tourStatus').disabled ? state.current.status : $('tourStatus').value, prize:$('tourPrize').value.trim(),
       tagline:$('tourTagline').value.trim(), description:$('tourDescription').value.trim(), rules:$('tourRules').value.trim(),
       organizer:$('tourOrganizer').value.trim(), contact:$('tourContact').value.trim(),
       published:$('tourPublished').checked, featured:$('tourFeatured').checked,
@@ -60,6 +61,11 @@
       tourDescription:t.description,tourRules:t.rules,tourOrganizer:t.organizer,tourContact:t.contact
     };
     Object.entries(values).forEach(([id,value]) => { if ($(id)) $(id).value = value ?? ''; });
+    const operationalStatus = !['draft','registration'].includes(t.status) || Boolean(t.matches?.length || t.champion);
+    $('tourStatus').disabled = operationalStatus;
+    $('tourStatusHelp').textContent = operationalStatus
+      ? `Estado automático: ${statusLabels[t.status] || t.status}. Cambia al generar el cuadro, programar partidos y publicar la final.`
+      : 'Elige si aún es borrador o si ya recibe inscripciones. Los siguientes estados los actualizará el sistema.';
     $('tourEnd').min = t.startDate || '';
     $('tourPublished').checked = t.published === true;
     $('tourFeatured').checked = t.featured === true;
@@ -80,7 +86,7 @@
   }
   function renderList() {
     $('tournamentList').innerHTML = state.tournaments.length ? state.tournaments.map(t => `
-      <button class="admin-list-item ${state.current?.id === t.id ? 'active' : ''}" data-id="${esc(t.id)}"><strong>${esc(t.name)}</strong><span>${esc(t.status)} - ${t.participants?.length || 0}/${t.size} inscritos</span></button>`).join('') : '<div class="empty-state">No hay campeonatos creados.</div>';
+      <button class="admin-list-item ${state.current?.id === t.id ? 'active' : ''}" data-id="${esc(t.id)}"><strong>${esc(t.name)}</strong><span>${esc(statusLabels[t.status] || t.status)} - ${t.participants?.length || 0}/${t.size} inscritos</span></button>`).join('') : '<div class="empty-state">No hay campeonatos creados.</div>';
   }
   async function loadTournaments(preferredId) {
     const data = await api('get_tournaments');
@@ -430,4 +436,3 @@
   }
   boot();
 })();
-

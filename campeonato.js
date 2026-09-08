@@ -7,7 +7,7 @@
     const parts = value.slice(0, 10).split('-').map(Number);
     return new Intl.DateTimeFormat('es-CL', { day:'numeric', month:'short', year:'numeric' }).format(new Date(parts[0], parts[1] - 1, parts[2]));
   };
-  const statusLabel = {draft:'Borrador',registration:'Inscripciones abiertas',draw:'Cuadro publicado',in_progress:'En juego',finished:'Finalizado',archived:'Archivado'};
+  const statusLabel = {draft:'Borrador',registration:'Inscripciones abiertas',draw:'Cuadro generado',in_progress:'En juego',finished:'Finalizado',archived:'Archivado'};
   const courtLabel = {cec1:'CEC Cancha 1',cec2:'CEC Cancha 2',cjp1:'CJP Cancha 1',cjp2:'CJP Cancha 2'};
   let currentTournament = null;
 
@@ -297,4 +297,3 @@
   }
   load();
 })();
-

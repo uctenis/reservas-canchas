@@ -4836,6 +4836,25 @@ function normalizeTournamentParticipant(player, index) {
   };
 }
 
+/**
+ * Borrador e inscripciones son decisiones editoriales del administrador.
+ * Desde que existe un cuadro, el estado se deriva del avance real y no se
+ * puede forzar enviando otro valor desde el navegador.
+ */
+function resolveTournamentStatus(payloadStatus, existing) {
+  const tournament = existing || {};
+  const matches = Array.isArray(tournament.matches) ? tournament.matches : [];
+  if (text(tournament.status) === 'archived') return 'archived';
+  if (tournament.champion || matches.some(function(match) {
+    return match.roundName === 'Final' && match.status === 'completed';
+  })) return 'finished';
+  if (matches.some(function(match) {
+    return match.status === 'scheduled' || match.status === 'completed';
+  })) return 'in_progress';
+  if (matches.length) return 'draw';
+  return text(payloadStatus) === 'registration' ? 'registration' : 'draft';
+}
+
 function adminSaveTournament(data) {
   if (!isAdminRequest(data)) return { ok: false, msg: 'Acceso reservado al administrador.' };
   const payload = data.tournament || {};
@@ -4851,7 +4870,7 @@ function adminSaveTournament(data) {
     : (existing.participants || []);
   if (participants.length > requestedSize) return { ok: false, msg: 'Hay mas inscritos que cupos disponibles.' };
   const id = text(payload.id) || (tournamentSlug(payload.name) + '-' + new Date().getTime().toString(36));
-  const status = TOURNAMENT_STATUSES.indexOf(text(payload.status)) >= 0 ? text(payload.status) : (text(existing.status) || 'draft');
+  const status = resolveTournamentStatus(payload.status, existing);
   const tournament = {
     id: id,
     name: text(payload.name),

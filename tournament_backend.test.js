@@ -54,6 +54,17 @@ assert.equal(context.validateTournamentScore([{a:4,b:6},{a:6,b:2},{a:10,b:7}],''
 assert.equal(context.validateTournamentScore([{a:6,b:5},{a:6,b:2}],'',{id:'a'},{id:'b'}).ok,false);
 assert.equal(context.validateTournamentScore([], 'b', {id:'a'}, {id:'b'}).winnerId,'b');
 
+// Solo borrador/inscripciones se eligen manualmente. Con cuadro generado,
+// el avance real manda aunque el cliente intente enviar otro estado.
+assert.equal(context.resolveTournamentStatus('draft', {}), 'draft');
+assert.equal(context.resolveTournamentStatus('registration', {}), 'registration');
+assert.equal(context.resolveTournamentStatus('finished', {}), 'draft');
+assert.equal(context.resolveTournamentStatus('registration', {matches:[{status:'pending'}]}), 'draw');
+assert.equal(context.resolveTournamentStatus('draft', {matches:[{status:'scheduled'}]}), 'in_progress');
+assert.equal(context.resolveTournamentStatus('draft', {matches:[{status:'completed',roundName:'Semifinal'}]}), 'in_progress');
+assert.equal(context.resolveTournamentStatus('draft', {matches:[{status:'completed',roundName:'Final'}]}), 'finished');
+assert.equal(context.resolveTournamentStatus('draft', {status:'archived',matches:[]}), 'archived');
+
 // El borrado permanente debe liberar todas las reservas antes de borrar el
 // documento, deduplicar IDs repetidos y fallar cerrado ante cualquier error.
 const originals = {
