@@ -172,6 +172,54 @@
       .sort((a,b)=>(a.seed||99)-(b.seed||99))
       .map((p,index) => `<tr><td><input class="score-input seed-edit" type="number" min="1" max="${size}" value="${p.seed || index + 1}" data-id="${esc(p.id)}"></td><td><strong>${esc(p.name)}</strong></td><td>${p.clubMember ? 'Socio UCTenis' : 'Externo'}</td><td>${esc(p.email || p.phone || '-')}</td><td><button class="tour-btn danger remove-player" type="button" data-id="${esc(p.id)}">Quitar</button></td></tr>`).join('') : '<tr><td colspan="5" class="empty-state">Agrega jugadores para comenzar.</td></tr>';
   }
+  // "Programar" no debe permitir elegir una hora que en realidad ya esta
+  // ocupada (por una reserva normal, una clase o otro partido) -- se
+  // consulta la misma disponibilidad real que usa el modulo de reservas
+  // (Firestore + Calendar + horarios especiales) y se deshabilitan las
+  // horas/canchas ya tomadas en el selector. El backend igual vuelve a
+  // validar todo antes de guardar (adminScheduleTournamentMatch), asi que
+  // esto es una ayuda visual, no la unica barrera contra duplicar agendas.
+  const availabilityCache = new Map();
+  function fetchAvailability(date) {
+    if (!availabilityCache.has(date)) availabilityCache.set(date, DB.getSlotsAPI(date));
+    return availabilityCache.get(date);
+  }
+  function findMatchById(matchId) {
+    return (state.current?.matches || []).find(m => m.id === matchId);
+  }
+  function refreshHourOptions(row, availability) {
+    const dateVal = row.querySelector('[data-field=date]')?.value;
+    const courtSelect = row.querySelector('[data-field=courtId]');
+    const slotSelect = row.querySelector('[data-field=slot]');
+    if (!courtSelect || !slotSelect) return;
+    const courtId = courtSelect.value;
+    const currentSlot = slotSelect.value;
+    const match = findMatchById(row.dataset.matchId);
+    const isOwnSlot = s => match && match.date === dateVal && match.courtId === courtId && match.slot === s;
+    const free = (availability?.ok && courtId) ? (availability.courts?.[courtId] || []) : null;
+    slotSelect.innerHTML = '<option value="">Hora</option>' + slots.map(s => {
+      const busy = free && free.indexOf(s) < 0 && !isOwnSlot(s);
+      return `<option value="${s}" ${busy ? 'disabled' : ''}>${s}${busy ? ' (ocupado)' : ''}</option>`;
+    }).join('');
+    if (Array.from(slotSelect.options).some(o => o.value === currentSlot)) slotSelect.value = currentSlot;
+  }
+  function applyAvailabilityToRow(row, availability) {
+    const courtSelect = row.querySelector('[data-field=courtId]');
+    const dateSelect = row.querySelector('[data-field=date]');
+    if (!courtSelect || !dateSelect) return;
+    const currentCourt = courtSelect.value;
+    const match = findMatchById(row.dataset.matchId);
+    Array.from(courtSelect.options).forEach(opt => {
+      if (!opt.value) return;
+      const free = availability?.ok ? (availability.courts?.[opt.value] || []) : null;
+      const isOwnCourt = match && match.courtId === opt.value && match.date === dateSelect.value;
+      const empty = Array.isArray(free) && !free.length && !isOwnCourt;
+      opt.disabled = empty;
+      opt.textContent = courtNames[opt.value] + (empty ? ' (sin horas libres)' : '');
+    });
+    if (Array.from(courtSelect.options).some(o => o.value === currentCourt)) courtSelect.value = currentCourt;
+    refreshHourOptions(row, availability);
+  }
   function scoreFields(match) {
     const score = match.score || [];
     return [0,1,2].map(i => `<span><input class="score-input" type="number" min="0" data-score="${i}-a" value="${score[i]?.a ?? ''}" aria-label="Games jugador 1 set ${i+1}"> - <input class="score-input" type="number" min="0" data-score="${i}-b" value="${score[i]?.b ?? ''}" aria-label="Games jugador 2 set ${i+1}"></span>`).join('');
@@ -205,7 +253,7 @@
               <input type="text" class="uct-date" data-field="date" readonly autocomplete="off" value="${esc(match.date || '')}" ${ready ? '' : 'disabled'}>
               <select data-field="slot" ${ready ? '' : 'disabled'}><option value="">Hora</option>${slots.map(s=>`<option ${match.slot===s?'selected':''}>${s}</option>`).join('')}</select>
               <select data-field="courtId" ${ready ? '' : 'disabled'}><option value="">Cancha</option>${Object.entries(courtNames).map(([id,name])=>`<option value="${id}" ${match.courtId===id?'selected':''}>${name}</option>`).join('')}</select>
-              <button class="tour-btn save-schedule" type="button" ${ready ? '' : 'disabled'}>Programar</button>
+              <button class="tour-btn save-schedule" type="button" title="Guarda fecha/hora/cancha y bloquea ese horario en la agenda de reservas del club (queda ocupado para todos)." ${ready ? '' : 'disabled'}>Programar</button>
             </div>
             <div class="match-admin-controls" style="margin-top:8px">
               ${scoreFields(match)}
@@ -216,6 +264,13 @@
         </article>`;
       }).join('')}</div>`;
     }).join('');
+    // Precarga la disponibilidad real para los partidos que ya tienen fecha
+    // asignada, asi el selector de hora sale filtrado sin que el admin tenga
+    // que re-tocar el campo de fecha primero.
+    document.querySelectorAll('#adminMatches .match-admin[data-match-id]').forEach(row => {
+      const dateVal = row.querySelector('[data-field=date]')?.value;
+      if (dateVal) fetchAvailability(dateVal).then(availability => applyAvailabilityToRow(row, availability));
+    });
   }
   async function generateBracket(confirmReplace = false) {
     if (!state.current?.id) await saveCurrent('Campeonato creado. Ahora puedes generar el cuadro.');
@@ -302,6 +357,20 @@
       removeTournamentFromState(deletedId);
       notice('Campeonato eliminado definitivamente.');
     } catch(e) { notice(e.message, true); }
+  });
+  $('adminMatches').addEventListener('change', async event => {
+    const row = event.target.closest('.match-admin');
+    if (!row) return;
+    if (event.target.matches('[data-field=date]')) {
+      const date = event.target.value;
+      if (!date) { refreshHourOptions(row, null); return; }
+      const availability = await fetchAvailability(date);
+      applyAvailabilityToRow(row, availability);
+      if (!availability?.ok) notice('No se pudo confirmar la disponibilidad real de las canchas; revisa la agenda antes de programar.', true);
+    } else if (event.target.matches('[data-field=courtId]')) {
+      const date = row.querySelector('[data-field=date]')?.value;
+      if (date) refreshHourOptions(row, await fetchAvailability(date));
+    }
   });
   $('adminMatches').addEventListener('click', async event => {
     const row = event.target.closest('.match-admin');
