@@ -5024,14 +5024,14 @@ function validateTournamentScore(sets, walkoverWinnerId, player1, player2) {
   };
 }
 
-function releaseTournamentBooking(bookingId, idToken) {
+function releaseTournamentBooking(bookingId, idToken, reason) {
   if (!bookingId) return;
   const stored = getBookingDocument(bookingId, idToken);
   if (!stored.ok || !stored.booking) return;
   const booking = stored.booking;
   booking.status = 'cancelled';
   booking.cancelledAt = new Date().toISOString();
-  booking.cancelledBy = 'tournament_reschedule';
+  booking.cancelledBy = reason || 'tournament_reschedule';
   booking.calendarCleanupPending = Boolean(booking.calendarEventId);
   booking.updatedAt = booking.cancelledAt;
   saveBookingDocument(booking, idToken);
@@ -5169,14 +5169,21 @@ function adminDeleteTournament(data) {
 /**
  * Borra el documento del campeonato de Firestore de forma permanente
  * (a diferencia de adminDeleteTournament, que solo lo archiva/oculta).
- * Sin retorno: los partidos programados de este campeonato no liberan
- * su reserva de cancha automaticamente -- si tenia partidos con horario
- * ya asignado, conviene revisarlos antes de borrar.
+ * Antes de borrar el campeonato, libera la reserva de cancha de cada
+ * partido que ya tenia horario asignado (booking cancelado en Firestore +
+ * su evento borrado de Calendar) -- si no, esas canchas quedaban bloqueadas
+ * para siempre aunque el campeonato ya no existiera.
  */
 function adminPermanentlyDeleteTournament(data) {
   if (!isAdminRequest(data)) return { ok: false, msg: 'Acceso reservado al administrador.' };
   const id = text(data.id);
   if (!id) return { ok: false, msg: 'Falta el ID del campeonato.' };
+  const stored = readTournament(id, data.idToken);
+  if (stored.ok && stored.tournament) {
+    (stored.tournament.matches || []).forEach(function(match) {
+      if (match.bookingId) releaseTournamentBooking(match.bookingId, data.idToken, 'tournament_deleted');
+    });
+  }
   try {
     const response = UrlFetchApp.fetch(tournamentFirestoreUrl(id), bookingFetchOptions('delete', undefined, data.idToken));
     const code = response.getResponseCode();
