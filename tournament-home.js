@@ -16,7 +16,7 @@
       title.textContent = tournament.name;
       const confirmed = (tournament.matches || []).filter(match => match.status === 'completed').length;
       const capacity = `${tournament.participants?.length || 0}/${tournament.size || 0} inscritos`;
-      text.textContent = escText(tournament.tagline || tournament.description || `${capacity}. Cuadro, agenda y resultados en vivo.`) + (confirmed ? ` ? ${confirmed} resultados publicados.` : '');
+      text.textContent = escText(tournament.tagline || tournament.description || `${capacity}. Cuadro, agenda y resultados en vivo.`) + (confirmed ? ` · ${confirmed} resultado${confirmed === 1 ? '' : 's'} publicado${confirmed === 1 ? '' : 's'}.` : '');
       link.href = `campeonato.html?id=${encodeURIComponent(tournament.id)}`;
       spotlight.classList.add('show');
     } catch (error) {

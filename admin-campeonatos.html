@@ -27,6 +27,11 @@
           <a id="publicPreviewLink" class="tour-link" href="campeonato.html" target="_blank" rel="noopener">Abrir sitio</a>
         </div>
         <div class="admin-alert" id="adminAlert" role="status"></div>
+        <ol class="admin-steps-guide">
+          <li><strong>Informaci&oacute;n:</strong> completa los datos y guarda. Actívalo con "Publicado en el sitio" para que se vea en la p&aacute;gina p&uacute;blica.</li>
+          <li><strong>Inscritos:</strong> agrega jugadores (socios o externos) hasta llenar el cupo, y sortea el cuadro cuando est&eacute; completa la n&oacute;mina.</li>
+          <li><strong>Cuadro y partidos:</strong> programa fecha/cancha de cada partido y registra los resultados a medida que se juegan.</li>
+        </ol>
         <div class="admin-tabs">
           <button class="admin-tab active" data-tab="details">1. Informaci&oacute;n</button>
           <button class="admin-tab" data-tab="players">2. Inscritos</button>
@@ -55,10 +60,11 @@
               <div class="field"><label>Contacto</label><input id="tourContact" placeholder="uctenisclub@gmail.com"></div>
             </div>
             <div class="check-row">
-              <label><input id="tourPublished" type="checkbox"> Publicado en el sitio</label>
-              <label><input id="tourFeatured" type="checkbox"> Destacado con publicidad en el home</label>
+              <label><input id="tourPublished" type="checkbox"> Publicado en el sitio <small>(sin esto, nadie fuera del panel lo ve)</small></label>
+              <label><input id="tourFeatured" type="checkbox"> Destacado en el home <small>(aparece en la tarjeta de portada del inicio)</small></label>
             </div>
             <div class="admin-actions"><button class="tour-btn primary" type="submit">Guardar campeonato</button><button class="tour-btn danger" id="archiveTournamentBtn" type="button">Archivar</button></div>
+            <p class="admin-actions-help">"Guardar campeonato" graba los cambios de este formulario (no borra inscritos ni resultados). "Archivar" retira el campeonato del sitio y de esta lista &mdash; los datos quedan guardados, no se eliminan, y no se puede deshacer desde aqu&iacute;.</p>
           </form>
         </section>
 
@@ -77,6 +83,8 @@
 
         <section class="admin-panel" data-panel="bracket">
           <div class="tour-section-head"><div><h2>Programaci&oacute;n y resultados</h2><p class="tour-section-copy">Cada horario bloquea la cancha y cada marcador completa autom&aacute;ticamente la ronda siguiente.</p></div><button class="tour-btn" id="regenerateBracketBtn" type="button">Regenerar cuadro</button></div>
+          <button class="bracket-preview-toggle" id="toggleBracketPreviewBtn" type="button" hidden>&#128065; Ver cuadro (como lo ve el p&uacute;blico)</button>
+          <iframe class="bracket-preview-frame" id="bracketPreviewFrame" title="Vista previa del cuadro" hidden></iframe>
           <div id="adminMatches"></div>
         </section>
       </section>

@@ -68,6 +68,11 @@
     $('editorSubtitle').textContent = t.id ? `${t.participants?.length || 0}/${t.size} inscritos - ${t.matches?.filter(m => m.status === 'completed').length || 0} resultados` : 'Configura, publica y opera el torneo desde aqui.';
     $('archiveTournamentBtn').style.display = t.id ? '' : 'none';
     $('publicPreviewLink').href = t.id ? `campeonato.html?id=${encodeURIComponent(t.id)}` : 'campeonato.html';
+    // Cambiar de campeonato invalida cualquier vista previa que hubiera quedado
+    // abierta -- si no, podria seguir mostrando el cuadro del torneo anterior.
+    $('bracketPreviewFrame').hidden = true;
+    $('bracketPreviewFrame').src = '';
+    $('toggleBracketPreviewBtn').textContent = '👁️ Ver cuadro (como lo ve el público)';
     renderParticipants();
     renderMatches();
   }
@@ -157,8 +162,10 @@
   }
   function renderMatches() {
     const matches = state.current?.matches || [];
+    $('toggleBracketPreviewBtn').hidden = !(state.current?.id && matches.length);
     if (!matches.length) {
       $('adminMatches').innerHTML = '<div class="empty-state">Guarda los inscritos y genera el cuadro para programar los partidos.</div>';
+      $('bracketPreviewFrame').hidden = true;
       return;
     }
     const grouped = [...new Set(matches.map(m => m.round))];
@@ -250,6 +257,15 @@
   $('saveParticipantsBtn').addEventListener('click', async () => { try { await saveCurrent('Nomina de inscritos guardada.'); } catch(e) { notice(e.message,true); } });
   $('generateBracketBtn').addEventListener('click', async () => { try { await saveCurrent('Inscritos guardados.'); await generateBracket(false); } catch(e) { notice(e.message,true); } });
   $('regenerateBracketBtn').addEventListener('click', async () => { try { await generateBracket(false); } catch(e) { notice(e.message,true); } });
+  $('toggleBracketPreviewBtn').addEventListener('click', () => {
+    const frame = $('bracketPreviewFrame');
+    const btn = $('toggleBracketPreviewBtn');
+    const showing = !frame.hidden;
+    if (showing) { frame.hidden = true; btn.textContent = '👁️ Ver cuadro (como lo ve el público)'; return; }
+    if (!frame.src && state.current?.id) frame.src = `campeonato.html?id=${encodeURIComponent(state.current.id)}`;
+    frame.hidden = false;
+    btn.textContent = '👁️ Ocultar vista previa';
+  });
   $('archiveTournamentBtn').addEventListener('click', async () => {
     if (!state.current?.id || !confirm('?Archivar este campeonato? Dejaria de aparecer publicamente.')) return;
     try { await api('admin_delete_tournament',{id:state.current.id}); state.current=null; await loadTournaments(); notice('Campeonato archivado.'); } catch(e) { notice(e.message,true); }
