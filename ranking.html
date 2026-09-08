@@ -1276,7 +1276,13 @@ function loadStaticRanking() {
   // vez de solo acortarlo.
   const livePlayers = (typeof DB.getCachedPlayersSnapshot === 'function') ? DB.getCachedPlayersSnapshot() : null;
   const cachedPlayersList = livePlayers ? null : getCachedRankingPlayers();
-  const split = splitPlayersByStatus(livePlayers || cachedPlayersList || buildInitialFirebaseSeed());
+  // La copia en localStorage puede quedar con una foto vieja si el jugador
+  // (o cualquier otro) actualizo su foto de perfil despues de guardarse esa
+  // copia. Se limpia el campo solo para este pintado instantaneo: se ve el
+  // avatar por defecto un instante en vez de arriesgarse a mostrar la foto
+  // equivocada, y se reemplaza por la real apenas responde Firebase (PASO 2).
+  const safeCachedPlayersList = cachedPlayersList ? cachedPlayersList.map(player => ({ ...player, foto: '' })) : null;
+  const split = splitPlayersByStatus(livePlayers || safeCachedPlayersList || buildInitialFirebaseSeed());
   rankingState.lists = split.active;
   rankingState.inactive = split.inactive;
   rankingState.source = livePlayers ? 'firebase' : (cachedPlayersList ? 'cache' : 'static');
