@@ -16,7 +16,7 @@
     el.className = 'admin-alert' + (error ? ' error' : '');
     el.style.display = 'block';
     clearTimeout(notice.timer);
-    notice.timer = setTimeout(() => { el.style.display = 'none'; }, 5500);
+    notice.timer = setTimeout(() => { el.style.display = 'none'; }, error ? 9000 : 5500);
   }
   async function api(action, payload = {}, requireAdmin = true) {
     const body = { action, ...payload };
@@ -348,15 +348,23 @@
   $('deleteTournamentBtn').addEventListener('click', async () => {
     if (!state.current?.id) return;
     const name = state.current.name || 'este campeonato';
-    if (!confirm(`Esto borra "${name}" para siempre: inscritos, cuadro y resultados incluidos. No se puede deshacer. ?Continuar?`)) return;
-    const typed = prompt('Para confirmar, escribe ELIMINAR en mayusculas:');
-    if (typed !== 'ELIMINAR') { notice('Confirmacion incorrecta. Accion cancelada.', true); return; }
+    // Un solo dialogo de confirmacion (antes pedia ademas escribir "ELIMINAR"
+    // a mano en un segundo prompt -- un paso extra que fallaba en silencio
+    // ante cualquier diferencia minima de texto, sin dejar claro por que).
+    if (!confirm(`¿Eliminar "${name}" para siempre?\n\nSe borran inscritos, cuadro y resultados. No se puede deshacer.`)) return;
+    const deletedId = state.current.id;
     try {
-      const deletedId = state.current.id;
       await api('admin_permanently_delete_tournament', { id: deletedId });
       removeTournamentFromState(deletedId);
       notice('Campeonato eliminado definitivamente.');
-    } catch(e) { notice(e.message, true); }
+    } catch(e) {
+      // alert() ademas del toast: esta accion es rara y critica, y un error
+      // aca casi siempre significa que apps_script_backend.js todavia no se
+      // redesplego en script.google.com con esta funcion -- que no se vea
+      // el aviso no debe parecer "no paso nada".
+      notice(e.message, true);
+      alert('No se pudo eliminar el campeonato:\n\n' + e.message);
+    }
   });
   $('adminMatches').addEventListener('change', async event => {
     const row = event.target.closest('.match-admin');
