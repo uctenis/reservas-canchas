@@ -141,16 +141,23 @@
         byGender[genero].forEach((player, index) => { player.livePos = index + 1; });
       });
       state.clubPlayers = [...byGender.M, ...byGender.F];
-      $('clubPlayers').innerHTML = state.clubPlayers.map(p => `<option value="${esc(p.nombre)}" data-id="${esc(p.id)}">${esc(p.email || '')}</option>`).join('');
+      // La posicion va antes del correo en la sugerencia: al escribir el
+      // nombre de un socio, se ve de inmediato si esta en el top10 de su
+      // escalerilla, sin tener que ir a revisar el ranking aparte.
+      $('clubPlayers').innerHTML = state.clubPlayers.map(p => `<option value="${esc(p.nombre)}" data-id="${esc(p.id)}">${p.livePos ? '#' + esc(p.livePos) + ' &middot; ' : ''}${esc(p.email || '')}</option>`).join('');
+      renderParticipants();
     } catch (_) {}
   }
 
   // Asigna la siembra (1, 2, 3...) segun la posicion actual de cada inscrito
-  // en el ranking del club, no segun el orden en que se anotaron. Solo se
-  // siembra a quienes tienen ficha en el ranking; el resto (externos o sin
-  // ranking) queda sin sembrar, al final -- igual que en un cuadro real. El
-  // admin puede seguir ajustando cualquier numero a mano despues.
-  function seedFromRanking() {
+  // en el ranking oficial del club, no segun el orden en que se anotaron.
+  // Solo se siembra a quienes tienen ficha en el ranking; el resto
+  // (externos o sin ranking) queda sin sembrar, al final -- igual que en un
+  // cuadro real. Se aplica sola cada vez que cambia la nomina (inscribir o
+  // quitar un jugador) para que la base de la siembra sea siempre el
+  // ranking oficial y no el orden de inscripcion; el admin puede seguir
+  // ajustando cualquier numero a mano despues si necesita una excepcion.
+  function applyRankingSeeds() {
     const withRanking = [];
     const withoutRanking = [];
     state.participants.forEach(participant => {
@@ -158,12 +165,17 @@
       if (club && club.livePos) withRanking.push({ participant, livePos: club.livePos });
       else withoutRanking.push(participant);
     });
-    if (!withRanking.length) return notice('Ningun inscrito tiene ficha en el ranking del club para sembrar.', true);
+    if (!withRanking.length) return false;
     withRanking.sort((a, b) => a.livePos - b.livePos);
     withRanking.forEach((entry, index) => { entry.participant.seed = index + 1; });
     withoutRanking.forEach((participant, index) => { participant.seed = withRanking.length + index + 1; });
+    return true;
+  }
+  function seedFromRanking() {
+    if (!applyRankingSeeds()) return notice('Ningun inscrito tiene ficha en el ranking del club para sembrar.', true);
     renderParticipants();
-    notice(`Siembra actualizada segun el ranking (${withRanking.length} inscrito${withRanking.length === 1 ? '' : 's'} con ficha).`);
+    const withRankingCount = state.participants.filter(p => state.clubPlayers.some(cp => cp.id === p.clubPlayerId && cp.livePos)).length;
+    notice(`Siembra actualizada segun el ranking (${withRankingCount} inscrito${withRankingCount === 1 ? '' : 's'} con ficha).`);
   }
   async function saveCurrent(message = 'Campeonato guardado.') {
     const data = await api('admin_save_tournament', { tournament:readForm() });
@@ -176,7 +188,14 @@
     $('capacityLabel').textContent = `(${state.participants.length}/${size})`;
     $('participantBody').innerHTML = state.participants.length ? state.participants
       .sort((a,b)=>(a.seed||99)-(b.seed||99))
-      .map((p,index) => `<tr><td><input class="score-input seed-edit" type="number" min="1" max="${size}" value="${p.seed || index + 1}" data-id="${esc(p.id)}"></td><td><strong>${esc(p.name)}</strong></td><td>${p.clubMember ? 'Socio UCTenis' : 'Externo'}</td><td>${esc(p.email || p.phone || '-')}</td><td><button class="tour-btn danger remove-player" type="button" data-id="${esc(p.id)}">Quitar</button></td></tr>`).join('') : '<tr><td colspan="5" class="empty-state">Agrega jugadores para comenzar.</td></tr>';
+      .map((p,index) => {
+        // Posicion actual en la escalerilla del club (por genero), para
+        // identificar de un vistazo a los inscritos top10 -- sutil (mismo
+        // estilo que la siembra del cuadro publico) pero visible.
+        const club = p.clubPlayerId ? state.clubPlayers.find(cp => cp.id === p.clubPlayerId) : null;
+        const rankBadge = club?.livePos ? ` <span class="seed-pill" title="Posicion en la escalerilla UCTenis">#${club.livePos}</span>` : '';
+        return `<tr><td><input class="score-input seed-edit" type="number" min="1" max="${size}" value="${p.seed || index + 1}" data-id="${esc(p.id)}"></td><td><strong>${esc(p.name)}</strong>${rankBadge}</td><td>${p.clubMember ? 'Socio UCTenis' : 'Externo'}</td><td>${esc(p.email || p.phone || '-')}</td><td><button class="tour-btn danger remove-player" type="button" data-id="${esc(p.id)}">Quitar</button></td></tr>`;
+      }).join('') : '<tr><td colspan="5" class="empty-state">Agrega jugadores para comenzar.</td></tr>';
   }
   // "Programar" no debe permitir elegir una hora que en realidad ya esta
   // ocupada (por una reserva normal, una clase o otro partido) -- se
@@ -301,6 +320,13 @@
   });
   $('newTournamentBtn').addEventListener('click', () => { state.current = blankTournament(); fillForm(state.current); renderList(); switchTab('details'); });
   $('tournamentList').addEventListener('click', event => { const item = event.target.closest('[data-id]'); if (item) selectTournament(item.dataset.id); });
+  // En desktop la lista de campeonatos ya queda siempre visible (sidebar
+  // sticky), pero en mobile el layout se apila en una sola columna y, al
+  // bajar a editar, la lista queda arriba fuera de pantalla sin ninguna
+  // forma de volver salvo hacer scroll manual hasta el principio.
+  $('backToListBtn').addEventListener('click', () => {
+    $('adminApp').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
   document.querySelector('.admin-tabs').addEventListener('click', event => { const tab = event.target.closest('[data-tab]'); if (tab) switchTab(tab.dataset.tab); });
   $('tourSize').addEventListener('change', renderParticipants);
   // La fecha de termino no puede quedar antes que la de inicio: se actualiza
@@ -335,11 +361,21 @@
     const club = state.clubPlayers.find(p => p.nombre.toLowerCase() === name.toLowerCase());
     state.participants.push({id:club?.id || `ext_${Date.now().toString(36)}`,name,email:$('participantEmail').value.trim(),phone:$('participantPhone').value.trim(),clubMember:$('participantMember').checked,clubPlayerId:club?.id || '',category:club?.categoria || '',seed:state.participants.length + 1,status:'active'});
     event.target.reset();
+    // La base de la siembra siempre es el ranking oficial del club, no el
+    // orden de inscripcion -- se reordena sola cada vez que entra un nuevo
+    // inscrito. Si no queda nadie con ficha en el ranking (p.ej. cuadro
+    // recien empezado con puros externos) simplemente no cambia nada.
+    applyRankingSeeds();
     renderParticipants();
   });
   $('participantBody').addEventListener('click', event => {
     const btn = event.target.closest('.remove-player');
-    if (btn) { state.participants = state.participants.filter(p => p.id !== btn.dataset.id); state.participants.forEach((p,i)=>p.seed=i+1); renderParticipants(); }
+    if (!btn) return;
+    state.participants = state.participants.filter(p => p.id !== btn.dataset.id);
+    // Si nadie tiene ficha en el ranking, se cae al simple cierre de huecos
+    // de antes (1..N sin saltos); si alguien si tiene, manda el ranking.
+    if (!applyRankingSeeds()) state.participants.forEach((p,i) => { p.seed = i + 1; });
+    renderParticipants();
   });
   $('participantBody').addEventListener('change', event => {
     if (event.target.matches('.seed-edit')) {

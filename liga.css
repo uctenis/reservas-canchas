@@ -19,8 +19,11 @@
 .league-gender-tabs { display:flex; gap:8px; margin:-4px 0 14px; }
 .league-gender-tabs button { border:1px solid rgba(255,255,255,.12); background:rgba(255,255,255,.04); color:var(--text-secondary); border-radius:8px; padding:7px 12px; cursor:pointer; font-weight:800; }
 .league-gender-tabs button.active { background:#f59e0b; border-color:#f59e0b; color:#111827; }
-/* Encabezado fijo al recorrer una clasificacion larga. */
-#leagueTable { overflow:auto; max-height:60vh; }
+/* Encabezado fijo al recorrer una clasificacion larga. Sin user-select:none
+   acá, al arrastrar el mouse para scrollear cerca del borde inferior el
+   navegador interpreta el gesto como seleccion de texto y hace auto-scroll
+   mientras repinta el resaltado azul en cada frame -- se ve como un parpadeo. */
+#leagueTable { overflow:auto; max-height:60vh; user-select:none; -webkit-user-select:none; }
 .league-table { width:100%; border-collapse:collapse; }
 .league-table th, .league-table td { padding:11px 8px; border-bottom:1px solid rgba(255,255,255,.07); text-align:left; }
 .league-table th { position:sticky; top:0; z-index:2; background:#1e293b; color:var(--text-secondary); font-size:.72rem; text-transform:uppercase; letter-spacing:.06em; }

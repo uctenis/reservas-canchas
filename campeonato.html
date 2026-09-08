@@ -9,7 +9,7 @@
   <meta property="og:description" content="Sigue el cuadro, los horarios y todos los resultados del campeonato.">
   <meta property="og:image" content="https://uctenis.github.io/reservas-canchas/logo_uctenis_v03.png">
   <link rel="icon" href="logo_uctenis_v03.png" type="image/png">
-  <link rel="stylesheet" href="tournament.css?v=20260908_v4">
+  <link rel="stylesheet" href="tournament.css?v=20260908_v5">
 </head>
 <body class="tournament-page">
   <div class="tour-shell">
@@ -24,6 +24,10 @@
 
     <main id="tournamentRoot" class="tour-loading" aria-live="polite">Cargando campeonato...</main>
   </div>
-  <script src="campeonato.js?v=20260908_v3"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+  <script src="db.js?v=20260908_tournaments_ranking"></script>
+  <script src="campeonato.js?v=20260908_v5"></script>
 </body>
 </html>

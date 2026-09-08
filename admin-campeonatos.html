@@ -6,7 +6,7 @@
   <title>Administrar campeonatos | UCTenis</title>
   <meta name="robots" content="noindex">
   <link rel="icon" href="logo_uctenis_v03.png" type="image/png">
-  <link rel="stylesheet" href="tournament.css?v=20260908_v4">
+  <link rel="stylesheet" href="tournament.css?v=20260908_v5">
   <link rel="stylesheet" href="datepicker.css?v=20260908_v3">
 </head>
 <body class="tournament-page">
@@ -24,7 +24,10 @@
       <section class="tour-card">
         <div class="tour-section-head">
           <div><span class="tour-kicker">Mesa de control</span><h1 id="editorTitle">Nuevo campeonato</h1><p class="tour-section-copy" id="editorSubtitle">Configura, publica y opera el torneo desde aqu&iacute;.</p></div>
-          <a id="publicPreviewLink" class="tour-link" href="campeonato.html" target="_blank" rel="noopener">Abrir sitio</a>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+            <button type="button" class="tour-link" id="backToListBtn">&larr; Todos los campeonatos</button>
+            <a id="publicPreviewLink" class="tour-link" href="campeonato.html" target="_blank" rel="noopener">Abrir sitio</a>
+          </div>
         </div>
         <div class="admin-alert" id="adminAlert" role="status"></div>
         <ol class="admin-steps-guide">
@@ -78,7 +81,8 @@
           </form>
           <div class="check-row"><label><input id="participantMember" type="checkbox"> Es socio/a UCTenis</label></div>
           <div style="overflow-x:auto"><table class="participant-table"><thead><tr><th>Siembra</th><th>Jugador</th><th>Origen</th><th>Contacto</th><th></th></tr></thead><tbody id="participantBody"></tbody></table></div>
-          <div class="admin-actions"><button class="tour-btn" id="seedFromRankingBtn" type="button" title="Asigna la siembra segun la posicion actual de cada jugador en el ranking del club">&#127919; Sembrar por ranking</button><button class="tour-btn primary" id="saveParticipantsBtn" type="button">Guardar inscritos</button><button class="tour-btn" id="generateBracketBtn" type="button">Sortear / generar cuadro</button></div>
+          <div class="admin-actions"><button class="tour-btn" id="seedFromRankingBtn" type="button" title="La siembra ya se actualiza sola al inscribir o quitar jugadores segun el ranking oficial. Usa esto para recalcularla de nuevo (por ejemplo, si el ranking cambio despues de inscribirlos, o para deshacer ajustes manuales).">&#127919; Volver a sembrar por ranking</button><button class="tour-btn primary" id="saveParticipantsBtn" type="button">Guardar inscritos</button><button class="tour-btn" id="generateBracketBtn" type="button">Sortear / generar cuadro</button></div>
+          <p class="admin-actions-help">La siembra (n&uacute;mero de cabeza de serie) se basa siempre en el ranking oficial del club al inscribir o quitar un jugador. Puedes ajustar cualquier n&uacute;mero a mano despu&eacute;s si necesitas una excepci&oacute;n puntual.</p>
         </section>
 
         <section class="admin-panel" data-panel="bracket">
@@ -94,6 +98,6 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
   <script src="db.js?v=20260907_tournaments"></script>
   <script src="datepicker.js?v=20260908_v3"></script>
-  <script src="admin-campeonatos.js?v=20260908_v5"></script>
+  <script src="admin-campeonatos.js?v=20260908_v6"></script>
 </body>
 </html>
