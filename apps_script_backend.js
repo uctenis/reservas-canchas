@@ -5025,25 +5025,35 @@ function validateTournamentScore(sets, walkoverWinnerId, player1, player2) {
 }
 
 function releaseTournamentBooking(bookingId, idToken, reason) {
-  if (!bookingId) return;
+  if (!bookingId) return { ok: true, skipped: true };
   const stored = getBookingDocument(bookingId, idToken);
-  if (!stored.ok || !stored.booking) return;
+  if (!stored.ok) {
+    return { ok: false, msg: stored.msg || 'No se pudo leer la reserva ' + bookingId + '.' };
+  }
+  // Una reserva ya eliminada no debe impedir reintentar un borrado que
+  // quedo a medias en una ejecucion anterior.
+  if (!stored.booking) return { ok: true, notFound: true };
   const booking = stored.booking;
   booking.status = 'cancelled';
   booking.cancelledAt = new Date().toISOString();
   booking.cancelledBy = reason || 'tournament_reschedule';
   booking.calendarCleanupPending = Boolean(booking.calendarEventId);
   booking.updatedAt = booking.cancelledAt;
-  saveBookingDocument(booking, idToken);
+  const cancelled = saveBookingDocument(booking, idToken);
+  if (!cancelled.ok) {
+    return { ok: false, msg: cancelled.msg || 'No se pudo liberar la reserva ' + bookingId + '.' };
+  }
   if (booking.calendarEventId) {
     try {
       const calendar = CalendarApp.getCalendarById(CONFIG.MAIN_CALENDAR_ID);
       const event = calendar && calendar.getEventById(booking.calendarEventId);
       if (event) event.deleteEvent();
       booking.calendarCleanupPending = false;
-      saveBookingDocument(booking, idToken);
+      const cleaned = saveBookingDocument(booking, idToken);
+      if (!cleaned.ok) console.warn('No se pudo confirmar la limpieza de ' + bookingId + ': ' + cleaned.msg);
     } catch (error) { console.warn('Limpieza de partido reprogramado:', error.message); }
   }
+  return { ok: true, bookingId: bookingId };
 }
 
 function adminScheduleTournamentMatch(data) {
@@ -5067,7 +5077,15 @@ function adminScheduleTournamentMatch(data) {
     const existing = getBookingDocument(newBookingId, data.idToken);
     const ownsExisting = existing.ok && existing.booking && existing.booking.tournamentId === tournament.id && existing.booking.matchId === match.id;
     if (!available && !ownsExisting) return { ok: false, msg: 'La cancha ya no esta disponible en ese horario.' };
-    if (match.bookingId && match.bookingId !== newBookingId) releaseTournamentBooking(match.bookingId, data.idToken);
+    if (match.bookingId && match.bookingId !== newBookingId) {
+      const releasedPrevious = releaseTournamentBooking(match.bookingId, data.idToken);
+      if (!releasedPrevious || !releasedPrevious.ok) {
+        return {
+          ok: false,
+          msg: (releasedPrevious && releasedPrevious.msg) || 'No se pudo liberar la reserva anterior del partido.'
+        };
+      }
+    }
     const now = new Date().toISOString();
     const booking = ownsExisting ? existing.booking : {
       id: newBookingId, courtId: courtId, date: dateStr, slot: slot,
@@ -5178,13 +5196,46 @@ function adminPermanentlyDeleteTournament(data) {
   if (!isAdminRequest(data)) return { ok: false, msg: 'Acceso reservado al administrador.' };
   const id = text(data.id);
   if (!id) return { ok: false, msg: 'Falta el ID del campeonato.' };
-  const stored = readTournament(id, data.idToken);
-  if (stored.ok && stored.tournament) {
-    (stored.tournament.matches || []).forEach(function(match) {
-      if (match.bookingId) releaseTournamentBooking(match.bookingId, data.idToken, 'tournament_deleted');
-    });
-  }
+
+  // Se serializa con la programacion de partidos. Sin este lock, un admin
+  // podia asignar una cancha entre la lectura del campeonato y su DELETE,
+  // dejando una reserva activa cuyo campeonato ya no existia.
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
   try {
+    const stored = readTournament(id, data.idToken);
+    if (!stored.ok) return stored;
+
+    const bookingIds = [];
+    const seenBookingIds = {};
+    if (stored.tournament) {
+      (stored.tournament.matches || []).forEach(function(match) {
+        const bookingId = text(match.bookingId);
+        if (bookingId && !seenBookingIds[bookingId]) {
+          seenBookingIds[bookingId] = true;
+          bookingIds.push(bookingId);
+        }
+      });
+    }
+
+    const releaseErrors = [];
+    bookingIds.forEach(function(bookingId) {
+      const released = releaseTournamentBooking(bookingId, data.idToken, 'tournament_deleted');
+      if (!released || !released.ok) {
+        releaseErrors.push((released && released.msg) || ('No se pudo liberar la reserva ' + bookingId + '.'));
+      }
+    });
+    // Fallar cerrado: conservar el campeonato permite reintentar y evita
+    // perder la unica referencia a una reserva que aun bloquea una cancha.
+    if (releaseErrors.length) {
+      return {
+        ok: false,
+        msg: 'No se elimino el campeonato porque no se pudieron liberar todas sus canchas: ' + releaseErrors.join(' | '),
+        released: bookingIds.length - releaseErrors.length,
+        failed: releaseErrors.length
+      };
+    }
+
     const response = UrlFetchApp.fetch(tournamentFirestoreUrl(id), bookingFetchOptions('delete', undefined, data.idToken));
     const code = response.getResponseCode();
     if (code !== 200 && code !== 404) {
@@ -5193,5 +5244,7 @@ function adminPermanentlyDeleteTournament(data) {
     return { ok: true, deletedId: id };
   } catch (error) {
     return { ok: false, msg: 'No se pudo eliminar el campeonato: ' + error.message };
+  } finally {
+    lock.releaseLock();
   }
 }

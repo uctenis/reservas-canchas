@@ -54,4 +54,40 @@ assert.equal(context.validateTournamentScore([{a:4,b:6},{a:6,b:2},{a:10,b:7}],''
 assert.equal(context.validateTournamentScore([{a:6,b:5},{a:6,b:2}],'',{id:'a'},{id:'b'}).ok,false);
 assert.equal(context.validateTournamentScore([], 'b', {id:'a'}, {id:'b'}).winnerId,'b');
 
+// El borrado permanente debe liberar todas las reservas antes de borrar el
+// documento, deduplicar IDs repetidos y fallar cerrado ante cualquier error.
+const originals = {
+  isAdminRequest: context.isAdminRequest,
+  readTournament: context.readTournament,
+  releaseTournamentBooking: context.releaseTournamentBooking,
+  UrlFetchApp: context.UrlFetchApp
+};
+context.isAdminRequest = () => true;
+context.readTournament = () => ({
+  ok: true,
+  tournament: { matches: [{bookingId:'booking-1'}, {bookingId:'booking-1'}, {bookingId:'booking-2'}, {}] }
+});
+const released = [];
+context.releaseTournamentBooking = id => { released.push(id); return {ok:true}; };
+let deleteCalls = 0;
+context.UrlFetchApp = { fetch() { deleteCalls++; return {getResponseCode:()=>200,getContentText:()=>''}; } };
+let deletion = context.adminPermanentlyDeleteTournament({id:'tour-1',idToken:'token'});
+assert.equal(deletion.ok, true);
+assert.deepEqual(released, ['booking-1','booking-2']);
+assert.equal(deleteCalls, 1);
+
+context.readTournament = () => ({ok:false,msg:'Firestore GET 503'});
+deletion = context.adminPermanentlyDeleteTournament({id:'tour-1',idToken:'token'});
+assert.equal(deletion.ok, false);
+assert.equal(deleteCalls, 1, 'No debe borrar si no pudo leer el campeonato');
+
+context.readTournament = () => ({ok:true,tournament:{matches:[{bookingId:'booking-3'}]}});
+context.releaseTournamentBooking = () => ({ok:false,msg:'Reserva inaccesible'});
+deletion = context.adminPermanentlyDeleteTournament({id:'tour-1',idToken:'token'});
+assert.equal(deletion.ok, false);
+assert.equal(deletion.failed, 1);
+assert.equal(deleteCalls, 1, 'No debe borrar si queda una reserva activa');
+
+Object.assign(context, originals);
+
 console.log('tournament backend tests: OK');
