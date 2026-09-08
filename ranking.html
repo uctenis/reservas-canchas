@@ -991,16 +991,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
   refreshRankingPage();
 
-  // Auto-open admin panels if specified in URL query
+  // Auto-open admin panels if specified in URL query. La sesion (DB.getSession(),
+  // via localStorage) y el modal (markup estatico del HTML) ya estan disponibles
+  // de inmediato -- el setTimeout de 800ms que habia antes no esperaba nada en
+  // realidad, solo se veia como un flash de la pagina de Ranking completa antes
+  // de saltar al panel de administracion.
   const params = new URLSearchParams(location.search);
   const openParam = params.get('openAdmin');
   if (openParam === 'news' || openParam === 'players' || openParam === 'schedules') {
-    setTimeout(() => {
-      if (isPlayerAdminSession()) {
-        openAdminModal();
-        switchAdminSubSection(openParam);
-      }
-    }, 800);
+    if (isPlayerAdminSession()) {
+      openAdminModal();
+      switchAdminSubSection(openParam);
+    }
   }
   if (params.get('liga') === '1') {
     ligaEntryFlow = true;
