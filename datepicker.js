@@ -47,6 +47,11 @@
     const display = document.createElement('input');
     display.type = 'text';
     display.className = 'uct-date';
+    // Sin esto, el observer de mutaciones (mas abajo) ve este mismo input
+    // recien creado -- que tambien tiene la clase "uct-date" -- como si
+    // fuera OTRO campo sin mejorar, y lo vuelve a "mejorar" en cascada
+    // (ocultandolo y creando un tercero, encima otro, etc.).
+    display.dataset.uctEnhanced = '1';
     display.readOnly = true;
     display.autocomplete = 'off';
     display.placeholder = 'dd/mm/aaaa';
