@@ -2381,6 +2381,36 @@ tr.drag-over-bottom {
 .admin-btn-ghost:hover { color: var(--text-primary); border-color: rgba(255,255,255,0.25); background: rgba(255,255,255,0.05); }
 .admin-btn-ghost-danger:hover { color: #fca5a5; border-color: rgba(248,113,113,0.4); background: rgba(248,113,113,0.08); }
 
+/* Acciones destructivas: separadas del resto y colapsadas por defecto para
+   que no queden al alcance de un clic apurado junto a botones de uso diario. */
+.admin-danger-zone {
+  margin-top: 24px;
+  border: 1px dashed rgba(248,113,113,0.35);
+  border-radius: 10px;
+  padding: 12px 16px;
+  background: rgba(248,113,113,0.04);
+}
+.admin-danger-zone summary {
+  cursor: pointer;
+  font-weight: 800;
+  font-size: 0.82rem;
+  color: #fca5a5;
+  list-style: none;
+}
+.admin-danger-zone summary::-webkit-details-marker { display: none; }
+.admin-danger-zone-body {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(248,113,113,0.2);
+}
+.admin-danger-zone-body strong { color: var(--text-primary); font-size: 0.86rem; }
+.admin-danger-zone-body p { margin: 4px 0 0; color: var(--text-secondary); font-size: 0.78rem; max-width: 480px; }
+
 .admin-stat-row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));

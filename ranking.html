@@ -369,9 +369,6 @@
           <button type="button" class="admin-btn-ghost" id="btnExportPlayers" onclick="exportPlayersToExcel(event)" title="Exportar jugadores a Excel">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg> Exportar
           </button>
-          <button type="button" class="admin-btn-ghost admin-btn-ghost-danger" id="btnResetSystem" onclick="resetSystemData(event)" title="Reiniciar temporada (requiere doble confirmación)">
-            🔄 Reiniciar temporada
-          </button>
           <button type="button" class="admin-btn-ghost" id="btnMigrateCategoryLabels" onclick="migrateCategoryLabels(event)" title="Reescribe a texto completo (Primera...Quinta) las fichas que aún tengan categoría abreviada o 'Principiante'">
             🔁 Migrar categorías a texto
           </button>
@@ -418,6 +415,19 @@
         </table>
       </div>
       <div class="admin-pagination" id="adminPlayerPagination"></div>
+
+      <details class="admin-danger-zone">
+        <summary>⚠️ Zona de peligro</summary>
+        <div class="admin-danger-zone-body">
+          <div>
+            <strong>Reiniciar temporada</strong>
+            <p>Elimina todos los desafíos y pone en cero las estadísticas (PJ, PG, PP, Puntos) de todos los jugadores en Firebase. No se puede deshacer.</p>
+          </div>
+          <button type="button" class="admin-btn-ghost admin-btn-ghost-danger" id="btnResetSystem" onclick="resetSystemData(event)" title="Reiniciar temporada (requiere doble confirmación)">
+            🔄 Reiniciar temporada
+          </button>
+        </div>
+      </details>
     </div>
 
     <!-- Vista Formulario de Jugador -->
