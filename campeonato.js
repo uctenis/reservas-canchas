@@ -9,6 +9,7 @@
   };
   const statusLabel = {draft:'Borrador',registration:'Inscripciones abiertas',draw:'Cuadro publicado',in_progress:'En juego',finished:'Finalizado',archived:'Archivado'};
   const courtLabel = {cec1:'CEC Cancha 1',cec2:'CEC Cancha 2',cjp1:'CJP Cancha 1',cjp2:'CJP Cancha 2'};
+  let currentTournament = null;
 
   function playerLine(player, match) {
     if (!player) return '<div class="match-player"><span>Por definir</span><span class="match-score">-</span></div>';
@@ -106,7 +107,106 @@
   }
   window.addEventListener('resize', scheduleDrawConnectors);
 
+  // =====================================================================
+  // Exportar el cuadro: PDF (una sola hoja) e imagen para Instagram.
+  // html2canvas/jsPDF se cargan solo si el admin realmente hace clic en
+  // exportar -- son ~500KB combinados que la mayoria de las visitas nunca
+  // necesita, asi que no se cargan de entrada con la pagina.
+  // =====================================================================
+  function loadScriptOnce(src) {
+    return new Promise((resolve, reject) => {
+      const existing = document.querySelector(`script[src="${src}"]`);
+      if (existing) { existing.dataset.loaded === '1' ? resolve() : existing.addEventListener('load', resolve, { once: true }); return; }
+      const script = document.createElement('script');
+      script.src = src;
+      script.onload = () => { script.dataset.loaded = '1'; resolve(); };
+      script.onerror = () => reject(new Error('No se pudo cargar una libreria necesaria para exportar.'));
+      document.head.appendChild(script);
+    });
+  }
+  async function ensureExportLibs() {
+    if (!window.html2canvas) await loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js');
+    if (!window.jspdf) await loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+  }
+  function sanitizeFilename(name) {
+    return String(name || 'campeonato').toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '')
+      .replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'campeonato';
+  }
+  // El cuadro puede quedar mas ancho que la ventana visible (scroll lateral
+  // en mobile, o simplemente un cuadro de 32 con muchas rondas); se le pide
+  // a html2canvas el ancho/alto reales de contenido (scrollWidth/Height), no
+  // solo lo que se ve, para que la exportacion nunca salga recortada.
+  async function captureBracketCanvas() {
+    const target = document.getElementById('bracketExportArea');
+    if (!target) throw new Error('Todavia no hay cuadro para exportar.');
+    await ensureExportLibs();
+    return window.html2canvas(target, {
+      backgroundColor: '#07110c',
+      scale: 2,
+      useCORS: true,
+      width: target.scrollWidth,
+      height: target.scrollHeight,
+      windowWidth: target.scrollWidth
+    });
+  }
+  async function withExportButton(btn, label, task) {
+    if (!btn || btn.disabled) return;
+    const original = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = label;
+    try { await task(); }
+    catch (error) { alert(error.message || 'No se pudo completar la exportacion.'); }
+    finally { btn.disabled = false; btn.textContent = original; }
+  }
+  async function exportBracketPDF(btn) {
+    await withExportButton(btn, 'Generando PDF...', async () => {
+      const canvas = await captureBracketCanvas();
+      const { jsPDF } = window.jspdf;
+      const orientation = canvas.width >= canvas.height ? 'landscape' : 'portrait';
+      const doc = new jsPDF({ orientation, unit: 'mm', format: 'a4' });
+      const pageW = doc.internal.pageSize.getWidth();
+      const pageH = doc.internal.pageSize.getHeight();
+      const margin = 8;
+      const ratio = Math.min((pageW - margin * 2) / canvas.width, (pageH - margin * 2) / canvas.height);
+      const w = canvas.width * ratio, h = canvas.height * ratio;
+      doc.setFillColor(7, 17, 12);
+      doc.rect(0, 0, pageW, pageH, 'F');
+      doc.addImage(canvas.toDataURL('image/png', 1), 'PNG', (pageW - w) / 2, (pageH - h) / 2, w, h);
+      doc.save(`cuadro-${sanitizeFilename(currentTournament?.name)}.pdf`);
+    });
+  }
+  async function exportBracketInstagram(btn) {
+    await withExportButton(btn, 'Generando imagen...', async () => {
+      const source = await captureBracketCanvas();
+      const SIZE = 1080, PADDING = 64;
+      const out = document.createElement('canvas');
+      out.width = SIZE; out.height = SIZE;
+      const ctx = out.getContext('2d');
+      ctx.fillStyle = '#07110c';
+      ctx.fillRect(0, 0, SIZE, SIZE);
+      const ratio = Math.min((SIZE - PADDING * 2) / source.width, (SIZE - PADDING * 2) / source.height);
+      const w = source.width * ratio, h = source.height * ratio;
+      ctx.drawImage(source, (SIZE - w) / 2, (SIZE - h) / 2, w, h);
+      await new Promise(resolve => out.toBlob(blob => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `cuadro-ig-${sanitizeFilename(currentTournament?.name)}.png`;
+        a.click();
+        URL.revokeObjectURL(url);
+        resolve();
+      }, 'image/png', 1));
+    });
+  }
+  root.addEventListener('click', event => {
+    const pdfBtn = event.target.closest('#exportBracketPdfBtn');
+    if (pdfBtn) return exportBracketPDF(pdfBtn);
+    const igBtn = event.target.closest('#exportBracketIgBtn');
+    if (igBtn) return exportBracketInstagram(igBtn);
+  });
+
   function render(t) {
+    currentTournament = t;
     document.title = `${t.name} | UCTenis`;
     const scheduled = (t.matches || []).filter(match => match.date && match.status !== 'completed')
       .sort((a,b) => (a.date + a.slot).localeCompare(b.date + b.slot));
@@ -131,8 +231,23 @@
       </header>
 
       <section class="tour-section" id="cuadro">
-        <div class="tour-section-head"><div><h2>Cuadro oficial</h2><p class="tour-section-copy">Los ganadores avanzan autom&aacute;ticamente en cada ronda.</p></div><span class="status-pill">${t.size} jugadores</span></div>
-        ${renderBracket(t)}
+        <div class="tour-section-head">
+          <div><h2>Cuadro oficial</h2><p class="tour-section-copy">Los ganadores avanzan autom&aacute;ticamente en cada ronda.</p></div>
+          <div class="bracket-export-actions">
+            <span class="status-pill">${t.size} jugadores</span>
+            ${t.matches?.length ? `
+              <button type="button" class="tour-btn" id="exportBracketPdfBtn" title="Descargar el cuadro en PDF, en una sola hoja">&#128196; PDF</button>
+              <button type="button" class="tour-btn" id="exportBracketIgBtn" title="Descargar una imagen del cuadro lista para publicar en Instagram">&#128248; Instagram</button>
+            ` : ''}
+          </div>
+        </div>
+        <div id="bracketExportArea">
+          <div class="bracket-export-header">
+            <img src="logo_uctenis_v03.png" alt="UCTenis" class="bracket-export-logo">
+            <div><strong>${esc(t.name)}</strong><span>${esc(t.category)} &middot; ${esc(t.gender)} &middot; ${formatDate(t.startDate)}${t.venue ? ' &middot; ' + esc(t.venue) : ''}</span></div>
+          </div>
+          ${renderBracket(t)}
+        </div>
       </section>
 
       <div class="tour-grid">
