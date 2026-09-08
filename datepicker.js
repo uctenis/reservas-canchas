@@ -29,11 +29,21 @@
     return Number.isNaN(date.getTime()) ? null : date;
   }
   function sameDay(a, b) { return a && b && a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate(); }
-  // Formato chileno dia/mes/año para lo que ve el usuario; el valor real
-  // (ISO) que usa el resto del sitio nunca cambia.
-  function formatDisplayDate(iso) {
-    const d = parseISO(iso);
-    return d ? `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}` : '';
+  function parseTimePart(value) {
+    const match = /T(\d{2}):(\d{2})/.exec(String(value || ''));
+    return match ? { h: Number(match[1]), m: Number(match[2]) } : null;
+  }
+  function toDateTimeISO(y, m, d, hh, mm) { return `${toISO(y, m, d)}T${pad(hh)}:${pad(mm)}`; }
+  // Formato chileno dia/mes/año (mas hora, para los campos fecha+hora) para
+  // lo que ve el usuario; el valor real (ISO / datetime-local) que usa el
+  // resto del sitio nunca cambia.
+  function formatDisplayValue(value, isDateTime) {
+    const d = parseISO(value);
+    if (!d) return '';
+    const datePart = `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+    if (!isDateTime) return datePart;
+    const t = parseTimePart(value);
+    return t ? `${datePart}, ${pad(t.h)}:${pad(t.m)}` : datePart;
   }
 
   // =====================================================================
@@ -43,6 +53,7 @@
   function enhance(realInput) {
     if (realInput.dataset.uctEnhanced) return;
     realInput.dataset.uctEnhanced = '1';
+    const isDateTime = realInput.dataset.uctKind === 'datetime';
 
     const display = document.createElement('input');
     display.type = 'text';
@@ -54,7 +65,7 @@
     display.dataset.uctEnhanced = '1';
     display.readOnly = true;
     display.autocomplete = 'off';
-    display.placeholder = 'dd/mm/aaaa';
+    display.placeholder = isDateTime ? 'dd/mm/aaaa, hh:mm' : 'dd/mm/aaaa';
     if (realInput.required) display.required = true;
     if (realInput.disabled) display.disabled = true;
     // Varios campos traen su propio "style" inline (ancho, padding, colores
@@ -83,7 +94,7 @@
       openPopup(display);
     });
 
-    function refreshDisplay() { display.value = formatDisplayDate(realInput.value); }
+    function refreshDisplay() { display.value = formatDisplayValue(realInput.value, isDateTime); }
 
     // Redefine "value" solo en esta instancia: el getter/setter nativos
     // siguen intactos (se delega a ellos), asi que .value sigue siendo ISO
@@ -162,15 +173,33 @@
   }
 
   function buildPopup(realInput) {
+    const isDateTime = realInput.dataset.uctKind === 'datetime';
     const min = parseISO(realInput.getAttribute('min'));
     const max = parseISO(realInput.getAttribute('max'));
-    const selected = parseISO(realInput.value);
     const today = new Date(); today.setHours(0, 0, 0, 0);
-    const view = { y: (selected || today).getFullYear(), m: (selected || today).getMonth() };
+    // En modo fecha+hora, elegir el dia no cierra el popup solo -- hay que
+    // ajustar la hora aparte y confirmar con "Listo" -- asi que la
+    // selección se guarda en una variable propia (no directo en el input)
+    // hasta que se confirma.
+    let picked = parseISO(realInput.value);
+    let pickedTime = parseTimePart(realInput.value) || { h: 12, m: 0 };
+    const view = { y: (picked || today).getFullYear(), m: (picked || today).getMonth() };
 
     const pop = document.createElement('div');
     pop.className = 'uct-datepicker-pop';
     pop.setAttribute('role', 'dialog');
+
+    function commit(closeAfter) {
+      if (!picked) {
+        if (closeAfter) { selectValue(realInput, ''); closePopup(); }
+        return;
+      }
+      const iso = isDateTime
+        ? toDateTimeISO(picked.getFullYear(), picked.getMonth(), picked.getDate(), pickedTime.h, pickedTime.m)
+        : toISO(picked.getFullYear(), picked.getMonth(), picked.getDate());
+      selectValue(realInput, iso);
+      if (closeAfter) closePopup();
+    }
 
     function render() {
       const first = new Date(view.y, view.m, 1);
@@ -199,15 +228,17 @@
           const cellDate = new Date(view.y, view.m, d);
           const disabled = (min && cellDate < min) || (max && cellDate > max);
           const isToday = sameDay(cellDate, today);
-          const isSelected = sameDay(cellDate, selected);
+          const isSelected = sameDay(cellDate, picked);
           const classes = ['uct-dp-cell', 'uct-dp-day'];
           if (isToday) classes.push('is-today');
           if (isSelected) classes.push('is-selected');
           if (disabled) classes.push('is-disabled');
           return `<button type="button" class="${classes.join(' ')}" data-day="${d}" ${disabled ? 'disabled' : ''}>${d}</button>`;
         }).join('')}</div>
+        ${isDateTime ? `<div class="uct-dp-time-row"><label for="uctDpTimeInput">Hora</label><input type="time" id="uctDpTimeInput" class="uct-dp-time-input" value="${pad(pickedTime.h)}:${pad(pickedTime.m)}"></div>` : ''}
         <div class="uct-dp-foot">
           <button type="button" class="uct-dp-today">Hoy</button>
+          ${isDateTime ? '<button type="button" class="uct-dp-done">Listo</button>' : ''}
           ${realInput.required ? '' : '<button type="button" class="uct-dp-clear">Limpiar</button>'}
         </div>`;
 
@@ -227,17 +258,26 @@
       }));
 
       pop.querySelectorAll('.uct-dp-day:not(.is-disabled)').forEach(btn => btn.addEventListener('click', () => {
-        selectValue(realInput, toISO(view.y, view.m, Number(btn.dataset.day)));
-        closePopup();
+        picked = new Date(view.y, view.m, Number(btn.dataset.day));
+        if (isDateTime) render(); else commit(true);
       }));
+
+      const timeInput = pop.querySelector('.uct-dp-time-input');
+      if (timeInput) timeInput.addEventListener('change', () => {
+        const parts = timeInput.value.split(':').map(Number);
+        if (Number.isFinite(parts[0])) pickedTime = { h: parts[0], m: parts[1] || 0 };
+      });
+      const doneBtn = pop.querySelector('.uct-dp-done');
+      if (doneBtn) doneBtn.addEventListener('click', () => commit(true));
 
       const todayBtn = pop.querySelector('.uct-dp-today');
       if (todayBtn) todayBtn.addEventListener('click', () => {
-        selectValue(realInput, toISO(today.getFullYear(), today.getMonth(), today.getDate()));
-        closePopup();
+        picked = new Date(today);
+        if (isDateTime) render(); else commit(true);
       });
       const clearBtn = pop.querySelector('.uct-dp-clear');
       if (clearBtn) clearBtn.addEventListener('click', () => {
+        picked = null;
         selectValue(realInput, '');
         closePopup();
       });

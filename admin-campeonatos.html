@@ -7,7 +7,7 @@
   <meta name="robots" content="noindex">
   <link rel="icon" href="logo_uctenis_v03.png" type="image/png">
   <link rel="stylesheet" href="tournament.css?v=20260907_v1">
-  <link rel="stylesheet" href="datepicker.css?v=20260908_v2">
+  <link rel="stylesheet" href="datepicker.css?v=20260908_v3">
 </head>
 <body class="tournament-page">
   <div class="tour-shell">
@@ -48,7 +48,7 @@
               <div class="field"><label>Rama</label><select id="tourGender"><option>Abierto</option><option>Masculino</option><option>Femenino</option><option>Dobles</option></select></div>
               <div class="field"><label>Inicio</label><input id="tourStart" type="text" class="uct-date" readonly autocomplete="off"></div>
               <div class="field"><label>T&eacute;rmino</label><input id="tourEnd" type="text" class="uct-date" readonly autocomplete="off"></div>
-              <div class="field"><label>Cierre de inscripciones</label><input id="tourDeadline" type="datetime-local"></div>
+              <div class="field"><label>Cierre de inscripciones</label><input id="tourDeadline" type="text" class="uct-date" data-uct-kind="datetime" readonly autocomplete="off"></div>
               <div class="field"><label>Sede</label><input id="tourVenue" placeholder="Canchas CEC / CJP"></div>
               <div class="field"><label>Superficie</label><select id="tourSurface"><option>Mixta</option><option>Arcilla</option><option>Asfalto</option></select></div>
               <div class="field"><label>Estado</label><select id="tourStatus"><option value="draft">Borrador</option><option value="registration">Inscripciones abiertas</option><option value="draw">Cuadro publicado</option><option value="in_progress">En juego</option><option value="finished">Finalizado</option></select></div>
@@ -93,7 +93,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
   <script src="db.js?v=20260907_tournaments"></script>
-  <script src="datepicker.js?v=20260908_v2"></script>
+  <script src="datepicker.js?v=20260908_v3"></script>
   <script src="admin-campeonatos.js?v=20260907_v1"></script>
 </body>
 </html>

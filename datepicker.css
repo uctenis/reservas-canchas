@@ -97,6 +97,17 @@ input.uct-date::selection { background: transparent; }
 .uct-dp-day.is-selected { background: var(--dp-accent); color: #0c160e; font-weight: 900; }
 .uct-dp-day.is-disabled { color: var(--dp-muted); opacity: 0.32; cursor: not-allowed; }
 
+.uct-dp-time-row {
+  display: flex; align-items: center; gap: 10px;
+  margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--dp-line);
+}
+.uct-dp-time-row label { font-size: 0.76rem; font-weight: 800; color: var(--dp-muted); }
+.uct-dp-time-input {
+  flex: 1; padding: 6px 8px; border-radius: 8px;
+  border: 1px solid var(--dp-line); background: rgba(255, 255, 255, 0.05);
+  color: var(--dp-text); font-family: inherit; font-size: 0.86rem;
+}
+
 .uct-dp-foot {
   display: flex; justify-content: space-between; gap: 8px;
   margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--dp-line);
@@ -107,4 +118,5 @@ input.uct-date::selection { background: transparent; }
   padding: 4px 6px; border-radius: 6px;
 }
 .uct-dp-foot button:hover { background: rgba(255, 255, 255, 0.06); }
+.uct-dp-foot .uct-dp-done { background: var(--dp-accent); color: #0c160e; padding: 4px 12px; }
 .uct-dp-foot .uct-dp-clear { color: var(--dp-muted); margin-left: auto; }
