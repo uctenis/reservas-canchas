@@ -1,9 +1,20 @@
 /* Selector de fecha propio para toda la web (input.uct-date): reemplaza el
  * calendario nativo del navegador -- que solo se abre pinchando el icono y
  * no se puede re-diseñar -- por un popup propio, con clic en cualquier
- * parte del campo. El valor del input se mantiene siempre en formato ISO
- * (yyyy-mm-dd), igual que el <input type="date"> nativo, para no romper el
- * codigo existente que lee/escribe ese valor.
+ * parte del campo.
+ *
+ * Cada <input class="uct-date"> del HTML se "mejora" en dos piezas:
+ *   - el input original (oculto, visualmente-invisible) sigue siendo la
+ *     fuente de verdad: conserva su id y su valor SIEMPRE en formato ISO
+ *     (yyyy-mm-dd), asi que todo el codigo existente que hace
+ *     document.getElementById(id).value sigue funcionando igual, sin
+ *     tocar un solo call-site.
+ *   - un input visible nuevo, insertado justo al lado, es el que el
+ *     usuario ve y toca: muestra la fecha en formato chileno (dd/mm/aaaa)
+ *     y abre el calendario propio al hacer clic.
+ * Un setter propio sobre el input oculto mantiene ambos sincronizados
+ * automaticamente, venga la asignacion de este archivo o de cualquier otro
+ * (p.ej. chal_fecha.value = todayISO() en ranking.html).
  */
 (() => {
   const MONTHS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
@@ -18,13 +29,116 @@
     return Number.isNaN(date.getTime()) ? null : date;
   }
   function sameDay(a, b) { return a && b && a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate(); }
+  // Formato chileno dia/mes/año para lo que ve el usuario; el valor real
+  // (ISO) que usa el resto del sitio nunca cambia.
+  function formatDisplayDate(iso) {
+    const d = parseISO(iso);
+    return d ? `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}` : '';
+  }
 
-  let openState = null; // { input, pop }
+  // =====================================================================
+  // Mejora de inputs: input oculto (fuente ISO) + input visible (dd/mm/aaaa)
+  // =====================================================================
+
+  function enhance(realInput) {
+    if (realInput.dataset.uctEnhanced) return;
+    realInput.dataset.uctEnhanced = '1';
+
+    const display = document.createElement('input');
+    display.type = 'text';
+    display.className = 'uct-date';
+    display.readOnly = true;
+    display.autocomplete = 'off';
+    display.placeholder = 'dd/mm/aaaa';
+    if (realInput.required) display.required = true;
+    if (realInput.disabled) display.disabled = true;
+    // Varios campos traen su propio "style" inline (ancho, padding, colores
+    // particulares de ese formulario); se copia al input visible para que
+    // se vea igual que antes -- el input original queda oculto de todas
+    // formas, asi que conservar su estilo ahi no serviria de nada.
+    const inlineStyle = realInput.getAttribute('style');
+    if (inlineStyle) display.setAttribute('style', inlineStyle);
+    realInput.insertAdjacentElement('afterend', display);
+
+    realInput.classList.remove('uct-date');
+    realInput.classList.add('uct-date-source');
+    realInput.tabIndex = -1;
+    realInput.setAttribute('aria-hidden', 'true');
+
+    display._uctReal = realInput;
+    realInput._uctDisplay = display;
+
+    // El <label for="..."> del HTML original sigue apuntando al id del
+    // input oculto (no se toco el markup): al hacer clic en la etiqueta el
+    // navegador enfoca ese input escondido. Se redirige el foco (y se abre
+    // el calendario) al input visible en vez de dejarlo en un campo que no
+    // se ve.
+    realInput.addEventListener('focus', () => {
+      display.focus();
+      openPopup(display);
+    });
+
+    function refreshDisplay() { display.value = formatDisplayDate(realInput.value); }
+
+    // Redefine "value" solo en esta instancia: el getter/setter nativos
+    // siguen intactos (se delega a ellos), asi que .value sigue siendo ISO
+    // para cualquier lectura existente. Solo se agrega el efecto lateral de
+    // refrescar el input visible en cada escritura, venga de donde venga.
+    const nativeDescriptor = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+    Object.defineProperty(realInput, 'value', {
+      configurable: true,
+      enumerable: true,
+      get() { return nativeDescriptor.get.call(realInput); },
+      set(v) { nativeDescriptor.set.call(realInput, v); refreshDisplay(); }
+    });
+
+    // El estado disabled tambien puede cambiar despues (p.ej. al reprogramar
+    // un partido de campeonato); se refleja en el input visible con el mismo
+    // truco.
+    const disabledDescriptor = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'disabled');
+    Object.defineProperty(realInput, 'disabled', {
+      configurable: true,
+      enumerable: true,
+      get() { return disabledDescriptor.get.call(realInput); },
+      set(v) { disabledDescriptor.set.call(realInput, v); display.disabled = v; }
+    });
+
+    refreshDisplay();
+  }
+
+  function enhanceAllWithin(root) {
+    if (!root || !root.querySelectorAll) return;
+    if (root.matches && root.matches('input.uct-date') && !root.dataset.uctEnhanced) enhance(root);
+    root.querySelectorAll('input.uct-date:not([data-uct-enhanced])').forEach(enhance);
+  }
+
+  enhanceAllWithin(document);
+
+  // Los formularios de ranking.html/admin-campeonatos.js reconstruyen
+  // secciones enteras con innerHTML (nuevo jugador, novedades, partidos de
+  // campeonato...); un observer capta esos inputs nuevos sin tener que
+  // avisar manualmente desde cada uno de esos renders.
+  let scanScheduled = false;
+  const observer = new MutationObserver(() => {
+    if (scanScheduled) return;
+    scanScheduled = true;
+    requestAnimationFrame(() => {
+      scanScheduled = false;
+      enhanceAllWithin(document);
+    });
+  });
+  observer.observe(document.documentElement, { childList: true, subtree: true });
+
+  // =====================================================================
+  // Popup del calendario
+  // =====================================================================
+
+  let openState = null; // { display, real, pop }
 
   function closePopup() {
     if (!openState) return;
     openState.pop.remove();
-    openState.input.setAttribute('aria-expanded', 'false');
+    openState.display.setAttribute('aria-expanded', 'false');
     openState = null;
     document.removeEventListener('mousedown', onOutsideClick, true);
     document.removeEventListener('keydown', onKeydown, true);
@@ -34,7 +148,7 @@
 
   function onOutsideClick(event) {
     if (!openState) return;
-    if (openState.pop.contains(event.target) || event.target === openState.input) return;
+    if (openState.pop.contains(event.target) || event.target === openState.display) return;
     closePopup();
   }
 
@@ -42,10 +156,10 @@
     if (event.key === 'Escape') closePopup();
   }
 
-  function buildPopup(input) {
-    const min = parseISO(input.getAttribute('min'));
-    const max = parseISO(input.getAttribute('max'));
-    const selected = parseISO(input.value);
+  function buildPopup(realInput) {
+    const min = parseISO(realInput.getAttribute('min'));
+    const max = parseISO(realInput.getAttribute('max'));
+    const selected = parseISO(realInput.value);
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const view = { y: (selected || today).getFullYear(), m: (selected || today).getMonth() };
 
@@ -89,7 +203,7 @@
         }).join('')}</div>
         <div class="uct-dp-foot">
           <button type="button" class="uct-dp-today">Hoy</button>
-          ${input.required ? '' : '<button type="button" class="uct-dp-clear">Limpiar</button>'}
+          ${realInput.required ? '' : '<button type="button" class="uct-dp-clear">Limpiar</button>'}
         </div>`;
 
       const monthSel = pop.querySelector('.uct-dp-month');
@@ -108,18 +222,18 @@
       }));
 
       pop.querySelectorAll('.uct-dp-day:not(.is-disabled)').forEach(btn => btn.addEventListener('click', () => {
-        selectValue(input, toISO(view.y, view.m, Number(btn.dataset.day)));
+        selectValue(realInput, toISO(view.y, view.m, Number(btn.dataset.day)));
         closePopup();
       }));
 
       const todayBtn = pop.querySelector('.uct-dp-today');
       if (todayBtn) todayBtn.addEventListener('click', () => {
-        selectValue(input, toISO(today.getFullYear(), today.getMonth(), today.getDate()));
+        selectValue(realInput, toISO(today.getFullYear(), today.getMonth(), today.getDate()));
         closePopup();
       });
       const clearBtn = pop.querySelector('.uct-dp-clear');
       if (clearBtn) clearBtn.addEventListener('click', () => {
-        selectValue(input, '');
+        selectValue(realInput, '');
         closePopup();
       });
     }
@@ -128,14 +242,14 @@
     return pop;
   }
 
-  function selectValue(input, isoValue) {
-    input.value = isoValue;
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    input.dispatchEvent(new Event('change', { bubbles: true }));
+  function selectValue(realInput, isoValue) {
+    realInput.value = isoValue; // el setter propio ya refresca el input visible
+    realInput.dispatchEvent(new Event('input', { bubbles: true }));
+    realInput.dispatchEvent(new Event('change', { bubbles: true }));
   }
 
-  function positionPopup(input, pop) {
-    const rect = input.getBoundingClientRect();
+  function positionPopup(anchorEl, pop) {
+    const rect = anchorEl.getBoundingClientRect();
     const popRect = pop.getBoundingClientRect();
     const spaceBelow = window.innerHeight - rect.bottom;
     const openUp = spaceBelow < popRect.height + 12 && rect.top > popRect.height + 12;
@@ -146,17 +260,19 @@
     pop.style.left = `${left}px`;
   }
 
-  function openPopup(input) {
-    if (openState && openState.input === input) return;
+  function openPopup(display) {
+    const realInput = display._uctReal;
+    if (!realInput || realInput.disabled) return;
+    if (openState && openState.display === display) return;
     closePopup();
-    const pop = buildPopup(input);
+    const pop = buildPopup(realInput);
     pop.style.position = 'fixed';
     pop.style.visibility = 'hidden';
     document.body.appendChild(pop);
-    positionPopup(input, pop);
+    positionPopup(display, pop);
     pop.style.visibility = 'visible';
-    input.setAttribute('aria-expanded', 'true');
-    openState = { input, pop };
+    display.setAttribute('aria-expanded', 'true');
+    openState = { display, real: realInput, pop };
     document.addEventListener('mousedown', onOutsideClick, true);
     document.addEventListener('keydown', onKeydown, true);
     window.addEventListener('scroll', closePopup, true);
@@ -164,14 +280,14 @@
   }
 
   document.addEventListener('click', event => {
-    const input = event.target.closest('input.uct-date');
-    if (input && !input.disabled) openPopup(input);
+    const display = event.target.closest('input.uct-date');
+    if (display && !display.disabled) openPopup(display);
   });
   document.addEventListener('keydown', event => {
-    const input = event.target.closest && event.target.closest('input.uct-date');
-    if (input && (event.key === 'Enter' || event.key === ' ')) {
+    const display = event.target.closest && event.target.closest('input.uct-date');
+    if (display && (event.key === 'Enter' || event.key === ' ')) {
       event.preventDefault();
-      openPopup(input);
+      openPopup(display);
     }
   });
 })();

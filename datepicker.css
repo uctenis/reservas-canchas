@@ -25,6 +25,23 @@ input.uct-date {
 }
 input.uct-date::selection { background: transparent; }
 
+/* Input original: sigue siendo la fuente de verdad (id, valor ISO, eventos),
+   pero visualmente no existe -- lo que se ve y se toca es el input.uct-date
+   que datepicker.js inserta al lado. !important para pisar los estilos
+   inline que ya traía cada campo en el HTML original. */
+.uct-date-source {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+  background: none !important;
+}
+
 .uct-datepicker-pop {
   z-index: 6000;
   width: 268px;

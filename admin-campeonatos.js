@@ -60,6 +60,7 @@
       tourDescription:t.description,tourRules:t.rules,tourOrganizer:t.organizer,tourContact:t.contact
     };
     Object.entries(values).forEach(([id,value]) => { if ($(id)) $(id).value = value ?? ''; });
+    $('tourEnd').min = t.startDate || '';
     $('tourPublished').checked = t.published === true;
     $('tourFeatured').checked = t.featured === true;
     state.participants = JSON.parse(JSON.stringify(t.participants || []));
@@ -210,6 +211,16 @@
   $('tournamentList').addEventListener('click', event => { const item = event.target.closest('[data-id]'); if (item) selectTournament(item.dataset.id); });
   document.querySelector('.admin-tabs').addEventListener('click', event => { const tab = event.target.closest('[data-tab]'); if (tab) switchTab(tab.dataset.tab); });
   $('tourSize').addEventListener('change', renderParticipants);
+  // La fecha de termino no puede quedar antes que la de inicio: se actualiza
+  // el minimo seleccionable del calendario de termino, y si el valor que ya
+  // tenia quedo antes del nuevo inicio, se limpia para que lo vuelvan a fijar.
+  $('tourStart').addEventListener('change', () => {
+    const startVal = $('tourStart').value;
+    $('tourEnd').min = startVal || '';
+    if (startVal && $('tourEnd').value && $('tourEnd').value < startVal) {
+      $('tourEnd').value = '';
+    }
+  });
   $('participantName').addEventListener('change', () => {
     const p = state.clubPlayers.find(player => player.nombre.toLowerCase() === $('participantName').value.trim().toLowerCase());
     if (p) { $('participantEmail').value = p.email || ''; $('participantMember').checked = true; }
