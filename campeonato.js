@@ -120,7 +120,7 @@
           <article class="match-box" data-match-id="${esc(match.id)}" data-next="${esc(match.roundName === 'Final' ? 'champion' : (match.nextMatchId || ''))}">
             ${playerLine(match.player1, match)}
             ${playerLine(match.player2, match)}
-            <div class="match-meta">${esc(match.scoreLabel || (match.date ? formatDate(match.date) + ' &middot; ' + match.slot : 'Horario por confirmar'))}</div>
+            <div class="match-meta">${esc(match.scoreLabel || (match.date ? formatDate(match.date) + ' &middot; ' + match.slot + (match.courtId ? ' &middot; ' + (courtLabel[match.courtId] || match.courtId) : '') : 'Horario por confirmar'))}</div>
           </article>`).join('')}</div></section>`;
       }).join('')}${championBox}</div></div>
     </div>`;
@@ -364,8 +364,26 @@
     const bracket = document.getElementById('tourBracket');
     if (!bracket) throw new Error('Todavia no hay cuadro para exportar.');
     await ensureExportLibs();
-    const sections = Array.from(bracket.querySelectorAll(':scope > .bracket-round'));
-    if (!sections.length) throw new Error('Todavia no hay cuadro para exportar.');
+    const allSections = Array.from(bracket.querySelectorAll(':scope > .bracket-round'));
+    if (!allSections.length) throw new Error('Todavia no hay cuadro para exportar.');
+
+    // No tiene sentido exportar una ronda futura que todavia no tiene a
+    // nadie definido (p.ej. la Final antes de que terminen las semis): son
+    // puras cajas "Por definir". El orden de las secciones en el DOM es
+    // siempre el mismo que arma renderBracket -- una por cada ronda (mismo
+    // orden que "rounds") y al final la del campeon.
+    const t = currentTournament || {};
+    const matches = t.matches || [];
+    const rounds = [...new Set(matches.map(m => m.round))];
+    const finalMatch = matches.find(m => m.roundName === 'Final');
+    const championActive = Boolean(t.champion || (finalMatch && (finalMatch.player1 || finalMatch.player2)));
+    const activeFlags = rounds
+      .map(round => matches.some(m => m.round === round && (m.player1 || m.player2)))
+      .concat(championActive);
+
+    const filtered = allSections.filter((_, index) => activeFlags[index]);
+    const sections = filtered.length ? filtered : allSections;
+
     const canvases = [];
     for (const section of sections) {
       canvases.push(await window.html2canvas(section, { backgroundColor: '#07110c', scale: 2, useCORS: true }));
