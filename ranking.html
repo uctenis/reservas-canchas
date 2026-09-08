@@ -897,6 +897,7 @@ const rankingState = {
 
 let rankingEditMode = false;
 let initialRankingOrder = [];
+let ligaEntryFlow = false;
 
 // ── Debounce util para evitar renders múltiples ──
 function debounce(fn, delay) {
@@ -976,6 +977,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 800);
   }
   if (params.get('liga') === '1') {
+    ligaEntryFlow = true;
     setTimeout(() => {
       if (DB.getSession()) openLeagueChallengeModal();
       else openAuthModal();
@@ -3162,6 +3164,11 @@ async function handleLoginResponse(result) {
 
   closeModal('authModal');
   await refreshRankingPage();
+
+  // Si el login se disparó desde el flujo de liga, retoma el modal de desafío en vez de dejar al usuario en el ranking
+  if (ligaEntryFlow) {
+    setTimeout(openLeagueChallengeModal, 300);
+  }
 
   // Gatillar auto-aceptación si hay un desafío pendiente en cola
   if (typeof window.triggerUrlChallengeAccept === 'function') {
@@ -6713,6 +6720,10 @@ function closeModal(id) {
     }
     renderAll();
   }
+  if (ligaEntryFlow && id === 'challengeModal') {
+    ligaEntryFlow = false;
+    window.location.href = 'liga.html';
+  }
 }
 
 function useFallbackAvatar(img) {
@@ -6748,11 +6759,11 @@ function extractPhotoStem(photo) {
 // que aun tenga "3ra"/"4ta"/"5ta" o el retirado "Principiante"/"abierta",
 // sin depender de que alguien la reedite.
 const CATEGORY_LABELS = {
-  primera: 'Primera', '1ra': 'Primera',
-  segunda: 'Segunda', '2da': 'Segunda',
-  tercera: 'Tercera', '3ra': 'Tercera',
-  cuarta: 'Cuarta', '4ta': 'Cuarta',
-  quinta: 'Quinta', '5ta': 'Quinta',
+  primera: 'Primera', '1ra': 'Primera', '1': 'Primera',
+  segunda: 'Segunda', '2da': 'Segunda', '2': 'Segunda',
+  tercera: 'Tercera', '3ra': 'Tercera', '3': 'Tercera',
+  cuarta: 'Cuarta', '4ta': 'Cuarta', '4': 'Cuarta',
+  quinta: 'Quinta', '5ta': 'Quinta', '5': 'Quinta',
   abierta: 'Quinta', principiante: 'Quinta'
 };
 

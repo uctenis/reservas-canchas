@@ -110,10 +110,28 @@
         table.innerHTML = '<p class="league-empty">Aún no hay partidos de liga en este ciclo. Sé el primero en jugar.</p>';
         return;
       }
-      table.innerHTML = `<table class="league-table"><thead><tr><th>#</th><th>Jugador</th><th>Pts</th><th>PJ</th><th>PG</th><th>Sets</th></tr></thead><tbody>${rows.map(row => `<tr><td class="league-rank">${row.pos}</td><td><span class="league-player"><strong>${escapeLeague(row.nombre)}</strong><small>${escapeLeague(row.categoria || 'Jugador')}</small></span></td><td class="league-points">${row.pts}</td><td>${row.pj}</td><td>${row.pg}</td><td>${row.setsFor}-${row.setsAgainst}</td></tr>`).join('')}</tbody></table>`;
+      table.innerHTML = `<table class="league-table"><thead><tr><th>#</th><th>Jugador</th><th>Pts</th><th>PJ</th><th>PG</th><th>Sets</th></tr></thead><tbody>${rows.map(row => `<tr><td class="league-rank">${row.pos}</td><td><span class="league-player"><strong>${escapeLeague(row.nombre)}</strong><small>${escapeLeague(normalizeLeagueCategory(row.categoria) || 'Jugador')}</small></span></td><td class="league-points">${row.pts}</td><td>${row.pj}</td><td>${row.pg}</td><td>${row.setsFor}-${row.setsAgainst}</td></tr>`).join('')}</tbody></table>`;
     }
 
     function escapeLeague(value) { return String(value || '').replace(/[&<>"']/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[char])); }
+
+    // Las categorias se muestran siempre en palabras (Primera...Quinta); esto
+    // cubre fichas viejas que en Firestore/Sheets aun quedaron con numero o
+    // abreviatura ("3", "3ra") en vez de la palabra completa.
+    const LEAGUE_CATEGORY_LABELS = {
+      primera: 'Primera', '1ra': 'Primera', '1': 'Primera',
+      segunda: 'Segunda', '2da': 'Segunda', '2': 'Segunda',
+      tercera: 'Tercera', '3ra': 'Tercera', '3': 'Tercera',
+      cuarta: 'Cuarta', '4ta': 'Cuarta', '4': 'Cuarta',
+      quinta: 'Quinta', '5ta': 'Quinta', '5': 'Quinta',
+      abierta: 'Quinta', principiante: 'Quinta'
+    };
+    function normalizeLeagueCategory(value) {
+      const raw = String(value || '').trim();
+      if (!raw) return '';
+      const key = raw.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+      return LEAGUE_CATEGORY_LABELS[key] || raw;
+    }
 
     document.querySelectorAll('.league-gender-tabs button').forEach(button => {
       button.addEventListener('click', () => {

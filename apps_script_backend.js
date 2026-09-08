@@ -3741,11 +3741,11 @@ function normalizeGender(value) {
 // como numero/abreviatura. Normaliza en caliente cualquier ficha vieja que
 // aun tenga "3ra"/"4ta"/"5ta" o el retirado "Principiante"/"abierta".
 var CATEGORY_LABELS_GAS = {
-  primera: 'Primera', '1ra': 'Primera',
-  segunda: 'Segunda', '2da': 'Segunda',
-  tercera: 'Tercera', '3ra': 'Tercera',
-  cuarta: 'Cuarta', '4ta': 'Cuarta',
-  quinta: 'Quinta', '5ta': 'Quinta',
+  primera: 'Primera', '1ra': 'Primera', '1': 'Primera',
+  segunda: 'Segunda', '2da': 'Segunda', '2': 'Segunda',
+  tercera: 'Tercera', '3ra': 'Tercera', '3': 'Tercera',
+  cuarta: 'Cuarta', '4ta': 'Cuarta', '4': 'Cuarta',
+  quinta: 'Quinta', '5ta': 'Quinta', '5': 'Quinta',
   abierta: 'Quinta', principiante: 'Quinta'
 };
 
