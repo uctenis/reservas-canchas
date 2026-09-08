@@ -70,19 +70,16 @@
     } catch (_) { /* sin ranking disponible: el cuadro se ve igual */ }
   }
 
-  // Mismo criterio que "Cabezas de serie" (ver renderSeededList): mostrar la
-  // medalla de ranking para cualquier socio inscrito, sin importar su lugar
-  // en la escalerilla, terminaba mostrando numeros como "#47" que no aportan
-  // nada y saturan el cuadro. Se limita a los mejor ubicados, en una
-  // cantidad que escala con el tamano del cuadro (2 en un cuadro de 8, 4 en
-  // uno de 16, 8 en uno de 32) en vez de un tope fijo.
+  // seedThreshold la usa "Cabezas de serie" (ver renderSeededList) para
+  // limitar cuantos sembrados del TORNEO se listan ahi. La medalla de
+  // ranking del CLUB es otro numero (posicion en la escalerilla oficial) y
+  // se muestra para cualquier socio inscrito que tenga ficha, sin ese tope.
   function seedThreshold(size) {
     return Math.max(2, Math.floor((size || 0) / 4));
   }
   function clubRankBadge(playerId) {
     const pos = playerId ? clubRankingById[playerId] : null;
-    if (!pos || pos > seedThreshold(currentTournament?.size)) return '';
-    return `<span class="club-rank-badge" title="Posici&oacute;n en la escalerilla UCTenis">#${esc(pos)}</span>`;
+    return pos ? `<span class="club-rank-badge" title="Posici&oacute;n en la escalerilla UCTenis">#${esc(pos)}</span>` : '';
   }
 
   function playerLine(player, match) {
