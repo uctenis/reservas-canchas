@@ -16,19 +16,95 @@
     return `<div class="match-player ${won ? 'winner' : ''}"><span><span class="match-seed">${player.seed ? '#' + esc(player.seed) : ''}</span>${esc(player.name)}</span><span class="match-score">${won ? '&#10003;' : ''}</span></div>`;
   }
 
+  // Panel de cabezas de serie (como la lista "SEEDED PLAYERS" de un cuadro
+  // ATP): solo tiene sentido mostrar una fraccion de los inscritos como
+  // sembrados, no la nomina completa (eso ya vive en "Inscritos").
+  function renderSeededList(tournament) {
+    const seedSlots = Math.max(2, Math.floor((tournament.size || 0) / 4));
+    const seeded = (tournament.participants || [])
+      .filter(player => player.seed && player.seed <= seedSlots)
+      .sort((a, b) => a.seed - b.seed);
+    if (!seeded.length) return '';
+    return `<div class="tour-card seeded-list">
+      <h3 class="round-title">Cabezas de serie</h3>
+      ${seeded.map(player => `<div class="seeded-item"><span class="seeded-num">${esc(player.seed)}</span><span>${esc(player.name)}</span></div>`).join('')}
+    </div>`;
+  }
+
   function renderBracket(tournament) {
     if (!tournament.matches?.length) return '<div class="tour-card empty-state">El cuadro se publicar&aacute; cuando finalicen las inscripciones.</div>';
     const rounds = [...new Set(tournament.matches.map(match => match.round))];
-    return `<div class="bracket-scroll"><div class="bracket">${rounds.map(round => {
-      const matches = tournament.matches.filter(match => match.round === round);
-      return `<section class="bracket-round"><h3 class="round-title">${esc(matches[0]?.roundName || 'Ronda')}</h3><div class="round-matches">${matches.map(match => `
-        <article class="match-box">
-          ${playerLine(match.player1, match)}
-          ${playerLine(match.player2, match)}
-          <div class="match-meta">${esc(match.scoreLabel || (match.date ? formatDate(match.date) + ' &middot; ' + match.slot : 'Horario por confirmar'))}</div>
-        </article>`).join('')}</div></section>`;
-    }).join('')}</div></div>`;
+    const finalMatch = tournament.matches.find(match => match.roundName === 'Final');
+    const championBox = `<section class="bracket-round champion-round"><h3 class="round-title">Campe&oacute;n</h3><div class="round-matches"><article class="match-box champion-box" data-match-id="champion">
+      ${tournament.champion
+        ? `<div class="champion-name"><span class="champion-trophy">&#127942;</span>${esc(tournament.champion.name)}</div>`
+        : `<div class="champion-name champion-pending">${finalMatch?.winner ? esc(finalMatch.winner.name) : 'Por definir'}</div>`}
+    </article></div></section>`;
+    return `<div class="seeded-and-bracket">
+      ${renderSeededList(tournament)}
+      <div class="bracket-scroll"><div class="bracket" id="tourBracket">${rounds.map(round => {
+        const matches = tournament.matches.filter(match => match.round === round);
+        return `<section class="bracket-round"><h3 class="round-title">${esc(matches[0]?.roundName || 'Ronda')}</h3><div class="round-matches">${matches.map(match => `
+          <article class="match-box" data-match-id="${esc(match.id)}" data-next="${esc(match.roundName === 'Final' ? 'champion' : (match.nextMatchId || ''))}">
+            ${playerLine(match.player1, match)}
+            ${playerLine(match.player2, match)}
+            <div class="match-meta">${esc(match.scoreLabel || (match.date ? formatDate(match.date) + ' &middot; ' + match.slot : 'Horario por confirmar'))}</div>
+          </article>`).join('')}</div></section>`;
+      }).join('')}${championBox}</div></div>
+    </div>`;
   }
+
+  // Las lineas que conectan cada partido con el siguiente se calculan a
+  // partir de la posicion real ya renderizada (getBoundingClientRect), en
+  // vez de intentar cuadrarlas a puro CSS: el cuadro puede tener 8, 16 o 32
+  // jugadores (distinta cantidad de rondas y de huecos entre partidos), asi
+  // que medir el DOM real es lo unico que funciona para cualquier tamano.
+  function drawBracketConnectors() {
+    const bracket = document.getElementById('tourBracket');
+    if (!bracket) return;
+    let svg = bracket.querySelector('.bracket-lines');
+    if (!svg) {
+      svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('class', 'bracket-lines');
+      bracket.prepend(svg);
+    }
+    const boxRect = bracket.getBoundingClientRect();
+    svg.setAttribute('width', bracket.scrollWidth);
+    svg.setAttribute('height', bracket.scrollHeight);
+    svg.innerHTML = '';
+    bracket.querySelectorAll('.match-box[data-next]').forEach(box => {
+      const nextId = box.dataset.next;
+      if (!nextId) return;
+      const target = bracket.querySelector(`.match-box[data-match-id="${CSS.escape(nextId)}"]`);
+      if (!target) return;
+      const from = box.getBoundingClientRect();
+      const to = target.getBoundingClientRect();
+      // getBoundingClientRect ya viene en coordenadas de viewport, asi que
+      // restar boxRect (medido en el mismo instante) cancela cualquier
+      // scroll de los contenedores por los que pase (.bracket-scroll, la
+      // pagina, etc.) sin necesitar sumarlo aparte.
+      const x1 = from.right - boxRect.left;
+      const y1 = from.top + from.height / 2 - boxRect.top;
+      const x2 = to.left - boxRect.left;
+      const y2 = to.top + to.height / 2 - boxRect.top;
+      const midX = x1 + (x2 - x1) / 2;
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('d', `M${x1},${y1} L${midX},${y1} L${midX},${y2} L${x2},${y2}`);
+      path.setAttribute('class', 'bracket-line');
+      svg.appendChild(path);
+    });
+  }
+
+  let redrawScheduled = false;
+  function scheduleDrawConnectors() {
+    if (redrawScheduled) return;
+    redrawScheduled = true;
+    requestAnimationFrame(() => {
+      redrawScheduled = false;
+      drawBracketConnectors();
+    });
+  }
+  window.addEventListener('resize', scheduleDrawConnectors);
 
   function render(t) {
     document.title = `${t.name} | UCTenis`;
@@ -87,6 +163,7 @@
           <div class="tour-card roster-list">${t.participants?.length ? [...t.participants].sort((a,b)=>(a.seed||99)-(b.seed||99)).map(player => `<div class="roster-item"><span>${esc(player.name)}${player.clubMember ? ' <small>UCTenis</small>' : ''}</span><span class="seed-pill">#${esc(player.seed || '-')}</span></div>`).join('') : '<div class="empty-state">A&uacute;n no hay inscritos publicados.</div>'}</div>
         </section>
       </div>`;
+    scheduleDrawConnectors();
   }
 
   async function load() {
