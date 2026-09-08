@@ -2645,7 +2645,11 @@ async function loadLiveData() {
     if (!feedEl || !gridEl) return;
 
     const recent = challenges.filter(c => {
-      if (c.status === 'eliminado' || c.status === 'completado') return false;
+      // 'rechazado' cubre tanto un rechazo real como la cancelación de un
+      // partido de liga (cancelChallenge() en ranking.html lo marca así);
+      // 'vencido' es una invitación que expiró sin respuesta. Ninguno de los
+      // dos debería seguir apareciendo como actividad "nueva" en el home.
+      if (['eliminado', 'completado', 'rechazado', 'vencido'].includes(c.status)) return false;
       // IMPORTANT: pendiente = sent but not yet answered — ALWAYS show regardless of date.
       // Only expire aceptado/terminado challenges by their scheduled date.
       if (c.status !== 'pendiente' && isChallengeExpiredByDateTime(c)) return false;
