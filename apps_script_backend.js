@@ -192,6 +192,7 @@ function handleRequest(data) {
       case "admin_schedule_match":   response = adminScheduleTournamentMatch(data); break;
       case "admin_record_match":     response = adminRecordTournamentMatch(data); break;
       case "admin_delete_tournament": response = adminDeleteTournament(data); break;
+      case "admin_permanently_delete_tournament": response = adminPermanentlyDeleteTournament(data); break;
       case "debug_firebase":         response = debugFirebaseConnection(data.email || 'gcuraqueo@uct.cl'); break;
       // ── Funcionarios UCT ──
       case "admin_create_staff":     response = adminCreateStaff(data); break;
@@ -5163,4 +5164,27 @@ function adminDeleteTournament(data) {
   stored.tournament.featured = false;
   stored.tournament.updatedAt = new Date().toISOString();
   return writeTournament(stored.tournament, data.idToken);
+}
+
+/**
+ * Borra el documento del campeonato de Firestore de forma permanente
+ * (a diferencia de adminDeleteTournament, que solo lo archiva/oculta).
+ * Sin retorno: los partidos programados de este campeonato no liberan
+ * su reserva de cancha automaticamente -- si tenia partidos con horario
+ * ya asignado, conviene revisarlos antes de borrar.
+ */
+function adminPermanentlyDeleteTournament(data) {
+  if (!isAdminRequest(data)) return { ok: false, msg: 'Acceso reservado al administrador.' };
+  const id = text(data.id);
+  if (!id) return { ok: false, msg: 'Falta el ID del campeonato.' };
+  try {
+    const response = UrlFetchApp.fetch(tournamentFirestoreUrl(id), bookingFetchOptions('delete', undefined, data.idToken));
+    const code = response.getResponseCode();
+    if (code !== 200 && code !== 404) {
+      return { ok: false, msg: 'No se pudo eliminar el campeonato (' + code + '): ' + response.getContentText().substring(0, 180) };
+    }
+    return { ok: true, deletedId: id };
+  } catch (error) {
+    return { ok: false, msg: 'No se pudo eliminar el campeonato: ' + error.message };
+  }
 }

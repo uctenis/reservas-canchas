@@ -67,6 +67,7 @@
     $('editorTitle').textContent = t.name || 'Nuevo campeonato';
     $('editorSubtitle').textContent = t.id ? `${t.participants?.length || 0}/${t.size} inscritos - ${t.matches?.filter(m => m.status === 'completed').length || 0} resultados` : 'Configura, publica y opera el torneo desde aqui.';
     $('archiveTournamentBtn').style.display = t.id ? '' : 'none';
+    $('deleteTournamentBtn').style.display = t.id ? '' : 'none';
     $('publicPreviewLink').href = t.id ? `campeonato.html?id=${encodeURIComponent(t.id)}` : 'campeonato.html';
     $('bracketPreviewLink').href = t.id ? `campeonato.html?id=${encodeURIComponent(t.id)}` : 'campeonato.html';
     renderParticipants();
@@ -89,6 +90,26 @@
     else if (state.current?.id) selectTournament(state.current.id);
     else if (state.tournaments[0]) selectTournament(state.tournaments[0].id);
     else { state.current = blankTournament(); fillForm(state.current); }
+  }
+  // Cada accion (guardar, sortear, programar un partido, publicar un
+  // resultado) ya devuelve el campeonato completo y actualizado en la misma
+  // respuesta -- pedir la lista entera de nuevo despues (loadTournaments)
+  // era una segunda vuelta a Apps Script por accion, y Apps Script es lento
+  // (arranque en frio + proxy hacia Firestore). Se actualiza el estado local
+  // con lo que ya se tiene, sin esperar otra ronda de red.
+  function applyTournamentUpdate(tournament) {
+    state.current = tournament;
+    const idx = state.tournaments.findIndex(t => t.id === tournament.id);
+    if (idx >= 0) state.tournaments[idx] = tournament;
+    else state.tournaments.unshift(tournament);
+    renderList();
+    fillForm(tournament);
+  }
+  function removeTournamentFromState(id) {
+    state.tournaments = state.tournaments.filter(t => t.id !== id);
+    state.current = state.tournaments[0] || blankTournament();
+    renderList();
+    fillForm(state.current);
   }
   // El ranking oficial del club vive en Firestore (la misma fuente que usa
   // ranking.html), no en el Sheet legado que leia la accion "get_ranking" del
@@ -140,8 +161,7 @@
   }
   async function saveCurrent(message = 'Campeonato guardado.') {
     const data = await api('admin_save_tournament', { tournament:readForm() });
-    state.current = data.tournament;
-    await loadTournaments(state.current.id);
+    applyTournamentUpdate(data.tournament);
     notice(message);
     return state.current;
   }
@@ -201,8 +221,7 @@
     if (!state.current?.id) await saveCurrent('Campeonato creado. Ahora puedes generar el cuadro.');
     try {
       const data = await api('admin_generate_bracket', { id:state.current.id, confirmReplace });
-      state.current = data.tournament;
-      await loadTournaments(state.current.id);
+      applyTournamentUpdate(data.tournament);
       switchTab('bracket');
       notice('Cuadro generado y llaves BYE avanzadas automaticamente.');
     } catch (error) {
@@ -264,7 +283,25 @@
   $('regenerateBracketBtn').addEventListener('click', async () => { try { await generateBracket(false); } catch(e) { notice(e.message,true); } });
   $('archiveTournamentBtn').addEventListener('click', async () => {
     if (!state.current?.id || !confirm('?Archivar este campeonato? Dejaria de aparecer publicamente.')) return;
-    try { await api('admin_delete_tournament',{id:state.current.id}); state.current=null; await loadTournaments(); notice('Campeonato archivado.'); } catch(e) { notice(e.message,true); }
+    try {
+      const archivedId = state.current.id;
+      await api('admin_delete_tournament',{id:archivedId});
+      removeTournamentFromState(archivedId);
+      notice('Campeonato archivado.');
+    } catch(e) { notice(e.message,true); }
+  });
+  $('deleteTournamentBtn').addEventListener('click', async () => {
+    if (!state.current?.id) return;
+    const name = state.current.name || 'este campeonato';
+    if (!confirm(`Esto borra "${name}" para siempre: inscritos, cuadro y resultados incluidos. No se puede deshacer. ?Continuar?`)) return;
+    const typed = prompt('Para confirmar, escribe ELIMINAR en mayusculas:');
+    if (typed !== 'ELIMINAR') { notice('Confirmacion incorrecta. Accion cancelada.', true); return; }
+    try {
+      const deletedId = state.current.id;
+      await api('admin_permanently_delete_tournament', { id: deletedId });
+      removeTournamentFromState(deletedId);
+      notice('Campeonato eliminado definitivamente.');
+    } catch(e) { notice(e.message, true); }
   });
   $('adminMatches').addEventListener('click', async event => {
     const row = event.target.closest('.match-admin');
@@ -274,7 +311,7 @@
         const date=row.querySelector('[data-field=date]').value, slot=row.querySelector('[data-field=slot]').value, courtId=row.querySelector('[data-field=courtId]').value;
         if (!date || !slot || !courtId) throw new Error('Selecciona fecha, hora y cancha.');
         const data=await api('admin_schedule_match',{id:state.current.id,matchId:row.dataset.matchId,date,slot,courtId});
-        state.current=data.tournament; await loadTournaments(state.current.id);
+        applyTournamentUpdate(data.tournament);
         notice(data.calendarPending ? 'Cancha bloqueada; Calendar quedo en cola de sincronizacion.' : 'Partido programado y cancha bloqueada.');
       }
       if (event.target.closest('.save-result')) {
@@ -282,7 +319,7 @@
         const walkoverWinnerId=row.querySelector('[data-field=walkover]').value;
         if (!walkoverWinnerId && !confirm('?Publicar este marcador? El ganador avanzara automaticamente en el cuadro.')) return;
         const data=await api('admin_record_match',{id:state.current.id,matchId:row.dataset.matchId,sets,walkoverWinnerId});
-        state.current=data.tournament; await loadTournaments(state.current.id);
+        applyTournamentUpdate(data.tournament);
         notice('Resultado publicado, noticia creada y cuadro actualizado.');
       }
     } catch(e) { notice(e.message,true); }
