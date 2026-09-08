@@ -79,7 +79,7 @@
   }
   function clubRankBadge(playerId) {
     const pos = playerId ? clubRankingById[playerId] : null;
-    return pos ? `<span class="club-rank-badge" title="Posici&oacute;n en la escalerilla UCTenis">#${esc(pos)}</span>` : '';
+    return pos ? `<span class="club-rank-badge" title="Posici&oacute;n en la escalerilla UCTenis">${esc(pos)}</span>` : '';
   }
 
   function playerLine(player, match) {
