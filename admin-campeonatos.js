@@ -307,10 +307,19 @@
       $('tourEnd').value = '';
     }
   });
-  $('participantName').addEventListener('change', () => {
+  // Autocompletar correo/telefono al elegir un socio de la lista (datalist):
+  // "change" solo no bastaba -- al elegir una opcion del datalist, algunos
+  // navegadores (Chrome incluido) disparan "input" pero no "change" hasta que
+  // el campo pierde el foco, asi que se veia como que no cargaba de inmediato.
+  function fillParticipantFromClub() {
     const p = state.clubPlayers.find(player => player.nombre.toLowerCase() === $('participantName').value.trim().toLowerCase());
-    if (p) { $('participantEmail').value = p.email || ''; $('participantMember').checked = true; }
-  });
+    if (!p) return;
+    $('participantEmail').value = p.email || '';
+    $('participantPhone').value = p.telefono || '';
+    $('participantMember').checked = true;
+  }
+  $('participantName').addEventListener('input', fillParticipantFromClub);
+  $('participantName').addEventListener('change', fillParticipantFromClub);
   $('participantForm').addEventListener('submit', event => {
     event.preventDefault();
     const size = Number($('tourSize').value);
