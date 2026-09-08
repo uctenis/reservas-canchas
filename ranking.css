@@ -419,7 +419,8 @@ body {
 
 .ranking-table-container {
   width: 100%;
-  overflow-x: auto;
+  overflow: auto;
+  max-height: 70vh;
   padding-bottom: 2px;
 }
 
@@ -432,7 +433,11 @@ body {
 }
 
 #rankTable th {
-  padding: 0 14px 8px;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 8px 14px;
+  background: var(--bg-dark);
   color: var(--text-secondary);
   font-size: 0.72rem;
   font-weight: 900;
@@ -1861,6 +1866,13 @@ tr.drag-over-bottom {
     border-bottom: 1px solid rgba(255, 255, 255, 0.075);
   }
 
+  /* En tarjetas apiladas (sin thead visible) no hace falta el recuadro con
+     scroll propio: que la pagina se desplace normal, como antes. */
+  .ranking-table-container {
+    max-height: none;
+    overflow: visible;
+  }
+
   #rankTable {
     min-width: 0;
     border-spacing: 0;
@@ -2454,7 +2466,10 @@ tr.drag-over-bottom {
   cursor: pointer;
 }
 
-.admin-table-wrap { width: 100%; overflow-x: auto; }
+/* Se limita el ancho maximo para que en monitores grandes las columnas no
+   queden estiradas con espacio vacio de sobra, y se acota el alto para que
+   el thead pueda quedar fijo (sticky) mientras se recorre la lista. */
+.admin-table-wrap { width: 100%; max-width: 1100px; margin: 0 auto; overflow: auto; max-height: 68vh; }
 .admin-table {
   width: 100%;
   border-collapse: separate;
@@ -2462,7 +2477,11 @@ tr.drag-over-bottom {
   table-layout: fixed;
 }
 .admin-table th {
-  padding: 0 12px 8px;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 8px 12px;
+  background: var(--bg-dark);
   text-align: left;
   color: var(--text-secondary);
   font-size: 0.68rem;
@@ -2553,7 +2572,8 @@ tr.drag-over-bottom {
   .admin-tab-bar { order: 3; width: 100%; overflow-x: auto; flex-wrap: nowrap; padding-bottom: 2px; }
   .admin-page-body { padding: 18px 14px 0; }
 
-  /* Jugadores: tabla -> tarjetas apiladas */
+  /* Jugadores: tabla -> tarjetas apiladas (sin thead, sin recuadro propio) */
+  .admin-table-wrap { max-width: none; max-height: none; overflow: visible; }
   .admin-table { border-spacing: 0; }
   .admin-table thead { display: none; }
   .admin-table, .admin-table tbody { display: block; }

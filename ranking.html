@@ -5076,7 +5076,6 @@ function showPlayerProfile(playerKey) {
       <div class="profile-info-chip"><span class="label">Mano</span><span class="value">${escapeHTML(player.mano || '-')}</span></div>
       <div class="profile-info-chip"><span class="label">Revés</span><span class="value">${escapeHTML(player.reves || '-')}</span></div>
       <div class="profile-info-chip"><span class="label">Pos. anterior</span><span class="value">${player.prev || '-'}</span></div>
-      <div class="profile-info-chip"><span class="label">ID</span><span class="value">${escapeHTML(player.id || '-')}</span></div>
     </div>
 
     <div class="profile-contact-row">
@@ -5607,6 +5606,8 @@ function closeAdminRowMenuOnEscape(e) { if (e.key === 'Escape') closeAdminRowMen
 function resetAdminForm() {
   document.getElementById('fAdminPlayer').reset();
   document.getElementById('adminPlayerId').value = '';
+  document.getElementById('adminPlayerId').readOnly = false;
+  document.getElementById('adminPlayerId').title = '';
   document.getElementById('adminRut').value = '';
   document.getElementById('adminRutDv').value = '';
   document.getElementById('adminGenero').value = rankingState.currentGender;
@@ -5627,6 +5628,11 @@ function fillAdminForm(playerKey) {
   const player = getPlayerByKey(playerKey);
   if (!player) return;
   document.getElementById('adminPlayerId').value = player.id;
+  // El ID es la clave interna que enlaza desafios, sesiones y RUT: cambiarlo
+  // en una ficha existente rompe esas referencias, asi que solo se puede
+  // fijar al crear un jugador nuevo (ver resetAdminForm), nunca al editar uno.
+  document.getElementById('adminPlayerId').readOnly = true;
+  document.getElementById('adminPlayerId').title = 'Código interno, no se puede modificar';
   document.getElementById('adminNombre').value = player.nombre;
   document.getElementById('adminEmail').value = player.email || '';
   document.getElementById('adminGenero').value = player.gender;
