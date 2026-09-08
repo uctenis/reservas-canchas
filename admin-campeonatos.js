@@ -68,11 +68,7 @@
     $('editorSubtitle').textContent = t.id ? `${t.participants?.length || 0}/${t.size} inscritos - ${t.matches?.filter(m => m.status === 'completed').length || 0} resultados` : 'Configura, publica y opera el torneo desde aqui.';
     $('archiveTournamentBtn').style.display = t.id ? '' : 'none';
     $('publicPreviewLink').href = t.id ? `campeonato.html?id=${encodeURIComponent(t.id)}` : 'campeonato.html';
-    // Cambiar de campeonato invalida cualquier vista previa que hubiera quedado
-    // abierta -- si no, podria seguir mostrando el cuadro del torneo anterior.
-    $('bracketPreviewFrame').hidden = true;
-    $('bracketPreviewFrame').src = '';
-    $('toggleBracketPreviewBtn').textContent = '👁️ Ver cuadro (como lo ve el público)';
+    $('bracketPreviewLink').href = t.id ? `campeonato.html?id=${encodeURIComponent(t.id)}` : 'campeonato.html';
     renderParticipants();
     renderMatches();
   }
@@ -162,10 +158,9 @@
   }
   function renderMatches() {
     const matches = state.current?.matches || [];
-    $('toggleBracketPreviewBtn').hidden = !(state.current?.id && matches.length);
+    $('bracketPreviewLink').hidden = !(state.current?.id && matches.length);
     if (!matches.length) {
       $('adminMatches').innerHTML = '<div class="empty-state">Guarda los inscritos y genera el cuadro para programar los partidos.</div>';
-      $('bracketPreviewFrame').hidden = true;
       return;
     }
     const grouped = [...new Set(matches.map(m => m.round))];
@@ -173,8 +168,18 @@
       const items = matches.filter(m => m.round === round);
       return `<div class="tour-section"><h3 class="round-title">${esc(items[0].roundName)}</h3>${items.map(match => {
         const ready = match.player1 && match.player2;
+        // BYE (avance automatico por falta de rival) o VOID (ronda vacia):
+        // el partido ya quedo resuelto solo, no hay nada que programar ni
+        // registrar. Antes se mostraban los mismos campos que un partido
+        // real pero deshabilitados, sin explicar por que -- parecia roto.
+        const isSettled = match.status === 'bye' || match.status === 'void';
+        if (isSettled) {
+          return `<article class="match-admin match-admin-settled" data-match-id="${esc(match.id)}">
+            <div><strong>${esc(match.player1?.name || 'Por definir')} vs ${esc(match.player2?.name || 'Por definir')}</strong><div class="schedule-meta">${match.status === 'bye' ? 'BYE -- avanza automáticamente, no requiere programación' : 'Sin rivales definidos en esta llave'}</div></div>
+          </article>`;
+        }
         return `<article class="match-admin" data-match-id="${esc(match.id)}">
-          <div><strong>${esc(match.player1?.name || 'Por definir')} vs ${esc(match.player2?.name || 'Por definir')}</strong><div class="schedule-meta">${esc(match.scoreLabel || match.status)}${match.date ? ' - ' + esc(match.date + ' ' + match.slot + ' ' + (courtNames[match.courtId] || '')) : ''}</div></div>
+          <div><strong>${esc(match.player1?.name || 'Por definir')} vs ${esc(match.player2?.name || 'Por definir')}</strong><div class="schedule-meta">${ready ? esc(match.scoreLabel || match.status) : 'Esperando el resultado de la ronda anterior'}${match.date ? ' - ' + esc(match.date + ' ' + match.slot + ' ' + (courtNames[match.courtId] || '')) : ''}</div></div>
           <div>
             <div class="match-admin-controls">
               <input type="text" class="uct-date" data-field="date" readonly autocomplete="off" value="${esc(match.date || '')}" ${ready ? '' : 'disabled'}>
@@ -257,15 +262,6 @@
   $('saveParticipantsBtn').addEventListener('click', async () => { try { await saveCurrent('Nomina de inscritos guardada.'); } catch(e) { notice(e.message,true); } });
   $('generateBracketBtn').addEventListener('click', async () => { try { await saveCurrent('Inscritos guardados.'); await generateBracket(false); } catch(e) { notice(e.message,true); } });
   $('regenerateBracketBtn').addEventListener('click', async () => { try { await generateBracket(false); } catch(e) { notice(e.message,true); } });
-  $('toggleBracketPreviewBtn').addEventListener('click', () => {
-    const frame = $('bracketPreviewFrame');
-    const btn = $('toggleBracketPreviewBtn');
-    const showing = !frame.hidden;
-    if (showing) { frame.hidden = true; btn.textContent = '👁️ Ver cuadro (como lo ve el público)'; return; }
-    if (!frame.src && state.current?.id) frame.src = `campeonato.html?id=${encodeURIComponent(state.current.id)}`;
-    frame.hidden = false;
-    btn.textContent = '👁️ Ocultar vista previa';
-  });
   $('archiveTournamentBtn').addEventListener('click', async () => {
     if (!state.current?.id || !confirm('?Archivar este campeonato? Dejaria de aparecer publicamente.')) return;
     try { await api('admin_delete_tournament',{id:state.current.id}); state.current=null; await loadTournaments(); notice('Campeonato archivado.'); } catch(e) { notice(e.message,true); }
