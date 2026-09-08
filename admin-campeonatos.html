@@ -7,6 +7,7 @@
   <meta name="robots" content="noindex">
   <link rel="icon" href="logo_uctenis_v03.png" type="image/png">
   <link rel="stylesheet" href="tournament.css?v=20260907_v1">
+  <link rel="stylesheet" href="datepicker.css?v=20260908_v1">
 </head>
 <body class="tournament-page">
   <div class="tour-shell">
@@ -40,8 +41,8 @@
               <div class="field"><label>Cupos del cuadro</label><select id="tourSize"><option>8</option><option>16</option><option>32</option></select></div>
               <div class="field"><label>Categor&iacute;a</label><input id="tourCategory" value="Todo competidor"></div>
               <div class="field"><label>Rama</label><select id="tourGender"><option>Abierto</option><option>Masculino</option><option>Femenino</option><option>Dobles</option></select></div>
-              <div class="field"><label>Inicio</label><input id="tourStart" type="date"></div>
-              <div class="field"><label>T&eacute;rmino</label><input id="tourEnd" type="date"></div>
+              <div class="field"><label>Inicio</label><input id="tourStart" type="text" class="uct-date" readonly autocomplete="off"></div>
+              <div class="field"><label>T&eacute;rmino</label><input id="tourEnd" type="text" class="uct-date" readonly autocomplete="off"></div>
               <div class="field"><label>Cierre de inscripciones</label><input id="tourDeadline" type="datetime-local"></div>
               <div class="field"><label>Sede</label><input id="tourVenue" placeholder="Canchas CEC / CJP"></div>
               <div class="field"><label>Superficie</label><select id="tourSurface"><option>Mixta</option><option>Arcilla</option><option>Asfalto</option></select></div>
@@ -71,7 +72,7 @@
           </form>
           <div class="check-row"><label><input id="participantMember" type="checkbox"> Es socio/a UCTenis</label></div>
           <div style="overflow-x:auto"><table class="participant-table"><thead><tr><th>Siembra</th><th>Jugador</th><th>Origen</th><th>Contacto</th><th></th></tr></thead><tbody id="participantBody"></tbody></table></div>
-          <div class="admin-actions"><button class="tour-btn primary" id="saveParticipantsBtn" type="button">Guardar inscritos</button><button class="tour-btn" id="generateBracketBtn" type="button">Sortear / generar cuadro</button></div>
+          <div class="admin-actions"><button class="tour-btn" id="seedFromRankingBtn" type="button" title="Asigna la siembra segun la posicion actual de cada jugador en el ranking del club">&#127919; Sembrar por ranking</button><button class="tour-btn primary" id="saveParticipantsBtn" type="button">Guardar inscritos</button><button class="tour-btn" id="generateBracketBtn" type="button">Sortear / generar cuadro</button></div>
         </section>
 
         <section class="admin-panel" data-panel="bracket">
@@ -85,6 +86,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
   <script src="db.js?v=20260907_tournaments"></script>
+  <script src="datepicker.js?v=20260908_v1"></script>
   <script src="admin-campeonatos.js?v=20260907_v1"></script>
 </body>
 </html>

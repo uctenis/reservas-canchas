@@ -7,6 +7,7 @@
   <link rel="icon" href="logo_uctenis_v03.png" type="image/png">
   <link rel="stylesheet" href="style.css?v=20260813_v1">
   <link rel="stylesheet" href="reservas.css?v=20260813_v1">
+  <link rel="stylesheet" href="datepicker.css?v=20260908_v1">
 </head>
 <body>
   <div id="debug-error-console" style="background:#ef4444; color:#fff; padding:15px; font-family:monospace; font-size:13px; display:none; position:fixed; top:0; left:0; width:100%; z-index:999999; box-shadow:0 4px 12px rgba(0,0,0,0.3);">
@@ -229,7 +230,7 @@
         <div class="form-row2" style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
           <div class="form-group" style="margin-bottom:0;">
             <label style="font-size:0.8rem; margin-bottom:4px; display:block;">Fecha de nacimiento *</label>
-            <input type="date" id="cpFechaNacimiento" style="width:100%; padding:10px; border-radius:8px;" required>
+            <input type="text" class="uct-date" id="cpFechaNacimiento" readonly autocomplete="off" style="width:100%; padding:10px; border-radius:8px;" required>
           </div>
           <div class="form-group" style="margin-bottom:0;">
             <label style="font-size:0.8rem; margin-bottom:4px; display:block;">Teléfono (opcional)</label>
@@ -405,6 +406,7 @@
 
 <script src="db.js?v=20260817_sync_admin_v2"></script>
 <script src="script.js?v=20260602_v2"></script>
+<script src="datepicker.js?v=20260908_v1"></script>
 <script>
 // ── STATE ──
 // isChallenge: boolean, retadoId: string|null, retadoNombre: string|null

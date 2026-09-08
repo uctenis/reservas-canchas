@@ -88,13 +88,53 @@
     else if (state.tournaments[0]) selectTournament(state.tournaments[0].id);
     else { state.current = blankTournament(); fillForm(state.current); }
   }
+  // El ranking oficial del club vive en Firestore (la misma fuente que usa
+  // ranking.html), no en el Sheet legado que leia la accion "get_ranking" del
+  // Apps Script -- ese Sheet ya no se actualiza desde que el ranking se migro
+  // a Firestore, asi que quedarse con el dejaba la siembra de los cuadros
+  // basada en datos desactualizados. db.js ya esta cargado en esta pagina,
+  // asi que se consulta Firestore directo, igual que hace el ranking.
   async function loadClubPlayers() {
     try {
-      const response = await fetch(`${API_URL}?action=get_ranking&v=${Date.now()}`);
-      const data = await response.json();
-      state.clubPlayers = [...(data.male || []), ...(data.female || [])];
+      const raw = DB.isCloudConfigured() ? await DB.getPlayersCloud() : DB.getUsers();
+      const byGender = { M: [], F: [] };
+      raw.forEach(player => {
+        const genero = String(player.genero || player.gender || '').toUpperCase().startsWith('F') ? 'F' : 'M';
+        const activo = player.activo !== false && player.participaRanking !== false;
+        if (!activo) return;
+        const pos = Number(player.pos ?? player.posicion ?? player.rank ?? player.ranking);
+        byGender[genero].push({ ...player, genero, pos: Number.isFinite(pos) && pos > 0 ? pos : null });
+      });
+      // Si a alguien le falta la posicion explicita, igual se le asigna un
+      // lugar relativo (por nombre) para que no quede fuera de la siembra.
+      ['M', 'F'].forEach(genero => {
+        byGender[genero].sort((a, b) => (a.pos ?? 9999) - (b.pos ?? 9999) || String(a.nombre).localeCompare(String(b.nombre), 'es'));
+        byGender[genero].forEach((player, index) => { player.livePos = index + 1; });
+      });
+      state.clubPlayers = [...byGender.M, ...byGender.F];
       $('clubPlayers').innerHTML = state.clubPlayers.map(p => `<option value="${esc(p.nombre)}" data-id="${esc(p.id)}">${esc(p.email || '')}</option>`).join('');
     } catch (_) {}
+  }
+
+  // Asigna la siembra (1, 2, 3...) segun la posicion actual de cada inscrito
+  // en el ranking del club, no segun el orden en que se anotaron. Solo se
+  // siembra a quienes tienen ficha en el ranking; el resto (externos o sin
+  // ranking) queda sin sembrar, al final -- igual que en un cuadro real. El
+  // admin puede seguir ajustando cualquier numero a mano despues.
+  function seedFromRanking() {
+    const withRanking = [];
+    const withoutRanking = [];
+    state.participants.forEach(participant => {
+      const club = state.clubPlayers.find(p => p.id === participant.clubPlayerId);
+      if (club && club.livePos) withRanking.push({ participant, livePos: club.livePos });
+      else withoutRanking.push(participant);
+    });
+    if (!withRanking.length) return notice('Ningun inscrito tiene ficha en el ranking del club para sembrar.', true);
+    withRanking.sort((a, b) => a.livePos - b.livePos);
+    withRanking.forEach((entry, index) => { entry.participant.seed = index + 1; });
+    withoutRanking.forEach((participant, index) => { participant.seed = withRanking.length + index + 1; });
+    renderParticipants();
+    notice(`Siembra actualizada segun el ranking (${withRanking.length} inscrito${withRanking.length === 1 ? '' : 's'} con ficha).`);
   }
   async function saveCurrent(message = 'Campeonato guardado.') {
     const data = await api('admin_save_tournament', { tournament:readForm() });
@@ -129,7 +169,7 @@
           <div><strong>${esc(match.player1?.name || 'Por definir')} vs ${esc(match.player2?.name || 'Por definir')}</strong><div class="schedule-meta">${esc(match.scoreLabel || match.status)}${match.date ? ' - ' + esc(match.date + ' ' + match.slot + ' ' + (courtNames[match.courtId] || '')) : ''}</div></div>
           <div>
             <div class="match-admin-controls">
-              <input type="date" data-field="date" value="${esc(match.date || '')}" ${ready ? '' : 'disabled'}>
+              <input type="text" class="uct-date" data-field="date" readonly autocomplete="off" value="${esc(match.date || '')}" ${ready ? '' : 'disabled'}>
               <select data-field="slot" ${ready ? '' : 'disabled'}><option value="">Hora</option>${slots.map(s=>`<option ${match.slot===s?'selected':''}>${s}</option>`).join('')}</select>
               <select data-field="courtId" ${ready ? '' : 'disabled'}><option value="">Cancha</option>${Object.entries(courtNames).map(([id,name])=>`<option value="${id}" ${match.courtId===id?'selected':''}>${name}</option>`).join('')}</select>
               <button class="tour-btn save-schedule" type="button" ${ready ? '' : 'disabled'}>Programar</button>
@@ -195,6 +235,7 @@
       if (player) player.seed = Number(event.target.value);
     }
   });
+  $('seedFromRankingBtn').addEventListener('click', seedFromRanking);
   $('saveParticipantsBtn').addEventListener('click', async () => { try { await saveCurrent('Nomina de inscritos guardada.'); } catch(e) { notice(e.message,true); } });
   $('generateBracketBtn').addEventListener('click', async () => { try { await saveCurrent('Inscritos guardados.'); await generateBracket(false); } catch(e) { notice(e.message,true); } });
   $('regenerateBracketBtn').addEventListener('click', async () => { try { await generateBracket(false); } catch(e) { notice(e.message,true); } });

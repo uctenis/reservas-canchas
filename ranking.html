@@ -11,6 +11,7 @@
   <link rel="icon" href="logo_uctenis_v03.png" type="image/png">
   <link rel="stylesheet" href="style.css?v=20260813_v1">
   <link rel="stylesheet" href="ranking.css?v=20260907_admin_mobile_v2">
+  <link rel="stylesheet" href="datepicker.css?v=20260908_v1">
   <script>
     // Quien llega desde liga.html (?liga=1) solo quiere el modal de desafio de
     // liga, no la pagina de ranking en si. Oculta el contenido antes del primer
@@ -213,7 +214,7 @@
         <div class="form-row">
           <div class="form-group">
             <label for="chal_fecha">Fecha propuesta</label>
-            <input type="date" id="chal_fecha" required>
+            <input type="text" class="uct-date" id="chal_fecha" required readonly autocomplete="off">
           </div>
           <div class="form-group" id="chalCanchaGroup">
             <label for="chal_cancha">Cancha</label>
@@ -264,7 +265,7 @@
         <div class="form-row" style="display:flex; gap:15px; margin-bottom:15px;">
           <div class="form-group" style="flex:1;">
             <label for="scoreDate" style="display:block; font-weight:500; margin-bottom:5px; font-size:0.85rem; color:rgba(255,255,255,0.7);">Fecha del partido</label>
-            <input type="date" id="scoreDate" style="width:100%; padding:8px 12px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); border-radius:6px; color:#fff; outline:none; font-size:0.9rem;">
+            <input type="text" class="uct-date" id="scoreDate" readonly autocomplete="off" style="width:100%; padding:8px 12px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); border-radius:6px; color:#fff; outline:none; font-size:0.9rem;">
           </div>
           <div class="form-group" style="flex:1;">
             <label for="scoreCourt" style="display:block; font-weight:500; margin-bottom:5px; font-size:0.85rem; color:rgba(255,255,255,0.7);">Cancha</label>
@@ -507,7 +508,7 @@
         <div class="form-row">
           <div class="form-group">
             <label for="adminFechaNacimiento">Fecha nacimiento</label>
-            <input type="date" id="adminFechaNacimiento">
+            <input type="text" class="uct-date" id="adminFechaNacimiento" readonly autocomplete="off">
           </div>
           <div class="form-group">
             <label for="adminCategoria">Categoría</label>
@@ -613,7 +614,7 @@
             </div>
             <div class="form-group" style="flex:1;">
               <label for="adminNewsDate" style="display:block; margin-bottom:6px; font-size:0.85rem; color:rgba(255,255,255,0.7);">Fecha de Publicación</label>
-              <input type="date" id="adminNewsDate" required style="width:100%; padding:10px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:#fff; outline:none;">
+              <input type="text" class="uct-date" id="adminNewsDate" required readonly autocomplete="off" style="width:100%; padding:10px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:#fff; outline:none;">
             </div>
             <div class="form-group" style="flex:1;">
               <label for="adminNewsOrder" style="display:block; margin-bottom:6px; font-size:0.85rem; color:rgba(255,255,255,0.7);">Posición</label>
@@ -681,15 +682,15 @@
               <div class="form-row schedule-form-grid">
                 <div class="form-group" id="specialDateSingleGroup" style="flex:1; min-width:160px;">
                   <label for="adminSpecialDate" style="display:block; margin-bottom:6px; font-size:0.85rem; color:rgba(255,255,255,0.7);">📅 Fecha</label>
-                  <input type="date" id="adminSpecialDate" style="width:100%; padding:10px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:#fff; outline:none;">
+                  <input type="text" class="uct-date" id="adminSpecialDate" readonly autocomplete="off" style="width:100%; padding:10px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:#fff; outline:none;">
                 </div>
                 <div class="form-group" id="specialDateStartGroup" style="flex:1; min-width:140px; display:none;">
                   <label for="adminSpecialDateStart" style="display:block; margin-bottom:6px; font-size:0.85rem; color:rgba(255,255,255,0.7);">📅 Desde</label>
-                  <input type="date" id="adminSpecialDateStart" style="width:100%; padding:10px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:#fff; outline:none;">
+                  <input type="text" class="uct-date" id="adminSpecialDateStart" readonly autocomplete="off" style="width:100%; padding:10px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:#fff; outline:none;">
                 </div>
                 <div class="form-group" id="specialDateEndGroup" style="flex:1; min-width:140px; display:none;">
                   <label for="adminSpecialDateEnd" style="display:block; margin-bottom:6px; font-size:0.85rem; color:rgba(255,255,255,0.7);">📅 Hasta</label>
-                  <input type="date" id="adminSpecialDateEnd" style="width:100%; padding:10px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:#fff; outline:none;">
+                  <input type="text" class="uct-date" id="adminSpecialDateEnd" readonly autocomplete="off" style="width:100%; padding:10px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:#fff; outline:none;">
                 </div>
                 <div class="form-group" style="flex:1; min-width:160px;">
                   <label for="adminSpecialDesc" style="display:block; margin-bottom:6px; font-size:0.85rem; color:rgba(255,255,255,0.7);">📝 Descripción (opcional)</label>
@@ -821,6 +822,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
 <script src="db.js?v=20260817_sync_admin_v2"></script>
 <script src="liga.js?v=20260907_v1"></script>
+<script src="datepicker.js?v=20260908_v1"></script>
 
 <script>
 // Helper functions for RUT
@@ -5121,7 +5123,7 @@ function openOwnProfileEditor() {
       <div class="form-row">
         <div class="form-group">
           <label for="ownFechaNacimiento">Fecha nacimiento</label>
-          <input type="date" id="ownFechaNacimiento" value="${escapeAttr(dateForInput(player.fechaNacimiento))}">
+          <input type="text" class="uct-date" id="ownFechaNacimiento" readonly autocomplete="off" value="${escapeAttr(dateForInput(player.fechaNacimiento))}">
         </div>
         <div class="form-group">
           <label for="ownCategoria">Categoría</label>
