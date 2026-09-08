@@ -11,6 +11,20 @@
   <link rel="icon" href="logo_uctenis_v03.png" type="image/png">
   <link rel="stylesheet" href="style.css?v=20260813_v1">
   <link rel="stylesheet" href="ranking.css?v=20260907_admin_mobile_v2">
+  <script>
+    // Quien llega desde liga.html (?liga=1) solo quiere el modal de desafio de
+    // liga, no la pagina de ranking en si. Oculta el contenido antes del primer
+    // paint para que no se vea "flashear" el ranking completo detras del popup;
+    // openModal() lo revela apenas el modal (o el login) esta listo, y hay un
+    // timeout de seguridad por si algo falla y el modal nunca llega a abrirse.
+    if (/(?:^|[?&])liga=1(?:&|$)/.test(location.search)) {
+      document.documentElement.classList.add('liga-entry-pending');
+      setTimeout(() => document.documentElement.classList.remove('liga-entry-pending'), 6000);
+    }
+  </script>
+  <style>
+    html.liga-entry-pending .ranking-page { visibility: hidden; }
+  </style>
 </head>
 <body>
 <div class="main-container ranking-page">
@@ -6705,6 +6719,7 @@ function setChallengeMinDate() {
 }
 
 function openModal(id) {
+  document.documentElement.classList.remove('liga-entry-pending');
   const modal = document.getElementById(id);
   modal.classList.add('visible');
   modal.setAttribute('aria-hidden', 'false');
