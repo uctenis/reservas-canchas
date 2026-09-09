@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Migrador de Base de Datos – UCTenis</title>
+  <link rel="icon" href="logo_uctenis_v03.png" type="image/png">
+  <style>
+    :root {
+      --bg-color: #07121f;
+      --card-bg: rgba(15, 23, 42, 0.8);
+      --border-color: rgba(255, 255, 255, 0.08);
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --accent-green: #c6d300;
+      --accent-blue: #3b82f6;
+      --accent-red: #ef4444;
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    body {
+      background-color: var(--bg-color);
+      background-image:
+        linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px),
+        linear-gradient(180deg, rgba(255,255,255,0.02) 1px, transparent 1px),
+        linear-gradient(135deg, rgba(198,211,0,0.05), transparent 40%);
+      background-size: 80px 80px, 80px 80px, 100% 100%;
+      color: var(--text-primary);
+      font-family: var(--font-sans);
+      margin: 0;
+      padding: 40px 20px;
+      display: flex;
+      justify-content: center;
+    }
+    .container {
+      max-width: 680px;
+      width: 100%;
+    }
+    header {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    .logo {
+      width: 80px;
+      margin-bottom: 12px;
+    }
+    h1 {
+      font-size: 2rem;
+      margin: 0 0 6px;
+      letter-spacing: -0.5px;
+    }
+    p {
+      color: var(--text-secondary);
+      margin: 0 0 20px;
+      font-size: 0.95rem;
+      line-height: 1.5;
+    }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+      margin-bottom: 20px;
+      backdrop-filter: blur(8px);
+    }
+    .step-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      margin-top: 0;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .step-number {
+      background: var(--border-color);
+      color: var(--text-primary);
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.8rem;
+    }
+    .active-step .step-number {
+      background: var(--accent-green);
+      color: #07121f;
+      font-weight: 800;
+    }
+    .btn {
+      width: 100%;
+      padding: 12px;
+      border-radius: 8px;
+      border: none;
+      font-family: inherit;
+      font-weight: 700;
+      font-size: 0.92rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .btn-primary {
+      background: var(--accent-green);
+      color: #07121f;
+    }
+    .btn-primary:hover:not(:disabled) {
+      background: #d4e000;
+      transform: translateY(-1px);
+    }
+    .btn-secondary {
+      background: var(--accent-blue);
+      color: white;
+    }
+    .btn-secondary:hover:not(:disabled) {
+      background: #2563eb;
+      transform: translateY(-1px);
+    }
+    .btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      transform: none !important;
+    }
+    .log-box {
+      background: rgba(0,0,0,0.4);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 12px;
+      font-family: monospace;
+      font-size: 0.8rem;
+      height: 140px;
+      overflow-y: auto;
+      margin-top: 14px;
+      color: #38bdf8;
+    }
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      font-size: 0.9rem;
+    }
+    .stat-row:last-child { border-bottom: none; }
+    .status-badge {
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: 700;
+    }
+    .status-pending { background: rgba(251,191,36,0.12); color: #fbbf24; }
+    .status-success { background: rgba(74,222,128,0.12); color: #4ade80; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <img src="logo_uctenis_v03.png" alt="UCTenis" class="logo">
+    <h1>Migración de Base de Datos</h1>
+    <p>Utilidad para transferir los jugadores, fotos, fichas y desafíos desde la base de datos antigua a la nueva.</p>
+  </header>
+
+  <!-- Paso 1: Conectar Base Antigua -->
+  <div class="card active-step" id="cardStep1">
+    <h3 class="step-title"><span class="step-number">1</span> Conectar Base de Datos Antigua</h3>
+    <p>Inicia sesión con la cuenta de <strong>David (dsilvaroco@gmail.com)</strong> para leer los datos anteriores.</p>
+    <button class="btn btn-secondary" id="btnAuthOld" onclick="loginOld()">
+      🔑 Conectar Base Antigua
+    </button>
+    <div class="stat-row" style="margin-top:14px">
+      <span>Estado:</span>
+      <span class="status-badge status-pending" id="statusOld">Desconectado</span>
+    </div>
+  </div>
+
+  <!-- Paso 2: Descargar Datos -->
+  <div class="card" id="cardStep2">
+    <h3 class="step-title"><span class="step-number">2</span> Descargar Datos desde la Nube</h3>
+    <p>Lee todos los jugadores y desafíos históricos almacenados en la base de datos antigua.</p>
+    <button class="btn btn-primary" id="btnFetch" onclick="fetchOldData()" disabled>
+      📥 Descargar Datos
+    </button>
+    <div id="statsBox" style="display:none; margin-top: 14px;">
+      <div class="stat-row"><span>Jugadores encontrados:</span><strong id="statPlayers">0</strong></div>
+      <div class="stat-row"><span>Desafíos encontrados:</span><strong id="statChallenges">0</strong></div>
+    </div>
+  </div>
+
+  <!-- Paso 3: Conectar Base Nueva -->
+  <div class="card" id="cardStep3">
+    <h3 class="step-title"><span class="step-number">3</span> Conectar Base de Datos Nueva</h3>
+    <p>Inicia sesión con la nueva cuenta del club <strong>(uctenisclub@gmail.com)</strong> para guardar los datos.</p>
+    <button class="btn btn-secondary" id="btnAuthNew" onclick="loginNew()" disabled>
+      🔑 Conectar Base Nueva
+    </button>
+    <div class="stat-row" style="margin-top:14px">
+      <span>Estado:</span>
+      <span class="status-badge status-pending" id="statusNew">Desconectado</span>
+    </div>
+  </div>
+
+  <!-- Paso 4: Guardar en Base Nueva -->
+  <div class="card" id="cardStep4">
+    <h3 class="step-title"><span class="step-number">4</span> Migrar Datos a la Nueva Base</h3>
+    <p>Sube los jugadores y desafíos recuperados a tu nuevo proyecto de Firebase.</p>
+    <button class="btn btn-primary" id="btnUpload" onclick="uploadNewData()" disabled>
+      🚀 Iniciar Transferencia
+    </button>
+    <div class="log-box" id="logBox">Logs del sistema...</div>
+  </div>
+</div>
+
+<!-- Firebase SDKs (Compat v9) -->
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
+<script>
+  // CONFIGURACIÓN VIEJA
+  const CONFIG_OLD = {
+    apiKey: "AIzaSyD0rw37KXsqIQTIWYEbTiiA775aissX65E",
+    authDomain: "uctenis.firebaseapp.com",
+    projectId: "uctenis",
+    storageBucket: "uctenis.firebasestorage.app",
+    messagingSenderId: "646912426490",
+    appId: "1:646912426490:web:70d8b5831f63b3e4a06443"
+  };
+
+  // CONFIGURACIÓN NUEVA
+  const CONFIG_NEW = {
+    apiKey: "AIzaSyDxNdwD8hHQmN2efhRwflL7RkpC-RFs3ow",
+    authDomain: "uctenis-club.firebaseapp.com",
+    projectId: "uctenis-club",
+    storageBucket: "uctenis-club.firebasestorage.app",
+    messagingSenderId: "223552986034",
+    appId: "1:223552986034:web:13b34a6a246fb254eca2ab",
+    measurementId: "G-2NKXS8BMNC"
+  };
+
+  // Inicializar Apps Firebase
+  const oldApp = firebase.initializeApp(CONFIG_OLD, "oldApp");
+  const newApp = firebase.initializeApp(CONFIG_NEW, "newApp");
+
+  let playersData = [];
+  let challengesData = [];
+
+  function addLog(msg) {
+    const logBox = document.getElementById('logBox');
+    logBox.innerHTML += `<div>[${new Date().toLocaleTimeString()}] ${msg}</div>`;
+    logBox.scrollTop = logBox.scrollHeight;
+  }
+
+  // PASO 1: Login base antigua
+  async function loginOld() {
+    try {
+      const provider = new firebase.auth.GoogleAuthProvider();
+      const result = await oldApp.auth().signInWithPopup(provider);
+      
+      document.getElementById('statusOld').textContent = `Conectado: ${result.user.email}`;
+      document.getElementById('statusOld').className = 'status-badge status-success';
+      addLog(`Autenticado con éxito en Base Antigua.`);
+      
+      document.getElementById('btnFetch').disabled = false;
+      document.getElementById('cardStep1').classList.remove('active-step');
+      document.getElementById('cardStep2').classList.add('active-step');
+    } catch(e) {
+      alert("Error al iniciar sesión en base antigua: " + e.message);
+      addLog(`Error login antiguo: ${e.message}`);
+    }
+  }
+
+  // PASO 2: Descargar datos
+  async function fetchOldData() {
+    const btn = document.getElementById('btnFetch');
+    btn.disabled = true;
+    btn.textContent = 'Descargando...';
+    addLog('Iniciando descarga de colecciones de la Base Antigua...');
+
+    try {
+      const dbOld = oldApp.firestore();
+      
+      // 1. Descargar jugadores
+      const playersSnapshot = await dbOld.collection('ranking_players').get();
+      playersData = playersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      addLog(`Descargados ${playersData.length} jugadores.`);
+
+      // 2. Descargar desafíos
+      const challengesSnapshot = await dbOld.collection('ranking_challenges').get();
+      challengesData = challengesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      addLog(`Descargados ${challengesData.length} desafíos.`);
+
+      document.getElementById('statPlayers').textContent = playersData.length;
+      document.getElementById('statChallenges').textContent = challengesData.length;
+      document.getElementById('statsBox').style.display = 'block';
+
+      btn.textContent = 'Datos Descargados ✅';
+      
+      document.getElementById('btnAuthNew').disabled = false;
+      document.getElementById('cardStep2').classList.remove('active-step');
+      document.getElementById('cardStep3').classList.add('active-step');
+    } catch(e) {
+      alert("Error descargando datos: " + e.message);
+      addLog(`Error descarga: ${e.message}`);
+      btn.disabled = false;
+      btn.textContent = '📥 Descargar Datos';
+    }
+  }
+
+  // PASO 3: Login base nueva
+  async function loginNew() {
+    try {
+      const provider = new firebase.auth.GoogleAuthProvider();
+      const result = await newApp.auth().signInWithPopup(provider);
+      
+      document.getElementById('statusNew').textContent = `Conectado: ${result.user.email}`;
+      document.getElementById('statusNew').className = 'status-badge status-success';
+      addLog(`Autenticado con éxito en Base Nueva.`);
+
+      document.getElementById('btnUpload').disabled = false;
+      document.getElementById('cardStep3').classList.remove('active-step');
+      document.getElementById('cardStep4').classList.add('active-step');
+    } catch(e) {
+      alert("Error al iniciar sesión en base nueva: " + e.message);
+      addLog(`Error login nuevo: ${e.message}`);
+    }
+  }
+
+  // PASO 4: Guardar datos nuevos
+  async function uploadNewData() {
+    const btn = document.getElementById('btnUpload');
+    btn.disabled = true;
+    btn.textContent = 'Migrando...';
+    addLog('Iniciando subida de datos a la nueva Base de Datos...');
+
+    try {
+      const dbNew = newApp.firestore();
+
+      // 1. Subir jugadores
+      addLog(`Guardando jugadores (${playersData.length})...`);
+      for (let i = 0; i < playersData.length; i++) {
+        const player = playersData[i];
+        await dbNew.collection('ranking_players').doc(player.id).set(player, { merge: true });
+        if ((i + 1) % 10 === 0 || i === playersData.length - 1) {
+          addLog(`Progreso jugadores: ${i + 1}/${playersData.length}`);
+        }
+      }
+
+      // 2. Subir desafíos
+      addLog(`Guardando desafíos (${challengesData.length})...`);
+      for (let i = 0; i < challengesData.length; i++) {
+        const challenge = challengesData[i];
+        await dbNew.collection('ranking_challenges').doc(challenge.id).set(challenge, { merge: true });
+        if ((i + 1) % 10 === 0 || i === challengesData.length - 1) {
+          addLog(`Progreso desafíos: ${i + 1}/${challengesData.length}`);
+        }
+      }
+
+      addLog('🎉 ¡MIGRACIÓN COMPLETADA CON ÉXITO! Todos los datos históricos, fotos y desafíos están ahora en la nueva cuenta.');
+      btn.textContent = '¡Migración Exitosa! 🎉';
+      alert('¡Felicidades! La base de datos completa de UCTenis ha sido migrada con éxito al nuevo proyecto.');
+    } catch(e) {
+      alert("Error subiendo datos: " + e.message);
+      addLog(`Error subida: ${e.message}`);
+      btn.disabled = false;
+      btn.textContent = '🚀 Iniciar Transferencia';
+    }
+  }
+</script>
+</body>
+</html>
