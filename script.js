@@ -270,17 +270,40 @@ async function fetchWeather() {
 
 let allPlayersData = [];
 
-async function loadRanking() {
+// ✅ Fase 2.2: Caché de ranking con validación de timestamp
+let cachedRankingData = null;
+let rankingCacheTime = 0;
+const RANKING_CACHE_MS = 5 * 60 * 1000; // 5 minutos
+
+async function loadRanking(forceRefresh = false) {
     const lastUpdatedEl = document.getElementById('lastUpdatedDate');
     if (!lastUpdatedEl) return;
+
+    // ✅ Retorna caché si es fresco y no se exige refresco
+    const now = Date.now();
+    if (!forceRefresh && cachedRankingData && (now - rankingCacheTime) < RANKING_CACHE_MS) {
+        allPlayersData = [
+            ...(cachedRankingData.hombres || []).map(p => ({ ...p, gender: 'H' })),
+            ...(cachedRankingData.mujeres || []).map(p => ({ ...p, gender: 'M' }))
+        ];
+        renderTable('M', cachedRankingData.mujeres);
+        renderTable('H', cachedRankingData.hombres);
+        findTopMover();
+        return;
+    }
 
     lastUpdatedEl.textContent = 'Actualizado: ' + new Date().toLocaleDateString('es-CL', { year: 'numeric', month: 'long', day: 'numeric' });
 
     try {
-        const response = await fetch(`${CONFIG.API_URL}?action=get_ranking&v=${new Date().getTime()}`);
+        // ✅ Sin ?v=timestamp: permite caché HTTP del navegador
+        const response = await fetch(`${CONFIG.API_URL}?action=get_ranking`);
         const data = await response.json();
 
         if (data.status === 'error') throw new Error(data.message);
+
+        // Guardar en caché
+        cachedRankingData = data;
+        rankingCacheTime = Date.now();
 
         allPlayersData = [
             ...(data.hombres || []).map(p => ({ ...p, gender: 'H' })),
@@ -432,7 +455,8 @@ document.addEventListener('DOMContentLoaded', () => {
       DB.addEventListener('challenges-updated', (data) => {
         console.log('📊 Desafíos actualizados, recalculando ranking...');
         if (typeof loadRanking === 'function') {
-          loadRanking();
+          // Forzar refresco al detectar cambios reales en Firestore
+          loadRanking(true);
         }
       });
     }

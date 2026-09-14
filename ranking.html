@@ -10,7 +10,7 @@
   <meta property="og:image" content="https://uctenis.github.io/reservas-canchas/logo_uctenis_v03.png">
   <link rel="icon" href="logo_uctenis_v03.png" type="image/png">
   <link rel="stylesheet" href="style.css?v=20260813_v1">
-  <link rel="stylesheet" href="ranking.css?v=20260907_admin_mobile_v2">
+  <link rel="stylesheet" href="ranking.css?v=20260914_cec_fix">
   <link rel="stylesheet" href="datepicker.css?v=20260908_v3">
   <script>
     // Quien llega desde liga.html (?liga=1) solo quiere el modal de desafio de
@@ -348,6 +348,7 @@
         <button type="button" class="admin-tab-btn active" id="tabPlayers" onclick="switchAdminSubSection('players')">👥 Jugadores</button>
         <button type="button" class="admin-tab-btn" id="tabNews" onclick="switchAdminSubSection('news')">📢 Novedades</button>
         <button type="button" class="admin-tab-btn" id="tabSchedules" onclick="switchAdminSubSection('schedules')">🗓️ Horarios</button>
+        <button type="button" class="admin-tab-btn" id="tabBookings" onclick="switchAdminSubSection('bookings')">📅 Reservas</button>
         <a class="admin-tab-btn" href="admin-campeonatos.html" style="text-decoration:none;display:inline-flex;align-items:center;">&#127942; Campeonatos</a>
       </div>
     </div>
@@ -813,6 +814,33 @@
       </div>
     </div>
 
+    <!-- Sección de Reservas (calendario de horas solicitadas/agendadas) -->
+    <div id="adminBookingsSection" class="hidden" style="padding: 0 20px 20px 20px;">
+      <div class="schedule-header">
+        <div>
+          <p class="modal-kicker">Centro de operaciones</p>
+          <h3>Calendario de reservas</h3>
+          <p class="schedule-header-copy">Horas solicitadas o agendadas por socios y funcionarios, por cancha y día.</p>
+        </div>
+      </div>
+
+      <div class="schedule-panel schedule-panel-card">
+        <div class="admin-bookings-toolbar">
+          <button type="button" class="btn-secondary admin-bookings-nav" onclick="shiftAdminBookingsDate(-1)" aria-label="Día anterior">←</button>
+          <input type="text" class="uct-date" id="adminBookingsDate" readonly autocomplete="off" style="max-width:180px; padding:10px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:#fff; outline:none;">
+          <button type="button" class="btn-secondary admin-bookings-nav" onclick="shiftAdminBookingsDate(1)" aria-label="Día siguiente">→</button>
+          <button type="button" class="btn-secondary" onclick="setAdminBookingsDateToday()" style="padding:8px 14px;font-size:0.8rem;">Hoy</button>
+          <span id="adminBookingsCount" class="admin-bookings-count"></span>
+        </div>
+
+        <div id="adminBookingsAlert" class="alert-box" style="display:none; padding: 12px; border-radius: 8px; font-size: 0.85rem; margin-bottom: 15px;"></div>
+
+        <div id="adminBookingsGridContainer" class="schedule-grid-shell">
+          <p style="color:var(--text-secondary);font-size:0.85rem;text-align:center;padding:15px">Cargando reservas...</p>
+        </div>
+      </div>
+    </div>
+
     </div>
   </div>
 </div>
@@ -820,7 +848,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-<script src="db.js?v=20260817_sync_admin_v2"></script>
+<script src="db.js?v=20260914_cec_fix"></script>
 <script src="liga.js?v=20260909_v1"></script>
 <script src="datepicker.js?v=20260908_v3"></script>
 
@@ -1062,6 +1090,11 @@ function setupEvents() {
     const m = String(today.getMonth() + 1).padStart(2, '0');
     const d = String(today.getDate()).padStart(2, '0');
     specialDateInput.value = `${y}-${m}-${d}`;
+  }
+
+  const bookingsDateInput = document.getElementById('adminBookingsDate');
+  if (bookingsDateInput) {
+    bookingsDateInput.addEventListener('change', () => loadAdminBookingsForDate());
   }
 
   document.getElementById('fChallenge').addEventListener('submit', submitChallenge);
@@ -7200,14 +7233,17 @@ window.switchAdminSubSection = function(section) {
   const tabPlayers = document.getElementById('tabPlayers');
   const tabNews = document.getElementById('tabNews');
   const tabSchedules = document.getElementById('tabSchedules');
+  const tabBookings = document.getElementById('tabBookings');
 
   const secPlayers = document.getElementById('adminPlayersSection');
   const secNews = document.getElementById('adminNewsSection');
   const secSchedules = document.getElementById('adminSchedulesSection');
+  const secBookings = document.getElementById('adminBookingsSection');
 
   tabPlayers.classList.toggle('active', section === 'players');
   tabNews.classList.toggle('active', section === 'news');
   if (tabSchedules) tabSchedules.classList.toggle('active', section === 'schedules');
+  if (tabBookings) tabBookings.classList.toggle('active', section === 'bookings');
 
   if (secPlayers) secPlayers.style.display = section === 'players' ? 'block' : 'none';
   if (secNews) {
@@ -7218,12 +7254,19 @@ window.switchAdminSubSection = function(section) {
     secSchedules.style.display = section === 'schedules' ? 'block' : 'none';
     secSchedules.classList.toggle('hidden', section !== 'schedules');
   }
+  if (secBookings) {
+    secBookings.style.display = section === 'bookings' ? 'block' : 'none';
+    secBookings.classList.toggle('hidden', section !== 'bookings');
+  }
 
   if (section === 'news') {
     renderAdminNewsList();
   } else if (section === 'schedules') {
     loadSpecialDatesList();
     loadScheduleConfig();
+  } else if (section === 'bookings') {
+    initAdminBookingsDateIfNeeded();
+    loadAdminBookingsForDate();
   }
 }
 
@@ -7907,6 +7950,110 @@ window.deleteSpecialPeriod = async function(groupId, label) {
   }
   loadSpecialDatesList();
 }
+
+// ──────────────── RESERVAS: CALENDARIO ADMIN ────────────────
+function showAdminBookingsAlert(msg, type = 'success') {
+  const box = document.getElementById('adminBookingsAlert');
+  if (!box) return;
+  box.style.display = 'block';
+  box.style.backgroundColor = type === 'error' ? 'rgba(239,68,68,0.15)' : (type === 'warn' ? 'rgba(217,119,6,0.15)' : 'rgba(16,185,129,0.15)');
+  box.style.border = `1px solid ${type === 'error' ? '#ef4444' : (type === 'warn' ? '#d97706' : '#10b981')}`;
+  box.style.color = type === 'error' ? '#fca5a5' : (type === 'warn' ? '#fcd34d' : '#86efac');
+  box.textContent = msg;
+  setTimeout(() => { box.style.display = 'none'; }, 4000);
+}
+
+// Solo canchas con al menos un horario habilitado algún día de la semana
+// (las CEC bloqueadas por mal estado nunca deben aparecer como columna: es
+// imposible que tengan horas pedidas).
+function getOperativeCourts() {
+  const all = (window.DB && DB.COURTS) || [];
+  const courtSlots = window.DEFAULT_COURT_SLOTS || {};
+  return all.filter(c => {
+    const days = courtSlots[c.id];
+    if (!days) return true;
+    return Object.values(days).some(list => Array.isArray(list) && list.length > 0);
+  });
+}
+
+function initAdminBookingsDateIfNeeded() {
+  const input = document.getElementById('adminBookingsDate');
+  if (input && !input.value) input.value = todayISO();
+}
+
+function getAdminBookingsDateStr() {
+  const input = document.getElementById('adminBookingsDate');
+  const val = input && input.value ? normalizeAdminDate(input.value) : '';
+  return val || todayISO();
+}
+
+window.shiftAdminBookingsDate = function(deltaDays) {
+  const input = document.getElementById('adminBookingsDate');
+  if (!input) return;
+  const [y, m, d] = getAdminBookingsDateStr().split('-').map(Number);
+  const next = new Date(y, m - 1, d + deltaDays);
+  input.value = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-${String(next.getDate()).padStart(2, '0')}`;
+  loadAdminBookingsForDate();
+};
+
+window.setAdminBookingsDateToday = function() {
+  const input = document.getElementById('adminBookingsDate');
+  if (input) input.value = todayISO();
+  loadAdminBookingsForDate();
+};
+
+function renderAdminBookingsGrid(bookings, dateStr) {
+  const container = document.getElementById('adminBookingsGridContainer');
+  if (!container) return;
+  const slots = window.DEFAULT_SLOTS || [];
+  const courts = getOperativeCourts();
+
+  const byKey = {};
+  bookings.forEach(b => { byKey[`${b.courtKey}|${b.slot}`] = b; });
+
+  const headerCells = courts.map(c => `<th>${escapeHTML(c.label)}</th>`).join('');
+  const rows = slots.map(slot => {
+    const cells = courts.map(c => {
+      const b = byKey[`${c.id}|${slot}`];
+      if (!b) return `<td class="booking-slot-cell">Libre</td>`;
+      const badge = b.userTypeLabel ? `<span class="booking-slot-badge">${escapeHTML(b.userTypeLabel)}</span>` : '';
+      return `<td class="booking-slot-cell is-booked"><span class="booking-slot-name">${escapeHTML(b.nombre || 'Jugador/a')}</span>${badge}</td>`;
+    }).join('');
+    return `<tr><th class="schedule-day-cell"><span>${slot}</span></th>${cells}</tr>`;
+  }).join('');
+
+  container.innerHTML = courts.length
+    ? `<table class="schedule-matrix"><thead><tr><th>Hora</th>${headerCells}</tr></thead><tbody>${rows}</tbody></table>`
+    : '<p style="color:var(--text-secondary);font-size:0.85rem;text-align:center;padding:15px">No hay canchas operativas configuradas.</p>';
+
+  const count = document.getElementById('adminBookingsCount');
+  if (count) count.textContent = `${bookings.length} reserva${bookings.length === 1 ? '' : 's'}`;
+}
+
+window.loadAdminBookingsForDate = async function() {
+  const dateStr = getAdminBookingsDateStr();
+  const container = document.getElementById('adminBookingsGridContainer');
+  if (container) container.innerHTML = '<p style="color:var(--text-secondary);font-size:0.85rem;text-align:center;padding:15px">Cargando reservas...</p>';
+  const count = document.getElementById('adminBookingsCount');
+  if (count) count.textContent = '';
+
+  try {
+    if (!window.CONFIG?.API_URL) throw new Error('Sin conexión al servidor configurada.');
+    const idToken = await DB.getIdTokenOrReauth();
+    if (!idToken) throw new Error(DB.lastAuthError || 'No se pudo renovar tu sesión de administrador con Google.');
+    const res = await fetch(window.CONFIG.API_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'admin_get_court_bookings', date: dateStr, idToken })
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.msg || 'Error en el servidor');
+    renderAdminBookingsGrid(data.bookings || [], dateStr);
+  } catch (e) {
+    console.warn('No se pudieron cargar las reservas del día:', e);
+    if (container) container.innerHTML = `<p style="color:#f87171;font-size:0.85rem;text-align:center;padding:15px">No se pudo cargar: ${e.message}</p>`;
+    showAdminBookingsAlert(`⚠️ No se pudo cargar: ${e.message}`, 'error');
+  }
+};
 
 // ──────────────── HORARIOS REGULARES Y PARÁMETROS DE RESERVA ────────────────
 const SCHEDULE_DAYS = [

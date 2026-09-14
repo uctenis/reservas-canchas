@@ -564,12 +564,12 @@ if (event.request.url.includes('/api/')) {
 
 ## 📝 CHECKLIST DE IMPLEMENTACIÓN
 
-- [ ] Fase 1.1: Convertir `getPlayersCloud()` a `onSnapshot()`
-- [ ] Fase 1.2: Convertir `getChallengesCloud()` a `onSnapshot()`  
-- [ ] Fase 1.3: Refactor `findPlayerByEmailCloud()` a query única
-- [ ] Fase 2.1: Agregar paginación con `limit()` en Firestore queries
-- [ ] Fase 2.2: Implementar caché con validación de timestamp
-- [ ] Fase 2.3: Cleanup de localStorage en logout
+- [x] Fase 1.1: Convertir `getPlayersCloud()` a `onSnapshot()` ✅
+- [x] Fase 1.2: Convertir `getChallengesCloud()` a `onSnapshot()` ✅  
+- [x] Fase 1.3: Refactor `findPlayerByEmailCloud()` a query única (con caché en memoria) ✅
+- [x] Fase 2.1: `getPlayersCloud/getChallengesCloud/getNewsCloud` usan caché del listener ✅
+- [x] Fase 2.2: Implementar caché con validación de timestamp en `loadRanking()` ✅
+- [x] Fase 2.3: Cleanup de localStorage en logout (`cleanupListeners`) ✅
 - [ ] Fase 3.1: Pruebas de carga con 10k+ registros
 - [ ] Fase 3.2: Implementar monitoring de operaciones Firestore
 - [ ] Fase 3.3: Documentar patrones de optimización

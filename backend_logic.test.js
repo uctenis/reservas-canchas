@@ -443,7 +443,7 @@ function testValidateChallengeCreationBlocksDuplicateFriendlyInvite() {
 
 function testDetectCourtFromEventStrictModeFailsClosed() {
   const ambiguousEvent = { getTitle() { return 'Mantenimiento de cancha'; }, getDescription() { return ''; }, getLocation() { return ''; } };
-  assert.equal(context.detectCourtFromEvent(ambiguousEvent), 'cec1', 'modo no-estricto conserva el fallback histórico para vistas de solo lectura');
+  assert.equal(context.detectCourtFromEvent(ambiguousEvent), 'cjp1', 'modo no-estricto nunca debe asumir una cancha CEC bloqueada; cae a cjp1');
   assert.equal(context.detectCourtFromEvent(ambiguousEvent, true), null, 'modo estricto no debe adivinar la cancha para no liberar otras 3 por error');
 }
 

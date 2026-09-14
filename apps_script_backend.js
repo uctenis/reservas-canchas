@@ -98,7 +98,8 @@ function getCourtName(courtId) {
  * como ocupado en las 4 canchas) en lugar de liberar 3 canchas por error.
  */
 function detectCourtFromEvent(event, strict) {
-  const fallback = strict ? null : 'cec1';
+  // Fallback: si no se detecta la cancha, asumimos cjp1 (las CEC están cerradas).
+  const fallback = strict ? null : 'cjp1';
   if (!event) return fallback;
   const title = (event.getTitle() || '').toLowerCase();
   const desc = (event.getDescription() || '').toLowerCase();
@@ -203,6 +204,8 @@ function handleRequest(data) {
       case "admin_retry_booking_sync": response = adminRetryBookingSync(data); break;
       case "admin_get_booking_sync_status": response = adminGetBookingSyncStatus(data); break;
       case "admin_migrate_calendar_bookings": response = adminMigrateCalendarBookings(data); break;
+      case "admin_get_stats":         response = adminGetStats(data); break;
+      case "admin_get_court_bookings": response = adminGetCourtBookingsForDate(data); break;
     }
 
     return ContentService.createTextOutput(JSON.stringify(response))
@@ -812,7 +815,9 @@ function createChallengeCalendarInvite(data) {
     const guestList = [text(data.retadorEmail), text(data.retadoEmail)].filter(Boolean);
     const guests = guestList.join(',');
     const isFriendly = text(data.tipo) === 'amistoso';
-    const courtKey = text(data.courtId || (data.cancha && data.cancha.toLowerCase().includes('cjp') ? 'cjp1' : 'cec1'));
+    // Igual que en detectCourtFromEvent: si no llega courtId, jamás asumir
+    // una cancha CEC (bloqueadas por mal estado) — el fallback es cjp1.
+    const courtKey = text(data.courtId || (data.cancha && data.cancha.toLowerCase().includes('cec') ? 'cec1' : 'cjp1'));
     const courtName = getCourtName(courtKey);
     const title = '[' + courtName + '] ' + (isFriendly ? 'Partido amistoso UCTenis: ' : 'Desafio ranking UCTenis: ') + text(data.retadorNombre) + ' vs ' + text(data.retadoNombre);
     const description = [
@@ -4191,6 +4196,16 @@ function sendMonthlyPlayerStats() {
 
 // =======================================================
 // 📅 AGENDA DIARIA Y FIN DE SEMANA — CORREOS DE CANCHAS
+
+/**
+ * Devuelve true si la cancha está completamente cerrada (todos los días sin slots).
+ * Usado para omitirla en los correos de agenda.
+ */
+function isCourtClosed(courtKey) {
+  const slots = CONFIG.COURT_SLOTS && CONFIG.COURT_SLOTS[courtKey];
+  if (!slots) return false;
+  return Object.values(slots).every(function(daySlots) { return !daySlots || daySlots.length === 0; });
+}
 // =======================================================
 
 /**
@@ -4270,13 +4285,34 @@ function getBookingsForDate(dateStr) {
     console.warn('getBookingsForDate error en calendar maestro: ' + e.message);
   }
 
+  // Excluir canchas completamente cerradas (ej: CEC mientras están fuera de servicio)
+  const activeBookings = bookings.filter(function(b) { return !isCourtClosed(b.courtKey); });
+
   // Ordenar por hora, luego por cancha
-  bookings.sort(function(a, b) {
+  activeBookings.sort(function(a, b) {
     if (a.slot !== b.slot) return a.slot < b.slot ? -1 : 1;
     return a.courtKey < b.courtKey ? -1 : 1;
   });
 
-  return bookings;
+  return activeBookings;
+}
+
+/**
+ * Devuelve las reservas de un día para el calendario del panel admin
+ * (pestaña "Reservas"). Reutiliza la misma fuente de verdad que los correos
+ * de agenda, así que nunca puede mostrar una cancha no operativa (isCourtClosed
+ * ya las excluye en getBookingsForDate) ni clasificarlas distinto.
+ * Requiere autenticación de admin (idToken).
+ * Params: { date: 'yyyy-MM-dd', idToken }
+ */
+function adminGetCourtBookingsForDate(data) {
+  if (!isAdminRequest(data)) return { ok: false, msg: 'Acceso reservado al administrador.' };
+
+  const dateStr = text(data.date);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return { ok: false, msg: 'Fecha no válida (usa yyyy-MM-dd).' };
+
+  const bookings = getBookingsForDate(dateStr);
+  return { ok: true, date: dateStr, bookings: bookings };
 }
 
 /**
@@ -4428,6 +4464,190 @@ function sendWeekendCourtDigest() {
   } catch(e) {
     console.error('sendWeekendCourtDigest error al enviar: ' + e.message);
   }
+}
+
+// =======================================================
+// 📊 ESTADÍSTICAS ADMIN
+// =======================================================
+
+/**
+ * Devuelve estadísticas agregadas de reservas en un rango de fechas.
+ * Requiere autenticación de admin (idToken).
+ * Params: { dateFrom: 'yyyy-MM-dd', dateTo: 'yyyy-MM-dd', idToken }
+ */
+function adminGetStats(data) {
+  if (!isAdminRequest(data)) return { ok: false, msg: 'Acceso reservado al administrador.' };
+
+  const dateFrom = text(data.dateFrom);
+  const dateTo   = text(data.dateTo);
+  if (!dateFrom || !dateTo) return { ok: false, msg: 'Se requieren dateFrom y dateTo (yyyy-MM-dd).' };
+  if (dateFrom > dateTo)    return { ok: false, msg: 'dateFrom debe ser anterior o igual a dateTo.' };
+
+  // Calcular días del rango
+  const dayMs = 24 * 60 * 60 * 1000;
+  const start = new Date(dateFrom + 'T00:00:00Z');
+  const end   = new Date(dateTo   + 'T00:00:00Z');
+  const totalDays = Math.round((end - start) / dayMs) + 1;
+  if (totalDays > 365) return { ok: false, msg: 'El rango no puede superar 365 días.' };
+
+  // Consultar Firestore usando runQuery con filtros de rango
+  const projectId = CONFIG.FIREBASE_PROJECT_ID;
+  const apiKey    = CONFIG.FIREBASE_API_KEY;
+  const idToken   = text(data.idToken);
+  const url = 'https://firestore.googleapis.com/v1/projects/' + projectId +
+              '/databases/(default)/documents:runQuery?key=' + apiKey;
+
+  const payload = {
+    structuredQuery: {
+      from: [{ collectionId: 'court_bookings' }],
+      where: {
+        compositeFilter: {
+          op: 'AND',
+          filters: [
+            { fieldFilter: { field: { fieldPath: 'date' }, op: 'GREATER_THAN_OR_EQUAL', value: { stringValue: dateFrom } } },
+            { fieldFilter: { field: { fieldPath: 'date' }, op: 'LESS_THAN_OR_EQUAL',    value: { stringValue: dateTo   } } }
+          ]
+        }
+      },
+      limit: 3000
+    }
+  };
+
+  let rows;
+  try {
+    const headers = { 'Content-Type': 'application/json' };
+    if (idToken) headers['Authorization'] = 'Bearer ' + idToken;
+    const resp = UrlFetchApp.fetch(url, {
+      method: 'post',
+      headers: headers,
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    });
+    if (resp.getResponseCode() >= 400) {
+      return { ok: false, msg: 'Firestore error ' + resp.getResponseCode() + ': ' + resp.getContentText().substring(0, 200) };
+    }
+    rows = JSON.parse(resp.getContentText()) || [];
+  } catch (e) {
+    return { ok: false, msg: 'Error al consultar reservas: ' + e.message };
+  }
+
+  // Parsear y agregar
+  const byCourt    = {};
+  const byPlayer   = {};
+  const byWeekday  = { 0:0, 1:0, 2:0, 3:0, 4:0, 5:0, 6:0 };
+  const bySlot     = {};
+  const byDate     = {};
+  const byStatus   = { confirmed: 0, cancelled: 0, other: 0 };
+
+  const ACTIVE_STATUSES = ['confirmed', 'pending_calendar', 'calendar_retry'];
+
+  rows.forEach(function(row) {
+    const doc = row.document;
+    if (!doc || !doc.fields) return;
+    const f = doc.fields;
+    const get = function(key) {
+      const v = f[key];
+      if (!v) return '';
+      return v.stringValue !== undefined ? v.stringValue : (v.booleanValue !== undefined ? v.booleanValue : (v.integerValue || ''));
+    };
+    const status   = get('status');
+    const courtId  = get('courtId');
+    const date     = get('date');
+    const slot     = get('slot');
+    const name     = get('name') || get('nombre') || 'Desconocido';
+    const email    = (get('email') || get('emailLower') || '').toLowerCase();
+    const userType = get('userType') || 'socio';
+
+    // Contabilizar estado
+    if (status === 'cancelled')            byStatus.cancelled++;
+    else if (ACTIVE_STATUSES.includes(status)) byStatus.confirmed++;
+    else                                   byStatus.other++;
+
+    if (!ACTIVE_STATUSES.includes(status)) return; // solo activas para métricas
+
+    // Por cancha
+    if (courtId) {
+      byCourt[courtId] = byCourt[courtId] || { courtId: courtId, courtName: getCourtName(courtId), total: 0 };
+      byCourt[courtId].total++;
+    }
+
+    // Por jugador
+    const playerKey = email || name.toLowerCase();
+    if (playerKey) {
+      if (!byPlayer[playerKey]) byPlayer[playerKey] = { name: name, email: email, userType: userType, total: 0, lastDate: '', favCourt: {}, slots: [] };
+      byPlayer[playerKey].total++;
+      if (!byPlayer[playerKey].lastDate || date > byPlayer[playerKey].lastDate) byPlayer[playerKey].lastDate = date;
+      byPlayer[playerKey].favCourt[courtId] = (byPlayer[playerKey].favCourt[courtId] || 0) + 1;
+      byPlayer[playerKey].slots.push(slot);
+    }
+
+    // Por día de semana
+    if (date) {
+      try {
+        const d = new Date(date + 'T12:00:00Z');
+        byWeekday[d.getUTCDay()]++;
+      } catch(e) {}
+    }
+
+    // Por hora
+    if (slot) {
+      bySlot[slot] = (bySlot[slot] || 0) + 1;
+    }
+
+    // Por fecha (para calendario)
+    if (date) {
+      byDate[date] = (byDate[date] || 0) + 1;
+    }
+  });
+
+  // Construir top jugadores
+  const topPlayers = Object.values(byPlayer)
+    .map(function(p) {
+      const favCourtEntries = Object.entries(p.favCourt).sort(function(a,b){ return b[1]-a[1]; });
+      return {
+        name: p.name,
+        email: p.email,
+        userType: p.userType,
+        total: p.total,
+        lastDate: p.lastDate,
+        favCourt: favCourtEntries.length ? getCourtName(favCourtEntries[0][0]) : 'N/A'
+      };
+    })
+    .sort(function(a,b){ return b.total - a.total; })
+    .slice(0, 50);
+
+  // Cancha más solicitada
+  const courtList = Object.values(byCourt).sort(function(a,b){ return b.total - a.total; });
+
+  // Total reservas activas
+  const totalActive = byStatus.confirmed;
+
+  // Día de semana más ocupado
+  const weekdayNames = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+  const busyWeekday = Object.entries(byWeekday).sort(function(a,b){ return b[1]-a[1]; })[0];
+
+  // Franja horaria más solicitada
+  const busySlot = Object.entries(bySlot).sort(function(a,b){ return b[1]-a[1]; })[0];
+
+  return {
+    ok: true,
+    dateFrom: dateFrom,
+    dateTo: dateTo,
+    totalDays: totalDays,
+    totals: {
+      confirmed: byStatus.confirmed,
+      cancelled: byStatus.cancelled,
+      avgPerDay: totalActive > 0 ? Math.round((totalActive / totalDays) * 10) / 10 : 0,
+      cancellationRate: byStatus.cancelled > 0 ? Math.round((byStatus.cancelled / (byStatus.confirmed + byStatus.cancelled)) * 1000) / 10 : 0
+    },
+    byCourt: courtList,
+    topPlayers: topPlayers,
+    byWeekday: weekdayNames.map(function(name, i) { return { name: name, total: byWeekday[i] || 0 }; }),
+    bySlot: Object.entries(bySlot).map(function(e){ return { slot: e[0], total: e[1] }; }).sort(function(a,b){ return b.total-a.total; }),
+    byDate: byDate,
+    busyWeekday: busyWeekday ? weekdayNames[parseInt(busyWeekday[0])] : 'N/A',
+    busySlot: busySlot ? busySlot[0] : 'N/A'
+  };
 }
 
 // =======================================================

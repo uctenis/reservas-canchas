@@ -65,8 +65,10 @@ const FIREBASE_COLLECTIONS = {
 // backend cae a estos mismos valores si Firestore no responde.
 const DEFAULT_SLOTS = ['09:00','10:30','12:00','13:30','15:00','16:30','18:00','19:30','21:00'];
 const DEFAULT_COURT_SLOTS = {
-  cec1: { 1:['18:00','19:30','21:00'], 2:['18:00','19:30','21:00'], 3:['18:00','19:30','21:00'], 4:['18:00','19:30','21:00'], 5:['18:00','19:30','21:00'], 6:DEFAULT_SLOTS, 0:[] },
-  cec2: { 1:['18:00','19:30','21:00'], 2:['18:00','19:30','21:00'], 3:['18:00','19:30','21:00'], 4:['18:00','19:30','21:00'], 5:['18:00','19:30','21:00'], 6:DEFAULT_SLOTS, 0:[] },
+  // 🚫 CEC 1 y CEC 2 bloqueadas por mal estado de cancha (igual que CONFIG.COURT_SLOTS
+  // en apps_script_backend.js) — no ofrecer horarios por defecto para ellas.
+  cec1: { 1:[], 2:[], 3:[], 4:[], 5:[], 6:[], 0:[] },
+  cec2: { 1:[], 2:[], 3:[], 4:[], 5:[], 6:[], 0:[] },
   cjp1: { 1:['20:00'], 2:['18:00','19:30','21:00'], 3:['18:00','19:30','21:00'], 4:['18:00','19:30','21:00'], 5:['20:00'], 6:DEFAULT_SLOTS, 0:[] },
   cjp2: { 1:['20:00'], 2:['18:00','19:30','21:00'], 3:['18:00','19:30','21:00'], 4:['18:00','19:30','21:00'], 5:['20:00'], 6:DEFAULT_SLOTS, 0:[] }
 };
@@ -924,36 +926,41 @@ const DB = {
     const normalized = normalizeEmailForDb(email);
     if (!normalized || !this.isCloudConfigured()) return null;
 
-    try {
-      const collection = firebaseDb.collection(FIREBASE_COLLECTIONS.players);
-      const queries = [
-        { field: 'emailLower', value: normalized },
-        { field: 'email', value: String(email || '').trim() },
-        { field: 'email', value: normalized }
-      ].filter((query, index, list) =>
-        query.value && list.findIndex(item => item.field === query.field && item.value === query.value) === index
+    // ✅ OPTIMIZACIÓN: Buscar primero en caché en memoria (evita query a Firestore)
+    if (cachedPlayers.length > 0) {
+      const fromCache = cachedPlayers.find(p =>
+        normalizeEmailForDb(p.email) === normalized && isAccessPlayerActive(p)
       );
+      if (fromCache) return fromCache;
+    }
 
-      for (const query of queries) {
-        const snapshot = await collection
-          .where(query.field, '==', query.value)
+    try {
+      // ✅ OPTIMIZACIÓN: Solo una query usando emailLower (campo indexado)
+      const snapshot = await firebaseDb
+        .collection(FIREBASE_COLLECTIONS.players)
+        .where('emailLower', '==', normalized)
+        .limit(1)
+        .get();
+
+      if (!snapshot.empty) {
+        const doc = snapshot.docs[0];
+        const player = { id: doc.id, ...doc.data() };
+        if (isAccessPlayerActive(player)) return player;
+      }
+
+      // Fallback: query por email sin normalizar (compatibilidad con docs viejos sin emailLower)
+      const emailRaw = String(email || '').trim();
+      if (emailRaw && emailRaw !== normalized) {
+        const snap2 = await firebaseDb
+          .collection(FIREBASE_COLLECTIONS.players)
+          .where('email', '==', emailRaw)
           .limit(1)
           .get();
-
-        if (!snapshot.empty) {
-          const doc = snapshot.docs[0];
+        if (!snap2.empty) {
+          const doc = snap2.docs[0];
           const player = { id: doc.id, ...doc.data() };
           if (isAccessPlayerActive(player)) return player;
         }
-      }
-
-      const players = await this.getPlayersCloud();
-      const byEmail = players.find(player =>
-        normalizeEmailForDb(player.email) === normalized &&
-        isAccessPlayerActive(player)
-      );
-      if (byEmail) {
-        return byEmail;
       }
     } catch (error) {
       console.warn('No se pudo buscar jugador por correo en Firebase:', error);
@@ -1478,7 +1485,7 @@ const DB = {
     window.addEventListener(eventName, (e) => callback(e.detail));
   },
 
-  // ✅ UTILIDAD: Limpiar todos los listeners (para logout)
+  // ✅ UTILIDAD: Limpiar todos los listeners y caché (para logout)
   cleanupListeners() {
     playersListeners.forEach(unsubscribe => unsubscribe());
     challengesListeners.forEach(unsubscribe => unsubscribe());
@@ -1492,7 +1499,10 @@ const DB = {
     cachedChallenges = [];
     cachedNews = [];
     cachedStaff = [];
-    console.log('✅ Listeners limpios');
+    // ✅ Fase 2.3: Limpiar caché de localStorage al cerrar sesión
+    const cacheKeys = ['uctenis_challenges', 'uctenis_news', 'uctenis_ranking_m', 'uctenis_ranking_f'];
+    cacheKeys.forEach(k => localStorage.removeItem(k));
+    console.log('✅ Listeners y caché local limpios');
   },
 
   // ──────────────── RANKING ────────────────
