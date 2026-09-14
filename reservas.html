@@ -6,7 +6,7 @@
   <title>Reservar Cancha – UCTenis</title>
   <link rel="icon" href="logo_uctenis_v03.png" type="image/png">
   <link rel="stylesheet" href="style.css?v=20260813_v1">
-  <link rel="stylesheet" href="reservas.css?v=20260813_v1">
+  <link rel="stylesheet" href="reservas.css?v=20260914_v3">
   <link rel="stylesheet" href="datepicker.css?v=20260908_v3">
 </head>
 <body>
@@ -76,41 +76,27 @@
   <!-- PASO 2: COURTS & SLOTS -->
   <section id="stepSlot" class="step-section hidden">
     <h2 class="step-title">Elige tu cancha y horario</h2>
-    <p class="step-sub" id="slotSubtitle"></p>
+    <div class="slot-date-nav">
+      <button type="button" class="date-nav-arrow" id="btnPrevDay" onclick="shiftSelectedDate(-1)" aria-label="Día anterior" title="Día anterior">‹</button>
+      <p class="step-sub" id="slotSubtitle"></p>
+      <button type="button" class="date-nav-arrow" id="btnNextDay" onclick="shiftSelectedDate(1)" aria-label="Día siguiente" title="Día siguiente">›</button>
+    </div>
 
-    <!-- ── WEATHER DETAIL FOR SELECTED DAY (HOURLY) ── -->
-    <div class="weather-detail-box weather-step2-box" id="step2WeatherBox" style="margin: 0 auto 24px auto; max-width: 800px; padding: 20px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 20px; display: none;">
-      <div class="weather-step2-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 12px; flex-wrap: wrap; gap: 10px;">
-        <div style="display: flex; align-items: center; gap: 10px;">
-          <span id="step2WeatherIcon" style="font-size: 1.6rem; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.25));">🌤️</span>
-          <h3 style="font-size: 1rem; color: var(--text-primary); margin: 0; font-weight: 800; display: flex; align-items: center; gap: 6px;">Detalle del clima</h3>
-        </div>
-        <div style="font-weight: 700; color: var(--accent-tennis); font-size: 0.9rem;" id="step2WeatherSummaryText">--</div>
-      </div>
-      
-      <div class="weather-step2-body">
-        <div style="display: flex; gap: 24px; align-items: center; flex-wrap: wrap; margin-bottom: 16px;">
-          <div style="flex: 0 0 auto; min-width: 140px;">
-            <div style="font-size: 1.8rem; font-weight: 800; color: var(--text-primary); letter-spacing: -0.02em;" id="step2WeatherTemps">--°C / --°C</div>
-            <div style="font-size: 0.82rem; color: var(--text-secondary); margin-top: 4px; display: flex; align-items: center; gap: 4px;">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="color: #60a5fa;"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>
-              <span id="step2WeatherRain">Probabilidad: --%</span>
-            </div>
-          </div>
-          <div style="flex: 1; min-width: 220px; padding-left: 20px; border-left: 1.5px solid rgba(255,255,255,0.08)" id="step2WeatherRecommendationCol">
-            <p class="smart-suggestion" id="step2WeatherSuggestion" style="font-size: 0.88rem; line-height: 1.45; color: var(--accent-tennis); margin: 0; font-weight: 600;">Cargando sugerencia...</p>
-          </div>
-        </div>
-        
-        <div style="border-top: 1px solid rgba(255,255,255,0.06); padding-top: 16px;">
-          <h4 style="font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); margin: 0 0 12px 0; font-weight: 700; display: flex; align-items: center; gap: 6px;">
-            ⏰ Pronóstico por Horas
-          </h4>
-          <div class="hourly-weather-timeline" id="step2HourlyTimeline">
-            <!-- Horas -->
-          </div>
+    <!-- ── WEATHER DETAIL FOR SELECTED DAY: compact chip by default, hourly detail is opt-in ── -->
+    <div class="weather-detail-box weather-step2-box" id="step2WeatherBox" style="display: none;">
+      <div class="weather-chip">
+        <span id="step2WeatherIcon" class="weather-chip-icon">🌤️</span>
+        <div class="weather-chip-info">
+          <div class="weather-chip-temps"><span id="step2WeatherTemps">--°C / --°C</span> · <span id="step2WeatherRain">💧 --%</span></div>
+          <p class="smart-suggestion weather-chip-suggestion" id="step2WeatherSuggestion">Cargando sugerencia...</p>
         </div>
       </div>
+      <details class="weather-hourly-details">
+        <summary>⏰ Ver pronóstico por horas</summary>
+        <div class="hourly-weather-timeline" id="step2HourlyTimeline">
+          <!-- Horas -->
+        </div>
+      </details>
     </div>
 
     <div class="availability-toolbar" aria-label="Filtros de disponibilidad">
@@ -513,17 +499,19 @@ function tryGoStep(n) {
 }
 
 // ── STEP 1: DATE STRIP ──
+function getMaxDaysAllowed() {
+  const session = DB.getSession();
+  const userType = (session && session.userType) ? session.userType : 'socio';
+  const effectiveType = session && session.isAdmin ? 'admin' : userType;
+  return Math.max(1, Number(reservationRules.maxAdvanceDays[effectiveType]) || 7);
+}
+
 function renderDateStrip() {
   const strip = document.getElementById('dateStrip');
   strip.innerHTML = '';
   const today = new Date();
 
-  const session = DB.getSession();
-  const userType = (session && session.userType) ? session.userType : 'socio';
-  
-  // Regla de anticipación máxima visual
-  const effectiveType = session && session.isAdmin ? 'admin' : userType;
-  const maxDaysAllowed = Math.max(1, Number(reservationRules.maxAdvanceDays[effectiveType]) || 7);
+  const maxDaysAllowed = getMaxDaysAllowed();
   const daysToRender = Math.min(60, Math.max(14, maxDaysAllowed + 1));
 
   for (let i = 0; i < daysToRender; i++) {
@@ -626,8 +614,7 @@ function updateSelectedDayWeather(iso) {
   const minTemp = Math.round(daily.temperature_2m_min[idx]);
   const rainProb = daily.precipitation_probability_max[idx];
   const icon = window.getWeatherIcon ? window.getWeatherIcon(wCode) : "🌤️";
-  const wDesc = getWeatherDesc(wCode);
-  
+
   // Custom suggestion logic based on that day's weather
   let maxPlayingRainProb = 0;
   let hasHourlyData = false;
@@ -694,20 +681,16 @@ function updateSelectedDayWeather(iso) {
     const tempsEl2 = document.getElementById('step2WeatherTemps');
     const rainEl2 = document.getElementById('step2WeatherRain');
     const suggEl2 = document.getElementById('step2WeatherSuggestion');
-    const summaryTextEl = document.getElementById('step2WeatherSummaryText');
     const timelineEl = document.getElementById('step2HourlyTimeline');
-    
+
     if (iconEl2) iconEl2.textContent = icon;
     if (tempsEl2) tempsEl2.textContent = `${maxTemp}°C / ${minTemp}°C`;
-    if (rainEl2) rainEl2.textContent = `Probabilidad de lluvia: ${rainProb}%`;
+    if (rainEl2) rainEl2.textContent = `💧 ${rainProb}%`;
     if (suggEl2) {
       suggEl2.textContent = suggestion;
       suggEl2.style.color = suggestionColor;
     }
-    if (summaryTextEl) {
-      summaryTextEl.textContent = `${wDesc} (${maxTemp}°C)`;
-    }
-    
+
     // Build hourly timeline
     if (timelineEl && window.weatherData.hourly) {
       timelineEl.innerHTML = '';
@@ -752,17 +735,80 @@ async function selectDate(iso) {
   const wd = dayOfWeekFromISO(iso);
   const [y, m, d] = iso.split('-');
   document.getElementById('slotSubtitle').textContent = `📅 ${DAYS_LONG[wd]} ${parseInt(d)} de ${MONTHS_LONG[parseInt(m) - 1]} ${y}`;
-  
+
   // Update detailed weather card for this day
   updateSelectedDayWeather(iso);
-  
+
+  // Mantiene la franja de fechas del Paso 1 sincronizada con el día activo
+  document.querySelectorAll('.date-btn').forEach(b => b.classList.toggle('date-active', b.dataset.iso === iso));
+  updateDayNavButtons(iso);
+
   const container = document.getElementById('courtsSlotsContainer');
   container.innerHTML = '<div style="text-align:center; padding: 40px; color: var(--text-secondary);">Sincronizando con Google Calendar... ⌛</div>';
   goStep(2);
-  
+
   const apiDisponibilidad = await DB.getSlotsAPI(iso);
   if (sel.date !== iso) return;
   renderSlotsByCourt(apiDisponibilidad);
+}
+
+// El club cierra los domingos, así que las flechas de Paso 2 saltan ese día
+function isBookableDay(d) {
+  return d.getDay() !== 0;
+}
+
+function shiftSelectedDate(delta) {
+  if (!sel.date) return;
+  const [y, m, d] = sel.date.split('-').map(Number);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const maxDaysAllowed = getMaxDaysAllowed();
+
+  let next = new Date(y, m - 1, d);
+  do {
+    next.setDate(next.getDate() + delta);
+    const diffDays = Math.round((next - today) / 86400000);
+    if (diffDays < 0 || diffDays >= maxDaysAllowed) return; // fuera de rango, no navega
+  } while (!isBookableDay(next));
+
+  const iso = localISO(next);
+  selectDate(iso);
+
+  const btn = document.querySelector(`.date-btn[data-iso="${iso}"]`);
+  if (btn) btn.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+}
+
+function updateDayNavButtons(iso) {
+  const prevBtn = document.getElementById('btnPrevDay');
+  const nextBtn = document.getElementById('btnNextDay');
+  if (!prevBtn || !nextBtn) return;
+
+  const [y, m, d] = iso.split('-').map(Number);
+  const current = new Date(y, m - 1, d);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const maxDaysAllowed = getMaxDaysAllowed();
+
+  const hasPrev = (() => {
+    let probe = new Date(current);
+    while (true) {
+      probe.setDate(probe.getDate() - 1);
+      if (probe < today) return false;
+      if (isBookableDay(probe)) return true;
+    }
+  })();
+  const hasNext = (() => {
+    let probe = new Date(current);
+    while (true) {
+      probe.setDate(probe.getDate() + 1);
+      const diffDays = Math.round((probe - today) / 86400000);
+      if (diffDays >= maxDaysAllowed) return false;
+      if (isBookableDay(probe)) return true;
+    }
+  })();
+
+  prevBtn.disabled = !hasPrev;
+  nextBtn.disabled = !hasNext;
 }
 
 function getShortMatchLabel(c) {
