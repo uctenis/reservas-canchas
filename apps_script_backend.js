@@ -205,7 +205,7 @@ function handleRequest(data) {
       case "admin_get_booking_sync_status": response = adminGetBookingSyncStatus(data); break;
       case "admin_migrate_calendar_bookings": response = adminMigrateCalendarBookings(data); break;
       case "admin_get_stats":         response = adminGetStats(data); break;
-      case "admin_get_court_bookings": response = adminGetCourtBookingsForDate(data); break;
+      case "admin_get_court_bookings_week": response = adminGetCourtBookingsForWeek(data); break;
     }
 
     return ContentService.createTextOutput(JSON.stringify(response))
@@ -2444,6 +2444,42 @@ function getDatabaseBookingsForDate(dateStr, idToken) {
   return result;
 }
 
+/**
+ * Igual que getDatabaseBookingsForDate pero para un rango [dateFrom, dateTo]
+ * inclusive en una sola consulta a Firestore, en vez de una consulta por
+ * día — usado por el calendario semanal del panel admin para no encadenar
+ * 7 llamadas remotas seguidas.
+ */
+function getDatabaseBookingsForDateRange(dateFrom, dateTo, idToken) {
+  try {
+    const url = 'https://firestore.googleapis.com/v1/projects/'
+      + encodeURIComponent(CONFIG.FIREBASE_PROJECT_ID)
+      + '/databases/(default)/documents:runQuery?key=' + encodeURIComponent(CONFIG.FIREBASE_API_KEY);
+    const structuredQuery = {
+      from: [{ collectionId: BOOKING_COLLECTION }],
+      where: {
+        compositeFilter: {
+          op: 'AND',
+          filters: [
+            { fieldFilter: { field: { fieldPath: 'date' }, op: 'GREATER_THAN_OR_EQUAL', value: { stringValue: dateFrom } } },
+            { fieldFilter: { field: { fieldPath: 'date' }, op: 'LESS_THAN_OR_EQUAL',    value: { stringValue: dateTo   } } }
+          ]
+        }
+      }
+    };
+    const response = UrlFetchApp.fetch(url, bookingFetchOptions('post', { structuredQuery: structuredQuery }, idToken));
+    const code = response.getResponseCode();
+    if (code !== 200) return { ok: false, bookings: [], msg: 'Firestore query ' + code + ': ' + response.getContentText().substring(0, 180) };
+    const rows = JSON.parse(response.getContentText()) || [];
+    const bookings = rows.map(function(row) { return bookingFromFirestoreDocument(row.document); })
+      .filter(Boolean)
+      .filter(function(booking) { return isActiveBookingStatus(booking.status); });
+    return { ok: true, bookings: bookings };
+  } catch (error) {
+    return { ok: false, bookings: [], msg: 'No se pudieron consultar reservas: ' + error.message };
+  }
+}
+
 function publicBooking(booking) {
   return {
     id: booking.id,
@@ -4234,6 +4270,10 @@ function getBookingsForDate(dateStr) {
         email: booking.email || '',
         rut: booking.rut || '',
         userTypeLabel: booking.userTypeLabel || '',
+        // 'amistoso' | 'ranking' (desafío) cuando la reserva viene de un
+        // desafío/amistoso (matchType lo pone createChallengeCalendarInvite
+        // al asociar el partido a la reserva); vacío = reserva normal.
+        tipo: booking.matchType || '',
         status: booking.status
       });
       occupiedKeys[key] = true;
@@ -4263,6 +4303,7 @@ function getBookingsForDate(dateStr) {
         const email = emailMatch ? emailMatch[1].trim() : '';
         const rut = rutMatch ? rutMatch[1].trim() : '';
         const userTypeLabel = tipoMatch ? tipoMatch[1].trim() : '';
+        const tipo = titleLower.includes('amistoso') ? 'amistoso' : (titleLower.includes('desafio') ? 'ranking' : '');
         const start = ev.getStartTime();
         const slot = Utilities.formatDate(start, 'America/Santiago', 'HH:mm');
         const bookingKey = courtKey + '|' + slot;
@@ -4276,6 +4317,7 @@ function getBookingsForDate(dateStr) {
           email: email,
           rut: rut,
           userTypeLabel: userTypeLabel,
+          tipo: tipo,
           status: 'confirmed'
         });
         occupiedKeys[bookingKey] = true;
@@ -4298,21 +4340,134 @@ function getBookingsForDate(dateStr) {
 }
 
 /**
- * Devuelve las reservas de un día para el calendario del panel admin
- * (pestaña "Reservas"). Reutiliza la misma fuente de verdad que los correos
- * de agenda, así que nunca puede mostrar una cancha no operativa (isCourtClosed
- * ya las excluye en getBookingsForDate) ni clasificarlas distinto.
+ * Devuelve las reservas de una semana (7 días desde startDate) para el
+ * calendario del panel admin (pestaña "Reservas"). Reutiliza la misma
+ * fuente de verdad que los correos de agenda, así que nunca puede mostrar
+ * una cancha no operativa (isCourtClosed ya las excluye en
+ * getBookingsForDate) ni clasificarlas distinto.
  * Requiere autenticación de admin (idToken).
- * Params: { date: 'yyyy-MM-dd', idToken }
+ * Params: { startDate: 'yyyy-MM-dd' (idealmente un lunes), idToken }
  */
-function adminGetCourtBookingsForDate(data) {
+/**
+ * Igual que getBookingsForDate pero para un rango de días en una sola
+ * pasada: una consulta a Firestore y una lectura de Calendar cubriendo todo
+ * el rango, en vez de encadenar ambas llamadas por cada día (lo que hacía
+ * el calendario semanal del panel admin lento — hasta 14 llamadas remotas
+ * seguidas para 7 días — y propenso a que una respuesta lenta y vieja
+ * pisara en el navegador los datos de una semana más nueva ya cargada).
+ * Devuelve { 'yyyy-MM-dd': [bookings...], ... } para cada día del rango,
+ * ya filtrado por canchas cerradas y ordenado igual que getBookingsForDate.
+ * @param {string} dateFromStr - Primer día del rango, 'yyyy-MM-dd'
+ * @param {string} dateToStr - Último día del rango (inclusive), 'yyyy-MM-dd'
+ */
+function getBookingsForDateRange(dateFromStr, dateToStr) {
+  const days = {};
+  const occupiedKeysByDay = {};
+  for (let cursor = new Date(dateFromStr + 'T12:00:00Z'); ; cursor = new Date(cursor.getTime() + 24 * 60 * 60 * 1000)) {
+    const dateStr = Utilities.formatDate(cursor, 'America/Santiago', 'yyyy-MM-dd');
+    days[dateStr] = [];
+    occupiedKeysByDay[dateStr] = {};
+    if (dateStr >= dateToStr) break;
+  }
+
+  const databaseResult = getDatabaseBookingsForDateRange(dateFromStr, dateToStr);
+  if (databaseResult.ok) {
+    databaseResult.bookings.forEach(function(booking) {
+      const dateStr = text(booking.date);
+      if (!(dateStr in days)) return;
+      const key = booking.courtId + '|' + booking.slot;
+      days[dateStr].push({
+        id: booking.id,
+        courtKey: booking.courtId,
+        courtName: getCourtName(booking.courtId),
+        slot: booking.slot,
+        nombre: booking.name || 'Jugador/a',
+        email: booking.email || '',
+        rut: booking.rut || '',
+        userTypeLabel: booking.userTypeLabel || '',
+        tipo: booking.matchType || '',
+        status: booking.status
+      });
+      occupiedKeysByDay[dateStr][key] = true;
+    });
+  }
+
+  const startOfRange = new Date(dateFromStr + 'T00:00:00' + getChileOffsetStr(dateFromStr));
+  const endOfRange = new Date(dateToStr + 'T23:59:59' + getChileOffsetStr(dateToStr));
+  const mainCalId = CONFIG.MAIN_CALENDAR_ID || CONFIG.CALENDARS['cec1'];
+  try {
+    const calendar = CalendarApp.getCalendarById(mainCalId);
+    if (calendar) {
+      const events = calendar.getEvents(startOfRange, endOfRange);
+      events.forEach(function(ev) {
+        const title = ev.getTitle() || '';
+        const titleLower = title.toLowerCase();
+        if (!titleLower.includes('reserva uctenis') && !titleLower.includes('desafio') && !titleLower.includes('amistoso')) return;
+
+        const start = ev.getStartTime();
+        const dateStr = Utilities.formatDate(start, 'America/Santiago', 'yyyy-MM-dd');
+        if (!(dateStr in days)) return;
+
+        const courtKey = detectCourtFromEvent(ev);
+        const desc = ev.getDescription() || '';
+        const emailMatch = desc.match(/correo:\s*([^\n\r]+)/i);
+        const rutMatch = desc.match(/rut:\s*([^\n\r]+)/i);
+        const tipoMatch = desc.match(/tipo:\s*([^\n\r]+)/i);
+        const userMatch = desc.match(/usuario:\s*([^\n\r]+)/i);
+
+        const cleanTitle = title.replace(/^\[[^\]]+\]\s*/i, '').replace(/^reserva uctenis\s*-\s*/i, '').trim();
+        const nombre = (userMatch && userMatch[1].trim()) || cleanTitle || 'Jugador/a';
+        const email = emailMatch ? emailMatch[1].trim() : '';
+        const rut = rutMatch ? rutMatch[1].trim() : '';
+        const userTypeLabel = tipoMatch ? tipoMatch[1].trim() : '';
+        const tipo = titleLower.includes('amistoso') ? 'amistoso' : (titleLower.includes('desafio') ? 'ranking' : '');
+        const slot = Utilities.formatDate(start, 'America/Santiago', 'HH:mm');
+        const bookingKey = courtKey + '|' + slot;
+        if (occupiedKeysByDay[dateStr][bookingKey]) return;
+
+        days[dateStr].push({
+          courtKey: courtKey,
+          courtName: getCourtName(courtKey),
+          slot: slot,
+          nombre: nombre,
+          email: email,
+          rut: rut,
+          userTypeLabel: userTypeLabel,
+          tipo: tipo,
+          status: 'confirmed'
+        });
+        occupiedKeysByDay[dateStr][bookingKey] = true;
+      });
+    }
+  } catch (e) {
+    console.warn('getBookingsForDateRange error en calendar maestro: ' + e.message);
+  }
+
+  Object.keys(days).forEach(function(dateStr) {
+    days[dateStr] = days[dateStr]
+      .filter(function(b) { return !isCourtClosed(b.courtKey); })
+      .sort(function(a, b) {
+        if (a.slot !== b.slot) return a.slot < b.slot ? -1 : 1;
+        return a.courtKey < b.courtKey ? -1 : 1;
+      });
+  });
+
+  return days;
+}
+
+function adminGetCourtBookingsForWeek(data) {
   if (!isAdminRequest(data)) return { ok: false, msg: 'Acceso reservado al administrador.' };
 
-  const dateStr = text(data.date);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return { ok: false, msg: 'Fecha no válida (usa yyyy-MM-dd).' };
+  const startDate = text(data.startDate);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) return { ok: false, msg: 'Fecha no válida (usa yyyy-MM-dd).' };
 
-  const bookings = getBookingsForDate(dateStr);
-  return { ok: true, date: dateStr, bookings: bookings };
+  const endDate = Utilities.formatDate(
+    new Date(new Date(startDate + 'T12:00:00Z').getTime() + 6 * 24 * 60 * 60 * 1000),
+    'America/Santiago', 'yyyy-MM-dd'
+  );
+  const daysMap = getBookingsForDateRange(startDate, endDate);
+  const days = Object.keys(daysMap).sort().map(function(date) { return { date: date, bookings: daysMap[date] }; });
+  return { ok: true, startDate: startDate, days: days };
 }
 
 /**

@@ -2738,14 +2738,39 @@ tr.drag-over-bottom {
 .schedule-panel-card .type-card strong { font-size:.86rem !important; }
 .schedule-panel-card .type-card span:last-child { font-size:.72rem !important; }
 
-.admin-bookings-toolbar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:16px; }
-.admin-bookings-nav { width:38px; height:38px; padding:0 !important; border-radius:10px; display:inline-flex; align-items:center; justify-content:center; font-size:1rem; }
+.admin-bookings-toolbar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
+.admin-bookings-nav { width:38px; height:38px; padding:0 !important; border-radius:10px; display:inline-flex; align-items:center; justify-content:center; font-size:1rem; flex-shrink:0; }
+.admin-bookings-week-label { font-weight:800; font-size:.9rem; color:var(--text-primary); min-width:130px; text-align:center; text-transform:capitalize; }
 .admin-bookings-count { margin-left:auto; color:var(--text-secondary); font-size:.8rem; font-weight:600; }
-.booking-slot-cell { min-width:150px; padding:6px 8px; border-radius:10px; font-size:.74rem; text-align:left; vertical-align:top; background:rgba(255,255,255,.025); border:1px solid rgba(255,255,255,.06); color:var(--text-secondary); }
-.booking-slot-cell.is-booked { background:linear-gradient(145deg, rgba(198,211,0,.16), rgba(198,211,0,.06)); border-color:rgba(198,211,0,.35); color:var(--text-primary); }
-.booking-slot-cell.is-closed { background:rgba(255,255,255,.015); border-style:dashed; color:rgba(255,255,255,.28); }
-.booking-slot-name { display:block; font-weight:700; color:var(--text-primary); }
-.booking-slot-badge { display:inline-block; margin-top:3px; font-size:.65rem; font-weight:700; color:var(--accent-tennis); background:rgba(198,211,0,.12); padding:1px 6px; border-radius:6px; }
+.admin-bookings-legend { display:flex; flex-wrap:wrap; gap:14px; margin-bottom:16px; padding:10px 12px; border:1px solid rgba(255,255,255,.06); border-radius:12px; background:rgba(0,0,0,.12); }
+.booking-legend-item { display:inline-flex; align-items:center; gap:6px; font-size:.74rem; color:var(--text-secondary); }
+.booking-legend-dot { width:10px; height:10px; border-radius:3px; display:inline-block; }
+.booking-legend-dot.is-reserva { background:#4ade80; }
+.booking-legend-dot.is-ranking { background:#60a5fa; }
+.booking-legend-dot.is-amistoso { background:#c084fc; }
+.booking-legend-dot.is-otro { background:#fbbf24; }
+
+.admin-bookings-week-shell { overflow-x:auto; }
+.admin-bookings-week-matrix { border-spacing:6px; }
+.admin-bookings-week-matrix .admin-bookings-time-head,
+.admin-bookings-day-head { position:sticky; top:0; z-index:2; background:#172033; padding:8px 6px; border-radius:8px; }
+.admin-bookings-day-head { min-width:118px; text-align:center; }
+.admin-bookings-day-head.is-today { background:rgba(198,211,0,.18); }
+.admin-bookings-day-name { display:block; font-size:.68rem; font-weight:800; letter-spacing:.04em; color:var(--text-secondary); text-transform:uppercase; }
+.admin-bookings-day-head.is-today .admin-bookings-day-name { color:var(--accent-tennis); }
+.admin-bookings-day-date { display:block; font-size:.78rem; font-weight:700; color:var(--text-primary); margin-top:2px; }
+.admin-bookings-time-cell { white-space:nowrap; padding:8px 10px; font-size:.78rem; font-weight:700; color:var(--accent-tennis); text-align:right; background:rgba(255,255,255,.02); border-radius:8px; }
+
+.booking-slot-cell { min-width:118px; padding:4px; border-radius:10px; vertical-align:top; background:rgba(255,255,255,.02); border:1px dashed rgba(255,255,255,.06); }
+.booking-slot-cell.is-booked { border-style:solid; border-color:transparent; background:transparent; display:flex; flex-direction:column; gap:4px; }
+.booking-chip { padding:5px 7px; border-radius:8px; font-size:.68rem; line-height:1.25; background:rgba(74,222,128,.12); border:1px solid rgba(74,222,128,.35); }
+.booking-chip.is-reserva { background:rgba(74,222,128,.12); border-color:rgba(74,222,128,.35); }
+.booking-chip.is-ranking { background:rgba(96,165,250,.14); border-color:rgba(96,165,250,.4); }
+.booking-chip.is-amistoso { background:rgba(192,132,252,.14); border-color:rgba(192,132,252,.4); }
+.booking-chip.is-otro { background:rgba(251,191,36,.14); border-color:rgba(251,191,36,.4); }
+.booking-chip-court { display:block; font-size:.6rem; font-weight:800; letter-spacing:.03em; color:var(--text-secondary); text-transform:uppercase; }
+.booking-chip-name { display:block; font-weight:700; color:var(--text-primary); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.booking-chip-type { display:block; font-size:.62rem; font-weight:600; color:var(--text-secondary); }
 .schedule-param-grid { display:grid; grid-template-columns:repeat(2,minmax(200px,1fr)); gap:12px; margin-bottom:18px; }
 .schedule-param-card { position:relative; margin:0; padding:16px 16px 14px 52px; border:1px solid rgba(255,255,255,.075); border-radius:15px; background:rgba(255,255,255,.027); }
 .schedule-param-icon { position:absolute; left:14px; top:17px; display:grid; place-items:center; width:28px; height:28px; border-radius:9px; background:rgba(198,211,0,.11); color:var(--accent-tennis); font-size:.9rem; }

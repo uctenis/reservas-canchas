@@ -814,28 +814,35 @@
       </div>
     </div>
 
-    <!-- Sección de Reservas (calendario de horas solicitadas/agendadas) -->
+    <!-- Sección de Reservas (calendario semanal de horas solicitadas/agendadas) -->
     <div id="adminBookingsSection" class="hidden" style="padding: 0 20px 20px 20px;">
       <div class="schedule-header">
         <div>
           <p class="modal-kicker">Centro de operaciones</p>
           <h3>Calendario de reservas</h3>
-          <p class="schedule-header-copy">Horas solicitadas o agendadas por socios y funcionarios, por cancha y día.</p>
+          <p class="schedule-header-copy">Horas solicitadas o agendadas por socios y funcionarios esta semana, por cancha.</p>
         </div>
       </div>
 
       <div class="schedule-panel schedule-panel-card">
         <div class="admin-bookings-toolbar">
-          <button type="button" class="btn-secondary admin-bookings-nav" onclick="shiftAdminBookingsDate(-1)" aria-label="Día anterior">←</button>
-          <input type="text" class="uct-date" id="adminBookingsDate" readonly autocomplete="off" style="max-width:180px; padding:10px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:#fff; outline:none;">
-          <button type="button" class="btn-secondary admin-bookings-nav" onclick="shiftAdminBookingsDate(1)" aria-label="Día siguiente">→</button>
-          <button type="button" class="btn-secondary" onclick="setAdminBookingsDateToday()" style="padding:8px 14px;font-size:0.8rem;">Hoy</button>
+          <button type="button" class="btn-secondary admin-bookings-nav" onclick="shiftAdminBookingsWeek(-1)" aria-label="Semana anterior">←</button>
+          <span id="adminBookingsWeekLabel" class="admin-bookings-week-label">Cargando…</span>
+          <button type="button" class="btn-secondary admin-bookings-nav" onclick="shiftAdminBookingsWeek(1)" aria-label="Semana siguiente">→</button>
+          <button type="button" class="btn-secondary" onclick="setAdminBookingsWeekToday()" style="padding:8px 14px;font-size:0.8rem;">Esta semana</button>
           <span id="adminBookingsCount" class="admin-bookings-count"></span>
+        </div>
+
+        <div class="admin-bookings-legend">
+          <span class="booking-legend-item"><i class="booking-legend-dot is-reserva"></i>Reserva normal</span>
+          <span class="booking-legend-item"><i class="booking-legend-dot is-ranking"></i>Desafío</span>
+          <span class="booking-legend-item"><i class="booking-legend-dot is-amistoso"></i>Amistoso</span>
+          <span class="booking-legend-item"><i class="booking-legend-dot is-otro"></i>Campeonato / otro</span>
         </div>
 
         <div id="adminBookingsAlert" class="alert-box" style="display:none; padding: 12px; border-radius: 8px; font-size: 0.85rem; margin-bottom: 15px;"></div>
 
-        <div id="adminBookingsGridContainer" class="schedule-grid-shell">
+        <div id="adminBookingsGridContainer" class="schedule-grid-shell admin-bookings-week-shell">
           <p style="color:var(--text-secondary);font-size:0.85rem;text-align:center;padding:15px">Cargando reservas...</p>
         </div>
       </div>
@@ -1090,11 +1097,6 @@ function setupEvents() {
     const m = String(today.getMonth() + 1).padStart(2, '0');
     const d = String(today.getDate()).padStart(2, '0');
     specialDateInput.value = `${y}-${m}-${d}`;
-  }
-
-  const bookingsDateInput = document.getElementById('adminBookingsDate');
-  if (bookingsDateInput) {
-    bookingsDateInput.addEventListener('change', () => loadAdminBookingsForDate());
   }
 
   document.getElementById('fChallenge').addEventListener('submit', submitChallenge);
@@ -7265,7 +7267,7 @@ window.switchAdminSubSection = function(section) {
     loadSpecialDatesList();
     loadScheduleConfig();
   } else if (section === 'bookings') {
-    initAdminBookingsDateIfNeeded();
+    initAdminBookingsWeekIfNeeded();
     loadAdminBookingsForDate();
   }
 }
@@ -7951,7 +7953,7 @@ window.deleteSpecialPeriod = async function(groupId, label) {
   loadSpecialDatesList();
 }
 
-// ──────────────── RESERVAS: CALENDARIO ADMIN ────────────────
+// ──────────────── RESERVAS: CALENDARIO SEMANAL ADMIN ────────────────
 function showAdminBookingsAlert(msg, type = 'success') {
   const box = document.getElementById('adminBookingsAlert');
   if (!box) return;
@@ -7976,62 +7978,129 @@ function getOperativeCourts() {
   });
 }
 
-function initAdminBookingsDateIfNeeded() {
-  const input = document.getElementById('adminBookingsDate');
-  if (input && !input.value) input.value = todayISO();
+const ADMIN_BOOKINGS_DAY_LABELS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+const ADMIN_BOOKINGS_DAY_LABELS_SHORT = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+const ADMIN_BOOKINGS_TYPE_LABELS = { ranking: 'Desafío', amistoso: 'Amistoso' };
+let adminBookingsWeekStart = null; // yyyy-mm-dd de un lunes
+
+function mondayOfWeek(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const date = new Date(y, m - 1, d);
+  const dow = date.getDay(); // 0=Dom..6=Sab
+  const diffToMonday = dow === 0 ? -6 : 1 - dow;
+  date.setDate(date.getDate() + diffToMonday);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
-function getAdminBookingsDateStr() {
-  const input = document.getElementById('adminBookingsDate');
-  const val = input && input.value ? normalizeAdminDate(input.value) : '';
-  return val || todayISO();
+function addDaysToDateStr(dateStr, deltaDays) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const date = new Date(y, m - 1, d + deltaDays);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
-window.shiftAdminBookingsDate = function(deltaDays) {
-  const input = document.getElementById('adminBookingsDate');
-  if (!input) return;
-  const [y, m, d] = getAdminBookingsDateStr().split('-').map(Number);
-  const next = new Date(y, m - 1, d + deltaDays);
-  input.value = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-${String(next.getDate()).padStart(2, '0')}`;
+function formatShortDayMonth(dateStr) {
+  const [, m, d] = dateStr.split('-').map(Number);
+  const months = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  return `${d} ${months[m - 1]}`;
+}
+
+function initAdminBookingsWeekIfNeeded() {
+  if (!adminBookingsWeekStart) adminBookingsWeekStart = mondayOfWeek(todayISO());
+}
+
+window.shiftAdminBookingsWeek = function(deltaWeeks) {
+  initAdminBookingsWeekIfNeeded();
+  adminBookingsWeekStart = addDaysToDateStr(adminBookingsWeekStart, deltaWeeks * 7);
   loadAdminBookingsForDate();
 };
 
-window.setAdminBookingsDateToday = function() {
-  const input = document.getElementById('adminBookingsDate');
-  if (input) input.value = todayISO();
+window.setAdminBookingsWeekToday = function() {
+  adminBookingsWeekStart = mondayOfWeek(todayISO());
   loadAdminBookingsForDate();
 };
 
-function renderAdminBookingsGrid(bookings, dateStr) {
+function bookingTypeBadge(b) {
+  if (b.userTypeLabel === 'Campeonato UCTenis') {
+    return { cls: 'is-otro', label: 'Campeonato' };
+  }
+  if (b.tipo === 'amistoso') return { cls: 'is-amistoso', label: ADMIN_BOOKINGS_TYPE_LABELS.amistoso };
+  if (b.tipo === 'ranking') return { cls: 'is-ranking', label: ADMIN_BOOKINGS_TYPE_LABELS.ranking };
+  return { cls: 'is-reserva', label: 'Reserva' };
+}
+
+function renderAdminBookingsWeekGrid(days) {
   const container = document.getElementById('adminBookingsGridContainer');
   if (!container) return;
   const slots = window.DEFAULT_SLOTS || [];
   const courts = getOperativeCourts();
+  const todayStr = todayISO();
 
-  const byKey = {};
-  bookings.forEach(b => { byKey[`${b.courtKey}|${b.slot}`] = b; });
+  if (!courts.length) {
+    container.innerHTML = '<p style="color:var(--text-secondary);font-size:0.85rem;text-align:center;padding:15px">No hay canchas operativas configuradas.</p>';
+    return;
+  }
 
-  const headerCells = courts.map(c => `<th>${escapeHTML(c.label)}</th>`).join('');
-  const rows = slots.map(slot => {
-    const cells = courts.map(c => {
-      const b = byKey[`${c.id}|${slot}`];
-      if (!b) return `<td class="booking-slot-cell">Libre</td>`;
-      const badge = b.userTypeLabel ? `<span class="booking-slot-badge">${escapeHTML(b.userTypeLabel)}</span>` : '';
-      return `<td class="booking-slot-cell is-booked"><span class="booking-slot-name">${escapeHTML(b.nombre || 'Jugador/a')}</span>${badge}</td>`;
-    }).join('');
-    return `<tr><th class="schedule-day-cell"><span>${slot}</span></th>${cells}</tr>`;
+  // Index: slot -> dateStr -> [bookings de ese día/hora en cualquier cancha]
+  const bySlotAndDay = {};
+  let total = 0;
+  days.forEach(day => {
+    (day.bookings || []).forEach(b => {
+      bySlotAndDay[b.slot] = bySlotAndDay[b.slot] || {};
+      bySlotAndDay[b.slot][day.date] = bySlotAndDay[b.slot][day.date] || [];
+      bySlotAndDay[b.slot][day.date].push(b);
+      total++;
+    });
+  });
+
+  const headerCells = days.map(day => {
+    const [, m, d] = day.date.split('-').map(Number);
+    const wd = new Date(day.date + 'T12:00:00').getDay();
+    const isToday = day.date === todayStr;
+    return `<th class="admin-bookings-day-head${isToday ? ' is-today' : ''}">
+        <span class="admin-bookings-day-name">${ADMIN_BOOKINGS_DAY_LABELS_SHORT[wd]}</span>
+        <span class="admin-bookings-day-date">${String(d).padStart(2,'0')}/${String(m).padStart(2,'0')}</span>
+      </th>`;
   }).join('');
 
-  container.innerHTML = courts.length
-    ? `<table class="schedule-matrix"><thead><tr><th>Hora</th>${headerCells}</tr></thead><tbody>${rows}</tbody></table>`
-    : '<p style="color:var(--text-secondary);font-size:0.85rem;text-align:center;padding:15px">No hay canchas operativas configuradas.</p>';
+  const rows = slots.map(slot => {
+    const cells = days.map(day => {
+      const dayBookings = (bySlotAndDay[slot] && bySlotAndDay[slot][day.date]) || [];
+      if (!dayBookings.length) return `<td class="booking-slot-cell"></td>`;
+      const chips = dayBookings.map(b => {
+        const badge = bookingTypeBadge(b);
+        const courtShort = escapeHTML((b.courtName || '').replace('Cancha ', ''));
+        return `<div class="booking-chip ${badge.cls}">
+            <span class="booking-chip-court">${courtShort}</span>
+            <span class="booking-chip-name">${escapeHTML(b.nombre || 'Jugador/a')}</span>
+            <span class="booking-chip-type">${badge.label}</span>
+          </div>`;
+      }).join('');
+      return `<td class="booking-slot-cell is-booked">${chips}</td>`;
+    }).join('');
+    return `<tr><th class="admin-bookings-time-cell">${slot}</th>${cells}</tr>`;
+  }).join('');
+
+  container.innerHTML = `<table class="schedule-matrix admin-bookings-week-matrix"><thead><tr><th class="admin-bookings-time-head">Hora</th>${headerCells}</tr></thead><tbody>${rows}</tbody></table>`;
 
   const count = document.getElementById('adminBookingsCount');
-  if (count) count.textContent = `${bookings.length} reserva${bookings.length === 1 ? '' : 's'}`;
+  if (count) count.textContent = `${total} reserva${total === 1 ? '' : 's'}`;
 }
 
+// Cada carga tarda varios segundos (el backend hace 7 llamadas seguidas a
+// Calendar, una por día). Si el admin navega rápido entre semanas, una
+// respuesta vieja puede llegar después de una más nueva y pisar la grilla
+// con datos de la semana equivocada. Este token descarta cualquier
+// respuesta que no corresponda a la última semana solicitada.
+let adminBookingsRequestToken = 0;
+
 window.loadAdminBookingsForDate = async function() {
-  const dateStr = getAdminBookingsDateStr();
+  initAdminBookingsWeekIfNeeded();
+  const startDate = adminBookingsWeekStart;
+  const endDate = addDaysToDateStr(startDate, 6);
+  const label = document.getElementById('adminBookingsWeekLabel');
+  if (label) label.textContent = `${formatShortDayMonth(startDate)} – ${formatShortDayMonth(endDate)}`;
+
+  const requestToken = ++adminBookingsRequestToken;
   const container = document.getElementById('adminBookingsGridContainer');
   if (container) container.innerHTML = '<p style="color:var(--text-secondary);font-size:0.85rem;text-align:center;padding:15px">Cargando reservas...</p>';
   const count = document.getElementById('adminBookingsCount');
@@ -8043,13 +8112,15 @@ window.loadAdminBookingsForDate = async function() {
     if (!idToken) throw new Error(DB.lastAuthError || 'No se pudo renovar tu sesión de administrador con Google.');
     const res = await fetch(window.CONFIG.API_URL, {
       method: 'POST',
-      body: JSON.stringify({ action: 'admin_get_court_bookings', date: dateStr, idToken })
+      body: JSON.stringify({ action: 'admin_get_court_bookings_week', startDate, idToken })
     });
     const data = await res.json();
+    if (requestToken !== adminBookingsRequestToken) return; // llegó tarde: ya no es la semana visible
     if (!data.ok) throw new Error(data.msg || 'Error en el servidor');
-    renderAdminBookingsGrid(data.bookings || [], dateStr);
+    renderAdminBookingsWeekGrid(data.days || []);
   } catch (e) {
-    console.warn('No se pudieron cargar las reservas del día:', e);
+    if (requestToken !== adminBookingsRequestToken) return;
+    console.warn('No se pudieron cargar las reservas de la semana:', e);
     if (container) container.innerHTML = `<p style="color:#f87171;font-size:0.85rem;text-align:center;padding:15px">No se pudo cargar: ${e.message}</p>`;
     showAdminBookingsAlert(`⚠️ No se pudo cargar: ${e.message}`, 'error');
   }
