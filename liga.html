@@ -143,8 +143,14 @@
 
     async function loadLeague() {
       DB.seed();
-      try { leagueState.players = (DB.isCloudConfigured() ? await DB.getPlayersCloud() : DB.getUsers()).filter(isLeaguePlayer); } catch (error) { leagueState.players = DB.getUsers().filter(isLeaguePlayer); }
-      try { leagueState.matches = DB.isCloudConfigured() ? await DB.getChallengesCloud() : DB.getChallenges(); } catch (error) { leagueState.matches = DB.getChallenges(); }
+      // Ambas cargas son independientes entre sí: se piden en paralelo en vez
+      // de esperar una para recién empezar la otra.
+      const [playersResult, matchesResult] = await Promise.allSettled([
+        DB.isCloudConfigured() ? DB.getPlayersCloud() : Promise.resolve(DB.getUsers()),
+        DB.isCloudConfigured() ? DB.getChallengesCloud() : Promise.resolve(DB.getChallenges())
+      ]);
+      leagueState.players = (playersResult.status === 'fulfilled' ? playersResult.value : DB.getUsers()).filter(isLeaguePlayer);
+      leagueState.matches = matchesResult.status === 'fulfilled' ? matchesResult.value : DB.getChallenges();
       renderLeague();
     }
     loadLeague();

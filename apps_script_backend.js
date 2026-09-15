@@ -25,7 +25,6 @@ const CONFIG = {
     names: ["UCTenis Club", "David Silva"]
   },
   ADMIN_PIN: "",
-  PHOTO_FOLDER_NAME: "UCTenis fotos jugadores",
 
   MAIN_CALENDAR_ID: "e500541f01f115243cc82fdd8cb8af53885461cb6d91e8f6e2c22ed07557c23c@group.calendar.google.com",
 
@@ -176,10 +175,6 @@ function handleRequest(data) {
       case "dispute_challenge_result": response = disputeChallengeResult(data); break;
       case "admin_resolve_challenge_dispute": response = adminResolveChallengeDispute(data); break;
       case "set_challenge_walkover":   response = setChallengeWalkover(data); break;
-      case "admin_save_player":      response = adminSavePlayer(data); break;
-      case "admin_delete_player":    response = adminDeletePlayer(data); break;
-      case "admin_reorder_ranking":  response = adminReorderRanking(data); break;
-      case "update_own_profile":     response = updateOwnProfile(data); break;
       case "admin_free_special_slots": response = adminFreeSpecialSlots(data); break;
       case "admin_remove_special_slots": response = adminRemoveSpecialSlots(data); break;
       case "get_special_dates":      response = getSpecialDatesList(); break;
@@ -1638,27 +1633,31 @@ function challengePlayerMatchesRole(challenge, role, ref) {
   );
 }
 
-function hasActiveChallengeInRole(sheet, role, ref, excludeId) {
+// Lee y parsea la hoja de desafíos una sola vez; las funciones hasActive*/
+// hasUnresolved* de abajo reciben ese arreglo ya en memoria en vez de volver
+// a leer y volver a parsear toda la hoja por cada chequeo.
+function loadAllChallenges(sheet) {
   const values = sheet.getDataRange().getValues();
-  for (let i = 1; i < values.length; i++) {
-    const challenge = challengeFromRow(values[i]);
-    if (!challenge.id || challenge.id === excludeId) continue;
-    if (text(challenge.tipo) === 'amistoso' || text(challenge.tipo) === 'campeonato') continue;
-    if (!isActiveChallengeStatus(challenge.status)) continue;
-    if (challengePlayerMatchesRole(challenge, role, ref)) return true;
-  }
-  return false;
+  const out = [];
+  for (let i = 1; i < values.length; i++) out.push(challengeFromRow(values[i]));
+  return out;
 }
 
-function hasActiveLeagueMatch(sheet, ref, excludeId) {
-  const values = sheet.getDataRange().getValues();
-  for (let i = 1; i < values.length; i++) {
-    const challenge = challengeFromRow(values[i]);
-    if (!challenge.id || challenge.id === excludeId || text(challenge.tipo) !== 'liga') continue;
-    if (!isActiveChallengeStatus(challenge.status)) continue;
-    if (challengePlayerMatchesRole(challenge, 'retador', ref) || challengePlayerMatchesRole(challenge, 'retado', ref)) return true;
-  }
-  return false;
+function hasActiveChallengeInRole(challenges, role, ref, excludeId) {
+  return challenges.some(challenge => {
+    if (!challenge.id || challenge.id === excludeId) return false;
+    if (text(challenge.tipo) === 'amistoso' || text(challenge.tipo) === 'campeonato') return false;
+    if (!isActiveChallengeStatus(challenge.status)) return false;
+    return challengePlayerMatchesRole(challenge, role, ref);
+  });
+}
+
+function hasActiveLeagueMatch(challenges, ref, excludeId) {
+  return challenges.some(challenge => {
+    if (!challenge.id || challenge.id === excludeId || text(challenge.tipo) !== 'liga') return false;
+    if (!isActiveChallengeStatus(challenge.status)) return false;
+    return challengePlayerMatchesRole(challenge, 'retador', ref) || challengePlayerMatchesRole(challenge, 'retado', ref);
+  });
 }
 
 function isPureAdminLeagueReference(ref) {
@@ -1672,17 +1671,14 @@ function isSamePlayerReference(a, b) {
   return Boolean((idA && idA === idB) || (emailA && emailA === emailB) || (nameA && nameA === nameB));
 }
 
-function hasUnresolvedChallengeBetween(sheet, refA, refB, excludeId) {
-  const values = sheet.getDataRange().getValues();
-  for (let i = 1; i < values.length; i++) {
-    const c = challengeFromRow(values[i]);
-    if (!c.id || c.id === excludeId) continue;
-    if (['pendiente', 'aceptado'].indexOf(c.status) < 0) continue;
+function hasUnresolvedChallengeBetween(challenges, refA, refB, excludeId) {
+  return challenges.some(c => {
+    if (!c.id || c.id === excludeId) return false;
+    if (['pendiente', 'aceptado'].indexOf(c.status) < 0) return false;
     const matchesA = challengePlayerMatchesRole(c, 'retador', refA) || challengePlayerMatchesRole(c, 'retado', refA);
     const matchesB = challengePlayerMatchesRole(c, 'retador', refB) || challengePlayerMatchesRole(c, 'retado', refB);
-    if (matchesA && matchesB) return true;
-  }
-  return false;
+    return matchesA && matchesB;
+  });
 }
 
 function validateChallengeCreation(challenge) {
@@ -1701,22 +1697,22 @@ function validateChallengeCreation(challenge) {
     // ranking, pero antes tampoco tenían ningún resguardo: se podían crear
     // invitaciones ilimitadas entre los mismos dos jugadores, cada una
     // generando un evento real de Calendar y una reserva real en Firestore.
-    const sheet = getChallengesSheet();
-    if (challenge.status === 'pendiente' && hasUnresolvedChallengeBetween(sheet, retadorRef, retadoRef, challenge.id)) {
+    const challenges = loadAllChallenges(getChallengesSheet());
+    if (challenge.status === 'pendiente' && hasUnresolvedChallengeBetween(challenges, retadorRef, retadoRef, challenge.id)) {
       return { ok: false, msg: 'Ya existe una invitación sin resolver entre estos dos jugadores.' };
     }
     return { ok: true };
   }
   if (text(challenge.tipo) === 'liga') {
     if (challenge.status !== 'pendiente') return { ok: true };
-    const sheet = getChallengesSheet();
-    if (hasActiveLeagueMatch(sheet, retadorRef, challenge.id)) {
+    const challenges = loadAllChallenges(getChallengesSheet());
+    if (hasActiveLeagueMatch(challenges, retadorRef, challenge.id)) {
       return { ok: false, msg: 'El retador ya tiene una invitación de liga activa.' };
     }
-    if (hasActiveLeagueMatch(sheet, retadoRef, challenge.id)) {
+    if (hasActiveLeagueMatch(challenges, retadoRef, challenge.id)) {
       return { ok: false, msg: 'El rival ya tiene una invitación de liga activa.' };
     }
-    if (hasUnresolvedChallengeBetween(sheet, retadorRef, retadoRef, challenge.id)) {
+    if (hasUnresolvedChallengeBetween(challenges, retadorRef, retadoRef, challenge.id)) {
       return { ok: false, msg: 'Ya existe una invitación de liga sin resolver entre estos jugadores.' };
     }
     return { ok: true };
@@ -1738,11 +1734,11 @@ function validateChallengeCreation(challenge) {
     return { ok: false, msg: 'Solo se puede desafiar hasta 3 posiciones superiores.' };
   }
 
-  const sheet = getChallengesSheet();
-  if (hasActiveChallengeInRole(sheet, 'retador', retadorRef, challenge.id)) {
+  const challenges = loadAllChallenges(getChallengesSheet());
+  if (hasActiveChallengeInRole(challenges, 'retador', retadorRef, challenge.id)) {
     return { ok: false, msg: 'El retador ya tiene un desafío activo como retador.' };
   }
-  if (hasActiveChallengeInRole(sheet, 'retado', retadoRef, challenge.id)) {
+  if (hasActiveChallengeInRole(challenges, 'retado', retadoRef, challenge.id)) {
     return { ok: false, msg: 'El retado ya tiene un desafío activo como retado.' };
   }
   return { ok: true };
@@ -3339,130 +3335,6 @@ function getUserBookings(data) {
 const PLAYER_HEADERS = ['ID','Nombre','Genero','Fecha nac','Categoria','Mano Habil','Reves','Foto','Ranking','Pos. Anterior','Correo','Rut'];
 const RANKING_HEADERS = ['Posicion','Nombre','Pos. Anterior','','','ID'];
 
-function adminSavePlayer(data) {
-  if (!isAdminRequest(data)) return { ok: false, msg: 'Acceso reservado al administrador.' };
-  const lock = LockService.getScriptLock();
-  lock.waitLock(10000);
-  try {
-    const ss = getSpreadsheet();
-    const index = getPlayersIndex(ss);
-    const requestedId = text(data.id);
-    const existing = requestedId ? index.byId[requestedId] : null;
-    const player = normalizePlayerPayload(data, existing);
-    if (!player.nombre) return { ok: false, msg: 'El nombre del jugador es obligatorio.' };
-    if (!player.genero) return { ok: false, msg: 'Selecciona ranking masculino o femenino.' };
-    if (!player.id) player.id = generatePlayerId(index, player.genero);
-    if (data.photoDataUrl) player.foto = savePlayerPhoto(data, player);
-    const duplicate = index.players.find(item =>
-      item.id !== player.id &&
-      ((player.email && item.email && item.email.toLowerCase() === player.email.toLowerCase()) ||
-       norm(item.nombre) === norm(player.nombre))
-    );
-    if (duplicate) return { ok: false, msg: 'Ya existe un jugador con ese nombre o correo.' };
-    const rowNumber = existing ? existing.rowNumber : index.sheet.getLastRow() + 1;
-    index.sheet.getRange(rowNumber, 1, 1, PLAYER_HEADERS.length).setValues([playerToRow(player)]);
-    if (player.activo) {
-      ensurePlayerInRanking(ss, player, numberOrBlank(data.posicion));
-    } else {
-      removePlayerFromRankings(ss, player);
-    }
-    return { ok: true, player: publicPlayer(player), ranking: getRanking() };
-  } finally { lock.releaseLock(); }
-}
-
-function adminDeletePlayer(data) {
-  if (!isAdminRequest(data)) return { ok: false, msg: 'Acceso reservado al administrador.' };
-  const lock = LockService.getScriptLock();
-  lock.waitLock(10000);
-  try {
-    const ss = getSpreadsheet();
-    const index = getPlayersIndex(ss);
-    const player = findPlayerReference(index, { id: text(data.id), nombre: text(data.nombre), email: text(data.email) });
-    if (!player) return { ok: false, msg: 'Jugador no encontrado.' };
-    index.sheet.deleteRow(player.rowNumber);
-    removePlayerFromRankings(ss, player);
-    return { ok: true, deletedId: player.id, ranking: getRanking() };
-  } finally { lock.releaseLock(); }
-}
-
-function adminReorderRanking(data) {
-  if (!isAdminRequest(data)) return { ok: false, msg: 'Acceso reservado al administrador.' };
-  const genero = normalizeGender(data.genero);
-  if (!genero) return { ok: false, msg: 'Género no válido.' };
-  const orderedIds = data.orderedIds;
-  if (!Array.isArray(orderedIds) || !orderedIds.length) {
-    return { ok: false, msg: 'Falta la lista ordenada de jugadores.' };
-  }
-  const lock = LockService.getScriptLock();
-  lock.waitLock(15000);
-  try {
-    const ss = getSpreadsheet();
-    const entries = readRankingEntries(ss, genero);
-    const previousMap = buildPreviousPositionMap(entries);
-    const entryMap = {};
-    entries.forEach(entry => { const key = entry.id || entry.nombre; if (key) entryMap[key] = entry; });
-    const reorderedEntries = [];
-    orderedIds.forEach(id => { if (entryMap[id]) { reorderedEntries.push(entryMap[id]); delete entryMap[id]; } });
-    Object.values(entryMap).forEach(remaining => { reorderedEntries.push(remaining); });
-    const finalEntries = reorderedEntries.map((entry, index) => ({ ...entry, posicion: index + 1 }));
-    writeRankingEntries(ss, genero, finalEntries, previousMap);
-    syncPlayerRankingColumns(ss, genero, finalEntries, previousMap);
-    return { ok: true, ranking: getRanking() };
-  } finally { lock.releaseLock(); }
-}
-
-function updateOwnProfile(data) {
-  const actorEmail = text(data.actorEmail || data.email);
-  const validation = actorEmail ? validateMember(actorEmail) : { ok: false };
-  if (!validation.ok) return { ok: false, msg: 'Debes ingresar con una cuenta validada para editar tu ficha.' };
-  if (validation.readOnly) return { ok: false, msg: 'Tu cuenta @uct.cl tiene acceso de solo lectura. Escribe a un administrador de UCTenis para activarte como socio o funcionario.' };
-  const lock = LockService.getScriptLock();
-  lock.waitLock(10000);
-  try {
-    const ss = getSpreadsheet();
-    const index = getPlayersIndex(ss);
-    const player = findPlayerReference(index, {
-      id: text(data.actorId || data.id),
-      nombre: text(data.actorName || data.actorNombre || data.nombre),
-      email: actorEmail
-    });
-    if (!player) {
-      const base = validation.player || {};
-      const created = normalizePlayerPayload({ ...base, ...data,
-        id: text(data.actorId || data.id || base.id),
-        nombre: text(data.nombre || data.actorName || data.actorNombre || base.nombre),
-        email: actorEmail,
-        genero: text(data.genero || data.gender || base.genero || base.gender)
-      }, null);
-      if (!created.nombre) return { ok: false, msg: 'Ingresa tu nombre para crear tu ficha.' };
-      if (!created.genero) return { ok: false, msg: 'Selecciona ranking masculino o femenino.' };
-      if (!created.id) created.id = generatePlayerId(index, created.genero);
-      if (data.photoDataUrl) created.foto = savePlayerPhoto(data, created);
-      const duplicate = index.players.find(item =>
-        item.id !== created.id &&
-        ((created.email && item.email && item.email.toLowerCase() === created.email.toLowerCase()) ||
-         norm(item.nombre) === norm(created.nombre))
-      );
-      if (duplicate) return { ok: false, msg: 'Ya existe un jugador con ese nombre o correo.' };
-      index.sheet.getRange(index.sheet.getLastRow() + 1, 1, 1, PLAYER_HEADERS.length).setValues([playerToRow(created)]);
-      ensurePlayerInRanking(ss, created, numberOrBlank(data.posicion || created.ranking));
-      return { ok: true, player: publicPlayer(created), ranking: getRanking() };
-    }
-    const updated = {
-      ...player,
-      fechaNacimiento: payloadField(data, ['fechaNacimiento','fechaNac','birthDate'], player.fechaNacimiento),
-      categoria: normalizeCategory(payloadField(data, ['categoria','category'], player.categoria)),
-      manoHabil: payloadField(data, ['manoHabil','mano','hand'], player.manoHabil),
-      reves: payloadField(data, ['reves','backhand'], player.reves),
-      foto: payloadField(data, ['foto','photo','avatar'], player.foto),
-      email: player.email || actorEmail
-    };
-    if (data.photoDataUrl) updated.foto = savePlayerPhoto(data, updated);
-    index.sheet.getRange(player.rowNumber, 1, 1, PLAYER_HEADERS.length).setValues([playerToRow(updated)]);
-    return { ok: true, player: publicPlayer(updated), ranking: getRanking() };
-  } finally { lock.releaseLock(); }
-}
-
 function applyChallengeResultToRanking(challenge) {
   if (text(challenge.tipo) === 'amistoso') return { ok: true, moved: false, msg: 'Partido amistoso: no se altera el ranking.' };
   if (text(challenge.tipo) === 'campeonato') return { ok: true, moved: false, msg: 'Partido de campeonato: no se altera el ranking.' };
@@ -3503,38 +3375,6 @@ function applyChallengeResultToRanking(challenge) {
   return { ok: true, moved: true, ganadorId: winner.id, perdedorId: loser.id, from: oldWinnerPos, to: oldLoserPos };
 }
 
-function ensurePlayerInRanking(ss, player, desiredPosition) {
-  const genders = ['M', 'F'];
-  genders.forEach(genero => {
-    let entries = readRankingEntries(ss, genero);
-    const previousMap = buildPreviousPositionMap(entries);
-    const existingIndex = findRankingEntryIndex(entries, player);
-    if (existingIndex >= 0) entries.splice(existingIndex, 1);
-    if (genero === player.genero) {
-      const position = Number.isFinite(desiredPosition) && desiredPosition > 0
-        ? Math.min(desiredPosition, entries.length + 1) : entries.length + 1;
-      const key = player.id || norm(player.nombre);
-      previousMap[key] = existingIndex >= 0 ? previousMap[key] : '';
-      entries.splice(position - 1, 0, { id: player.id, nombre: player.nombre, posicion: position, posicionAnterior: existingIndex >= 0 ? previousMap[key] : '', genero: player.genero });
-    }
-    writeRankingEntries(ss, genero, entries, previousMap);
-    syncPlayerRankingColumns(ss, genero, entries, previousMap);
-  });
-}
-
-function removePlayerFromRankings(ss, player) {
-  ['M','F'].forEach(genero => {
-    const entries = readRankingEntries(ss, genero);
-    const filtered = entries.filter(entry => !matchesPlayerReference(entry, player));
-    if (filtered.length !== entries.length) {
-      const previousMap = {};
-      filtered.forEach((entry, index) => { previousMap[rankingEntryKey(entry)] = index + 1; });
-      writeRankingEntries(ss, genero, filtered, previousMap);
-      syncPlayerRankingColumns(ss, genero, filtered, previousMap);
-    }
-  });
-}
-
 function getSpreadsheet() { return SpreadsheetApp.openById(CONFIG.SHEET_MIEMBROS_ID); }
 
 function getPlayersSheet(ss) {
@@ -3561,8 +3401,16 @@ function ensureSheetHeaders(sheet, headers) {
   if (!text(first[0])) sheet.getRange(1, 1, 1, width).setValues([headers]);
 }
 
+// Nada en este archivo escribe en la hoja 'jugadores' dentro de una misma
+// ejecución, así que memorizar el índice por objeto de spreadsheet evita
+// releer toda la hoja varias veces en una sola solicitud (ej: al confirmar
+// un resultado de desafío, que hoy pide el índice dos veces).
+let _playersIndexCache = null;
+let _playersIndexCacheSS = null;
 function getPlayersIndex(ss) {
-  const sheet = getPlayersSheet(ss);
+  const spreadsheet = ss || getSpreadsheet();
+  if (_playersIndexCache && _playersIndexCacheSS === spreadsheet) return _playersIndexCache;
+  const sheet = getPlayersSheet(spreadsheet);
   const values = sheet.getDataRange().getValues();
   const players = [], byId = {}, byName = {}, byEmail = {};
   for (let i = 1; i < values.length; i++) {
@@ -3573,7 +3421,9 @@ function getPlayersIndex(ss) {
     if (player.nombre) byName[norm(player.nombre)] = player;
     if (player.email) byEmail[player.email.toLowerCase()] = player;
   }
-  return { sheet: sheet, players: players, byId: byId, byName: byName, byEmail: byEmail };
+  _playersIndexCache = { sheet: sheet, players: players, byId: byId, byName: byName, byEmail: byEmail };
+  _playersIndexCacheSS = spreadsheet;
+  return _playersIndexCache;
 }
 
 function playerFromRow(row, rowNumber) {
@@ -3590,97 +3440,6 @@ function playerFromRow(row, rowNumber) {
     posicionAnterior: numberOrBlank(row[9]),
     email: text(row[10]), rut: text(row[11])
   };
-}
-
-function normalizePlayerPayload(data, existing) {
-  const base = existing || {};
-  const genero = normalizeGender(payloadField(data, ['genero','gender'], base.genero));
-  const activo = data.activo !== false && data.activo !== 'false';
-  return {
-    id: payloadField(data, ['id','codigo','uid'], base.id),
-    nombre: payloadField(data, ['nombre','name','jugador'], base.nombre),
-    genero: genero,
-    fechaNacimiento: payloadField(data, ['fechaNacimiento','fechaNac','birthDate'], base.fechaNacimiento),
-    categoria: normalizeCategory(payloadField(data, ['categoria','category'], base.categoria)),
-    manoHabil: payloadField(data, ['manoHabil','mano','hand'], base.manoHabil || base.mano),
-    reves: payloadField(data, ['reves','backhand'], base.reves),
-    foto: payloadField(data, ['foto','photo','avatar'], base.foto),
-    ranking: numberOrBlank(payloadField(data, ['ranking','posicion'], base.ranking)),
-    posicionAnterior: numberOrBlank(payloadField(data, ['posicionAnterior','prev'], base.posicionAnterior)),
-    email: payloadField(data, ['email','correo'], base.email),
-    rut: payloadField(data, ['rut'], base.rut),
-    activo: activo
-  };
-}
-
-function payloadField(data, keys, fallback) {
-  for (let i = 0; i < keys.length; i++) {
-    if (Object.prototype.hasOwnProperty.call(data, keys[i]) && data[keys[i]] !== undefined && data[keys[i]] !== null) {
-      return text(data[keys[i]]);
-    }
-  }
-  return text(fallback);
-}
-
-function playerToRow(player) {
-  return [
-    player.id, player.nombre, player.genero, player.fechaNacimiento,
-    normalizeCategory(player.categoria), player.manoHabil || player.mano,
-    player.reves, player.foto, player.ranking || '', player.posicionAnterior || '',
-    player.email, player.rut || ''
-  ];
-}
-
-function publicPlayer(player) {
-  return {
-    id: player.id, nombre: player.nombre, genero: player.genero,
-    fechaNacimiento: player.fechaNacimiento,
-    edad: calculateAge(player.fechaNacimiento) || player.edad,
-    categoria: normalizeCategory(player.categoria),
-    manoHabil: player.manoHabil || player.mano,
-    mano: player.mano || player.manoHabil,
-    reves: player.reves, foto: photoFor(player.id, player.foto),
-    ranking: player.ranking, posicionAnterior: player.posicionAnterior,
-    email: player.email, rut: player.rut || ''
-  };
-}
-
-function savePlayerPhoto(data, player) {
-  const dataUrl = (data.photoDataUrl || '').toString();
-  if (!dataUrl) return '';
-  const match = dataUrl.match(/^data:(image\/(?:png|jpeg|jpg|webp));base64,([A-Za-z0-9+/=]+)$/);
-  if (!match) throw new Error('La foto debe ser JPG, PNG o WEBP.');
-  const mime = match[1] === 'image/jpg' ? 'image/jpeg' : match[1];
-  const bytes = Utilities.base64Decode(match[2]);
-  if (bytes.length > 3500000) throw new Error('La foto es demasiado pesada.');
-  const extMap = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
-  const ext = extMap[mime] || 'jpg';
-  const safeName = fileSafeName((player.id || player.nombre || 'jugador') + '-' + new Date().getTime()) + '.' + ext;
-  const blob = Utilities.newBlob(bytes, mime, safeName);
-  const file = getPhotoFolder().createFile(blob);
-  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-  return 'https://drive.google.com/thumbnail?id=' + file.getId() + '&sz=w600';
-}
-
-function getPhotoFolder() {
-  const name = CONFIG.PHOTO_FOLDER_NAME || 'UCTenis fotos jugadores';
-  const folders = DriveApp.getFoldersByName(name);
-  if (folders.hasNext()) return folders.next();
-  return DriveApp.createFolder(name);
-}
-
-function fileSafeName(value) {
-  return norm(value).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'jugador';
-}
-
-function generatePlayerId(index, genero) {
-  const prefix = normalizeGender(genero) === 'F' ? 'f' : 'm';
-  let max = 0;
-  index.players.forEach(player => {
-    const match = text(player.id).match(new RegExp('^' + prefix + '(\\d+)$', 'i'));
-    if (match) max = Math.max(max, Number(match[1]));
-  });
-  return prefix + String(max + 1).padStart(3, '0');
 }
 
 function readRankingEntries(ss, genero) {
@@ -3730,14 +3489,27 @@ function writeRankingEntries(ss, genero, entries, previousMap) {
 
 function syncPlayerRankingColumns(ss, genero, entries, previousMap) {
   const index = getPlayersIndex(ss);
+  const sheet = index.sheet;
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return;
+  // Un solo read + un solo write de todo el bloque de columnas (Ranking,
+  // Pos. Anterior) en vez de una llamada a la API de Sheets por jugador.
+  const range = sheet.getRange(2, 9, lastRow - 1, 2);
+  const values = range.getValues();
+  let changed = false;
   entries.forEach((entry, indexNumber) => {
     const player = findPlayerReference(index, entry);
     if (!player) return;
+    const rowIdx = player.rowNumber - 2;
+    if (rowIdx < 0 || rowIdx >= values.length) return;
     const key = rankingEntryKey(entry);
     const hasPrevious = previousMap && Object.prototype.hasOwnProperty.call(previousMap, key);
     const previous = hasPrevious ? previousMap[key] : (entry.posicionAnterior || '');
-    index.sheet.getRange(player.rowNumber, 9, 1, 2).setValues([[indexNumber + 1, previous]]);
+    values[rowIdx][0] = indexNumber + 1;
+    values[rowIdx][1] = previous;
+    changed = true;
   });
+  if (changed) range.setValues(values);
 }
 
 function buildPreviousPositionMap(entries) {

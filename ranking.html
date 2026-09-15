@@ -1250,6 +1250,18 @@ async function refreshRankingPage() {
     console.error('Error cargando ranking estático:', staticErr);
   }
 
+  // PASO 2 y PASO 3 son independientes (jugadores vs. desafíos), así que la
+  // sincronización de desafíos se dispara aquí para que corra en paralelo
+  // con la carga de jugadores de abajo, en vez de esperar a que esa termine.
+  syncChallengesFromCloud().then(() => {
+    applyLocalChallengesToRanking();
+    renderAll();
+    checkPendingChallengesAlert();
+  }).catch(err => {
+    console.warn('Error sincronizando desafíos:', err);
+    checkPendingChallengesAlert();
+  });
+
   // PASO 2: Intentar actualizar con Firebase en segundo plano
   if (DB.isCloudConfigured()) {
     setRankStatus('Conectando...', 'info');
@@ -1282,16 +1294,6 @@ async function refreshRankingPage() {
   } else {
     setRankStatus('Modo local', 'info');
   }
-
-  // PASO 3: Sincronizar desafíos
-  syncChallengesFromCloud().then(() => {
-    applyLocalChallengesToRanking();
-    renderAll();
-    checkPendingChallengesAlert();
-  }).catch(err => {
-    console.warn('Error sincronizando desafíos:', err);
-    checkPendingChallengesAlert();
-  });
 }
 
 const RANKING_PLAYERS_CACHE_KEY = 'uctenis_ranking_players_cache_v1';
