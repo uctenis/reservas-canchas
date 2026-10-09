@@ -8,8 +8,8 @@
   <link rel="stylesheet" href="style.css?v=20260813_v1">
   <link rel="stylesheet" href="reservas.css?v=20260914_v3">
   <link rel="stylesheet" href="datepicker.css?v=20260908_v3">
-  <link rel="stylesheet" href="theme.css?v=20261009_r2">
-  <script src="site.js?v=20261009_r2" defer></script>
+  <link rel="stylesheet" href="theme.css?v=20261009_r3">
+  <script src="site.js?v=20261009_r3" defer></script>
 </head>
 <body>
   <div id="debug-error-console" style="background:#ef4444; color:#fff; padding:15px; font-family:monospace; font-size:13px; display:none; position:fixed; top:0; left:0; width:100%; z-index:999999; box-shadow:0 4px 12px rgba(0,0,0,0.3);">
@@ -128,13 +128,15 @@
     
     <p class="rule-note">⏱ Cada bloque = 1.5 horas · Máx. 1 reserva por día</p>
     
-    <div id="selectedSlotInfo" style="text-align: center; margin-top: 20px; margin-bottom: 12px; min-height: 24px; color: var(--accent-tennis); font-weight: 600; font-size: 1.05rem;">
-      ⚠️ Ningún horario seleccionado
-    </div>
-
-    <div class="confirm-actions" style="margin-top: 16px; display: flex; gap: 12px; justify-content: center;">
-      <button class="btn-back" onclick="goStep(1)">← Cambiar Fecha</button>
-      <button class="btn-next" id="btnConfirmSlot" style="margin: 0; padding: 12px 36px; font-size: 1.05rem;" disabled>Continuar →</button>
+    <!-- Barra de acción fija al pie: muestra lo elegido y el botón para continuar -->
+    <div class="slot-action-bar">
+      <div id="selectedSlotInfo" class="slot-action-info">
+        ⚠️ Ningún horario seleccionado
+      </div>
+      <div class="confirm-actions">
+        <button class="btn-back" onclick="goStep(1)">← Cambiar Fecha</button>
+        <button class="btn-next" id="btnConfirmSlot" disabled>Continuar →</button>
+      </div>
     </div>
   </section>
 
@@ -1021,6 +1023,15 @@ function renderSlotsByCourt(apiData) {
   });
 
   container.innerHTML = html;
+
+  // Resumen por cancha: cuántos horarios quedan libres ese día
+  container.querySelectorAll('.court-row').forEach(row => {
+    const title = row.querySelector('h3');
+    if (!title || !row.querySelector('.slot-card')) return;
+    const free = row.querySelectorAll('.slot-free').length;
+    title.insertAdjacentHTML('beforeend', `<span class="court-free-chip${free ? '' : ' is-full'}">${free ? `${free} libre${free === 1 ? '' : 's'}` : 'Sin cupos'}</span>`);
+  });
+
   applyReservationFilters();
 
   if (!session) {

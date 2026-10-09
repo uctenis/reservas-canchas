@@ -26,8 +26,8 @@
   <style>
     html.liga-entry-pending .ranking-page { visibility: hidden; }
   </style>
-  <link rel="stylesheet" href="theme.css?v=20261009_r2">
-  <script src="site.js?v=20261009_r2" defer></script>
+  <link rel="stylesheet" href="theme.css?v=20261009_r3">
+  <script src="site.js?v=20261009_r3" defer></script>
 </head>
 <body>
 <div class="main-container ranking-page">
@@ -90,6 +90,7 @@
       </div>
     </div>
 
+    <div class="rank-podium" id="rankPodium" aria-label="Primeros tres del ranking"></div>
     <div class="rank-summary" id="rankSummary" aria-live="polite"></div>
 
     <div class="ranking-table-container">
@@ -1072,6 +1073,11 @@ function setupEvents() {
     if (key) showPlayerProfile(key);
   });
 
+  document.getElementById('rankPodium').addEventListener('click', event => {
+    const card = event.target.closest('[data-player-key]');
+    if (card) showPlayerProfile(card.dataset.playerKey);
+  });
+
   document.getElementById('inactivePlayersList').addEventListener('click', event => {
     const profileBtn = event.target.closest('[data-action="show-profile"]');
     const row = event.target.closest('[data-player-key]');
@@ -1995,6 +2001,7 @@ function switchGender(gender) {
 function renderRankingLoading() {
   document.getElementById('rankBody').innerHTML = '<tr><td colspan="8" class="empty-row">Cargando ranking...</td></tr>';
   document.getElementById('rankSummary').innerHTML = '';
+  document.getElementById('rankPodium').innerHTML = '';
   document.getElementById('inactivePlayersList').innerHTML = '<p class="empty-state">Cargando jugadores inactivos...</p>';
 }
 
@@ -2064,13 +2071,40 @@ function renderRanking() {
   }
 }
 
+// Podio con los tres primeros. Con menos de tres jugadores no se muestra y
+// el resumen conserva su tarjeta de "Líder".
+function renderPodium(list) {
+  const podium = document.getElementById('rankPodium');
+  if (!podium) return false;
+  if (list.length < 3) {
+    podium.innerHTML = '';
+    return false;
+  }
+  const gender = rankingState.currentGender;
+  const labels = ['Líder', '2º lugar', '3er lugar'];
+  podium.innerHTML = list.slice(0, 3).map((player, index) => `
+    <button type="button" class="podium-card podium-${index + 1}" data-player-key="${escapeAttr(player.id)}" aria-label="${escapeAttr(labels[index] + ': ' + player.nombre)}">
+      <span class="podium-photo-wrap">
+        <img class="podium-photo" src="${escapeAttr(player.foto)}" data-fallback="${escapeAttr(GENDERS[gender].fallbackAvatar)}" onerror="useFallbackAvatar(this)" alt="" width="96" height="96" decoding="async">
+        <span class="podium-medal">${index + 1}</span>
+      </span>
+      <span class="podium-label">${labels[index]}</span>
+      <strong class="podium-name">${escapeHTML(player.nombre)}</strong>
+      <span class="podium-meta">${escapeHTML(normalizeCategory(player.categoria) || 'Perfil por completar')} ${evolutionHtml(player)}</span>
+      <span class="podium-step" aria-hidden="true"></span>
+    </button>`).join('');
+  return true;
+}
+
 function renderSummary(list) {
   const summary = document.getElementById('rankSummary');
   if (!list.length) {
     summary.innerHTML = '';
+    renderPodium(list);
     return;
   }
 
+  const hasPodium = renderPodium(list);
   const gender = rankingState.currentGender;
   const leader = list[0];
   const inactiveCount = (rankingState.inactive[gender] || []).length;
@@ -2084,14 +2118,16 @@ function renderSummary(list) {
       <strong>${inactiveCount}</strong>
     </div>` : '';
 
-  summary.innerHTML = `
+  const leaderBoxHtml = hasPodium ? '' : `
     <div class="summary-item leader-summary">
       <img src="fotos/leader_badge.png" class="leader-rank-badge" aria-label="Líder número 1" style="background: transparent; border: none; box-shadow: none; padding: 0; object-fit: contain;">
       <div class="leader-summary-copy">
         <span>Líder</span>
         <strong>${escapeHTML(leader.nombre)}</strong>
       </div>
-    </div>
+    </div>`;
+
+  summary.innerHTML = `${leaderBoxHtml}
     <div class="summary-item">
       <span>${labelPlayers}</span>
       <strong>${list.length}</strong>
