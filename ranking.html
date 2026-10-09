@@ -26,6 +26,8 @@
   <style>
     html.liga-entry-pending .ranking-page { visibility: hidden; }
   </style>
+  <link rel="stylesheet" href="theme.css?v=20261009_r2">
+  <script src="site.js?v=20261009_r2" defer></script>
 </head>
 <body>
 <div class="main-container ranking-page">
@@ -60,15 +62,15 @@
         <p class="rank-subtitle" id="rankSubtitle">Cargando ranking...</p>
       </div>
       <div class="rank-actions">
-        <button class="btn-primary pulse-confirm" id="btnConfirmRankingOrder" type="button" style="display:none; background:#10b981; border:none; border-radius:8px; font-weight:800; padding:8px 16px; font-size:0.85rem; width:auto; min-height:auto; cursor:pointer; color:#0f172a; align-items:center; justify-content:center; gap:6px;">💾 Guardar Orden</button>
+        <button class="btn-primary pulse-confirm" id="btnConfirmRankingOrder" type="button" style="display:none; background:#10b981; border:none; border-radius:8px; font-weight:800; padding:8px 16px; font-size:0.85rem; width:auto; min-height:auto; cursor:pointer; color:#07120e; align-items:center; justify-content:center; gap:6px;">💾 Guardar Orden</button>
         <div class="rank-actions-group">
           <button class="btn-admin-panel" id="btnModoEdicion" type="button" style="display:none; background:rgba(99, 102, 241, 0.15); border-color:rgba(99, 102, 241, 0.35); color:#a5b4fc; font-weight:800;">✏️ Modo Edición</button>
           <button class="btn-admin-panel" id="btnAdminPlayers" type="button" data-action="open-admin" style="display:none">Panel Administrador</button>
         </div>
         <div class="rank-actions-group">
           <button class="btn-challenge-new" id="btnNuevoDesafio" type="button" style="display:none">Nuevo desafío</button>
-          <button class="btn-challenge-new" id="btnNuevaLiga" type="button" style="display:none; background:#f59e0b; color:#111827; border-color:#f59e0b;">Partido de liga</button>
-          <button class="btn-challenge-new" id="btnNuevoAmistoso" type="button" style="display:none; background:#64748b; color:#fff; border-color:#64748b;">Registrar Amistoso</button>
+          <button class="btn-challenge-new" id="btnNuevaLiga" type="button" style="display:none; background:#f59e0b; color:#0a1712; border-color:#f59e0b;">Partido de liga</button>
+          <button class="btn-challenge-new" id="btnNuevoAmistoso" type="button" style="display:none; background:#6c8479; color:#fff; border-color:#6c8479;">Registrar Amistoso</button>
         </div>
       </div>
     </div>
@@ -83,7 +85,7 @@
         </div>
       </div>
       <div style="display:flex; gap:10px; flex-shrink:0;">
-        <button class="btn-primary" id="btnSaveRankingEdits" type="button" style="background:#10b981; color:#0f172a; border:none; border-radius:8px; padding:8px 16px; font-weight:800; font-size:0.82rem; cursor:pointer; width:auto; min-height:auto; display:inline-flex; align-items:center; box-shadow: 0 4px 12px rgba(16,185,129,0.25);">Guardar Cambios</button>
+        <button class="btn-primary" id="btnSaveRankingEdits" type="button" style="background:#10b981; color:#07120e; border:none; border-radius:8px; padding:8px 16px; font-weight:800; font-size:0.82rem; cursor:pointer; width:auto; min-height:auto; display:inline-flex; align-items:center; box-shadow: 0 4px 12px rgba(16,185,129,0.25);">Guardar Cambios</button>
         <button class="btn-secondary" id="btnCancelRankingEdits" type="button" style="border-radius:8px; padding:8px 16px; font-size:0.82rem; cursor:pointer; width:auto; min-height:auto; background:rgba(255,255,255,0.06); color:#fff; border:1px solid var(--panel-line); display:inline-flex; align-items:center;">Cancelar</button>
       </div>
     </div>
@@ -226,7 +228,7 @@
             </select>
           </div>
         </div>
-        <label style="display:flex; align-items:center; gap:8px; margin:-6px 0 12px; font-size:0.85rem; color:var(--text-secondary,#94a3b8); cursor:pointer;">
+        <label style="display:flex; align-items:center; gap:8px; margin:-6px 0 12px; font-size:0.85rem; color:var(--text-secondary,#9bb0a6); cursor:pointer;">
           <input type="checkbox" id="chal_otro_lugar" style="width:auto; margin:0;">
           Van a jugar en otro lugar (fuera del club) — no reservar cancha
         </label>
@@ -1494,7 +1496,7 @@ function showFloatingAlert(count) {
   alertDiv.style.position = 'fixed';
   alertDiv.style.bottom = '24px';
   alertDiv.style.right = '24px';
-  alertDiv.style.backgroundColor = 'rgba(15, 23, 42, 0.95)';
+  alertDiv.style.backgroundColor = 'rgba(7, 18, 14, 0.95)';
   alertDiv.style.border = '2px solid var(--accent-tennis)';
   alertDiv.style.borderRadius = '16px';
   alertDiv.style.padding = '16px 20px';
@@ -2291,7 +2293,7 @@ function renderMyProfile() {
     alertsHtml += `
       <div class="pending-challenge-alert pulse-badge" style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 8px; padding: 12px; margin-bottom: 14px; display: flex; flex-direction: column; gap: 8px; align-items: stretch;">
         <span style="color: #fca5a5; font-size: 0.88rem; font-weight: 800; text-align: center;">⚔️ Tienes ${pendingChallenges.length} desafío${pendingChallenges.length > 1 ? 's' : ''} pendiente${pendingChallenges.length > 1 ? 's' : ''} por responder!</span>
-        <button class="btn-alert-link" style="background: var(--court-green); color: #08111f; border: none; border-radius: 6px; padding: 6px 12px; font-family: var(--font-sans); font-weight: 900; font-size: 0.8rem; cursor: pointer; text-align: center; transition: transform 0.18s ease;" onclick="scrollToMyChallenges()">Ver y responder</button>
+        <button class="btn-alert-link" style="background: var(--court-green); color: #06110c; border: none; border-radius: 6px; padding: 6px 12px; font-family: var(--font-sans); font-weight: 900; font-size: 0.8rem; cursor: pointer; text-align: center; transition: transform 0.18s ease;" onclick="scrollToMyChallenges()">Ver y responder</button>
       </div>
     `;
   }
@@ -2299,7 +2301,7 @@ function renderMyProfile() {
     alertsHtml += `
       <div class="pending-challenge-alert" style="background: rgba(251, 191, 36, 0.15); border: 1px solid rgba(251, 191, 36, 0.4); border-radius: 8px; padding: 12px; margin-bottom: 14px; display: flex; flex-direction: column; gap: 8px; align-items: stretch;">
         <span style="color: #fde047; font-size: 0.88rem; font-weight: 800; text-align: center;">⚠️ Tienes ${expiredChallenges.length} desafío${expiredChallenges.length > 1 ? 's' : ''} vencido${expiredChallenges.length > 1 ? 's' : ''} sin resultado!</span>
-        <button class="btn-alert-link" style="background: var(--warning); color: #08111f; border: none; border-radius: 6px; padding: 6px 12px; font-family: var(--font-sans); font-weight: 900; font-size: 0.8rem; cursor: pointer; text-align: center; transition: transform 0.18s ease;" onclick="scrollToMyChallenges()">Ver mis desafíos</button>
+        <button class="btn-alert-link" style="background: var(--warning); color: #06110c; border: none; border-radius: 6px; padding: 6px 12px; font-family: var(--font-sans); font-weight: 900; font-size: 0.8rem; cursor: pointer; text-align: center; transition: transform 0.18s ease;" onclick="scrollToMyChallenges()">Ver mis desafíos</button>
       </div>
     `;
   }
@@ -4028,7 +4030,7 @@ function showChallengeAcceptedModal(challenge) {
       }
       @keyframes fadeInOverlay { from { opacity:0; } to { opacity:1; } }
       .chal-accepted-box {
-        background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+        background: linear-gradient(135deg, #07120e 0%, #11231c 100%);
         border: 2px solid rgba(245, 158, 11, 0.6);
         border-radius: 24px;
         padding: 36px 32px 28px;
@@ -5037,7 +5039,7 @@ function showPlayerProfile(playerKey) {
               : (c.retadorNombre || users.find(u=>u.id===c.retadorId)?.nombre || 'Jugador');
             const isDrawMatch = !c.ganadorId;
             const won = !isDrawMatch && playerMatchesChallengeRef(player, c.ganadorId);
-            const resultColor = isDrawMatch ? '#94a3b8' : (won ? '#4ade80' : '#f87171');
+            const resultColor = isDrawMatch ? '#9bb0a6' : (won ? '#4ade80' : '#f87171');
             const resultMark = isDrawMatch ? '🤝 ' : (won ? '✓ ' : '✗ ');
             const isFriendly = c.tipo === 'amistoso';
             const isLeague = c.tipo === 'liga';
@@ -5070,7 +5072,7 @@ function showPlayerProfile(playerKey) {
         <div class="profile-record-stats">
           <div><span class="stat-label" style="color:#4ade80;">Ganados</span><span class="stat-value">${chalWins}</span></div>
           <div><span class="stat-label" style="color:#f87171;">Perdidos</span><span class="stat-value">${chalLosses}</span></div>
-          <div><span class="stat-label" style="color:#94a3b8;">Total</span><span class="stat-value">${officialMatches.length}</span></div>
+          <div><span class="stat-label" style="color:#9bb0a6;">Total</span><span class="stat-value">${officialMatches.length}</span></div>
         </div>
       </div>
 
@@ -5079,7 +5081,7 @@ function showPlayerProfile(playerKey) {
         <div class="profile-record-stats">
           <div><span class="stat-label" style="color:#fbbf24;">Puntos ciclo actual</span><span class="stat-value">${currentLeagueRow?.pts || 0}</span></div>
           <div><span class="stat-label" style="color:#4ade80;">Ganados</span><span class="stat-value">${leagueWins}</span></div>
-          <div><span class="stat-label" style="color:#94a3b8;">Jugados</span><span class="stat-value">${leagueMatches.length}</span></div>
+          <div><span class="stat-label" style="color:#9bb0a6;">Jugados</span><span class="stat-value">${leagueMatches.length}</span></div>
         </div>
       </div>
 
@@ -5089,8 +5091,8 @@ function showPlayerProfile(playerKey) {
         <div class="profile-record-stats">
           <div><span class="stat-label" style="color:#4ade80;">Ganados</span><span class="stat-value">${friendlyWins}</span></div>
           <div><span class="stat-label" style="color:#f87171;">Perdidos</span><span class="stat-value">${friendlyLosses}</span></div>
-          ${friendlyDraws > 0 ? `<div><span class="stat-label" style="color:#94a3b8;">Empates</span><span class="stat-value">${friendlyDraws}</span></div>` : ''}
-          <div><span class="stat-label" style="color:#94a3b8;">Total</span><span class="stat-value">${friendlyMatches.length}</span></div>
+          ${friendlyDraws > 0 ? `<div><span class="stat-label" style="color:#9bb0a6;">Empates</span><span class="stat-value">${friendlyDraws}</span></div>` : ''}
+          <div><span class="stat-label" style="color:#9bb0a6;">Total</span><span class="stat-value">${friendlyMatches.length}</span></div>
         </div>
       </div>
 

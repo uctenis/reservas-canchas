@@ -3,11 +3,11 @@
 
 :root {
     /* Colors */
-    --bg-dark: #0f172a;
-    --bg-card: rgba(30, 41, 59, 0.7);
-    --bg-card-hover: rgba(51, 65, 85, 0.8);
-    --text-primary: #f8fafc;
-    --text-secondary: #94a3b8;
+    --bg-dark: #07120e;
+    --bg-card: rgba(17, 35, 28, 0.7);
+    --bg-card-hover: rgba(34, 56, 46, 0.8);
+    --text-primary: #f4f8f5;
+    --text-secondary: #9bb0a6;
     --accent-blue: #3b82f6;
     --accent-tennis: #c6d300;
     --accent-gradient: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
@@ -103,7 +103,7 @@ header {
 header h1 {
     font-size: 3.5rem;
     letter-spacing: -0.02em;
-    background: linear-gradient(to right, #fff, #94a3b8);
+    background: linear-gradient(to right, #fff, #9bb0a6);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     margin-bottom: 10px;
@@ -184,7 +184,7 @@ header h1 {
     width: 100%;
     height: 100%;
     display: flex;
-    background: linear-gradient(to top, rgba(15, 23, 42, 0.8), transparent);
+    background: linear-gradient(to top, rgba(7, 18, 14, 0.8), transparent);
 }
 
 .court-link-zone {
@@ -219,7 +219,7 @@ header h1 {
     font-weight: 700;
     font-size: 1.2rem;
     padding: 12px 24px;
-    background: rgba(15, 23, 42, 0.8);
+    background: rgba(7, 18, 14, 0.8);
     border-radius: 50px;
     border: 1px solid rgba(255, 255, 255, 0.1);
     backdrop-filter: blur(4px);
@@ -372,7 +372,7 @@ footer {
     font-weight: 800;
     font-size: 0.98rem;
     border: none;
-    color: #08111f;
+    color: #06110c;
     background: linear-gradient(90deg, #b5c900 0%, #d4e000 100%);
     box-shadow: 0 10px 28px rgba(198,211,0,0.22);
     cursor: pointer;
@@ -515,7 +515,7 @@ tr:hover {
 }
 
 .modal-content {
-    background: #1e293b;
+    background: #11231c;
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 24px;
     width: 90%;
@@ -525,7 +525,7 @@ tr:hover {
 }
 
 .modal-header {
-    background: linear-gradient(to bottom, #0f172a, #1e293b);
+    background: linear-gradient(to bottom, #07120e, #11231c);
     padding: 40px 20px 20px;
     text-align: center;
     position: relative;
@@ -634,7 +634,7 @@ tr:hover {
     font-size: 2rem;
     font-weight: 800;
     margin-bottom: 5px;
-    background: linear-gradient(to right, #fff, #e2e8f0);
+    background: linear-gradient(to right, #fff, #e3ece7);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
 }
@@ -651,7 +651,7 @@ tr:hover {
 
 .btn-ranking-cta {
     background: var(--accent-tennis);
-    color: #0f172a;
+    color: #07120e;
     padding: 15px 35px;
     border-radius: 50px;
     font-weight: 700;

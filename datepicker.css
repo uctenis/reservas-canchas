@@ -4,10 +4,10 @@
  * --tour-bg de tournament.css) sin necesitar una hoja de estilos por pagina. */
 :root {
   --dp-accent: var(--accent-tennis, var(--tour-accent, #c6d300));
-  --dp-bg: var(--bg-dark, var(--tour-bg, #0f172a));
-  --dp-card: #1e293b;
-  --dp-text: var(--text-primary, #f8fafc);
-  --dp-muted: var(--text-secondary, #94a3b8);
+  --dp-bg: var(--bg-dark, var(--tour-bg, #07120e));
+  --dp-card: #11231c;
+  --dp-text: var(--text-primary, #f4f8f5);
+  --dp-muted: var(--text-secondary, #9bb0a6);
   --dp-line: rgba(255, 255, 255, 0.1);
 }
 

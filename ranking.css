@@ -1,21 +1,21 @@
 /* Ranking UCTenis */
 
 body {
-  background-color: #07121f;
+  background-color: #06100c;
   background-image:
     linear-gradient(90deg, rgba(255,255,255,0.035) 1px, transparent 1px),
     linear-gradient(180deg, rgba(255,255,255,0.025) 1px, transparent 1px),
     linear-gradient(135deg, rgba(198,211,0,0.08), transparent 34%),
-    linear-gradient(180deg, #07121f 0%, #0f172a 54%, #07121f 100%);
+    linear-gradient(180deg, #06100c 0%, #07120e 54%, #06100c 100%);
   background-size: 120px 120px, 120px 120px, 100% 100%, 100% 100%;
 }
 
 .ranking-page {
-  --panel-bg: rgba(8, 19, 33, 0.86);
+  --panel-bg: rgba(6, 16, 12, 0.86);
   --panel-bg-soft: rgba(255, 255, 255, 0.045);
   --panel-line: rgba(255, 255, 255, 0.105);
   --panel-line-strong: rgba(198, 211, 0, 0.34);
-  --muted-line: rgba(148, 163, 184, 0.16);
+  --muted-line: rgba(155, 176, 166, 0.16);
   --surface-hover: rgba(255, 255, 255, 0.075);
   --court-green: #c6d300;
   --court-blue: #3b82f6;
@@ -123,7 +123,7 @@ body {
 
 .gender-tab.active {
   background: var(--court-green);
-  color: #08111f;
+  color: #06110c;
   box-shadow: 0 10px 22px rgba(198, 211, 0, 0.18);
 }
 
@@ -243,7 +243,7 @@ body {
 .btn-primary {
   border: none;
   background: linear-gradient(90deg, #b5c900 0%, #d4e000 100%);
-  color: #08111f;
+  color: #06110c;
   box-shadow: 0 10px 28px rgba(198,211,0,0.28);
 }
 
@@ -256,7 +256,7 @@ body {
   font-weight: 900;
   border: none;
   background: linear-gradient(90deg, #b5c900 0%, #d4e000 100%);
-  color: #08111f;
+  color: #06110c;
   box-shadow: 0 10px 28px rgba(198,211,0,0.28);
   transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease;
   display: inline-block;
@@ -332,7 +332,7 @@ body {
   font-weight: 900;
   border: 1px solid rgba(198, 211, 0, 0.72);
   background: linear-gradient(90deg, rgba(198,211,0,1) 0%, rgba(212,224,0,1) 100%);
-  color: #08111f;
+  color: #06110c;
   box-shadow: 0 10px 30px rgba(198,211,0,0.28);
   transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.12s ease;
 }
@@ -400,7 +400,7 @@ body {
   flex: 0 0 46px;
   border-radius: 10px;
   background: radial-gradient(circle at 30% 20%, #f7ff7a 0%, var(--court-green) 48%, #9db000 100%);
-  color: #08111f;
+  color: #06110c;
   font-size: 1.35rem;
   font-weight: 1000;
   line-height: 1;
@@ -557,7 +557,7 @@ body {
 
 .rank-1 {
   background: var(--court-green);
-  color: #08111f;
+  color: #06110c;
   box-shadow: 0 8px 20px rgba(198, 211, 0, 0.24);
 }
 
@@ -870,7 +870,7 @@ body {
   padding: 2px 7px;
   border-radius: 6px;
   background: var(--court-green);
-  color: #08111f;
+  color: #06110c;
   font-size: 0.68rem;
   font-weight: 900;
 }
@@ -919,7 +919,7 @@ body {
   flex: 0 0 auto;
   border-radius: 8px;
   background: var(--court-green);
-  color: #08111f;
+  color: #06110c;
   font-weight: 900;
 }
 
@@ -942,7 +942,7 @@ body {
 }
 
 .btn-login-top:hover {
-  color: #08111f;
+  color: #06110c;
   background: var(--court-green);
 }
 
@@ -953,7 +953,7 @@ body {
 
 .modal-overlay {
   padding: 18px;
-  background: rgba(2, 6, 23, 0.78);
+  background: rgba(3, 10, 7, 0.78);
 }
 
 .modal-content {
@@ -962,7 +962,7 @@ body {
   max-height: 92vh;
   overflow: auto;
   border-radius: 8px;
-  background: #111c2c;
+  background: #0d1b15;
   border: 1px solid var(--panel-line);
   box-shadow: 0 30px 70px rgba(0, 0, 0, 0.45);
 }
@@ -1075,7 +1075,7 @@ body {
 }
 
 .form-group select option {
-  background: #111c2c;
+  background: #0d1b15;
 }
 
 .form-group input[type="file"] {
@@ -1088,7 +1088,7 @@ body {
   border: 0;
   border-radius: 7px;
   background: var(--court-green);
-  color: #08111f;
+  color: #06110c;
   font-family: var(--font-sans);
   font-weight: 900;
   cursor: pointer;
@@ -1128,7 +1128,7 @@ body {
   justify-content: center;
   gap: 10px;
   background: #fff;
-  color: #1f2937;
+  color: #16271f;
   border-color: #e5e7eb;
 }
 
@@ -1322,7 +1322,7 @@ body {
   bottom: -2px;
   right: -2px;
   background: var(--accent-tennis);
-  color: #0f172a;
+  color: #07120e;
   font-weight: 900;
   font-size: 0.85rem;
   min-width: 30px;
@@ -1332,7 +1332,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 3px solid #111c2c;
+  border: 3px solid #0d1b15;
 }
 
 .profile-hero-rank.inactive {
@@ -1374,7 +1374,7 @@ body {
 }
 
 .profile-info-chip {
-  background: #111c2c;
+  background: #0d1b15;
   padding: 12px 8px;
   text-align: center;
 }
@@ -1540,7 +1540,7 @@ body {
   background: rgba(255, 255, 255, 0.02);
   padding: 8px 12px;
   border-radius: 8px;
-  border-left: 3px solid var(--match-color, #94a3b8);
+  border-left: 3px solid var(--match-color, #9bb0a6);
   font-size: 0.82rem;
 }
 
@@ -1581,7 +1581,7 @@ body {
     width: 40px;
     height: 40px;
     border-radius: 50%;
-    background: rgba(15, 23, 42, 0.72);
+    background: rgba(7, 18, 14, 0.72);
   }
 
   .profile-card-view .profile-hero {
@@ -2101,7 +2101,7 @@ tr.drag-over-bottom {
 }
 .btn-alert-link {
   background: var(--court-green);
-  color: #08111f;
+  color: #06110c;
   border: none;
   border-radius: 6px;
   padding: 6px 12px;
@@ -2223,7 +2223,7 @@ tr.drag-over-bottom {
 
   .mobile-dash-tab.active {
     background: var(--court-green);
-    color: #08111f;
+    color: #06110c;
     box-shadow: 0 8px 18px rgba(198, 211, 0, 0.18);
   }
 
@@ -2246,12 +2246,12 @@ tr.drag-over-bottom {
 
 /* Estilos agregados para estados de partidos y botones destacados */
 .challenge-card.status-terminado {
-  border-left-color: #94a3b8;
+  border-left-color: #9bb0a6;
 }
 
 .btn-score-highlight {
   background: linear-gradient(90deg, #b5c900 0%, #d4e000 100%) !important;
-  color: #08111f !important;
+  color: #06110c !important;
   font-weight: 900 !important;
   box-shadow: 0 4px 12px rgba(198,211,0,0.3) !important;
   border: none !important;
@@ -2300,7 +2300,7 @@ tr.drag-over-bottom {
   align-items: center;
   gap: 16px;
   padding: 16px 24px;
-  background: rgba(15, 23, 42, 0.94);
+  background: rgba(7, 18, 14, 0.94);
   backdrop-filter: blur(8px);
   border-bottom: 1px solid rgba(255,255,255,0.08);
   flex-wrap: wrap;
@@ -2357,7 +2357,7 @@ tr.drag-over-bottom {
   background: rgba(255,255,255,0.05);
 }
 .admin-tab-btn.active {
-  color: #0f172a;
+  color: #07120e;
   background: var(--accent-tennis);
 }
 
@@ -2520,7 +2520,7 @@ tr.drag-over-bottom {
 .admin-player-avatar {
   flex-shrink: 0; width: 32px; height: 32px; border-radius: 8px;
   display: inline-flex; align-items: center; justify-content: center;
-  background: var(--court-green); color: #08111f; font-weight: 900; font-size: 0.86rem;
+  background: var(--court-green); color: #06110c; font-weight: 900; font-size: 0.86rem;
 }
 .admin-table tr.is-inactive .admin-player-avatar { background: rgba(255,255,255,0.08); color: var(--text-secondary); }
 .admin-player-cell .player-name { font-weight: 700; }
@@ -2543,7 +2543,7 @@ tr.drag-over-bottom {
 .admin-row-menu {
   position: absolute; top: 34px; right: 0; z-index: 1000;
   min-width: 170px; padding: 6px;
-  background: #1e293b; border: 1px solid rgba(255,255,255,0.15);
+  background: #11231c; border: 1px solid rgba(255,255,255,0.15);
   border-radius: 10px; box-shadow: 0 12px 28px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.08);
   display: flex; flex-direction: column; gap: 3px;
   animation: adminMenuFadeIn 0.15s ease-out;
@@ -2622,7 +2622,7 @@ tr.drag-over-bottom {
   background:
     radial-gradient(circle at 88% 10%, rgba(198,211,0,.13), transparent 28%),
     linear-gradient(135deg, rgba(255,255,255,.06), rgba(255,255,255,.018));
-  box-shadow: 0 20px 55px rgba(2,6,23,.22);
+  box-shadow: 0 20px 55px rgba(3, 10, 7,.22);
 }
 .schedule-header h3 { margin: 0; font-size: 1.55rem; letter-spacing: -.025em; }
 .schedule-header-copy { margin: 5px 0 0; color: var(--text-secondary); font-size: .84rem; }
@@ -2709,9 +2709,9 @@ tr.drag-over-bottom {
   max-width: none;
 }
 
-.schedule-panel-card { padding:22px; border:1px solid rgba(255,255,255,.075); border-radius:18px; background:linear-gradient(145deg, rgba(255,255,255,.045), rgba(255,255,255,.015)); box-shadow:0 18px 50px rgba(2,6,23,.16); }
+.schedule-panel-card { padding:22px; border:1px solid rgba(255,255,255,.075); border-radius:18px; background:linear-gradient(145deg, rgba(255,255,255,.045), rgba(255,255,255,.015)); box-shadow:0 18px 50px rgba(3, 10, 7,.16); }
 .schedule-form-grid { display:flex; gap:15px; margin-bottom:15px; flex-wrap:wrap; }
-.schedule-form-grid input, .schedule-param-card input { border-radius:11px !important; border-color:rgba(255,255,255,.11) !important; background:rgba(3,7,18,.32) !important; transition:border-color .2s, box-shadow .2s; }
+.schedule-form-grid input, .schedule-param-card input { border-radius:11px !important; border-color:rgba(255,255,255,.11) !important; background:rgba(3, 10, 7,.32) !important; transition:border-color .2s, box-shadow .2s; }
 .schedule-form-grid input:focus, .schedule-param-card input:focus { border-color:rgba(198,211,0,.7) !important; box-shadow:0 0 0 3px rgba(198,211,0,.1); }
 .schedule-court-selector { display:grid; grid-template-columns:repeat(4, minmax(120px,1fr)); gap:8px; margin-bottom:20px; }
 .schedule-check-card { display:flex; align-items:center; gap:9px; min-height:44px; padding:10px 12px; border:1px solid rgba(255,255,255,.08); border-radius:12px; background:rgba(255,255,255,.025); cursor:pointer; font-size:.79rem; transition:.2s; }
@@ -2719,9 +2719,9 @@ tr.drag-over-bottom {
 .schedule-check-card input { accent-color:var(--accent-tennis); width:16px; height:16px; }
 .schedule-court-tabs { display:grid; grid-template-columns:repeat(4,1fr); gap:7px; margin-bottom:18px; padding:5px; border:1px solid rgba(255,255,255,.06); border-radius:14px; background:rgba(0,0,0,.14); }
 .schedule-court-tabs .admin-tab-btn { padding:9px 10px !important; border-radius:10px; font-size:.78rem !important; }
-.schedule-grid-shell { overflow:auto; padding:8px; border:1px solid rgba(255,255,255,.065); border-radius:15px; background:rgba(2,6,23,.2); }
+.schedule-grid-shell { overflow:auto; padding:8px; border:1px solid rgba(255,255,255,.065); border-radius:15px; background:rgba(3, 10, 7,.2); }
 .schedule-matrix { width:100%; min-width:700px; border-collapse:separate; border-spacing:5px; }
-.schedule-matrix thead th { position:sticky; top:0; z-index:2; padding:7px 5px; background:#172033; color:var(--text-secondary); font-size:.68rem; font-weight:800; }
+.schedule-matrix thead th { position:sticky; top:0; z-index:2; padding:7px 5px; background:#10201a; color:var(--text-secondary); font-size:.68rem; font-weight:800; }
 .schedule-matrix td { padding:2px; text-align:center; }
 .schedule-day-cell { min-width:124px; padding:5px 7px; text-align:left; color:var(--text-primary); font-size:.78rem; }
 .schedule-day-cell > span:first-child { display:block; margin-bottom:4px; }
@@ -2753,7 +2753,7 @@ tr.drag-over-bottom {
 .admin-bookings-week-shell { overflow-x:auto; }
 .admin-bookings-week-matrix { border-spacing:6px; }
 .admin-bookings-week-matrix .admin-bookings-time-head,
-.admin-bookings-day-head { position:sticky; top:0; z-index:2; background:#172033; padding:8px 6px; border-radius:8px; }
+.admin-bookings-day-head { position:sticky; top:0; z-index:2; background:#10201a; padding:8px 6px; border-radius:8px; }
 .admin-bookings-day-head { min-width:118px; text-align:center; }
 .admin-bookings-day-head.is-today { background:rgba(198,211,0,.18); }
 .admin-bookings-day-name { display:block; font-size:.68rem; font-weight:800; letter-spacing:.04em; color:var(--text-secondary); text-transform:uppercase; }
@@ -2829,7 +2829,7 @@ tr.drag-over-bottom {
 
 .segmented-btn.active {
   background: var(--accent-tennis);
-  color: #0f172a;
+  color: #07120e;
 }
 
 /* Buscador de fechas especiales */
