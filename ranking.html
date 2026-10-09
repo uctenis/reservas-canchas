@@ -10,7 +10,7 @@
   <meta property="og:image" content="https://uctenis.github.io/reservas-canchas/logo_uctenis_v03.png">
   <link rel="icon" href="logo_uctenis_v03.png" type="image/png">
   <link rel="stylesheet" href="style.css?v=20260813_v1">
-  <link rel="stylesheet" href="ranking.css?v=20260914_cec_fix">
+  <link rel="stylesheet" href="ranking.css?v=20261009_reservas_admin">
   <link rel="stylesheet" href="datepicker.css?v=20260908_v3">
   <script>
     // Quien llega desde liga.html (?liga=1) solo quiere el modal de desafio de
@@ -820,7 +820,7 @@
         <div>
           <p class="modal-kicker">Centro de operaciones</p>
           <h3>Calendario de reservas</h3>
-          <p class="schedule-header-copy">Horas solicitadas o agendadas por socios y funcionarios esta semana, por cancha.</p>
+          <p class="schedule-header-copy">Todas las horas agendadas por socios y funcionarios en las canchas operativas, semana a semana.</p>
         </div>
       </div>
 
@@ -830,8 +830,11 @@
           <span id="adminBookingsWeekLabel" class="admin-bookings-week-label">Cargando…</span>
           <button type="button" class="btn-secondary admin-bookings-nav" onclick="shiftAdminBookingsWeek(1)" aria-label="Semana siguiente">→</button>
           <button type="button" class="btn-secondary" onclick="setAdminBookingsWeekToday()" style="padding:8px 14px;font-size:0.8rem;">Esta semana</button>
+          <button type="button" class="btn-secondary" onclick="loadAdminBookingsForDate()" style="padding:8px 14px;font-size:0.8rem;">↻ Actualizar</button>
           <span id="adminBookingsCount" class="admin-bookings-count"></span>
         </div>
+
+        <div id="adminBookingsSummary" class="admin-bookings-summary"></div>
 
         <div class="admin-bookings-legend">
           <span class="booking-legend-item"><i class="booking-legend-dot is-reserva"></i>Reserva normal</span>
@@ -7971,7 +7974,9 @@ function showAdminBookingsAlert(msg, type = 'success') {
 // (las CEC bloqueadas por mal estado nunca deben aparecer como columna: es
 // imposible que tengan horas pedidas).
 function getOperativeCourts() {
-  const all = (window.DB && DB.COURTS) || [];
+  // DB se declara con `const` en db.js, así que no existe como window.DB:
+  // preguntar por window.DB daba siempre vacío y la grilla nunca se dibujaba.
+  const all = (typeof DB !== 'undefined' && DB.COURTS) || [];
   const courtSlots = window.DEFAULT_COURT_SLOTS || {};
   return all.filter(c => {
     const days = courtSlots[c.id];
@@ -8033,7 +8038,16 @@ function bookingTypeBadge(b) {
 function renderAdminBookingsWeekGrid(days) {
   const container = document.getElementById('adminBookingsGridContainer');
   if (!container) return;
-  const slots = window.DEFAULT_SLOTS || [];
+  // Las filas no pueden salir solo de DEFAULT_SLOTS: hay horarios válidos
+  // fuera de esa lista (CJP lunes y viernes a las 20:00, horarios
+  // personalizados, eventos puestos a mano en el calendario) y sus reservas
+  // se contaban en el total pero quedaban sin fila donde dibujarse.
+  const slotSet = new Set(window.DEFAULT_SLOTS || []);
+  Object.values(window.DEFAULT_COURT_SLOTS || {}).forEach(courtDays => {
+    Object.values(courtDays || {}).forEach(list => (list || []).forEach(slot => slotSet.add(slot)));
+  });
+  days.forEach(day => (day.bookings || []).forEach(b => { if (b.slot) slotSet.add(b.slot); }));
+  const slots = Array.from(slotSet).sort();
   const courts = getOperativeCourts();
   const todayStr = todayISO();
 
@@ -8054,30 +8068,39 @@ function renderAdminBookingsWeekGrid(days) {
     });
   });
 
+  const dayLabel = dateStr => {
+    const [, m, d] = dateStr.split('-').map(Number);
+    const wd = new Date(dateStr + 'T12:00:00').getDay();
+    return { name: ADMIN_BOOKINGS_DAY_LABELS_SHORT[wd], date: `${String(d).padStart(2,'0')}/${String(m).padStart(2,'0')}` };
+  };
+  const dayStateClass = dateStr => dateStr === todayStr ? ' is-today' : (dateStr < todayStr ? ' is-past' : '');
+
   const headerCells = days.map(day => {
-    const [, m, d] = day.date.split('-').map(Number);
-    const wd = new Date(day.date + 'T12:00:00').getDay();
-    const isToday = day.date === todayStr;
-    return `<th class="admin-bookings-day-head${isToday ? ' is-today' : ''}">
-        <span class="admin-bookings-day-name">${ADMIN_BOOKINGS_DAY_LABELS_SHORT[wd]}</span>
-        <span class="admin-bookings-day-date">${String(d).padStart(2,'0')}/${String(m).padStart(2,'0')}</span>
+    const label = dayLabel(day.date);
+    const dayTotal = (day.bookings || []).length;
+    return `<th class="admin-bookings-day-head${dayStateClass(day.date)}">
+        <span class="admin-bookings-day-name">${label.name}</span>
+        <span class="admin-bookings-day-date">${label.date}</span>
+        <span class="admin-bookings-day-total${dayTotal ? '' : ' is-empty'}">${dayTotal || '–'}</span>
       </th>`;
   }).join('');
 
   const rows = slots.map(slot => {
     const cells = days.map(day => {
       const dayBookings = (bySlotAndDay[slot] && bySlotAndDay[slot][day.date]) || [];
-      if (!dayBookings.length) return `<td class="booking-slot-cell"></td>`;
+      if (!dayBookings.length) return `<td class="booking-slot-cell${dayStateClass(day.date)}"></td>`;
       const chips = dayBookings.map(b => {
         const badge = bookingTypeBadge(b);
         const courtShort = escapeHTML((b.courtName || '').replace('Cancha ', ''));
-        return `<div class="booking-chip ${badge.cls}">
+        const nombre = b.nombre || 'Jugador/a';
+        const detail = [b.courtName, slot, nombre, b.userTypeLabel, b.email].filter(Boolean).join(' · ');
+        return `<div class="booking-chip ${badge.cls}" title="${escapeHTML(detail)}">
             <span class="booking-chip-court">${courtShort}</span>
-            <span class="booking-chip-name">${escapeHTML(b.nombre || 'Jugador/a')}</span>
+            <span class="booking-chip-name">${escapeHTML(nombre)}</span>
             <span class="booking-chip-type">${badge.label}</span>
           </div>`;
       }).join('');
-      return `<td class="booking-slot-cell is-booked">${chips}</td>`;
+      return `<td class="booking-slot-cell is-booked${dayStateClass(day.date)}"><div class="booking-chip-stack">${chips}</div></td>`;
     }).join('');
     return `<tr><th class="admin-bookings-time-cell">${slot}</th>${cells}</tr>`;
   }).join('');
@@ -8085,7 +8108,38 @@ function renderAdminBookingsWeekGrid(days) {
   container.innerHTML = `<table class="schedule-matrix admin-bookings-week-matrix"><thead><tr><th class="admin-bookings-time-head">Hora</th>${headerCells}</tr></thead><tbody>${rows}</tbody></table>`;
 
   const count = document.getElementById('adminBookingsCount');
-  if (count) count.textContent = `${total} reserva${total === 1 ? '' : 's'}`;
+  if (count) count.textContent = total ? `${total} reserva${total === 1 ? '' : 's'}` : 'Sin reservas esta semana';
+
+  renderAdminBookingsSummary(days, courts, total, todayStr, dayLabel);
+}
+
+// Tarjetas de resumen sobre la grilla: total de la semana, hoy, día más
+// ocupado y reservas por cancha operativa.
+function renderAdminBookingsSummary(days, courts, total, todayStr, dayLabel) {
+  const box = document.getElementById('adminBookingsSummary');
+  if (!box) return;
+
+  const tiles = [{ label: 'Reservas en la semana', value: total, accent: true }];
+
+  const today = days.find(day => day.date === todayStr);
+  if (today) tiles.push({ label: 'Hoy', value: (today.bookings || []).length });
+
+  const busiest = days.reduce((best, day) => ((day.bookings || []).length > (best ? best.bookings.length : 0) ? day : best), null);
+  if (busiest) {
+    const label = dayLabel(busiest.date);
+    tiles.push({ label: 'Día más ocupado', value: `${label.name} ${label.date}`, hint: `${busiest.bookings.length} reserva${busiest.bookings.length === 1 ? '' : 's'}` });
+  }
+
+  courts.forEach(court => {
+    const courtTotal = days.reduce((sum, day) => sum + (day.bookings || []).filter(b => b.courtKey === court.id).length, 0);
+    tiles.push({ label: court.label, value: courtTotal });
+  });
+
+  box.innerHTML = tiles.map(tile => `<div class="admin-bookings-stat${tile.accent ? ' is-accent' : ''}">
+      <span class="admin-bookings-stat-label">${escapeHTML(tile.label)}</span>
+      <strong class="admin-bookings-stat-value">${escapeHTML(String(tile.value))}</strong>
+      ${tile.hint ? `<span class="admin-bookings-stat-hint">${escapeHTML(tile.hint)}</span>` : ''}
+    </div>`).join('');
 }
 
 // Cada carga tarda varios segundos (el backend hace 7 llamadas seguidas a
@@ -8107,6 +8161,8 @@ window.loadAdminBookingsForDate = async function() {
   if (container) container.innerHTML = '<p style="color:var(--text-secondary);font-size:0.85rem;text-align:center;padding:15px">Cargando reservas...</p>';
   const count = document.getElementById('adminBookingsCount');
   if (count) count.textContent = '';
+  const summary = document.getElementById('adminBookingsSummary');
+  if (summary) summary.innerHTML = '';
 
   try {
     if (!window.CONFIG?.API_URL) throw new Error('Sin conexión al servidor configurada.');
