@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+ <title>Ranking UCTenis</title>
+    
+<meta name="description" content="Revisa el ranking oficial del Club UCTenis. Mantente al día con las posiciones y la evolución de los jugadores.">
+<meta property="og:title" content="Ranking UCTenis" />
+<meta property="og:description" content="Revisa el ranking actualizado del club y la evolución de los jugadores." />
+<meta property="og:image" content="https://uctenis.github.io/reservas-canchas/logo_uctenis_v03.png" />
+<meta property="og:url" content="https://uctenis.github.io/reservas-canchas/ranking.html" />
+<meta property="og:type" content="website" />
+
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+    
+<meta name="theme-color" content="#001f33"/>
+<style>
+:root{--background-color:#001f33;--text-color:#f5f5f7;--subtle-text-color:#a1a1a6;--accent-color:#c6d300;--card-background:rgba(255,255,255,0.05);}
+@keyframes fadeIn{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;margin:0;padding:0;background:var(--background-color);color:var(--text-color)}
+.main-container{max-width:900px;margin:0 auto;padding:40px 20px;animation:fadeIn 1s ease-out forwards}
+.header-section{text-align:center;margin-bottom:20px}
+.uct-logo{width:clamp(96px,14vw,168px);height:auto;display:block;margin:0 auto 12px;filter:drop-shadow(0 2px 6px rgba(0,0,0,.35))}
+h1{font-size:36px;font-weight:700;letter-spacing:-1px;margin:0}
+.ranking-info{text-align:center;margin-bottom:20px}
+.last-updated-date{font-size:14px;color:var(--subtle-text-color);font-style:italic}
+.section{background:var(--card-background);border-radius:18px;padding:18px 16px;margin-bottom:24px;}
+.section h2{font-size:22px;margin:6px 6px 12px;color:var(--text-color);}
+table{width:100%;border-collapse:collapse;color:var(--text-color);display:none}
+th,td{padding:12px 15px;text-align:left;border-bottom:1px solid rgba(255,255,255,.1)}
+th{font-weight:600; color:var(--text-color);}
+tr{transition: background-color 0.3s ease;}
+tr:last-child td{border-bottom:none}
+.loading{color:var(--subtle-text-color);font-style:italic;text-align:center;padding:10px}
+.footer-nav{text-align:center;margin-top:28px}
+.back-button{display:inline-block;background:var(--accent-color);color:#001f33;font-size:16px;font-weight:700;padding:12px 30px;border:none;border-radius:30px;cursor:pointer;text-decoration:none;transition:background-color .2s ease,transform .15s ease}
+.back-button:hover{background-color:#a4b200;transform:translateY(-2px)}
+.arrow-up{color:#4CAF50;} .arrow-down{color:#F44336;} .new-entry{color:#FFC107;}
+.col-pos {width:80px;text-align:center;}
+.col-evol {width:60px;text-align:center;font-size:1.2em;}
+td.col-nombre { font-weight: 600; }
+.player-highlight {
+    background-image: linear-gradient(to right, rgba(200, 211, 0, 0.1), transparent 80%);
+    border-left: 4px solid var(--accent-color);
+}
+
+@media (max-width:768px){
+  h1{font-size:28px}
+  .section h2{font-size:20px}
+  table thead { display: none; }
+  table, tbody, tr, td { display: block; }
+  tr {
+    display: flex;
+    align-items: center;
+    padding: 10px 5px;
+    border-bottom: 1px solid rgba(255,255,255,.1);
+    margin-bottom: 5px;
+  }
+  .player-highlight { border-left-width: 5px; }
+  tr:last-child { border-bottom: none; }
+  td { border: none; padding: 2px 5px; }
+  .col-pos { font-size: 1.1em; font-weight: bold; width: 45px; text-align: center; }
+  .col-nombre { flex-grow: 1; width: auto; }
+  .col-evol { width: 45px; text-align: center; font-size: 1.4em; }
+}
+</style>
+</head>
+<body>
+<div class="main-container">
+    <div class="header-section">
+        <img src="logo_uctenis_v03.png" alt="Logo UCTenis Club" class="uct-logo" loading="lazy"/>
+        <h1>Ranking UCTenis</h1>
+    </div>
+    <div class="ranking-info">
+        <p class="last-updated-date" id="lastUpdatedDate">Cargando...</p>
+    </div>
+    
+    <section class="section" id="secM">
+        <h2>Ranking Femenino</h2>
+        <div class="loading" id="loadingM">Cargando ranking...</div>
+        <table id="tableM">
+            <thead><tr><th class="col-pos">Pos.</th><th>Nombre</th><th class="col-evol">Evol.</th></tr></thead>
+            <tbody id="tbodyM"></tbody>
+        </table>
+    </section>
+
+    <section class="section" id="secH">
+        <h2>Ranking Masculino</h2>
+        <div class="loading" id="loadingH">Cargando ranking...</div>
+        <table id="tableH">
+            <thead><tr><th class="col-pos">Pos.</th><th>Nombre</th><th class="col-evol">Evol.</th></tr></thead>
+            <tbody id="tbodyH"></tbody>
+        </table>
+    </section>
+
+    <div class="footer-nav">
+        <a class="back-button" href="index.html">Volver a Reservar</a>
+    </div>
+</div>
+
+<script>
+    const API_URL = "https://script.google.com/macros/s/AKfycbzHtbq5qEcBkr6vU9iVn5Xt59byciz0gFUFkStd5KXXEtr5VzDeus6mZysN7ALLY6M3JQ/exec";
+
+    async function cargarDatos() {
+        document.getElementById('lastUpdatedDate').textContent = 'Ranking al día: ' + new Date().toLocaleDateString('es-CL', { year: 'numeric', month: 'long', day: 'numeric' });
+        document.getElementById('loadingM').textContent = "Cargando...";
+        document.getElementById('loadingH').textContent = "Cargando...";
+        try {
+            const response = await fetch(API_URL + '?v=' + Date.now());
+            const data = await response.json();
+            if (data.status === 'error') throw new Error(data.message);
+            
+            renderTabla('tbodyM', 'tableM', 'loadingM', data.mujeres);
+            renderTabla('tbodyH', 'tableH', 'loadingH', data.hombres);
+        } catch (err) {
+            console.error('Fallo cargando ranking:', err);
+            document.getElementById('loadingM').textContent = `Error: ${err.message}`;
+            document.getElementById('loadingH').textContent = `Error: ${err.message}`;
+        }
+    }
+
+    function renderTabla(tbodyId, tableId, loadingId, lista) {
+        const tbody = document.getElementById(tbodyId);
+        tbody.innerHTML = '';
+        if (!lista || lista.length === 0) {
+            document.getElementById(loadingId).textContent = 'No hay datos en esta sección.';
+            return;
+        }
+
+        lista.forEach(p => {
+            const tr = tbody.insertRow();
+            const posActual = parseInt(p.posicion);
+            const posAnterior = parseInt(p.posicionAnterior);
+            let evolucionHtml = '';
+
+            if (!isNaN(posAnterior) && posAnterior > 0) {
+                if (posActual < posAnterior) evolucionHtml = `<span class="arrow-up" title="Subió desde ${posAnterior}">▲</span>`;
+                else if (posActual > posAnterior) evolucionHtml = `<span class="arrow-down" title="Bajó desde ${posAnterior}">▼</span>`;
+                else evolucionHtml = `<span class="new-entry" title="Mantuvo la posición">●</span>`;
+            } else {
+                evolucionHtml = `<span class="new-entry" title="Nuevo o Sin Ranking">●</span>`;
+            }
+
+            if (!isNaN(posAnterior) && posAnterior > 0 && posActual !== posAnterior) {
+                tr.classList.add('player-highlight');
+            }
+            
+            tr.innerHTML = `<td class="col-pos">${p.posicion}</td><td class="col-nombre">${p.nombre}</td><td class="col-evol">${evolucionHtml}</td>`;
+        });
+
+        document.getElementById(loadingId).style.display = 'none';
+        document.getElementById(tableId).style.display = 'table';
+    }
+
+    document.addEventListener('DOMContentLoaded', cargarDatos);
+</script>
+</body>
+</html>
