@@ -780,7 +780,7 @@
             <!-- ═══ PARÁMETROS DE RESERVA ═══ -->
             <div id="scheduleSectionParams" class="schedule-panel schedule-panel-card hidden">
               <p class="schedule-panel-desc">
-                Controla con cuánta anticipación puede reservar cada tipo de usuario y cuántas reservas puede tener por día.
+                Controla con cuánta anticipación puede reservar cada tipo de usuario, hasta cuántas horas antes de cada bloque se puede reservar y cuántas reservas puede tener por día.
               </p>
               <div class="form-row schedule-param-grid">
                 <div class="form-group schedule-param-card">
@@ -802,6 +802,12 @@
                   <span class="schedule-param-icon">▦</span>
                   <label style="display:block; margin-bottom:6px; font-size:0.85rem; color:rgba(255,255,255,0.7);">Máx. reservas por día</label>
                   <input type="number" id="cfgMaxBookingsPerDay" min="1" max="10" style="width:100%; padding:10px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:#fff; outline:none;">
+                </div>
+                <div class="form-group schedule-param-card">
+                  <span class="schedule-param-icon">⏱</span>
+                  <label for="cfgMinLeadHours" style="display:block; margin-bottom:6px; font-size:0.85rem; color:rgba(255,255,255,0.7);">Reservar hasta (horas antes del bloque)</label>
+                  <input type="number" id="cfgMinLeadHours" min="0" max="72" step="1" style="width:100%; padding:10px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:#fff; outline:none;">
+                  <small style="display:block; margin-top:6px; font-size:0.72rem; color:rgba(255,255,255,0.5);">Ej: 4 = el bloque de las 18:00 se puede reservar hasta las 14:00. 0 = hasta que empiece.</small>
                 </div>
               </div>
 
@@ -861,7 +867,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-<script src="db.js?v=20261019_emails"></script>
+<script src="db.js?v=20261019_minlead"></script>
 <script src="liga.js?v=20260909_v1"></script>
 <script src="datepicker.js?v=20260908_v3"></script>
 
@@ -8277,7 +8283,8 @@ function applyScheduleConfigToForm() {
   document.getElementById('cfgMaxAdvanceFuncionario').value = scheduleConfigState.maxAdvanceDays.funcionario || 2;
   document.getElementById('cfgMaxAdvanceAdmin').value = scheduleConfigState.maxAdvanceDays.admin || 7;
   document.getElementById('cfgMaxBookingsPerDay').value = scheduleConfigState.maxBookingsPerDay || 1;
-  ['cfgMaxAdvanceSocio','cfgMaxAdvanceFuncionario','cfgMaxAdvanceAdmin','cfgMaxBookingsPerDay'].forEach(id => {
+  document.getElementById('cfgMinLeadHours').value = window.parseMinLeadHours(scheduleConfigState.minLeadHours);
+  ['cfgMaxAdvanceSocio','cfgMaxAdvanceFuncionario','cfgMaxAdvanceAdmin','cfgMaxBookingsPerDay','cfgMinLeadHours'].forEach(id => {
     const input = document.getElementById(id);
     if (input && !input.dataset.dirtyBound) {
       input.addEventListener('input', markScheduleConfigDirty);
@@ -8291,7 +8298,8 @@ function defaultScheduleConfig() {
   return {
     courtSlots: cloneDefaultCourtSlots(),
     maxAdvanceDays: { ...(window.DEFAULT_MAX_ADVANCE_DAYS || {}) },
-    maxBookingsPerDay: window.DEFAULT_MAX_BOOKINGS_PER_DAY || 1
+    maxBookingsPerDay: window.DEFAULT_MAX_BOOKINGS_PER_DAY || 1,
+    minLeadHours: window.DEFAULT_MIN_LEAD_HOURS ?? 4
   };
 }
 
@@ -8312,7 +8320,8 @@ function loadScheduleConfig() {
     scheduleConfigState = {
       courtSlots: saved.courtSlots || cloneDefaultCourtSlots(),
       maxAdvanceDays: { ...(window.DEFAULT_MAX_ADVANCE_DAYS || {}), ...(saved.maxAdvanceDays || {}) },
-      maxBookingsPerDay: Number(saved.maxBookingsPerDay) > 0 ? Number(saved.maxBookingsPerDay) : (window.DEFAULT_MAX_BOOKINGS_PER_DAY || 1)
+      maxBookingsPerDay: Number(saved.maxBookingsPerDay) > 0 ? Number(saved.maxBookingsPerDay) : (window.DEFAULT_MAX_BOOKINGS_PER_DAY || 1),
+      minLeadHours: window.parseMinLeadHours(saved.minLeadHours)
     };
     applyScheduleConfigToForm();
     markScheduleConfigSaved();
@@ -8397,6 +8406,7 @@ window.saveScheduleConfigAll = async function(event) {
     admin: Number(document.getElementById('cfgMaxAdvanceAdmin').value) || 7
   };
   scheduleConfigState.maxBookingsPerDay = Number(document.getElementById('cfgMaxBookingsPerDay').value) || 1;
+  scheduleConfigState.minLeadHours = Math.min(72, window.parseMinLeadHours(document.getElementById('cfgMinLeadHours').value));
 
   try {
     const session = DB.getSession();
@@ -8413,6 +8423,7 @@ window.saveScheduleConfigAll = async function(event) {
         courtSlots: scheduleConfigState.courtSlots,
         maxAdvanceDays: scheduleConfigState.maxAdvanceDays,
         maxBookingsPerDay: scheduleConfigState.maxBookingsPerDay,
+        minLeadHours: scheduleConfigState.minLeadHours,
         actorEmail: session?.email || '',
         idToken
       })

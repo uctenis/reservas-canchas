@@ -2270,6 +2270,14 @@ function getDynamicScheduleConfig(idToken) {
  * con "Missing or insufficient permissions" — el mismo problema que ya
  * resolvimos para la lectura, ahora del lado de la escritura.
  */
+// Horas mínimas antes del inicio de un bloque para poder reservarlo (0 = hasta
+// que empiece). Configurable desde el panel de admin; por defecto 4.
+function parseMinLeadHours(value) {
+  var n = Number(value);
+  if (value === '' || value === null || value === undefined || !isFinite(n) || n < 0) return 4;
+  return Math.min(n, 72);
+}
+
 function saveScheduleConfig(data) {
   if (!isAdminRequest(data)) return { ok: false, msg: 'Acceso reservado al administrador.' };
   try {
@@ -2277,6 +2285,7 @@ function saveScheduleConfig(data) {
       courtSlots: data.courtSlots || {},
       maxAdvanceDays: data.maxAdvanceDays || {},
       maxBookingsPerDay: Number(data.maxBookingsPerDay) > 0 ? Number(data.maxBookingsPerDay) : 1,
+      minLeadHours: parseMinLeadHours(data.minLeadHours),
       updatedAt: new Date().toISOString(),
       updatedBy: text(data.actorEmail || data.adminEmail)
     };
@@ -3073,8 +3082,11 @@ function createBooking(data) {
   var maxAdvanceMs = MAX_ADVANCE_MS_BACKEND[userType] || MAX_ADVANCE_MS_BACKEND.socio;
   var bookingDate = makeLocalDate(dateStr, slot);
   var msUntilBooking = bookingDate.getTime() - Date.now();
-  if (msUntilBooking < 4 * 60 * 60 * 1000) {
-    return { ok: false, msg: 'Las reservas deben realizarse con al menos 4 horas de anticipación.' };
+  var minLeadHours = parseMinLeadHours(dynamicConfig && dynamicConfig.minLeadHours);
+  if (msUntilBooking < minLeadHours * 60 * 60 * 1000) {
+    return { ok: false, msg: minLeadHours > 0
+      ? 'Las reservas deben realizarse con al menos ' + minLeadHours + ' hora' + (minLeadHours === 1 ? '' : 's') + ' de anticipación.'
+      : 'Ese horario ya comenzó.' };
   }
   if (msUntilBooking > maxAdvanceMs) {
     var maxDiasLabel = Math.round(maxAdvanceMs / (24 * 60 * 60 * 1000) * 10) / 10;

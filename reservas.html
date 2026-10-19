@@ -416,7 +416,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
 
-<script src="db.js?v=20261019_emails"></script>
+<script src="db.js?v=20261019_minlead"></script>
 <script src="script.js?v=20260602_v2"></script>
 <script src="datepicker.js?v=20260908_v3"></script>
 <script>
@@ -426,7 +426,8 @@ let sel = { court: null, date: null, slot: null, isChallenge: false, isFriendly:
 let currentStep = 1;
 let reservationRules = {
   maxAdvanceDays: { ...(window.DEFAULT_MAX_ADVANCE_DAYS || { admin: 7, socio: 7, funcionario: 2 }) },
-  maxBookingsPerDay: window.DEFAULT_MAX_BOOKINGS_PER_DAY || 1
+  maxBookingsPerDay: window.DEFAULT_MAX_BOOKINGS_PER_DAY || 1,
+  minLeadHours: window.DEFAULT_MIN_LEAD_HOURS ?? 4
 };
 window.RESERVATION_RULES = reservationRules;
 
@@ -467,7 +468,11 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!config) return;
       reservationRules.maxAdvanceDays = { ...reservationRules.maxAdvanceDays, ...(config.maxAdvanceDays || {}) };
       reservationRules.maxBookingsPerDay = Number(config.maxBookingsPerDay) || reservationRules.maxBookingsPerDay;
+      reservationRules.minLeadHours = window.parseMinLeadHours(config.minLeadHours, reservationRules.minLeadHours);
       renderDateStrip();
+      // Si el tablero ya se pintó con los valores por defecto, se repinta con los guardados
+      const shown = sel.date && DB.peekSlotsCache ? DB.peekSlotsCache(sel.date) : null;
+      if (shown) renderSlotsKeepingSelection(shown.data);
       const ruleNote = document.querySelector('.board-summary-text small');
       if (ruleNote) ruleNote.textContent = `Bloques de 1 h 30 · máx. ${reservationRules.maxBookingsPerDay} reserva${reservationRules.maxBookingsPerDay === 1 ? '' : 's'} por día`;
     }).catch(error => console.warn('No se pudo cargar la configuración de reservas:', error));
@@ -966,7 +971,9 @@ function renderSlotsByCourt(apiData) {
   };
   const dayOfWeek = dayOfWeekFromISO(sel.date);
   const now = new Date();
-  const fourHoursFromNow = new Date(now.getTime() + 4 * 60 * 60 * 1000);
+  const leadHours = window.parseMinLeadHours(reservationRules.minLeadHours);
+  const bookingCutoff = new Date(now.getTime() + leadHours * 60 * 60 * 1000);
+  const leadLabel = `${String(leadHours).replace('.', ',')} h`;
   const [sy, smo, sd] = sel.date.split('-').map(Number);
   const firstName = (full) => (full || 'Socio').trim().split(/\s+/)[0];
 
@@ -1011,7 +1018,7 @@ function renderSlotsByCourt(apiData) {
     const [sh, sm] = slot.split(':').map(Number);
     const slotDate = new Date(sy, smo - 1, sd, sh, sm, 0);
     const isPast = slotDate < now;
-    const isTooClose = slotDate < fourHoursFromNow;
+    const isTooClose = slotDate < bookingCutoff;
     const isMine = !!(ci.myBooked && ci.myBooked.slot === slot);
     const match = ci.challenges.find(c => c.slot === slot);
     // Clases fijas: martes y miércoles 18:00–19:30 en CJP
@@ -1032,7 +1039,7 @@ function renderSlotsByCourt(apiData) {
       const why = ci.busyLabels[slot] || '';
       return { kind: 'busy', label: 'Ocupada', sub: why, aria: `${where}: ocupada${why ? ' (' + why + ')' : ''}`, past: isTooClose };
     }
-    if (isTooClose) return { kind: 'past', label: isPast ? 'Pasada' : 'Límite 4 h', aria: `${where}: ${isPast ? 'ya pasó' : 'se reserva con 4 horas de anticipación'}`, past: true };
+    if (isTooClose) return { kind: 'past', label: isPast ? 'Pasada' : `Límite ${leadLabel}`, aria: `${where}: ${isPast ? 'ya pasó' : `se reserva con ${leadLabel} de anticipación`}`, past: true };
     if (alreadyHasBooking) return { kind: 'limit', label: 'Límite diario', aria: `${where}: alcanzaste el límite diario` };
     return { kind: 'free', label: 'Libre', aria: session ? `Libre: elegir ${where}` : `Libre: inicia sesión para reservar ${where}` };
   }
