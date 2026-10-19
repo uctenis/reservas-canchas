@@ -884,7 +884,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-<script src="db.js?v=20261019_courts"></script>
+<script src="db.js?v=20261019_cfgread"></script>
 <script src="liga.js?v=20260909_v1"></script>
 <script src="datepicker.js?v=20260908_v3"></script>
 
@@ -8572,6 +8572,12 @@ window.resetScheduleCourtToDefault = function() {
 window.saveScheduleConfigAll = async function(event) {
   if (event) event.preventDefault();
   if (!scheduleConfigState) return;
+  // Sin haber leído lo guardado, guardar enviaría los valores por defecto y
+  // borraría los horarios configurados (así se perdían los de CEC).
+  if (!scheduleConfigCloudLoaded) {
+    showScheduleConfigAlert('⚠️ No se pudo leer la configuración guardada, así que no se guardó nada para no borrarla. Recarga la página e inténtalo de nuevo.', 'error');
+    return;
+  }
 
   const btn = document.getElementById('btnSaveScheduleConfig');
   const regularBtn = document.getElementById('btnSaveScheduleConfigRegular');

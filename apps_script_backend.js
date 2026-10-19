@@ -181,6 +181,7 @@ function handleRequest(data) {
       case "get_player_rut":         response = getPlayerRut(data); break;
       case "save_player_rut":        response = savePlayerRut(data); break;
       case "save_schedule_config":   response = saveScheduleConfig(data); break;
+      case "get_schedule_config":    response = getScheduleConfigPublic(data.idToken); break;
       case "get_tournaments":        response = getTournaments(data); break;
       case "get_tournament":         response = getTournament(data); break;
       case "admin_save_tournament":  response = adminSaveTournament(data); break;
@@ -2270,6 +2271,29 @@ function getDynamicScheduleConfig(idToken) {
  * con "Missing or insufficient permissions" — el mismo problema que ya
  * resolvimos para la lectura, ahora del lado de la escritura.
  */
+/**
+ * Devuelve uct_config/schedule para el panel de admin y la página de
+ * reservas (las reglas de Firestore no permiten leerlo desde el navegador).
+ * Distingue "no existe" (config: null) de "falló la lectura" (ok: false),
+ * para que el panel nunca guarde encima de una configuración que no pudo leer.
+ */
+function getScheduleConfigPublic(idToken) {
+  try {
+    const url = 'https://firestore.googleapis.com/v1/projects/'
+      + encodeURIComponent(CONFIG.FIREBASE_PROJECT_ID)
+      + '/databases/(default)/documents/uct_config/schedule?key='
+      + encodeURIComponent(CONFIG.FIREBASE_API_KEY);
+    const response = UrlFetchApp.fetch(url, bookingFetchOptions('get', undefined, idToken));
+    const code = response.getResponseCode();
+    if (code === 404) return { ok: true, config: null };
+    if (code !== 200) return { ok: false, msg: 'No se pudo leer la configuración (' + code + ').' };
+    const doc = JSON.parse(response.getContentText());
+    return { ok: true, config: doc.fields ? firestoreValueToJs({ mapValue: { fields: doc.fields } }) : null };
+  } catch (e) {
+    return { ok: false, msg: 'No se pudo leer la configuración: ' + e.message };
+  }
+}
+
 // Horas mínimas antes del inicio de un bloque para poder reservarlo (0 = hasta
 // que empiece). Configurable desde el panel de admin; por defecto 4.
 function parseMinLeadHours(value) {

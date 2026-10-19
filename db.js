@@ -873,12 +873,21 @@ const DB = {
     try {
       const doc = await firebaseDb.collection(FIREBASE_COLLECTIONS.config).doc('schedule').get();
       return doc.exists ? doc.data() : null;
-    } catch (e) {
-      // Se propaga el error (en vez de devolver null como "no hay nada guardado")
-      // para que el panel de admin no sobrescriba la configuración con los
-      // valores por defecto cuando en realidad solo falló la lectura.
-      console.warn('No se pudo leer la configuración de horarios:', e);
-      throw e;
+    } catch (sdkError) {
+      // Las reglas de Firestore no dejan leer uct_config desde el navegador;
+      // se lee a través del backend, que usa la identidad del Apps Script.
+      try {
+        const res = await fetch(`${window.CONFIG.API_URL}?action=get_schedule_config`);
+        const data = await res.json();
+        if (data && data.ok) return data.config || null;
+        throw new Error((data && data.msg) || 'Respuesta inválida del servidor.');
+      } catch (backendError) {
+        // Se propaga el error (en vez de devolver null como "no hay nada
+        // guardado") para que el panel de admin no sobrescriba la
+        // configuración con los valores por defecto.
+        console.warn('No se pudo leer la configuración de horarios:', sdkError, backendError);
+        throw backendError;
+      }
     }
   },
 
