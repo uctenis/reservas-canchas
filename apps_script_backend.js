@@ -712,6 +712,39 @@ function createSpecialPeriodCalendarEvents(period) {
   return result;
 }
 
+// Evento creado por createSpecialPeriodCalendarEvents (ver su descripción)
+function isSpecialPeriodMirrorEvent(event) {
+  try {
+    return (event.getDescription() || '').toLowerCase().indexOf('bloqueo administrativo de disponibilidad uctenis') >= 0;
+  } catch (e) {
+    return false;
+  }
+}
+
+// Borra del calendario todos los eventos de un período especial buscándolos
+// por su "Grupo:" en la descripción; cubre los que no quedaron registrados
+// en la planilla (columna calendarEventIds vacía).
+function deleteSpecialPeriodEventsByGroup(groupId, fechaInicio, fechaFin) {
+  if (!groupId || !fechaInicio || !fechaFin) return 0;
+  let removed = 0;
+  try {
+    const calendar = CalendarApp.getCalendarById(CONFIG.MAIN_CALENDAR_ID);
+    if (!calendar) return 0;
+    const start = new Date(fechaInicio + 'T00:00:00Z');
+    start.setUTCDate(start.getUTCDate() - 1);
+    const end = new Date(fechaFin + 'T00:00:00Z');
+    end.setUTCDate(end.getUTCDate() + 2);
+    const marker = 'grupo: ' + text(groupId).toLowerCase();
+    calendar.getEvents(start, end).forEach(function(event) {
+      if ((event.getDescription() || '').toLowerCase().indexOf(marker) < 0) return;
+      try { event.deleteEvent(); removed++; } catch (e) { console.warn('No se pudo borrar evento de período:', e.message); }
+    });
+  } catch (error) {
+    console.warn('No se pudieron buscar los eventos del período ' + groupId + ':', error.message);
+  }
+  return removed;
+}
+
 function deleteSpecialPeriodCalendarEvents(eventIds) {
   String(eventIds || '').split(',').map(text).filter(Boolean).forEach(function(eventId) {
     try {
@@ -743,17 +776,22 @@ function adminRemoveSpecialSlots(data) {
   const values = sheet.getDataRange().getValues();
   let removed = 0;
   const eventIds = [];
+  let firstDate = '', lastDate = '';
   for (let i = values.length - 1; i >= 1; i--) {
     const matches = groupId
       ? text(values[i][4]) === groupId
       : (dateCellToStr(values[i][0], ss) === fecha && text(values[i][1]) === courtId);
     if (matches) {
+      const rowDate = dateCellToStr(values[i][0], ss);
+      if (rowDate && (!firstDate || rowDate < firstDate)) firstDate = rowDate;
+      if (rowDate && (!lastDate || rowDate > lastDate)) lastDate = rowDate;
       if (values[i][5]) eventIds.push(values[i][5]);
       sheet.deleteRow(i + 1);
       removed++;
     }
   }
-  eventIds.forEach(deleteSpecialPeriodCalendarEvents);
+  eventIds.forEach(function(ids) { deleteSpecialPeriodCalendarEvents(ids); });
+  if (groupId) deleteSpecialPeriodEventsByGroup(groupId, firstDate, lastDate);
   return { ok: true, removed: removed };
 }
 
@@ -2956,6 +2994,10 @@ function getAvailableSlots(dateStr, idToken, courtIdFilter) {
   // Indexar tiempos ocupados por cancha
   const busyTimesByCourt = { cec1: [], cec2: [], cjp1: [], cjp2: [] };
   allEvents.forEach(e => {
+    // Los cierres/aperturas de "Fechas especiales" se leen de la planilla
+    // (specialCourts/closedCourts arriba); su evento en Calendar es solo un
+    // reflejo. Si quedó huérfano (período ya borrado) no debe bloquear la cancha.
+    if (isSpecialPeriodMirrorEvent(e)) return;
     const rawTitle = e.getTitle() || '';
     const title = rawTitle.toLowerCase();
     let busyLabel = '';
