@@ -3029,3 +3029,25 @@ tr.drag-over-bottom {
   .court-status-grid { grid-template-columns: 1fr; }
   .schedule-court-selector { grid-template-columns: 1fr 1fr; }
 }
+
+/* ── Parámetros: franjas de Clases UCTenis ── */
+.class-blocks-card { margin: 18px 0 16px; padding: 16px; border: 1px solid rgba(129,140,248,.28); border-radius: 14px; background: rgba(129,140,248,.06); }
+.class-blocks-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 12px; }
+.class-blocks-head strong { display: block; color: var(--text-primary); font-size: .92rem; }
+.class-blocks-head small { display: block; margin-top: 3px; color: var(--text-secondary); font-size: .76rem; line-height: 1.4; }
+.class-block-add { flex-shrink: 0; padding: 8px 14px; border: 1px solid rgba(129,140,248,.45); border-radius: 10px; background: rgba(129,140,248,.14); color: #c7d2fe; font-size: .78rem; font-weight: 800; cursor: pointer; }
+.class-block-add:hover { background: rgba(129,140,248,.24); }
+.class-blocks-list { display: flex; flex-direction: column; gap: 8px; }
+.class-block-row { display: grid; grid-template-columns: 130px 140px 1fr auto; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid rgba(255,255,255,.08); border-radius: 12px; background: rgba(3,10,7,.3); }
+.class-block-row select { width: 100%; padding: 8px 10px; border: 1px solid rgba(255,255,255,.12); border-radius: 9px; background: #10201a; color: var(--text-primary); font-size: .8rem; }
+.class-block-courts { display: flex; flex-wrap: wrap; gap: 6px 12px; }
+.class-block-courts label { display: inline-flex; align-items: center; gap: 5px; color: var(--text-secondary); font-size: .78rem; cursor: pointer; }
+.class-block-courts input { accent-color: #818cf8; width: 15px; height: 15px; }
+.class-block-remove { width: 32px; height: 32px; border: 1px solid rgba(248,113,113,.35); border-radius: 9px; background: rgba(248,113,113,.08); color: #fca5a5; cursor: pointer; }
+.class-block-remove:hover { background: rgba(248,113,113,.2); }
+.class-blocks-empty { margin: 0; color: var(--text-secondary); font-size: .8rem; }
+@media (max-width: 720px) {
+  .class-blocks-head { flex-direction: column; }
+  .class-block-row { grid-template-columns: 1fr 1fr auto; }
+  .class-block-courts { grid-column: 1 / -1; grid-row: 2; }
+}

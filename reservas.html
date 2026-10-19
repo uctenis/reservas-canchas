@@ -416,7 +416,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
 
-<script src="db.js?v=20261019_cfgread"></script>
+<script src="db.js?v=20261019_classes"></script>
 <script src="script.js?v=20260602_v2"></script>
 <script src="datepicker.js?v=20260908_v3"></script>
 <script>
@@ -427,7 +427,8 @@ let currentStep = 1;
 let reservationRules = {
   maxAdvanceDays: { ...(window.DEFAULT_MAX_ADVANCE_DAYS || { admin: 7, socio: 7, funcionario: 2 }) },
   maxBookingsPerDay: window.DEFAULT_MAX_BOOKINGS_PER_DAY || 1,
-  minLeadHours: window.DEFAULT_MIN_LEAD_HOURS ?? 4
+  minLeadHours: window.DEFAULT_MIN_LEAD_HOURS ?? 4,
+  classBlocks: window.parseClassBlocks ? window.parseClassBlocks() : []
 };
 window.RESERVATION_RULES = reservationRules;
 
@@ -469,6 +470,7 @@ document.addEventListener('DOMContentLoaded', () => {
       reservationRules.maxAdvanceDays = { ...reservationRules.maxAdvanceDays, ...(config.maxAdvanceDays || {}) };
       reservationRules.maxBookingsPerDay = Number(config.maxBookingsPerDay) || reservationRules.maxBookingsPerDay;
       reservationRules.minLeadHours = window.parseMinLeadHours(config.minLeadHours, reservationRules.minLeadHours);
+      reservationRules.classBlocks = window.parseClassBlocks(config.classBlocks);
       renderDateStrip();
       // Si el tablero ya se pintó con los valores por defecto, se repinta con los guardados
       const shown = sel.date && DB.peekSlotsCache ? DB.peekSlotsCache(sel.date) : null;
@@ -953,14 +955,10 @@ function renderSlotsByCourt(apiData) {
     const dayOfWeek = dayOfWeekFromISO(sel.date); // 0=Dom, 1=Lun, etc.
     
     DB.COURTS.forEach(c => {
-      // Bloquear clases los martes (2) y miércoles (3) de 18:00 a 19:30 (slot '18:00') sólo en canchas CJP
-      if ((dayOfWeek === 2 || dayOfWeek === 3) && c.id.startsWith('cjp')) {
-        syntheticCourts[c.id] = DB.SLOTS.filter(s => s !== '18:00');
-        busyLabels[c.id] = { '18:00': 'Clases UCTenis' };
-      } else {
-        syntheticCourts[c.id] = [...DB.SLOTS];
-        busyLabels[c.id] = {};
-      }
+      // Franjas de clases configuradas por el admin (Horarios → Parámetros)
+      const classSlots = DB.SLOTS.filter(s => window.isClassBlock(reservationRules.classBlocks, c.id, dayOfWeek, s));
+      syntheticCourts[c.id] = DB.SLOTS.filter(s => !classSlots.includes(s));
+      busyLabels[c.id] = Object.fromEntries(classSlots.map(s => [s, 'Clases UCTenis']));
     });
     apiData = { ok: true, courts: syntheticCourts, busyLabels: busyLabels };
   }
@@ -1022,7 +1020,8 @@ function renderSlotsByCourt(apiData) {
     const isMine = !!(ci.myBooked && ci.myBooked.slot === slot);
     const match = ci.challenges.find(c => c.slot === slot);
     // Clases fijas: martes y miércoles 18:00–19:30 en CJP
-    const isSystemClass = (dayOfWeek === 2 || dayOfWeek === 3) && slot === '18:00' && ci.court.id.startsWith('cjp');
+    // Franjas de clases configuradas por el admin (Horarios → Parámetros)
+    const isSystemClass = window.isClassBlock(reservationRules.classBlocks, ci.court.id, dayOfWeek, slot);
     const isBusy = (!ci.available.includes(slot) || isSystemClass || !!match) && !isMine;
 
     if (isMine) return { kind: 'mine', label: 'Tu reserva', aria: `${where}: tu reserva` };

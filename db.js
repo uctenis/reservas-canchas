@@ -76,11 +76,27 @@ const DEFAULT_MAX_ADVANCE_DAYS = { admin: 7, socio: 7, funcionario: 2 };
 const DEFAULT_MAX_BOOKINGS_PER_DAY = 1;
 // Horas mínimas antes del inicio de un bloque para poder reservarlo
 const DEFAULT_MIN_LEAD_HOURS = 4;
+// Franjas fijas de "Clases UCTenis" (día 0=Dom…6=Sáb, bloque de inicio, canchas)
+const DEFAULT_CLASS_BLOCKS = [
+  { day: 2, slot: '18:00', courts: ['cjp1', 'cjp2'] },
+  { day: 3, slot: '18:00', courts: ['cjp1', 'cjp2'] }
+];
 window.DEFAULT_SLOTS = DEFAULT_SLOTS;
 window.DEFAULT_COURT_SLOTS = DEFAULT_COURT_SLOTS;
 window.DEFAULT_MAX_ADVANCE_DAYS = DEFAULT_MAX_ADVANCE_DAYS;
 window.DEFAULT_MAX_BOOKINGS_PER_DAY = DEFAULT_MAX_BOOKINGS_PER_DAY;
 window.DEFAULT_MIN_LEAD_HOURS = DEFAULT_MIN_LEAD_HOURS;
+window.DEFAULT_CLASS_BLOCKS = DEFAULT_CLASS_BLOCKS;
+// Franjas de clases de la configuración guardada (o las de por defecto si nunca se guardaron)
+window.parseClassBlocks = function (value) {
+  if (!Array.isArray(value)) return JSON.parse(JSON.stringify(DEFAULT_CLASS_BLOCKS));
+  return value
+    .map(b => ({ day: Number(b && b.day), slot: String((b && b.slot) || ''), courts: Array.isArray(b && b.courts) ? b.courts.map(String) : [] }))
+    .filter(b => b.day >= 0 && b.day <= 6 && /^\d{1,2}:\d{2}$/.test(b.slot) && b.courts.length);
+};
+window.isClassBlock = function (blocks, courtId, dayOfWeek, slot) {
+  return (blocks || []).some(b => b.day === dayOfWeek && b.slot === slot && b.courts.includes(courtId));
+};
 // Lee minLeadHours de la configuración guardada; 0 es válido (hasta el inicio)
 window.parseMinLeadHours = function (value, fallback = DEFAULT_MIN_LEAD_HOURS) {
   const n = Number(value);

@@ -2355,6 +2355,37 @@ function sanitizeClosedCourts(value) {
   return out;
 }
 
+// Franjas semanales de "Clases UCTenis" (Horarios → Parámetros del admin):
+// [{ day: 0..6 (0=Dom), slot: 'HH:mm', courts: ['cjp1', ...] }].
+// Si nunca se configuraron, rigen las de siempre (martes y miércoles 18:00 en CJP).
+const DEFAULT_CLASS_BLOCKS = [
+  { day: 2, slot: '18:00', courts: ['cjp1', 'cjp2'] },
+  { day: 3, slot: '18:00', courts: ['cjp1', 'cjp2'] }
+];
+
+function sanitizeClassBlocks(value) {
+  if (!Array.isArray(value)) return DEFAULT_CLASS_BLOCKS;
+  return value.map(function(block) {
+    return {
+      day: Number(block && block.day),
+      slot: text(block && block.slot),
+      courts: (Array.isArray(block && block.courts) ? block.courts : []).map(text).filter(function(c) { return CONFIG.CALENDARS[c]; })
+    };
+  }).filter(function(block) {
+    return block.day >= 0 && block.day <= 6 && /^\d{1,2}:\d{2}$/.test(block.slot) && block.courts.length;
+  });
+}
+
+function getClassBlocks(dynamicConfig) {
+  return dynamicConfig && Array.isArray(dynamicConfig.classBlocks) ? sanitizeClassBlocks(dynamicConfig.classBlocks) : DEFAULT_CLASS_BLOCKS;
+}
+
+function isClassBlockSlot(classBlocks, courtId, dayOfWeek, slot) {
+  return classBlocks.some(function(block) {
+    return block.day === dayOfWeek && block.slot === slot && block.courts.indexOf(courtId) >= 0;
+  });
+}
+
 function saveScheduleConfig(data) {
   if (!isAdminRequest(data)) return { ok: false, msg: 'Acceso reservado al administrador.' };
   try {
@@ -2364,6 +2395,7 @@ function saveScheduleConfig(data) {
       maxBookingsPerDay: Number(data.maxBookingsPerDay) > 0 ? Number(data.maxBookingsPerDay) : 1,
       minLeadHours: parseMinLeadHours(data.minLeadHours),
       closedCourts: sanitizeClosedCourts(data.closedCourts),
+      classBlocks: sanitizeClassBlocks(data.classBlocks),
       updatedAt: new Date().toISOString(),
       updatedBy: text(data.actorEmail || data.adminEmail)
     };
@@ -2977,6 +3009,7 @@ function getAvailableSlots(dateStr, idToken, courtIdFilter) {
   // Cierre indefinido desde "Estado de canchas"; una fecha especial que abre
   // todos los horarios ese día sigue mandando sobre él.
   const adminClosedCourts = (dynamicConfig && dynamicConfig.closedCourts) || {};
+  const classBlocks = getClassBlocks(dynamicConfig);
   result.closedReasons = {};
 
   // Leer Calendar una sola vez desde el calendario maestro (Cancha CEC 1)
@@ -3079,7 +3112,7 @@ function getAvailableSlots(dateStr, idToken, courtIdFilter) {
     candidateSlots.forEach(slot => {
       let slotStart = makeLocalDate(dateStr, slot);
       let slotEnd = new Date(slotStart.getTime() + 90 * 60000);
-      let isClassSlot = (dayOfWeek === 2 || dayOfWeek === 3) && slot === '18:00' && courtKey.startsWith('cjp') && !specialCourts[courtKey];
+      let isClassSlot = isClassBlockSlot(classBlocks, courtKey, dayOfWeek, slot) && !specialCourts[courtKey];
       let busyMatch = busyTimes.find(b => (slotStart.getTime() < b.end && slotEnd.getTime() > b.start));
       let isDatabaseBooking = databaseBusy[courtKey + '|' + slot] === true;
 
@@ -3186,7 +3219,7 @@ function createBooking(data) {
 
   var noonUTC = new Date(data.date + 'T12:00:00Z');
   var dayOfWeek = parseInt(Utilities.formatDate(noonUTC, 'America/Santiago', 'u'), 10) % 7;
-  if ((dayOfWeek === 2 || dayOfWeek === 3) && data.slot === '18:00' && data.courtId.startsWith('cjp')) {
+  if (isClassBlockSlot(getClassBlocks(dynamicConfig), courtId, dayOfWeek, slot)) {
     return { ok: false, msg: "Este horario está reservado para Clases UCTenis." };
   }
 

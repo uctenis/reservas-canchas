@@ -10,7 +10,7 @@
   <meta property="og:image" content="https://uctenis.github.io/reservas-canchas/logo_uctenis_v03.png">
   <link rel="icon" href="logo_uctenis_v03.png" type="image/png">
   <link rel="stylesheet" href="style.css?v=20260813_v1">
-  <link rel="stylesheet" href="ranking.css?v=20261019_courts">
+  <link rel="stylesheet" href="ranking.css?v=20261019_classes">
   <link rel="stylesheet" href="datepicker.css?v=20260908_v3">
   <script>
     // Quien llega desde liga.html (?liga=1) solo quiere el modal de desafio de
@@ -797,7 +797,7 @@
             <!-- ═══ PARÁMETROS DE RESERVA ═══ -->
             <div id="scheduleSectionParams" class="schedule-panel schedule-panel-card hidden">
               <p class="schedule-panel-desc">
-                Controla con cuánta anticipación puede reservar cada tipo de usuario, hasta cuántas horas antes de cada bloque se puede reservar y cuántas reservas puede tener por día.
+                Controla con cuánta anticipación puede reservar cada tipo de usuario, hasta cuántas horas antes de cada bloque se puede reservar, cuántas reservas puede tener por día y en qué horarios hay clases.
               </p>
               <div class="form-row schedule-param-grid">
                 <div class="form-group schedule-param-card">
@@ -826,6 +826,17 @@
                   <input type="number" id="cfgMinLeadHours" min="0" max="72" step="1" style="width:100%; padding:10px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:#fff; outline:none;">
                   <small style="display:block; margin-top:6px; font-size:0.72rem; color:rgba(255,255,255,0.5);">Ej: 4 = el bloque de las 18:00 se puede reservar hasta las 14:00. 0 = hasta que empiece.</small>
                 </div>
+              </div>
+
+              <div class="class-blocks-card">
+                <div class="class-blocks-head">
+                  <div>
+                    <strong>🎓 Franjas de Clases UCTenis</strong>
+                    <small>Bloques que se reservan cada semana para clases. Aparecen como "Clase" y nadie puede reservarlos.</small>
+                  </div>
+                  <button type="button" class="class-block-add" onclick="addClassBlock()">+ Agregar franja</button>
+                </div>
+                <div id="classBlocksList" class="class-blocks-list"></div>
               </div>
 
               <div style="display:flex;justify-content:flex-end;">
@@ -884,7 +895,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-<script src="db.js?v=20261019_cfgread"></script>
+<script src="db.js?v=20261019_classes"></script>
 <script src="liga.js?v=20260909_v1"></script>
 <script src="datepicker.js?v=20260908_v3"></script>
 
@@ -8371,9 +8382,76 @@ function buildScheduleConfigPayload() {
     maxAdvanceDays: scheduleConfigState.maxAdvanceDays,
     maxBookingsPerDay: scheduleConfigState.maxBookingsPerDay,
     minLeadHours: scheduleConfigState.minLeadHours,
-    closedCourts: scheduleConfigState.closedCourts || {}
+    closedCourts: scheduleConfigState.closedCourts || {},
+    classBlocks: window.parseClassBlocks(scheduleConfigState.classBlocks)
   };
 }
+
+// ── Franjas de clases (Parámetros) ──
+const CLASS_BLOCK_DAYS = [[1, 'Lunes'], [2, 'Martes'], [3, 'Miércoles'], [4, 'Jueves'], [5, 'Viernes'], [6, 'Sábado'], [0, 'Domingo']];
+
+// Bloques que existen en algún horario regular (incluye los especiales, ej. 20:00)
+function classBlockSlotOptions() {
+  const slots = new Set(window.DEFAULT_SLOTS || []);
+  Object.values((scheduleConfigState && scheduleConfigState.courtSlots) || {}).forEach(days => {
+    Object.values(days || {}).forEach(list => (list || []).forEach(s => slots.add(s)));
+  });
+  (scheduleConfigState.classBlocks || []).forEach(b => b.slot && slots.add(b.slot));
+  return [...slots].sort();
+}
+
+function renderClassBlocks() {
+  const list = document.getElementById('classBlocksList');
+  if (!list || !scheduleConfigState) return;
+  const blocks = scheduleConfigState.classBlocks || [];
+  if (!blocks.length) {
+    list.innerHTML = '<p class="class-blocks-empty">No hay franjas de clases. Todos los bloques quedan disponibles para reservar.</p>';
+    return;
+  }
+  const slots = classBlockSlotOptions();
+  list.innerHTML = blocks.map((b, i) => `
+    <div class="class-block-row">
+      <select aria-label="Día" onchange="updateClassBlock(${i}, 'day', this.value)">
+        ${CLASS_BLOCK_DAYS.map(([v, l]) => `<option value="${v}"${v === b.day ? ' selected' : ''}>${l}</option>`).join('')}
+      </select>
+      <select aria-label="Bloque" onchange="updateClassBlock(${i}, 'slot', this.value)">
+        ${slots.map(s => `<option value="${s}"${s === b.slot ? ' selected' : ''}>${s} – ${addMinutesToHHMM(s, 90)}</option>`).join('')}
+      </select>
+      <div class="class-block-courts">
+        ${Object.keys(COURT_STATUS_INFO).map(id => `<label><input type="checkbox"${b.courts.includes(id) ? ' checked' : ''} onchange="toggleClassBlockCourt(${i}, '${id}', this.checked)"> ${SPECIAL_COURT_SHORT[id]}</label>`).join('')}
+      </div>
+      <button type="button" class="class-block-remove" onclick="removeClassBlock(${i})" aria-label="Quitar franja">✕</button>
+    </div>`).join('');
+}
+
+function addMinutesToHHMM(slot, minutes) {
+  const [h, m] = slot.split(':').map(Number);
+  const total = h * 60 + m + minutes;
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+}
+
+window.addClassBlock = function() {
+  scheduleConfigState.classBlocks = [...(scheduleConfigState.classBlocks || []), { day: 2, slot: '18:00', courts: ['cjp1', 'cjp2'] }];
+  markScheduleConfigDirty();
+  renderClassBlocks();
+};
+window.removeClassBlock = function(index) {
+  scheduleConfigState.classBlocks = (scheduleConfigState.classBlocks || []).filter((_, i) => i !== index);
+  markScheduleConfigDirty();
+  renderClassBlocks();
+};
+window.updateClassBlock = function(index, field, value) {
+  const block = scheduleConfigState.classBlocks[index];
+  if (!block) return;
+  block[field] = field === 'day' ? Number(value) : value;
+  markScheduleConfigDirty();
+};
+window.toggleClassBlockCourt = function(index, courtId, checked) {
+  const block = scheduleConfigState.classBlocks[index];
+  if (!block) return;
+  block.courts = checked ? [...new Set([...block.courts, courtId])] : block.courts.filter(c => c !== courtId);
+  markScheduleConfigDirty();
+};
 
 window.toggleCourtClosed = async function(courtId) {
   if (!scheduleConfigState || !scheduleConfigCloudLoaded) {
@@ -8455,6 +8533,7 @@ function applyScheduleConfigToForm() {
   document.getElementById('cfgMaxAdvanceAdmin').value = scheduleConfigState.maxAdvanceDays.admin || 7;
   document.getElementById('cfgMaxBookingsPerDay').value = scheduleConfigState.maxBookingsPerDay || 1;
   document.getElementById('cfgMinLeadHours').value = window.parseMinLeadHours(scheduleConfigState.minLeadHours);
+  renderClassBlocks();
   ['cfgMaxAdvanceSocio','cfgMaxAdvanceFuncionario','cfgMaxAdvanceAdmin','cfgMaxBookingsPerDay','cfgMinLeadHours'].forEach(id => {
     const input = document.getElementById(id);
     if (input && !input.dataset.dirtyBound) {
@@ -8472,7 +8551,8 @@ function defaultScheduleConfig() {
     maxAdvanceDays: { ...(window.DEFAULT_MAX_ADVANCE_DAYS || {}) },
     maxBookingsPerDay: window.DEFAULT_MAX_BOOKINGS_PER_DAY || 1,
     minLeadHours: window.DEFAULT_MIN_LEAD_HOURS ?? 4,
-    closedCourts: {}
+    closedCourts: {},
+    classBlocks: window.parseClassBlocks()
   };
 }
 
@@ -8498,7 +8578,8 @@ function loadScheduleConfig() {
       maxAdvanceDays: { ...(window.DEFAULT_MAX_ADVANCE_DAYS || {}), ...(saved.maxAdvanceDays || {}) },
       maxBookingsPerDay: Number(saved.maxBookingsPerDay) > 0 ? Number(saved.maxBookingsPerDay) : (window.DEFAULT_MAX_BOOKINGS_PER_DAY || 1),
       minLeadHours: window.parseMinLeadHours(saved.minLeadHours),
-      closedCourts: (saved.closedCourts && typeof saved.closedCourts === 'object') ? saved.closedCourts : {}
+      closedCourts: (saved.closedCourts && typeof saved.closedCourts === 'object') ? saved.closedCourts : {},
+      classBlocks: window.parseClassBlocks(saved.classBlocks)
     };
     applyScheduleConfigToForm();
     markScheduleConfigSaved();
@@ -8611,6 +8692,10 @@ window.saveScheduleConfigAll = async function(event) {
     const data = await res.json();
     if (!data || !data.ok) throw new Error((data && data.msg) || 'No se pudo guardar.');
     markScheduleConfigSaved();
+    if (!Array.isArray(data.savedFields) || !data.savedFields.includes('classBlocks')) {
+      showScheduleConfigAlert('⚠️ Se guardó, pero las franjas de clases no: falta publicar la versión nueva del backend en Apps Script.', 'error');
+      return;
+    }
     showScheduleConfigAlert('✅ Horarios y parámetros guardados. Ya rigen para las próximas reservas.');
   } catch (e) {
     console.error('Error guardando configuración de horarios:', e);
