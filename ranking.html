@@ -861,7 +861,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-<script src="db.js?v=20261019_prefetch"></script>
+<script src="db.js?v=20261019_emails"></script>
 <script src="liga.js?v=20260909_v1"></script>
 <script src="datepicker.js?v=20260908_v3"></script>
 
@@ -5340,7 +5340,7 @@ function exportPlayersToExcel(event) {
     const isActive = !['false', '0', 'no', 'inactivo', 'inactiva', 'inactive', 'baja', 'retirado', 'retirada'].includes(String(p.activo ?? p.participaRanking ?? true).toLowerCase());
     return [
       p.nombre || "",
-      p.email || "",
+      String(p.email || "").trim().toLowerCase(),
       p.telefono || p.phone || "",
       p.gender === "F" ? "Femenino" : "Masculino",
       isActive ? "Activo" : "Inactivo",
@@ -5588,7 +5588,19 @@ function renderAdminPlayerPagination(total, from, to) {
     </div>`;
 }
 
+// La primera vez que un admin abre el listado, deja en minúsculas los correos
+// guardados con mayúsculas (una sola pasada por carga de página).
+let memberEmailsNormalized = false;
+function normalizeMemberEmailsOnce() {
+  if (memberEmailsNormalized || !isPlayerAdminSession() || typeof DB.normalizeStoredEmailsCloud !== 'function') return;
+  memberEmailsNormalized = true;
+  DB.normalizeStoredEmailsCloud()
+    .then(count => { if (count) console.info(`[admin] ${count} correo(s) de miembros pasados a minúsculas`); })
+    .catch(error => { memberEmailsNormalized = false; console.warn('No se pudieron normalizar los correos:', error); });
+}
+
 function renderAdminPlayerList() {
+  normalizeMemberEmailsOnce();
   const tbody = document.getElementById('adminPlayerList');
   const rawPlayers = getAllPlayers();
   renderAdminPlayerStats(rawPlayers);
@@ -5640,7 +5652,7 @@ function renderAdminPlayerList() {
       </td>
       <td>${escapeHTML(player.categoria || '—')}</td>
       <td>${escapeHTML(GENDERS[player.gender].label)}</td>
-      <td>${escapeHTML(player.email || 'Sin correo')}</td>
+      <td>${escapeHTML(String(player.email || '').trim().toLowerCase() || 'Sin correo')}</td>
       <td><span class="status-pill ${active ? 'status-active' : 'status-inactive'}">${active ? 'Activo' : 'Inactivo'}</span></td>
       <td><span class="status-pill ${complete ? 'status-complete' : 'status-incomplete'}">${complete ? 'Completo' : 'Incompleto'}</span></td>
       <td class="table-actions">

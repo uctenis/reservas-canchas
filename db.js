@@ -94,6 +94,12 @@ function normalizeEmailForDb(email) {
   return String(email || '').trim().toLowerCase();
 }
 
+// Ficha leída de Firestore con el correo en minúsculas (algunos socios lo
+// escribieron en mayúsculas); no toca las fichas sin correo.
+function withLowercaseEmail(record) {
+  return record && record.email ? { ...record, email: normalizeEmailForDb(record.email) } : record;
+}
+
 const DB_STATIC_ACCESS_PLAYERS = [
   { id: 'm001', nombre: 'David Silva', email: 'dsilva@uct.cl', genero: 'M', categoria: 'Tercera', foto: 'fotos/m001.png' },
   { id: 'm002', nombre: 'Ismael Devia', email: 'idevia@uct.cl', genero: 'M', categoria: 'Tercera', foto: 'fotos/m002.png' },
@@ -885,7 +891,7 @@ const DB = {
     if (!this.isCloudConfigured()) throw new Error('Firestore no está disponible.');
     // Si no hay caché, hacer fetch manual
     const snapshot = await firebaseDb.collection(FIREBASE_COLLECTIONS.players).get();
-    cachedPlayers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    cachedPlayers = snapshot.docs.map(doc => withLowercaseEmail({ id: doc.id, ...doc.data() }));
     return cachedPlayers;
   },
 
@@ -911,9 +917,9 @@ const DB = {
       .collection(FIREBASE_COLLECTIONS.players)
       .onSnapshot(
         snapshot => {
-          cachedPlayers = snapshot.docs.map(doc => ({ 
-            id: doc.id, 
-            ...doc.data() 
+          cachedPlayers = snapshot.docs.map(doc => withLowercaseEmail({
+            id: doc.id,
+            ...doc.data()
           }));
           this.dispatchEvent('players-updated', { count: cachedPlayers.length });
           console.log(`✅ ${cachedPlayers.length} jugadores actualizados en tiempo real`);
@@ -949,7 +955,7 @@ const DB = {
 
       if (!snapshot.empty) {
         const doc = snapshot.docs[0];
-        const player = { id: doc.id, ...doc.data() };
+        const player = withLowercaseEmail({ id: doc.id, ...doc.data() });
         if (isAccessPlayerActive(player)) return player;
       }
 
@@ -963,7 +969,7 @@ const DB = {
           .get();
         if (!snap2.empty) {
           const doc = snap2.docs[0];
-          const player = { id: doc.id, ...doc.data() };
+          const player = withLowercaseEmail({ id: doc.id, ...doc.data() });
           if (isAccessPlayerActive(player)) return player;
         }
       }
@@ -1005,6 +1011,7 @@ const DB = {
       activo: isActivo,
       participaRanking: isParticipa,
       telefono: formatPhoneNumber(player.telefono),
+      ...(emailLower ? { email: emailLower } : {}),
       emailLower,
       updatedAt: now,
       updatedBy: actor.email || actor.adminEmail || actor.actorEmail || ''
@@ -1018,6 +1025,31 @@ const DB = {
     return { ...data, rut: player.rut || '' };
   },
 
+  /** Deja en minúsculas el correo guardado de jugadores y funcionarios que lo
+   * tengan con mayúsculas o espacios. Solo escribe las fichas que cambian;
+   * devuelve cuántas actualizó. Requiere sesión de administrador. */
+  async normalizeStoredEmailsCloud() {
+    if (!this.isCloudConfigured()) return 0;
+    let updated = 0;
+    for (const collection of [FIREBASE_COLLECTIONS.players, FIREBASE_COLLECTIONS.staff]) {
+      const snap = await firebaseDb.collection(collection).get();
+      const pending = snap.docs.filter(doc => {
+        const raw = doc.data().email;
+        return typeof raw === 'string' && raw && raw !== normalizeEmailForDb(raw);
+      });
+      for (let i = 0; i < pending.length; i += 400) {
+        const batch = firebaseDb.batch();
+        pending.slice(i, i + 400).forEach(doc => {
+          const email = normalizeEmailForDb(doc.data().email);
+          batch.update(doc.ref, { email, emailLower: email });
+        });
+        await batch.commit();
+      }
+      updated += pending.length;
+    }
+    return updated;
+  },
+
   async savePlayersCloud(players, actor = {}) {
     if (!this.isCloudConfigured()) throw new Error('Firestore no está disponible.');
     const batch = firebaseDb.batch();
@@ -1029,6 +1061,7 @@ const DB = {
       const isActivo = player.activo !== undefined ? (player.activo !== false && player.activo !== 'false') : 
                        (player.participaRanking !== undefined ? (player.participaRanking !== false && player.participaRanking !== 'false') : true);
       const isParticipa = player.participaRanking !== undefined ? (player.participaRanking !== false && player.participaRanking !== 'false') : isActivo;
+      const emailLower = normalizeEmailForDb(player.email);
       const data = cleanFirestoreData({
         ...player,
         id,
@@ -1036,7 +1069,8 @@ const DB = {
         activo: isActivo,
         participaRanking: isParticipa,
         telefono: formatPhoneNumber(player.telefono),
-        emailLower: normalizeEmailForDb(player.email),
+        ...(emailLower ? { email: emailLower } : {}),
+        emailLower,
         updatedAt: now,
         updatedBy: actor.email || actor.adminEmail || actor.actorEmail || ''
       });
@@ -1204,6 +1238,7 @@ const DB = {
       ...staff,
       id,
       userType: 'funcionario',
+      ...(emailLower ? { email: emailLower } : {}),
       emailLower,
       activo: staff.activo !== false,
       createdAt: staff.createdAt || now,
@@ -1222,7 +1257,7 @@ const DB = {
     if (cachedStaff.length > 0) return cachedStaff;
     if (!this.isCloudConfigured()) throw new Error('Firestore no está disponible.');
     const snap = await firebaseDb.collection(FIREBASE_COLLECTIONS.staff).orderBy('nombre').get();
-    cachedStaff = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    cachedStaff = snap.docs.map(doc => withLowercaseEmail({ id: doc.id, ...doc.data() }));
     return cachedStaff;
   },
 
@@ -1325,7 +1360,7 @@ const DB = {
       .orderBy('nombre')
       .onSnapshot(
         snap => {
-          cachedStaff = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          cachedStaff = snap.docs.map(doc => withLowercaseEmail({ id: doc.id, ...doc.data() }));
           this.dispatchEvent('staff-updated', { count: cachedStaff.length });
         },
         err => console.error('❌ Error en listener de funcionarios:', err)
