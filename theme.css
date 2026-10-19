@@ -813,6 +813,9 @@ body.page-admin header { text-align: left; }
 
 .board-note { margin: 0 0 10px; padding: 10px 14px; border: 1px dashed var(--line-strong); border-radius: 12px; background: rgba(255, 255, 255, 0.03); color: var(--text-secondary); font-size: 0.82rem; line-height: 1.5; }
 .board-note strong { color: var(--text-primary); }
+.board-note-row { display: flex; align-items: center; gap: 10px; }
+.board-note-row + .board-note-row { margin-top: 6px; }
+.board-note-thumb { flex: 0 0 auto; width: 44px; height: 30px; border-radius: 7px; object-fit: cover; filter: grayscale(1) brightness(0.75); }
 .board-note-cta { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
 .board-empty { padding: 36px 16px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface-1); color: var(--text-secondary); text-align: center; }
 
@@ -832,6 +835,8 @@ body.page-admin header { text-align: left; }
 .board-table thead th { background: var(--board-bg); }
 .bh { position: relative; padding: 0 4px 12px; text-align: center; vertical-align: bottom; }
 .bh::after { content: ''; position: absolute; left: 4px; right: 4px; bottom: 4px; height: 2px; border-radius: 2px; background: var(--cx-color); opacity: 0.7; }
+/* Foto del complejo de fondo en el encabezado de cada cancha (no agrega altura) */
+.board-table thead th.bh { padding-top: 14px; border-radius: 12px 12px 0 0; background: linear-gradient(180deg, rgba(11, 34, 25, 0.72) 0%, rgba(11, 34, 25, 0.86) 55%, var(--board-bg) 100%), var(--bh-img, none) center / cover no-repeat, var(--board-bg); }
 .bh-cec { --cx-color: var(--accent-clay); }
 .bh-cjp { --cx-color: var(--accent-court); }
 .bh-cx { display: block; color: var(--cx-color); font-size: 0.62rem; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; }
@@ -899,3 +904,17 @@ body.page-admin header { text-align: left; }
   .bd { min-width: 60px; padding: 8px 10px; }
   .bd-num { font-size: 1.3rem; }
 }
+
+/* Paso 3: franja con la foto de la cancha elegida */
+.confirm-card { overflow: hidden; }
+.confirm-photo { position: relative; display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-start; height: 128px; margin: -40px -30px 0; padding: 14px 20px 30px; background: center / cover no-repeat var(--surface-2); text-align: left; }
+.confirm-photo::before { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(4, 11, 8, 0.15) 0%, rgba(4, 11, 8, 0.85) 100%); }
+.confirm-photo span, .confirm-photo small { position: relative; }
+.confirm-photo span { color: #fff; font-family: var(--font-display); font-size: 1.05rem; font-weight: 800; font-stretch: 108%; letter-spacing: 0.02em; text-transform: uppercase; }
+.confirm-photo small { color: rgba(255, 255, 255, 0.75); font-size: 0.74rem; font-weight: 600; }
+.confirm-photo + .confirm-icon { position: relative; display: grid; place-items: center; width: 60px; height: 60px; margin: -30px auto 12px; border: 1px solid var(--line-strong); border-radius: 50%; background: var(--surface-2); font-size: 1.9rem; box-shadow: var(--shadow-card); }
+@media (max-width: 600px) {
+  .confirm-photo { height: 112px; margin: -28px -16px 0; padding: 12px 16px 28px; }
+}
+/* El clima del día va bajo la grilla, a todo el ancho del tablero */
+.board .weather-step2-box { max-width: none; margin: 16px 0 0; }

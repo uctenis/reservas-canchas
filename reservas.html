@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="style.css?v=20260813_v1">
   <link rel="stylesheet" href="reservas.css?v=20260914_v3">
   <link rel="stylesheet" href="datepicker.css?v=20260908_v3">
-  <link rel="stylesheet" href="theme.css?v=20261019_grid1">
+  <link rel="stylesheet" href="theme.css?v=20261019_grid3">
   <script src="site.js?v=20261009_r3" defer></script>
 </head>
 <body>
@@ -78,28 +78,6 @@
   <!-- PASO 2: COURTS & SLOTS -->
   <section id="stepSlot" class="step-section hidden">
     <h2 class="step-title">Elige tu cancha y horario</h2>
-    <div class="slot-date-nav">
-      <button type="button" class="date-nav-arrow" id="btnPrevDay" onclick="shiftSelectedDate(-1)" aria-label="Día anterior" title="Día anterior">‹</button>
-      <p class="step-sub" id="slotSubtitle"></p>
-      <button type="button" class="date-nav-arrow" id="btnNextDay" onclick="shiftSelectedDate(1)" aria-label="Día siguiente" title="Día siguiente">›</button>
-    </div>
-
-    <!-- ── WEATHER DETAIL FOR SELECTED DAY: compact chip by default, hourly detail is opt-in ── -->
-    <div class="weather-detail-box weather-step2-box" id="step2WeatherBox" style="display: none;">
-      <div class="weather-chip">
-        <span id="step2WeatherIcon" class="weather-chip-icon">🌤️</span>
-        <div class="weather-chip-info">
-          <div class="weather-chip-temps"><span id="step2WeatherTemps">--°C / --°C</span> · <span id="step2WeatherRain">💧 --%</span></div>
-          <p class="smart-suggestion weather-chip-suggestion" id="step2WeatherSuggestion">Cargando sugerencia...</p>
-        </div>
-      </div>
-      <details class="weather-hourly-details">
-        <summary>⏰ Ver pronóstico por horas</summary>
-        <div class="hourly-weather-timeline" id="step2HourlyTimeline">
-          <!-- Horas -->
-        </div>
-      </details>
-    </div>
 
     <!-- Tablero de disponibilidad: filas = horas, columnas = canchas -->
     <div class="board">
@@ -150,6 +128,23 @@
         <span class="bl bl-campeonato">Campeonato</span>
         <span class="bl bl-closed">Cerrada</span>
       </div>
+
+      <!-- ── WEATHER DETAIL FOR SELECTED DAY: compact chip by default, hourly detail is opt-in ── -->
+      <div class="weather-detail-box weather-step2-box" id="step2WeatherBox" style="display: none;">
+        <div class="weather-chip">
+          <span id="step2WeatherIcon" class="weather-chip-icon">🌤️</span>
+          <div class="weather-chip-info">
+            <div class="weather-chip-temps"><span id="step2WeatherTemps">--°C / --°C</span> · <span id="step2WeatherRain">💧 --%</span></div>
+            <p class="smart-suggestion weather-chip-suggestion" id="step2WeatherSuggestion">Cargando sugerencia...</p>
+          </div>
+        </div>
+        <details class="weather-hourly-details">
+          <summary>⏰ Ver pronóstico por horas</summary>
+          <div class="hourly-weather-timeline" id="step2HourlyTimeline">
+            <!-- Horas -->
+          </div>
+        </details>
+      </div>
     </div>
     
     <!-- Barra de acción fija al pie: muestra lo elegido y el botón para continuar -->
@@ -167,6 +162,7 @@
   <!-- PASO 3: CONFIRM -->
   <section id="stepConfirm" class="step-section hidden">
     <div class="confirm-card glass-card">
+      <div class="confirm-photo" id="confirmPhoto" aria-hidden="true"></div>
       <div class="confirm-icon" id="confirmIcon">🎾</div>
       <h2 id="confirmTitle">Confirma tu reserva</h2>
       <div class="confirm-details" id="confirmDetails"></div>
@@ -764,7 +760,8 @@ async function selectDate(iso) {
   sel.date = iso;
   const wd = dayOfWeekFromISO(iso);
   const [y, m, d] = iso.split('-');
-  document.getElementById('slotSubtitle').textContent = `📅 ${DAYS_LONG[wd]} ${parseInt(d)} de ${MONTHS_LONG[parseInt(m) - 1]} ${y}`;
+  const subtitle = document.getElementById('slotSubtitle');
+  if (subtitle) subtitle.textContent = `📅 ${DAYS_LONG[wd]} ${parseInt(d)} de ${MONTHS_LONG[parseInt(m) - 1]} ${y}`;
 
   // Update detailed weather card for this day
   updateSelectedDayWeather(iso);
@@ -995,11 +992,12 @@ function renderSlotsByCourt(apiData) {
     const notes = Object.entries(byComplex).map(([cx, list]) => {
       const info = COMPLEX_INFO[cx] || { short: cx.toUpperCase(), surface: '' };
       const total = courtsInfo.filter(ci => ci.complex === cx).length;
-      return list.length === total
+      const text = list.length === total
         ? `<strong>${info.short} · ${info.surface}</strong> sin horarios este día`
         : `${list.map(ci => `<strong>${ci.court.label}</strong>`).join(' y ')} sin horarios este día`;
+      return `<div class="board-note-row"><img class="board-note-thumb" src="${courtThumb(list[0].court)}" alt="" loading="lazy"><span>${text}</span></div>`;
     });
-    html += `<div class="board-note" data-complex-note="${Object.keys(byComplex).join(' ')}">${notes.join('<br>')}</div>`;
+    html += `<div class="board-note" data-complex-note="${Object.keys(byComplex).join(' ')}">${notes.join('')}</div>`;
   }
 
   if (!openCourts.length) {
@@ -1037,7 +1035,7 @@ function renderSlotsByCourt(apiData) {
     const info = COMPLEX_INFO[ci.complex] || { short: ci.complex.toUpperCase(), surface: '' };
     const firstOfComplex = i === 0 || openCourts[i - 1].complex !== ci.complex;
     const free = freeByCourt[ci.court.id] || 0;
-    return `<th scope="col" class="bh bh-${ci.complex}${firstOfComplex ? ' cx-start' : ''}" data-complex="${ci.complex}">
+    return `<th scope="col" class="bh bh-${ci.complex}${firstOfComplex ? ' cx-start' : ''}" data-complex="${ci.complex}" style="--bh-img:url('${courtThumb(ci.court)}')">
       <span class="bh-cx">${info.short} · ${info.surface}</span>
       <span class="bh-name">${ci.shortName}</span>
       <span class="bh-free${free ? '' : ' is-full'}">${free ? `${free} libre${free === 1 ? '' : 's'}` : 'Sin cupos'}</span>
@@ -1073,6 +1071,11 @@ function renderSlotsByCourt(apiData) {
   if (!session) {
     container.insertAdjacentHTML('afterend', '<p class="login-prompt" id="reservationLoginPrompt">🔑 <a onclick="openAuth()" style="color:var(--accent-tennis);cursor:pointer;font-weight:600">Inicia sesión</a> para reservar un horario.</p>');
   }
+}
+
+// Versión liviana (640×260) de la foto del complejo: cec.jpg → cec-sm.jpg
+function courtThumb(court) {
+  return (court.img || `${court.id.substring(0, 3)}.jpg`).replace(/\.jpg$/, '-sm.jpg');
 }
 
 function addMinutesToSlot(slot, minutes) {
@@ -1607,6 +1610,10 @@ function buildConfirmCard() {
   const endStr = `${String(endH).padStart(2,'0')}:${String(endM).padStart(2,'0')}`;
 
   const fechaLabel = `${DAYS_LONG[wd]}, ${parseInt(d)} de ${MONTHS_LONG[parseInt(m) - 1]} ${y}`;
+
+  const photo = document.getElementById('confirmPhoto');
+  photo.style.backgroundImage = `url('${courtThumb(sel.court)}')`;
+  photo.innerHTML = `<span>${sel.court.label}</span><small>${sel.court.surface}</small>`;
 
   if (sel.isChallenge) {
     document.getElementById('confirmIcon').textContent = '⚔️';
