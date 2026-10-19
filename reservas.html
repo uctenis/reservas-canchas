@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="style.css?v=20260813_v1">
   <link rel="stylesheet" href="reservas.css?v=20260914_v3">
   <link rel="stylesheet" href="datepicker.css?v=20260908_v3">
-  <link rel="stylesheet" href="theme.css?v=20261009_r3">
+  <link rel="stylesheet" href="theme.css?v=20261019_grid1">
   <script src="site.js?v=20261009_r3" defer></script>
 </head>
 <body>
@@ -101,32 +101,56 @@
       </details>
     </div>
 
-    <div class="availability-toolbar" aria-label="Filtros de disponibilidad">
-      <div class="availability-summary">
-        <span class="availability-dot"></span>
-        <div><strong id="availableCount">Buscando horarios</strong><small>disponibilidad en tiempo real</small></div>
-      </div>
-      <div class="availability-filters">
-        <label class="filter-select"><span>Complejo</span><select id="courtFilter" onchange="applyReservationFilters()"><option value="all">Todos</option><option value="cec">CEC · Arcilla</option><option value="cjp">CJP · Asfalto</option></select></label>
-        <label class="filter-select"><span>Momento</span><select id="timeFilter" onchange="applyReservationFilters()"><option value="all">Todo el día</option><option value="morning">Mañana</option><option value="afternoon">Tarde</option><option value="evening">Noche</option></select></label>
-        <button type="button" class="toolbar-btn toolbar-btn-primary" onclick="selectFirstAvailable()">Primer horario libre</button>
-        <button type="button" class="toolbar-btn" id="btnRefreshSlots" onclick="refreshSlotAvailability(true)" aria-label="Actualizar disponibilidad">↻ Actualizar</button>
-      </div>
-    </div>
+    <!-- Tablero de disponibilidad: filas = horas, columnas = canchas -->
+    <div class="board">
+      <div class="board-days" id="boardDays" aria-label="Elegir día"></div>
 
-    <div class="legend-row">
-      <span class="leg leg-free">Disponible</span>
-      <span class="leg leg-busy">Ocupado</span>
-      <span class="leg leg-clases">Clases UCTenis</span>
-      <span class="leg leg-desafio">Desafío</span>
-      <span class="leg leg-amistoso">Amistoso</span>
-      <span class="leg leg-mine">Mi reserva</span>
-      <span class="leg leg-sel">Seleccionado</span>
+      <div class="board-controls" aria-label="Filtros de disponibilidad">
+        <div class="board-ctrl">
+          <span class="board-ctrl-label">Complejo</span>
+          <div class="seg" role="group" aria-label="Complejo" data-filter="court">
+            <button type="button" class="seg-btn is-on" data-value="all" aria-pressed="true" onclick="setBoardFilter(this)">Todos</button>
+            <button type="button" class="seg-btn" data-value="cec" aria-pressed="false" onclick="setBoardFilter(this)">CEC · Arcilla</button>
+            <button type="button" class="seg-btn" data-value="cjp" aria-pressed="false" onclick="setBoardFilter(this)">CJP · Asfalto</button>
+          </div>
+        </div>
+        <div class="board-ctrl">
+          <span class="board-ctrl-label">Momento</span>
+          <div class="seg" role="group" aria-label="Momento del día" data-filter="time">
+            <button type="button" class="seg-btn is-on" data-value="all" aria-pressed="true" onclick="setBoardFilter(this)">Todo el día</button>
+            <button type="button" class="seg-btn" data-value="morning" aria-pressed="false" onclick="setBoardFilter(this)">Mañana</button>
+            <button type="button" class="seg-btn" data-value="afternoon" aria-pressed="false" onclick="setBoardFilter(this)">Tarde</button>
+            <button type="button" class="seg-btn" data-value="evening" aria-pressed="false" onclick="setBoardFilter(this)">Noche</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="board-summary">
+        <div class="board-summary-text">
+          <span class="availability-dot"></span>
+          <strong id="availableCount">Buscando horarios</strong>
+          <small>Bloques de 1 h 30 · máx. 1 reserva por día</small>
+        </div>
+        <div class="board-summary-actions">
+          <button type="button" class="toolbar-btn toolbar-btn-primary" onclick="selectFirstAvailable()">Primer horario libre</button>
+          <button type="button" class="toolbar-btn" id="btnRefreshSlots" onclick="refreshSlotAvailability(true)" aria-label="Actualizar disponibilidad">↻ Actualizar</button>
+        </div>
+      </div>
+
+      <div id="courtsSlotsContainer"></div>
+
+      <div class="board-legend" aria-label="Leyenda">
+        <span class="bl bl-free">Libre</span>
+        <span class="bl bl-sel">Elegida</span>
+        <span class="bl bl-mine">Tu reserva</span>
+        <span class="bl bl-busy">Ocupada</span>
+        <span class="bl bl-clases">Clase UCTenis</span>
+        <span class="bl bl-desafio">Desafío</span>
+        <span class="bl bl-amistoso">Amistoso</span>
+        <span class="bl bl-campeonato">Campeonato</span>
+        <span class="bl bl-closed">Cerrada</span>
+      </div>
     </div>
-    
-    <div id="courtsSlotsContainer"></div>
-    
-    <p class="rule-note">⏱ Cada bloque = 1.5 horas · Máx. 1 reserva por día</p>
     
     <!-- Barra de acción fija al pie: muestra lo elegido y el botón para continuar -->
     <div class="slot-action-bar">
@@ -748,6 +772,7 @@ async function selectDate(iso) {
   // Mantiene la franja de fechas del Paso 1 sincronizada con el día activo
   document.querySelectorAll('.date-btn').forEach(b => b.classList.toggle('date-active', b.dataset.iso === iso));
   updateDayNavButtons(iso);
+  renderBoardDays();
 
   const container = document.getElementById('courtsSlotsContainer');
   container.innerHTML = '<div style="text-align:center; padding: 40px; color: var(--text-secondary);">Sincronizando con Google Calendar... ⌛</div>';
@@ -853,6 +878,7 @@ function renderSlotsByCourt(apiData) {
   const container = document.getElementById('courtsSlotsContainer');
   document.getElementById('reservationLoginPrompt')?.remove();
   container.innerHTML = '';
+  container.classList.remove('show-past');
 
   let html = '';
 
@@ -886,152 +912,162 @@ function renderSlotsByCourt(apiData) {
     apiData = { ok: true, courts: syntheticCourts, busyLabels: busyLabels };
   }
 
-  const complejos = [
-    { name: 'Complejo CEC (Arcilla)', img: 'cec.jpg', courts: DB.COURTS.filter(c => c.id.startsWith('cec')) },
-    { name: 'Complejo CJP (Asfalto)', img: 'cjp.jpg', courts: DB.COURTS.filter(c => c.id.startsWith('cjp')) }
-  ];
+  const COMPLEX_INFO = {
+    cec: { short: 'CEC', surface: 'Arcilla' },
+    cjp: { short: 'CJP', surface: 'Asfalto' }
+  };
+  const dayOfWeek = dayOfWeekFromISO(sel.date);
+  const now = new Date();
+  const fourHoursFromNow = new Date(now.getTime() + 4 * 60 * 60 * 1000);
+  const [sy, smo, sd] = sel.date.split('-').map(Number);
+  const firstName = (full) => (full || 'Socio').trim().split(/\s+/)[0];
 
-  // Mostrar primero los complejos operativos (con algún horario habilitado hoy);
-  // los que están deshabilitados (ej: CEC fuera de servicio) quedan al final.
-  const isComplejoOperativo = comp => comp.courts.some(court => {
-    const playableSlots = (apiData.playable && Array.isArray(apiData.playable[court.id])) ? apiData.playable[court.id] : DB.SLOTS;
-    return playableSlots.length > 0;
-  });
-  complejos.sort((a, b) => isComplejoOperativo(b) - isComplejoOperativo(a));
-
-  complejos.forEach(comp => {
-    html += `
-      <div class="complejo-section" style="margin-bottom: 2rem;">
-        <div class="complejo-banner">
-          <img src="${comp.img}" alt="${comp.name}" class="complejo-img">
-          <div class="complejo-title">${comp.name}</div>
-        </div>
-        <div class="courts-grid">
-    `;
-
-    comp.courts.forEach(court => {
-      const booked = DB.getCourtBookings(court.id, sel.date);
-      const myBooked = session ? booked.find(b => b.userId === session.id) : null;
-      const courtData = apiData.courts[court.id];
-      const availableBlocks = Array.isArray(courtData) ? courtData : [];
-      const courtError = courtData && !Array.isArray(courtData) ? (courtData.error || 'Error de sincronización') : null;
-      const playableSlots = (apiData.playable && Array.isArray(apiData.playable[court.id])) ? apiData.playable[court.id] : DB.SLOTS;
-      
-      // Mapa de etiquetas de motivo para slots ocupados (ej: "Clases UCTenis")
-      const courtBusyLabels = (apiData.busyLabels && apiData.busyLabels[court.id]) ? apiData.busyLabels[court.id] : {};
-
-      // Filter challenges for this court on this date
-      const courtChallenges = challenges.filter(c => 
+  const courtsInfo = DB.COURTS.map(court => {
+    const booked = DB.getCourtBookings(court.id, sel.date);
+    const courtData = apiData.courts[court.id];
+    return {
+      court,
+      complex: court.id.substring(0, 3),
+      shortName: court.label.split('–').pop().trim(),
+      myBooked: session ? booked.find(b => b.userId === session.id) : null,
+      available: Array.isArray(courtData) ? courtData : [],
+      error: courtData && !Array.isArray(courtData) ? (courtData.error || 'Error de sincronización') : null,
+      playable: (apiData.playable && Array.isArray(apiData.playable[court.id])) ? apiData.playable[court.id] : DB.SLOTS,
+      busyLabels: (apiData.busyLabels && apiData.busyLabels[court.id]) ? apiData.busyLabels[court.id] : {},
+      challenges: challenges.filter(c =>
         c.fecha === sel.date &&
         (c.status === 'pendiente' || c.status === 'aceptado' || c.status === 'resultado_pendiente') &&
         (
           c.courtId === court.id ||
           (c.cancha && (c.cancha === court.label || c.cancha.includes(court.label) || court.label.includes(c.cancha)))
         )
-      );
-
-      let slotsHtml = playableSlots.map(slot => {
-        const isMine = myBooked && myBooked.slot === slot;
-        const isFreeInGoogle = availableBlocks.includes(slot);
-        
-        // Check if there is a matching challenge for this slot
-        const matchChallenge = courtChallenges.find(c => c.slot === slot);
-        
-        // Bloquear permanentemente el horario de clases en el frontend (martes y miércoles de 18:00 a 19:30 en CJP)
-        const dayOfWeek = dayOfWeekFromISO(sel.date);
-        const isSystemClass = (dayOfWeek === 2 || dayOfWeek === 3) && slot === '18:00' && court.id.startsWith('cjp');
-        
-        // It is busy if GCal says so OR it is a system class OR we have an active challenge in DB
-        const isBusy = (!isFreeInGoogle || isSystemClass || !!matchChallenge) && !isMine;
-        
-        // Determine busy label/type
-        let busyLabel = '';
-        if (isBusy) {
-          if (isSystemClass) {
-            busyLabel = 'Clases UCTenis';
-          } else if (matchChallenge) {
-            if (matchChallenge.tipo === 'amistoso') busyLabel = 'Amistoso';
-            else if (matchChallenge.tipo === 'campeonato') busyLabel = 'Campeonato';
-            else busyLabel = 'Desafío';
-          } else {
-            busyLabel = courtBusyLabels[slot] || '';
-          }
-        }
-        
-        const isClases = busyLabel === 'Clases UCTenis';
-        const isDesafio = busyLabel === 'Desafío';
-        const isAmistoso = busyLabel === 'Amistoso';
-        const isCampeonato = busyLabel === 'Campeonato';
-        
-        const now = new Date();
-        const [sh, sm] = slot.split(':').map(Number);
-        const [sy, smo, sd] = sel.date.split('-').map(Number);
-        const slotDate = new Date(sy, smo - 1, sd, sh, sm, 0);
-        const isPast = slotDate < now;
-        const fourHoursFromNow = new Date(now.getTime() + 4 * 60 * 60 * 1000);
-        const isTooClose = slotDate < fourHoursFromNow;
-
-        let cls = 'slot-card';
-        let endH = sh + 1, endM = sm + 30;
-        if (endM >= 60) { endH++; endM -= 60; }
-        const endStr = `${String(endH).padStart(2,'0')}:${String(endM).padStart(2,'0')}`;
-
-        if (isTooClose) cls += ' slot-past';
-        else if (isMine) cls += ' slot-mine';
-        else if (isClases) cls += ' slot-busy slot-clases';
-        else if (isDesafio) cls += ' slot-busy slot-desafio';
-        else if (isAmistoso) cls += ' slot-busy slot-amistoso';
-        else if (isCampeonato) cls += ' slot-busy slot-campeonato';
-        else if (isBusy) cls += ' slot-busy';
-        else if (alreadyHasBooking) cls += ' slot-past';
-        else cls += ' slot-free';
-
-        const clickable = !isTooClose && !isBusy && !!session && !courtError && !alreadyHasBooking;
-        const statusText = courtError ? courtError
-          : isMine ? 'Tu reserva'
-          : isClases ? '🎾 Clases UCTenis'
-          : isDesafio ? getShortMatchLabel(matchChallenge)
-          : isAmistoso ? getShortMatchLabel(matchChallenge)
-          : isCampeonato ? getShortMatchLabel(matchChallenge)
-          : isBusy ? 'Ocupado'
-          : isPast ? 'Pasado'
-          : isTooClose ? 'Límite 4h'
-          : alreadyHasBooking ? 'Límite diario'
-          : 'Disponible';
-        const period = sh < 12 ? 'morning' : (sh < 18 ? 'afternoon' : 'evening');
-        return `<div class="${cls}" data-slot="${slot}" data-period="${period}" ${clickable ? `role="button" tabindex="0" onclick="selectSlot('${court.id}', '${slot}', this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();selectSlot('${court.id}', '${slot}', this)}"` : ''}>
-          <div class="slot-time">${slot}</div>
-          <div class="slot-end">hasta ${endStr}</div>
-          <div class="slot-status">${statusText}</div>
-        </div>`;
-      }).join('');
-
-      if (playableSlots.length === 0) {
-        slotsHtml = `<div style="grid-column: 1/-1; color: var(--text-secondary); text-align: center; padding: 10px; font-size: 0.9rem;">🚫 Cancha no disponible para hoy</div>`;
-      }
-
-      html += `
-        <div class="court-row" data-complex="${court.id.substring(0, 3)}" data-court-id="${court.id}">
-          <h3 style="margin-top:0; margin-bottom: 0.5rem; color: var(--text-primary); font-size: 1rem;">${court.label}</h3>
-          <div class="slots-grid">${slotsHtml}</div>
-          ${courtError ? `<div style="margin-top:0.75rem;color:#b45309;font-size:0.92rem;">⚠️ ${courtError}</div>` : ''}
-        </div>
-      `;
-    });
-    
-    html += `</div></div>`;
+      )
+    };
   });
+
+  // Canchas sin ningún horario hoy (ej: CEC fuera de servicio) no ocupan columnas:
+  // se avisan en una nota sobre el tablero.
+  const openCourts = courtsInfo.filter(ci => ci.playable.length > 0);
+  const closedCourts = courtsInfo.filter(ci => ci.playable.length === 0);
+
+  // Las filas son la unión de los horarios de todas las canchas abiertas
+  // (algunos días CJP usa bloques distintos, ej. 20:00).
+  const rowSlots = [...new Set(openCourts.flatMap(ci => ci.playable))].sort();
+
+  function cellFor(ci, slot) {
+    const endStr = addMinutesToSlot(slot, 90);
+    const where = `${ci.court.label} de ${slot} a ${endStr}`;
+    if (!ci.playable.includes(slot)) return { kind: 'closed', label: 'Cerrada', aria: `${where}: cerrada` };
+    if (ci.error) return { kind: 'busy', label: 'Sin datos', aria: `${where}: ${ci.error}` };
+
+    const [sh, sm] = slot.split(':').map(Number);
+    const slotDate = new Date(sy, smo - 1, sd, sh, sm, 0);
+    const isPast = slotDate < now;
+    const isTooClose = slotDate < fourHoursFromNow;
+    const isMine = !!(ci.myBooked && ci.myBooked.slot === slot);
+    const match = ci.challenges.find(c => c.slot === slot);
+    // Clases fijas: martes y miércoles 18:00–19:30 en CJP
+    const isSystemClass = (dayOfWeek === 2 || dayOfWeek === 3) && slot === '18:00' && ci.court.id.startsWith('cjp');
+    const isBusy = (!ci.available.includes(slot) || isSystemClass || !!match) && !isMine;
+
+    if (isMine) return { kind: 'mine', label: 'Tu reserva', aria: `${where}: tu reserva` };
+    if (isBusy) {
+      const vs = match ? `${firstName(match.retadorNombre)} vs ${firstName(match.retadoNombre)}` : '';
+      if (isSystemClass || (!match && ci.busyLabels[slot] === 'Clases UCTenis')) {
+        return { kind: 'clases', label: 'Clase', aria: `${where}: clases UCTenis`, past: isTooClose };
+      }
+      if (match) {
+        const kind = match.tipo === 'amistoso' ? 'amistoso' : match.tipo === 'campeonato' ? 'campeonato' : 'desafio';
+        const label = kind === 'amistoso' ? 'Amistoso' : kind === 'campeonato' ? 'Torneo' : 'Desafío';
+        return { kind, label, sub: vs, aria: `${where}: ${label.toLowerCase()} ${vs}`, past: isTooClose };
+      }
+      const why = ci.busyLabels[slot] || '';
+      return { kind: 'busy', label: 'Ocupada', sub: why, aria: `${where}: ocupada${why ? ' (' + why + ')' : ''}`, past: isTooClose };
+    }
+    if (isTooClose) return { kind: 'past', label: isPast ? 'Pasada' : 'Límite 4 h', aria: `${where}: ${isPast ? 'ya pasó' : 'se reserva con 4 horas de anticipación'}`, past: true };
+    if (alreadyHasBooking) return { kind: 'limit', label: 'Límite diario', aria: `${where}: alcanzaste el límite diario` };
+    return { kind: 'free', label: 'Libre', aria: session ? `Libre: elegir ${where}` : `Libre: inicia sesión para reservar ${where}` };
+  }
+
+  if (closedCourts.length) {
+    const byComplex = {};
+    closedCourts.forEach(ci => { (byComplex[ci.complex] = byComplex[ci.complex] || []).push(ci); });
+    const notes = Object.entries(byComplex).map(([cx, list]) => {
+      const info = COMPLEX_INFO[cx] || { short: cx.toUpperCase(), surface: '' };
+      const total = courtsInfo.filter(ci => ci.complex === cx).length;
+      return list.length === total
+        ? `<strong>${info.short} · ${info.surface}</strong> sin horarios este día`
+        : `${list.map(ci => `<strong>${ci.court.label}</strong>`).join(' y ')} sin horarios este día`;
+    });
+    html += `<div class="board-note" data-complex-note="${Object.keys(byComplex).join(' ')}">${notes.join('<br>')}</div>`;
+  }
+
+  if (!openCourts.length) {
+    html += `<div class="board-empty">🚫 No hay canchas habilitadas para este día.</div>`;
+    container.innerHTML = html;
+    applyReservationFilters();
+    return;
+  }
+
+  const rows = rowSlots.map(slot => {
+    const cells = openCourts.map(ci => ({ ci, cell: cellFor(ci, slot) }));
+    const [sh] = slot.split(':').map(Number);
+    const period = sh < 12 ? 'morning' : (sh < 18 ? 'afternoon' : 'evening');
+    const rowPast = cells.every(({ cell }) => cell.past || cell.kind === 'closed');
+    return { slot, cells, period, rowPast };
+  });
+  const pastRows = rows.filter(r => r.rowPast);
+
+  if (pastRows.length && pastRows.length < rows.length) {
+    const last = pastRows[pastRows.length - 1].slot;
+    html += `<button type="button" class="board-past-toggle" aria-expanded="false" onclick="toggleBoardPast(this)">
+      <span>Horas que ya pasaron · ${pastRows[0].slot} a ${addMinutesToSlot(last, 90)}</span><span class="board-past-chev" aria-hidden="true">⌄</span>
+    </button>`;
+  } else if (pastRows.length === rows.length) {
+    html += `<div class="board-note board-note-cta">Hoy ya no quedan horas para reservar.
+      <button type="button" class="toolbar-btn toolbar-btn-primary" onclick="shiftSelectedDate(1)">Ver el día siguiente →</button></div>`;
+  }
+
+  const freeByCourt = {};
+  rows.forEach(r => r.cells.forEach(({ ci, cell }) => {
+    if (cell.kind === 'free') freeByCourt[ci.court.id] = (freeByCourt[ci.court.id] || 0) + 1;
+  }));
+
+  const head = openCourts.map((ci, i) => {
+    const info = COMPLEX_INFO[ci.complex] || { short: ci.complex.toUpperCase(), surface: '' };
+    const firstOfComplex = i === 0 || openCourts[i - 1].complex !== ci.complex;
+    const free = freeByCourt[ci.court.id] || 0;
+    return `<th scope="col" class="bh bh-${ci.complex}${firstOfComplex ? ' cx-start' : ''}" data-complex="${ci.complex}">
+      <span class="bh-cx">${info.short} · ${info.surface}</span>
+      <span class="bh-name">${ci.shortName}</span>
+      <span class="bh-free${free ? '' : ' is-full'}">${free ? `${free} libre${free === 1 ? '' : 's'}` : 'Sin cupos'}</span>
+    </th>`;
+  }).join('');
+
+  const body = rows.map(r => {
+    const tds = r.cells.map(({ ci, cell }, i) => {
+      const firstOfComplex = i === 0 || openCourts[i - 1].complex !== ci.complex;
+      const clickable = cell.kind === 'free';
+      const inner = `<span class="bc-label">${cell.label}</span>${cell.sub ? `<span class="bc-sub">${cell.sub}</span>` : ''}`;
+      const el = clickable
+        ? `<button type="button" class="bc bc-free" data-court="${ci.court.id}" data-slot="${r.slot}" aria-pressed="false" aria-label="${cell.aria}" onclick="${session ? `selectSlot('${ci.court.id}', '${r.slot}', this)` : 'openAuth()'}">${inner}</button>`
+        : `<div class="bc bc-${cell.kind}${cell.past ? ' is-past' : ''}" aria-label="${cell.aria}" title="${cell.aria}">${inner}</div>`;
+      return `<td class="${firstOfComplex ? 'cx-start' : ''}" data-complex="${ci.complex}">${el}</td>`;
+    }).join('');
+    return `<tr class="${r.rowPast ? 'row-past' : ''}" data-period="${r.period}" data-slot="${r.slot}">
+      <th scope="row" class="bt"><span class="bt-start">${r.slot}</span><span class="bt-end">${addMinutesToSlot(r.slot, 90)}</span></th>${tds}
+    </tr>`;
+  }).join('');
+
+  html += `<div class="board-scroll">
+    <table class="board-table" style="--cols:${openCourts.length}">
+      <caption class="sr-only">Disponibilidad de canchas por hora</caption>
+      <thead><tr><th scope="col" class="bt-head">Hora</th>${head}</tr></thead>
+      <tbody>${body}</tbody>
+    </table>
+  </div>`;
 
   container.innerHTML = html;
-
-  // Resumen por cancha: cuántos horarios quedan libres ese día
-  container.querySelectorAll('.court-row').forEach(row => {
-    const title = row.querySelector('h3');
-    if (!title || !row.querySelector('.slot-card')) return;
-    const free = row.querySelectorAll('.slot-free').length;
-    title.insertAdjacentHTML('beforeend', `<span class="court-free-chip${free ? '' : ' is-full'}">${free ? `${free} libre${free === 1 ? '' : 's'}` : 'Sin cupos'}</span>`);
-  });
-
   applyReservationFilters();
 
   if (!session) {
@@ -1039,20 +1075,60 @@ function renderSlotsByCourt(apiData) {
   }
 }
 
+function addMinutesToSlot(slot, minutes) {
+  const [h, m] = slot.split(':').map(Number);
+  const total = h * 60 + m + minutes;
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+}
+
+function toggleBoardPast(btn) {
+  const open = btn.getAttribute('aria-expanded') !== 'true';
+  btn.setAttribute('aria-expanded', String(open));
+  document.getElementById('courtsSlotsContainer').classList.toggle('show-past', open);
+}
+
+// Franja de días dentro del paso 2 (Hoy, Mañana, Mié 21...) para cambiar de día sin volver atrás
+function renderBoardDays() {
+  const strip = document.getElementById('boardDays');
+  if (!strip) return;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const maxDaysAllowed = getMaxDaysAllowed();
+  let html = '';
+  for (let i = 0, shown = 0; i < maxDaysAllowed && shown < 7; i++) {
+    const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() + i);
+    if (!isBookableDay(d)) continue;
+    shown++;
+    const iso = localISO(d);
+    const label = i === 0 ? 'Hoy' : i === 1 ? 'Mañana' : DAYS_SHORT[d.getDay()];
+    const active = iso === sel.date;
+    html += `<button type="button" class="bd${active ? ' is-on' : ''}" aria-pressed="${active}" onclick="selectDate('${iso}')">
+      <span class="bd-dow">${label}</span><span class="bd-num">${d.getDate()}</span>
+    </button>`;
+  }
+  strip.innerHTML = html;
+  // Deja visible el día activo sin mover la página en vertical
+  const active = strip.querySelector('.bd.is-on');
+  if (active) strip.scrollLeft = active.offsetLeft - (strip.clientWidth - active.offsetWidth) / 2;
+}
+
 function selectSlot(courtId, slot, el) {
-  const isSelected = el.classList.contains('slot-selected');
-  document.querySelectorAll('.slot-card').forEach(c => c.classList.remove('slot-selected'));
-  
+  const isSelected = el.classList.contains('is-selected');
+  document.querySelectorAll('#courtsSlotsContainer .bc.is-selected').forEach(c => {
+    c.classList.remove('is-selected');
+    c.setAttribute('aria-pressed', 'false');
+  });
+
   if (isSelected) {
     sel.court = null;
     sel.slot = null;
     document.getElementById('btnConfirmSlot').disabled = true;
   } else {
-    el.classList.add('slot-selected');
+    el.classList.add('is-selected');
+    el.setAttribute('aria-pressed', 'true');
     sel.court = DB.COURTS.find(c => c.id === courtId);
     sel.slot = slot;
     document.getElementById('btnConfirmSlot').disabled = false;
-    
   }
   updateSelectedSlotInfo();
 }
@@ -1072,31 +1148,50 @@ function updateSelectedSlotInfo() {
   }
 }
 
+const boardFilters = { court: 'all', time: 'all' };
+
+function setBoardFilter(btn) {
+  const group = btn.closest('.seg');
+  group.querySelectorAll('.seg-btn').forEach(b => {
+    const on = b === btn;
+    b.classList.toggle('is-on', on);
+    b.setAttribute('aria-pressed', String(on));
+  });
+  boardFilters[group.dataset.filter] = btn.dataset.value;
+  applyReservationFilters();
+}
+
 function applyReservationFilters() {
-  const courtFilter = document.getElementById('courtFilter')?.value || 'all';
-  const timeFilter = document.getElementById('timeFilter')?.value || 'all';
-  document.querySelectorAll('#courtsSlotsContainer .court-row').forEach(row => {
-    const courtVisible = courtFilter === 'all' || row.dataset.complex === courtFilter;
-    row.classList.toggle('reservation-filter-hidden', !courtVisible);
-    row.querySelectorAll('.slot-card').forEach(card => {
-      card.classList.toggle('reservation-filter-hidden', timeFilter !== 'all' && card.dataset.period !== timeFilter);
-    });
+  const container = document.getElementById('courtsSlotsContainer');
+  const { court, time } = boardFilters;
+  container.querySelectorAll('[data-complex]').forEach(el => {
+    el.classList.toggle('reservation-filter-hidden', court !== 'all' && el.dataset.complex !== court);
   });
-  document.querySelectorAll('#courtsSlotsContainer .complejo-section').forEach(section => {
-    section.classList.toggle('reservation-filter-hidden', !section.querySelector('.court-row:not(.reservation-filter-hidden)'));
+  container.querySelectorAll('[data-complex-note]').forEach(el => {
+    el.classList.toggle('reservation-filter-hidden', court !== 'all' && !el.dataset.complexNote.split(' ').includes(court));
   });
-  const visibleFree = document.querySelectorAll('#courtsSlotsContainer .court-row:not(.reservation-filter-hidden) .slot-free:not(.reservation-filter-hidden)').length;
+  container.querySelectorAll('tbody tr').forEach(tr => {
+    tr.classList.toggle('reservation-filter-hidden', time !== 'all' && tr.dataset.period !== time);
+  });
+  const table = container.querySelector('.board-table');
+  if (table) {
+    const visibleCols = container.querySelectorAll('thead th[data-complex]:not(.reservation-filter-hidden)').length;
+    table.style.setProperty('--cols', visibleCols);
+    const noMatch = visibleCols === 0 || !container.querySelector('tbody tr:not(.reservation-filter-hidden)');
+    container.classList.toggle('board-no-match', noMatch);
+  }
+  const visibleFree = container.querySelectorAll('tbody tr:not(.reservation-filter-hidden) td:not(.reservation-filter-hidden) .bc-free').length;
   const count = document.getElementById('availableCount');
   if (count) count.textContent = visibleFree === 1 ? '1 horario disponible' : `${visibleFree} horarios disponibles`;
 }
 
 function selectFirstAvailable() {
   if (!DB.getSession()) { openAuth(); return; }
-  const cards = Array.from(document.querySelectorAll('#courtsSlotsContainer .court-row:not(.reservation-filter-hidden) .slot-free:not(.reservation-filter-hidden)'));
-  const card = cards.sort((a, b) => (a.dataset.slot || '').localeCompare(b.dataset.slot || ''))[0];
-  if (!card) return;
-  card.click();
-  card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  // El DOM ya viene ordenado por hora (filas) y cancha (columnas)
+  const cell = Array.from(document.querySelectorAll('#courtsSlotsContainer .bc-free')).find(b => b.offsetParent !== null);
+  if (!cell) return;
+  if (!cell.classList.contains('is-selected')) cell.click();
+  cell.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
 }
 
 async function refreshSlotAvailability(force = false) {

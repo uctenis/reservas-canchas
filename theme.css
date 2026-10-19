@@ -776,3 +776,126 @@ body.page-admin header { text-align: left; }
   *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
   .uct-reveal { opacity: 1; transform: none; }
 }
+
+/* ── Reservas: tablero de disponibilidad (filas = horas, columnas = canchas) ── */
+.board { --board-bg: #0b2219; --board-cell-h: 58px; max-width: 1000px; margin: 0 auto; }
+.board .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+/* Anula los estilos globales de tabla del ranking (style.css), incluida su vista de tarjetas en móvil */
+.board-table thead { display: table-header-group; }
+.board-table tr { display: table-row; margin: 0; padding: 0; border: 0; border-radius: 0; background: none; cursor: default; transform: none !important; transition: none; will-change: auto; }
+:where(.board-table) th, :where(.board-table) td { border: 0; border-radius: 0; background: none; color: inherit; font-weight: inherit; letter-spacing: normal; text-transform: none; }
+.board-table tr:hover td { background: none; }
+
+.board-days { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 14px; scrollbar-width: none; }
+.board-days::-webkit-scrollbar { display: none; }
+.bd { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-width: 70px; padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: 12px; background: var(--surface-2); color: var(--text-secondary); font-family: var(--font-display); cursor: pointer; transition: transform 0.25s var(--ease-out), border-color 0.2s ease, background 0.2s ease; }
+.bd:hover { transform: translateY(-2px); border-color: rgba(198, 211, 0, 0.45); color: var(--text-primary); }
+.bd-dow { font-size: 0.66rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; }
+.bd-num { font-size: 1.55rem; font-weight: 900; font-stretch: 110%; line-height: 1; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.bd.is-on { background: linear-gradient(135deg, #b9cc00, #e2f03a); border-color: transparent; color: rgba(6, 17, 12, 0.75); box-shadow: var(--shadow-glow); }
+.bd.is-on .bd-num { color: #06110c; }
+
+.board-controls { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px 20px; padding: 14px 0; border-top: 1px solid var(--line); }
+.board-ctrl { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.board-ctrl-label { font-family: var(--font-display); font-size: 0.68rem; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-muted); }
+.seg { display: inline-flex; gap: 2px; padding: 4px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-1); max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.seg::-webkit-scrollbar { display: none; }
+.seg-btn { flex: 0 0 auto; padding: 7px 13px; border: 0; border-radius: 9px; background: transparent; color: var(--text-secondary); font-family: var(--font-display); font-size: 0.82rem; font-weight: 700; white-space: nowrap; cursor: pointer; transition: background 0.2s ease, color 0.2s ease; }
+.seg-btn:hover { color: var(--text-primary); background: rgba(255, 255, 255, 0.05); }
+.seg-btn.is-on { background: var(--text-primary); color: #06110c; box-shadow: 0 6px 16px -8px rgba(0, 0, 0, 0.8); }
+.bd:focus-visible, .seg-btn:focus-visible, .bc-free:focus-visible, .board-past-toggle:focus-visible { outline: 3px solid rgba(198, 211, 0, 0.55); outline-offset: 2px; }
+
+.board-summary { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px 16px; padding: 12px 0 14px; border-top: 1px solid var(--line); }
+.board-summary-text { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; }
+.board-summary-text strong { color: var(--text-primary); font-size: 0.95rem; }
+.board-summary-text small { color: var(--text-muted); font-size: 0.76rem; }
+.board-summary-actions { display: flex; gap: 8px; }
+
+.board-note { margin: 0 0 10px; padding: 10px 14px; border: 1px dashed var(--line-strong); border-radius: 12px; background: rgba(255, 255, 255, 0.03); color: var(--text-secondary); font-size: 0.82rem; line-height: 1.5; }
+.board-note strong { color: var(--text-primary); }
+.board-note-cta { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
+.board-empty { padding: 36px 16px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface-1); color: var(--text-secondary); text-align: center; }
+
+.board-past-toggle { display: flex; justify-content: space-between; align-items: center; width: 100%; margin: 0 0 10px; padding: 13px 4px; border: 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); background: transparent; color: var(--text-secondary); font-family: var(--font-display); font-size: 0.92rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; text-align: left; cursor: pointer; }
+.board-past-toggle:hover { color: var(--text-primary); }
+.board-past-chev { font-size: 1.2rem; line-height: 1; transition: transform 0.25s var(--ease-out); }
+.show-past .board-past-chev { transform: rotate(180deg); }
+#courtsSlotsContainer:not(.show-past) tr.row-past { display: none; }
+
+.board-scroll { padding: 14px 16px 16px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--board-bg); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), var(--shadow-card); }
+.board-table { width: 100%; min-width: calc(76px + var(--cols, 4) * 96px); table-layout: fixed; border-collapse: separate; border-spacing: 6px; }
+.board-no-match .board-scroll { display: none; }
+#courtsSlotsContainer.board-no-match::after { content: 'Ninguna cancha cumple ese filtro'; display: block; padding: 32px 16px; border: 1px dashed var(--line-strong); border-radius: var(--radius-lg); color: var(--text-secondary); text-align: center; }
+
+.bt-head, .bt { width: 76px; text-align: left; }
+.bt-head { padding: 0 4px 12px; vertical-align: bottom; font-family: var(--font-display); font-size: 0.68rem; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-muted); }
+.board-table thead th { background: var(--board-bg); }
+.bh { position: relative; padding: 0 4px 12px; text-align: center; vertical-align: bottom; }
+.bh::after { content: ''; position: absolute; left: 4px; right: 4px; bottom: 4px; height: 2px; border-radius: 2px; background: var(--cx-color); opacity: 0.7; }
+.bh-cec { --cx-color: var(--accent-clay); }
+.bh-cjp { --cx-color: var(--accent-court); }
+.bh-cx { display: block; color: var(--cx-color); font-size: 0.62rem; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; }
+.bh-name { display: block; margin-top: 2px; color: var(--text-primary); font-family: var(--font-display); font-size: 1rem; font-weight: 800; font-stretch: 108%; letter-spacing: 0.03em; text-transform: uppercase; }
+.bh-free { display: inline-block; margin-top: 6px; padding: 2px 9px; border-radius: 999px; background: rgba(74, 222, 128, 0.14); color: #86efac; font-size: 0.66rem; font-weight: 800; }
+.bh-free.is-full { background: rgba(255, 255, 255, 0.06); color: var(--text-muted); }
+
+.bt { padding: 0 6px 0 4px; vertical-align: middle; }
+.bt-start { display: block; color: var(--text-primary); font-family: var(--font-display); font-size: 1.45rem; font-weight: 900; font-stretch: 105%; line-height: 1; font-variant-numeric: tabular-nums; }
+.bt-end { display: block; margin-top: 3px; color: var(--text-muted); font-size: 0.7rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.bt-end::before { content: 'a '; }
+
+.board-table td { padding: 0; vertical-align: middle; }
+.bc { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; width: 100%; min-height: var(--board-cell-h); padding: 6px; border: 1px solid var(--line); border-radius: 10px; background: rgba(255, 255, 255, 0.035); color: var(--text-muted); font-family: var(--font-display); text-align: center; }
+.bc-label { font-size: 0.8rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; line-height: 1.1; }
+.bc-sub { max-width: 100%; overflow: hidden; color: inherit; opacity: 0.8; font-family: var(--font-sans); font-size: 0.66rem; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+
+.bc-free { border-color: rgba(74, 222, 128, 0.42); background: linear-gradient(180deg, rgba(74, 222, 128, 0.13), rgba(74, 222, 128, 0.07)); color: #86efac; cursor: pointer; transition: transform 0.2s var(--ease-out), background 0.2s ease, border-color 0.2s ease, box-shadow 0.25s ease; }
+.bc-free:hover { transform: translateY(-2px); border-color: #4ade80; background: linear-gradient(180deg, rgba(74, 222, 128, 0.24), rgba(74, 222, 128, 0.12)); box-shadow: 0 12px 24px -14px rgba(74, 222, 128, 0.8); }
+.bc-free:active { transform: scale(0.97); }
+.bc-free.is-selected { border-color: transparent; background: linear-gradient(135deg, #b9cc00, #e2f03a); color: #06110c; box-shadow: 0 14px 30px -12px rgba(198, 211, 0, 0.85); }
+.bc-free.is-selected .bc-label { font-size: 0; }
+.bc-free.is-selected .bc-label::before { content: '✓ Elegida'; font-size: 0.8rem; }
+
+.bc-mine { border: 1.5px dashed var(--accent-tennis); background: rgba(198, 211, 0, 0.1); color: var(--accent-tennis-hi); }
+.bc-clases { border-color: rgba(129, 140, 248, 0.42); background: rgba(129, 140, 248, 0.12); color: #c7d2fe; }
+.bc-desafio { border-color: rgba(245, 158, 11, 0.42); background: rgba(245, 158, 11, 0.11); color: #fcd34d; }
+.bc-amistoso { border-color: rgba(45, 212, 191, 0.42); background: rgba(45, 212, 191, 0.1); color: #5eead4; }
+.bc-campeonato { border-color: rgba(248, 113, 113, 0.42); background: rgba(248, 113, 113, 0.1); color: #fca5a5; }
+.bc-closed { border-style: dashed; background: repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.045) 0 6px, transparent 6px 12px); }
+.bc-limit { opacity: 0.55; }
+.bc-past, .bc.is-past { opacity: 0.38; }
+
+.board-legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 16px; margin: 14px 0 4px; }
+.bl { display: inline-flex; align-items: center; gap: 6px; color: var(--text-secondary); font-size: 0.74rem; }
+.bl::before { content: ''; width: 12px; height: 12px; border: 1px solid var(--line-strong); border-radius: 4px; background: rgba(255, 255, 255, 0.04); }
+.bl-free::before { border-color: #4ade80; background: rgba(74, 222, 128, 0.2); }
+.bl-sel::before { border-color: #e2f03a; background: #c6d300; }
+.bl-mine::before { border: 1.5px dashed var(--accent-tennis); background: rgba(198, 211, 0, 0.12); }
+.bl-clases::before { border-color: #818cf8; background: rgba(129, 140, 248, 0.2); }
+.bl-desafio::before { border-color: #f59e0b; background: rgba(245, 158, 11, 0.2); }
+.bl-amistoso::before { border-color: #2dd4bf; background: rgba(45, 212, 191, 0.2); }
+.bl-campeonato::before { border-color: #f87171; background: rgba(248, 113, 113, 0.2); }
+.bl-closed::before { border-style: dashed; background: repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.18) 0 2px, transparent 2px 4px); }
+
+/* Escritorio: el encabezado de canchas queda fijo bajo la barra al hacer scroll */
+@media (min-width: 861px) {
+  .board-scroll { overflow: visible; }
+  .board-table thead th { position: sticky; top: var(--nav-h); z-index: 3; }
+}
+/* Móvil: la tabla se desliza de lado y la columna de horas queda fija */
+@media (max-width: 860px) {
+  .board { --board-cell-h: 52px; }
+  .board-scroll { overflow-x: auto; padding: 10px 8px 12px; border-radius: 16px; -webkit-overflow-scrolling: touch; }
+  .board-table { border-spacing: 4px; min-width: calc(60px + var(--cols, 4) * 82px); }
+  .bt-head, .bt { position: sticky; left: 0; z-index: 2; width: 60px; background: var(--board-bg); }
+  .bt-start { font-size: 1.15rem; }
+  .bh-name { font-size: 0.86rem; }
+  .bc-label { font-size: 0.72rem; letter-spacing: 0.08em; }
+  .bc-free.is-selected .bc-label::before { font-size: 0.72rem; }
+  .board-controls { flex-direction: column; align-items: stretch; }
+  .board-ctrl { flex-direction: column; align-items: flex-start; gap: 6px; }
+  .board-summary-actions { width: 100%; }
+  .board-summary-actions .toolbar-btn { flex: 1; }
+  .bd { min-width: 60px; padding: 8px 10px; }
+  .bd-num { font-size: 1.3rem; }
+}
