@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="style.css?v=20260813_v1">
   <link rel="stylesheet" href="reservas.css?v=20260914_v3">
   <link rel="stylesheet" href="datepicker.css?v=20260908_v3">
-  <link rel="stylesheet" href="theme.css?v=20261019_grid3">
+  <link rel="stylesheet" href="theme.css?v=20261019_grid4">
   <script src="site.js?v=20261009_r3" defer></script>
 </head>
 <body>
@@ -772,7 +772,8 @@ async function selectDate(iso) {
   renderBoardDays();
 
   const container = document.getElementById('courtsSlotsContainer');
-  container.innerHTML = '<div style="text-align:center; padding: 40px; color: var(--text-secondary);">Sincronizando con Google Calendar... ⌛</div>';
+  container.innerHTML = `<div class="board-loading" role="status"><span class="board-loading-dot"></span>Buscando horarios libres…</div>
+    <div class="board-skeleton" aria-hidden="true">${'<i></i>'.repeat(12)}</div>`;
   goStep(2);
 
   const apiDisponibilidad = await DB.getSlotsAPI(iso);
@@ -995,7 +996,7 @@ function renderSlotsByCourt(apiData) {
       const text = list.length === total
         ? `<strong>${info.short} · ${info.surface}</strong> sin horarios este día`
         : `${list.map(ci => `<strong>${ci.court.label}</strong>`).join(' y ')} sin horarios este día`;
-      return `<div class="board-note-row"><img class="board-note-thumb" src="${courtThumb(list[0].court)}" alt="" loading="lazy"><span>${text}</span></div>`;
+      return `<div class="board-note-row">${text}</div>`;
     });
     html += `<div class="board-note" data-complex-note="${Object.keys(byComplex).join(' ')}">${notes.join('')}</div>`;
   }
@@ -1035,7 +1036,7 @@ function renderSlotsByCourt(apiData) {
     const info = COMPLEX_INFO[ci.complex] || { short: ci.complex.toUpperCase(), surface: '' };
     const firstOfComplex = i === 0 || openCourts[i - 1].complex !== ci.complex;
     const free = freeByCourt[ci.court.id] || 0;
-    return `<th scope="col" class="bh bh-${ci.complex}${firstOfComplex ? ' cx-start' : ''}" data-complex="${ci.complex}" style="--bh-img:url('${courtThumb(ci.court)}')">
+    return `<th scope="col" class="bh bh-${ci.complex}${firstOfComplex ? ' cx-start' : ''}" data-complex="${ci.complex}">
       <span class="bh-cx">${info.short} · ${info.surface}</span>
       <span class="bh-name">${ci.shortName}</span>
       <span class="bh-free${free ? '' : ' is-full'}">${free ? `${free} libre${free === 1 ? '' : 's'}` : 'Sin cupos'}</span>
@@ -1163,6 +1164,13 @@ function setBoardFilter(btn) {
   boardFilters[group.dataset.filter] = btn.dataset.value;
   applyReservationFilters();
 }
+
+// Desde el home: reservas.html?complejo=cjp abre el tablero ya filtrado
+(() => {
+  const cx = new URLSearchParams(location.search).get('complejo');
+  const btn = cx && document.querySelector(`.seg[data-filter="court"] .seg-btn[data-value="${CSS.escape(cx)}"]`);
+  if (btn) setBoardFilter(btn);
+})();
 
 function applyReservationFilters() {
   const container = document.getElementById('courtsSlotsContainer');
