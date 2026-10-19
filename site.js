@@ -138,10 +138,11 @@
     if (active) body.classList.add('page-' + active);
     if (/^admin/i.test(location.pathname.split('/').pop() || '')) body.classList.add('page-admin');
 
-    // En el inicio, el acceso de usuario se muestra dentro de la barra.
+    // El acceso de usuario se muestra dentro de la barra en las páginas que lo
+    // piden (inicio y reservas), para no ocupar espacio sobre el contenido.
     var slot = document.getElementById('siteNavSlot');
-    var homeUserBar = document.getElementById('userBarIndex');
-    if (slot && homeUserBar) slot.appendChild(homeUserBar);
+    var navUserBar = document.getElementById('userBarIndex') || document.querySelector('[data-nav-slot]');
+    if (slot && navUserBar) slot.appendChild(navUserBar);
 
     if (!document.querySelector('footer')) body.appendChild(buildFooter());
 

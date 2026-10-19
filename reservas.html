@@ -8,8 +8,8 @@
   <link rel="stylesheet" href="style.css?v=20260813_v1">
   <link rel="stylesheet" href="reservas.css?v=20260914_v3">
   <link rel="stylesheet" href="datepicker.css?v=20260908_v3">
-  <link rel="stylesheet" href="theme.css?v=20261019_plate1">
-  <script src="site.js?v=20261009_r3" defer></script>
+  <link rel="stylesheet" href="theme.css?v=20261019_compact1">
+  <script src="site.js?v=20261019_navuser" defer></script>
 </head>
 <body>
   <div id="debug-error-console" style="background:#ef4444; color:#fff; padding:15px; font-family:monospace; font-size:13px; display:none; position:fixed; top:0; left:0; width:100%; z-index:999999; box-shadow:0 4px 12px rgba(0,0,0,0.3);">
@@ -32,7 +32,7 @@
   <header>
     <a href="index.html" aria-label="Volver al inicio"><img src="logo_uctenis_v03.png" alt="UCTenis" class="club-logo" style="width:80px;margin-bottom:10px"></a>
     <h1>Reservar Cancha</h1>
-    <div id="userBar" class="res-user-bar"></div>
+    <div id="userBar" class="res-user-bar" data-nav-slot></div>
   </header>
 
   <!-- Banner Modo Funcionario -->
@@ -40,7 +40,7 @@
     🏛️ <strong>Modo Funcionario UCT Activo:</strong> Solo puedes reservar canchas con un máximo de 48 horas de anticipación.
   </div>
 
-  <div class="step-indicator">
+  <div class="step-indicator" aria-label="Pasos de la reserva">
     <div class="step active" id="si1" style="cursor:pointer;" onclick="tryGoStep(1)"><span>1</span> Fecha</div>
     <div class="step-line"></div>
     <div class="step" id="si2" style="cursor:pointer;" onclick="tryGoStep(2)"><span>2</span> Horario</div>

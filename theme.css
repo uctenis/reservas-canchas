@@ -961,3 +961,25 @@ body.page-admin header { text-align: left; }
   .cc-body { padding: 14px 16px 16px; }
 }
 @media (max-width: 420px) { .bc-free.is-selected .bc-label::before { content: '✓'; font-size: 1rem; } }
+
+/* ── Reservas: cabecera compacta (usuario en la barra, pasos en una píldora) ── */
+body.page-reservas .main-container > header { margin-bottom: 14px; }
+body.page-reservas header h1 { margin-bottom: 0; font-size: clamp(1.7rem, 4.4vw, 2.6rem); }
+.site-nav-slot .res-user-bar { margin: 0; }
+.site-nav-slot .user-pill-res { gap: 8px; padding: 4px 12px 4px 4px; border-color: var(--line-strong); background: rgba(255, 255, 255, 0.05); }
+.site-nav-slot .user-pill-res .av { width: 28px; height: 28px; font-size: 0.82rem; }
+.site-nav-slot .user-pill-res span { color: var(--text-primary); font-size: 0.86rem; font-weight: 700; }
+.site-nav-slot .user-pill-res button { padding: 0 0 0 8px; border-left: 1px solid var(--line-strong); font-size: 0.78rem; }
+.site-nav-slot .btn-login-res { padding: 8px 15px; border-color: transparent; border-radius: 999px; background: var(--accent-tennis); color: #06110c; font-size: 0.82rem; font-weight: 800; white-space: nowrap; }
+body.page-reservas .step-indicator { display: flex; width: fit-content; max-width: 100%; margin: 0 auto 22px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface-1); }
+body.page-reservas .step { gap: 6px; padding: 2px 6px; font-size: 0.78rem; }
+body.page-reservas .step span { width: 22px; height: 22px; border-width: 1px; font-size: 0.7rem; }
+body.page-reservas .step.active span { box-shadow: 0 0 10px rgba(198, 211, 0, 0.35); }
+body.page-reservas .step-line { min-width: 14px; max-width: 28px; }
+@media (max-width: 600px) {
+  body.page-reservas .main-container > header { margin-bottom: 12px; }
+  body.page-reservas .step-indicator { margin-bottom: 16px; }
+  .site-nav-slot .user-pill-res span { display: none; }
+  body.page-reservas .step { font-size: 0; }
+  body.page-reservas .step.active { font-size: 0.78rem; }
+}
