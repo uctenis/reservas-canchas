@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="style.css?v=20260813_v1">
   <link rel="stylesheet" href="reservas.css?v=20260914_v3">
   <link rel="stylesheet" href="datepicker.css?v=20260908_v3">
-  <link rel="stylesheet" href="theme.css?v=20261019_grid4">
+  <link rel="stylesheet" href="theme.css?v=20261019_plate1">
   <script src="site.js?v=20261009_r3" defer></script>
 </head>
 <body>
@@ -416,7 +416,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
 
-<script src="db.js?v=20260914_cec_fix"></script>
+<script src="db.js?v=20261019_prefetch"></script>
 <script src="script.js?v=20260602_v2"></script>
 <script src="datepicker.js?v=20260908_v3"></script>
 <script>
@@ -468,11 +468,12 @@ document.addEventListener('DOMContentLoaded', () => {
       reservationRules.maxAdvanceDays = { ...reservationRules.maxAdvanceDays, ...(config.maxAdvanceDays || {}) };
       reservationRules.maxBookingsPerDay = Number(config.maxBookingsPerDay) || reservationRules.maxBookingsPerDay;
       renderDateStrip();
-      const ruleNote = document.querySelector('#stepSlot .rule-note');
-      if (ruleNote) ruleNote.textContent = `⏱ Cada bloque = 1.5 horas · Máx. ${reservationRules.maxBookingsPerDay} reserva${reservationRules.maxBookingsPerDay === 1 ? '' : 's'} por día`;
+      const ruleNote = document.querySelector('.board-summary-text small');
+      if (ruleNote) ruleNote.textContent = `Bloques de 1 h 30 · máx. ${reservationRules.maxBookingsPerDay} reserva${reservationRules.maxBookingsPerDay === 1 ? '' : 's'} por día`;
     }).catch(error => console.warn('No se pudo cargar la configuración de reservas:', error));
   }
   renderMyBookings();
+  prefetchUpcomingSlots();
   document.getElementById('authModal').addEventListener('click', e => { if (e.target.id === 'authModal') closeAuth(); });
   document.getElementById('successModal').addEventListener('click', e => { if (e.target.id === 'successModal') closeSuccess(); });
   document.getElementById('challengeModal').addEventListener('click', e => { if (e.target.id === 'challengeModal') closeChallengeModal(); });
@@ -772,13 +773,62 @@ async function selectDate(iso) {
   renderBoardDays();
 
   const container = document.getElementById('courtsSlotsContainer');
-  container.innerHTML = `<div class="board-loading" role="status"><span class="board-loading-dot"></span>Buscando horarios libres…</div>
-    <div class="board-skeleton" aria-hidden="true">${'<i></i>'.repeat(12)}</div>`;
+  const cached = typeof DB.peekSlotsCache === 'function' ? DB.peekSlotsCache(iso) : null;
   goStep(2);
+
+  // Si el día ya está precargado se muestra al instante; si el dato tiene más
+  // de 30 s se vuelve a pedir por detrás y solo se repinta si cambió algo.
+  if (cached) {
+    renderSlotsByCourt(cached.data);
+    if (cached.fresh) { prefetchUpcomingSlots(); return; }
+  } else {
+    container.innerHTML = `<div class="board-loading" role="status"><span class="board-loading-dot"></span>Buscando horarios libres…</div>
+      <div class="board-skeleton" aria-hidden="true">${'<i></i>'.repeat(12)}</div>`;
+  }
 
   const apiDisponibilidad = await DB.getSlotsAPI(iso);
   if (sel.date !== iso) return;
-  renderSlotsByCourt(apiDisponibilidad);
+  const unchanged = cached && JSON.stringify(cached.data) === JSON.stringify(apiDisponibilidad);
+  const failedButHaveData = cached && !(apiDisponibilidad && apiDisponibilidad.ok);
+  if (!unchanged && !failedButHaveData) renderSlotsKeepingSelection(apiDisponibilidad);
+  prefetchUpcomingSlots();
+}
+
+// Repinta el tablero sin perder la casilla elegida, si sigue libre
+function renderSlotsKeepingSelection(apiData) {
+  const prev = sel.court && sel.slot ? { court: sel.court.id, slot: sel.slot } : null;
+  renderSlotsByCourt(apiData);
+  if (!prev) return;
+  const cell = document.querySelector(`#courtsSlotsContainer .bc-free[data-court="${prev.court}"][data-slot="${prev.slot}"]`);
+  if (cell) selectSlot(prev.court, prev.slot, cell);
+}
+
+// Días reservables que muestra la franja (hasta 7 desde hoy, sin domingos)
+function getUpcomingBookableDays() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const maxDaysAllowed = getMaxDaysAllowed();
+  const days = [];
+  for (let i = 0; i < maxDaysAllowed && days.length < 7; i++) {
+    const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() + i);
+    if (isBookableDay(d)) days.push({ d, i, iso: localISO(d) });
+  }
+  return days;
+}
+
+// Precarga en segundo plano la disponibilidad de la semana (2 consultas a la vez)
+// para que cambiar de día sea instantáneo.
+let slotsPrefetchRunning = false;
+async function prefetchUpcomingSlots() {
+  if (slotsPrefetchRunning || typeof DB.peekSlotsCache !== 'function') return;
+  slotsPrefetchRunning = true;
+  try {
+    const pending = getUpcomingBookableDays().map(day => day.iso).filter(iso => !DB.peekSlotsCache(iso));
+    const worker = async () => { while (pending.length) await DB.getSlotsAPI(pending.shift()); };
+    await Promise.all([worker(), worker()]);
+  } finally {
+    slotsPrefetchRunning = false;
+  }
 }
 
 // El club cierra los domingos, así que las flechas de Paso 2 saltan ese día
@@ -1036,9 +1086,15 @@ function renderSlotsByCourt(apiData) {
     const info = COMPLEX_INFO[ci.complex] || { short: ci.complex.toUpperCase(), surface: '' };
     const firstOfComplex = i === 0 || openCourts[i - 1].complex !== ci.complex;
     const free = freeByCourt[ci.court.id] || 0;
+    // "Cancha 1" → palabra chica + número grande, como los números pintados en la cancha
+    const m = ci.shortName.match(/^(.*?)\s*(\d+)$/);
+    const nameHtml = m ? `<small>${m[1]}</small><b>${m[2]}</b>` : `<b>${ci.shortName}</b>`;
     return `<th scope="col" class="bh bh-${ci.complex}${firstOfComplex ? ' cx-start' : ''}" data-complex="${ci.complex}">
-      <span class="bh-cx">${info.short} · ${info.surface}</span>
-      <span class="bh-name">${ci.shortName}</span>
+      <span class="bh-plate">
+        <svg class="bh-court" viewBox="0 0 40 22" aria-hidden="true"><rect x="1" y="1" width="38" height="20" rx="1"/><path d="M1 4h38M1 18h38M20 1v20M10 4v14M30 4v14M10 11h20"/></svg>
+        <span class="bh-cx">${info.short} · ${info.surface}</span>
+        <span class="bh-name">${nameHtml}</span>
+      </span>
       <span class="bh-free${free ? '' : ' is-full'}">${free ? `${free} libre${free === 1 ? '' : 's'}` : 'Sin cupos'}</span>
     </th>`;
   }).join('');
@@ -1095,15 +1151,8 @@ function toggleBoardPast(btn) {
 function renderBoardDays() {
   const strip = document.getElementById('boardDays');
   if (!strip) return;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const maxDaysAllowed = getMaxDaysAllowed();
   let html = '';
-  for (let i = 0, shown = 0; i < maxDaysAllowed && shown < 7; i++) {
-    const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() + i);
-    if (!isBookableDay(d)) continue;
-    shown++;
-    const iso = localISO(d);
+  for (const { d, i, iso } of getUpcomingBookableDays()) {
     const label = i === 0 ? 'Hoy' : i === 1 ? 'Mañana' : DAYS_SHORT[d.getDay()];
     const active = iso === sel.date;
     html += `<button type="button" class="bd${active ? ' is-on' : ''}" aria-pressed="${active}" onclick="selectDate('${iso}')">
@@ -1213,7 +1262,7 @@ async function refreshSlotAvailability(force = false) {
   if (btn) { btn.disabled = true; btn.textContent = '↻ Actualizando'; }
   try {
     const apiDisponibilidad = await DB.getSlotsAPI(dateToRefresh);
-    if (sel.date === dateToRefresh) renderSlotsByCourt(apiDisponibilidad);
+    if (sel.date === dateToRefresh) renderSlotsKeepingSelection(apiDisponibilidad);
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = '↻ Actualizar'; }
   }

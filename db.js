@@ -300,7 +300,12 @@ let cachedStaff = [];
 // latencia alta, hasta unos segundos por cold start). TTL corto para no mostrar
 // horarios desactualizados si alguien más reserva en ese rango.
 const SLOTS_CACHE_TTL_MS = 30 * 1000;
+// Hasta este tiempo se puede mostrar un dato vencido al instante mientras se
+// piden los frescos (ver peekSlotsCache).
+const SLOTS_STALE_MAX_MS = 5 * 60 * 1000;
 const slotsCache = new Map();
+const slotsInflight = new Map();
+let slotsCacheGeneration = 0;
 
 const DB = {
 
@@ -1704,25 +1709,43 @@ const DB = {
     if (cached && (Date.now() - cached.ts) < SLOTS_CACHE_TTL_MS) {
       return cached.data;
     }
-    try {
-      const idToken = await this.getIdToken();
-      const res = idToken
-        ? await fetch(window.CONFIG.API_URL, {
-            method: 'POST',
-            body: JSON.stringify({ action: 'get_available_slots', date: fechaStr, idToken })
-          })
-        : await fetch(`${window.CONFIG.API_URL}?${new URLSearchParams({ action: 'get_available_slots', date: fechaStr }).toString()}`);
-      const data = await res.json();
-      if (data && data.ok) slotsCache.set(fechaStr, { data, ts: Date.now() });
-      return data; // { ok: true, courts: { cec1: ["09:00", ...], cec2: [...] } }
-    } catch (e) {
-      console.error('Error obteniendo disponibilidad:', e);
-      return { ok: false };
-    }
+    // Si ya hay una consulta en curso para ese día (ej. la precarga), se reutiliza
+    if (slotsInflight.has(fechaStr)) return slotsInflight.get(fechaStr);
+    const generation = slotsCacheGeneration;
+    const request = (async () => {
+      try {
+        const idToken = await this.getIdToken();
+        const res = idToken
+          ? await fetch(window.CONFIG.API_URL, {
+              method: 'POST',
+              body: JSON.stringify({ action: 'get_available_slots', date: fechaStr, idToken })
+            })
+          : await fetch(`${window.CONFIG.API_URL}?${new URLSearchParams({ action: 'get_available_slots', date: fechaStr }).toString()}`);
+        const data = await res.json();
+        // No guardar una respuesta que empezó antes de invalidar la caché (ej. tras reservar)
+        if (data && data.ok && generation === slotsCacheGeneration) slotsCache.set(fechaStr, { data, ts: Date.now() });
+        return data; // { ok: true, courts: { cec1: ["09:00", ...], cec2: [...] } }
+      } catch (e) {
+        console.error('Error obteniendo disponibilidad:', e);
+        return { ok: false };
+      } finally {
+        slotsInflight.delete(fechaStr);
+      }
+    })();
+    slotsInflight.set(fechaStr, request);
+    return request;
+  },
+  // Disponibilidad guardada aunque esté vencida (hasta 5 min), para pintarla al
+  // instante y refrescarla por detrás. Devuelve { data, fresh } o null.
+  peekSlotsCache(fechaStr) {
+    const cached = slotsCache.get(fechaStr);
+    if (!cached || (Date.now() - cached.ts) > SLOTS_STALE_MAX_MS) return null;
+    return { data: cached.data, fresh: (Date.now() - cached.ts) < SLOTS_CACHE_TTL_MS };
   },
   invalidateSlotsCache(fechaStr) {
-    if (fechaStr) slotsCache.delete(fechaStr);
-    else slotsCache.clear();
+    slotsCacheGeneration++;
+    if (fechaStr) { slotsCache.delete(fechaStr); slotsInflight.delete(fechaStr); }
+    else { slotsCache.clear(); slotsInflight.clear(); }
   },
 
   // Nota: Para usar la versión real que agenda en Google Calendar, se llama a esta función
