@@ -10,7 +10,7 @@
   <meta property="og:image" content="https://uctenis.github.io/reservas-canchas/logo_uctenis_v03.png">
   <link rel="icon" href="logo_uctenis_v03.png" type="image/png">
   <link rel="stylesheet" href="style.css?v=20260813_v1">
-  <link rel="stylesheet" href="ranking.css?v=20261009_reservas_admin">
+  <link rel="stylesheet" href="ranking.css?v=20261019_courts">
   <link rel="stylesheet" href="datepicker.css?v=20260908_v3">
   <script>
     // Quien llega desde liga.html (?liga=1) solo quiere el modal de desafio de
@@ -653,9 +653,13 @@
         <div class="schedule-body">
           <!-- Navegación lateral -->
           <nav class="schedule-sidebar">
-            <button type="button" class="schedule-nav-item active" data-schedule-section="special" onclick="switchScheduleSection('special')">
+            <button type="button" class="schedule-nav-item active" data-schedule-section="status" onclick="switchScheduleSection('status')">
+              <span class="schedule-nav-icon">🎾</span>
+              <span class="schedule-nav-text"><strong>Estado de canchas</strong><small>Abrir o cerrar una cancha sin fecha de término</small></span>
+            </button>
+            <button type="button" class="schedule-nav-item" data-schedule-section="special" onclick="switchScheduleSection('special')">
               <span class="schedule-nav-icon">📅</span>
-              <span class="schedule-nav-text"><strong>Fechas Especiales</strong><small>Abrir o cerrar canchas por día o período</small></span>
+              <span class="schedule-nav-text"><strong>Fechas Especiales</strong><small>Cerrar o abrir canchas un día o un período</small></span>
             </button>
             <button type="button" class="schedule-nav-item" data-schedule-section="regular" onclick="switchScheduleSection('regular')">
               <span class="schedule-nav-icon">🕒</span>
@@ -663,7 +667,7 @@
             </button>
             <button type="button" class="schedule-nav-item" data-schedule-section="params" onclick="switchScheduleSection('params')">
               <span class="schedule-nav-icon">⚙️</span>
-              <span class="schedule-nav-text"><strong>Parámetros de Reserva</strong><small>Anticipación y límite diario</small></span>
+              <span class="schedule-nav-text"><strong>Parámetros de Reserva</strong><small>Anticipación, horas mínimas y límite diario</small></span>
             </button>
           </nav>
 
@@ -671,13 +675,61 @@
           <div class="schedule-content">
 
             <!-- ═══ FECHAS ESPECIALES ═══ -->
-            <div id="scheduleSectionSpecial" class="schedule-panel schedule-panel-card">
+            <!-- ═══ ESTADO DE CANCHAS ═══ -->
+            <div id="scheduleSectionStatus" class="schedule-panel schedule-panel-card">
               <p class="schedule-panel-desc">
-                Habilita todos los horarios o cierra por completo una o más canchas, para un día puntual o un período de varios días (mantenimiento, torneo, feriado).
+                Cierra una cancha sin fecha de término (mal estado, mantención larga) o vuelve a abrirla. El cambio rige de inmediato para las reservas. Para cerrar solo algunos días usa <a href="#" onclick="switchScheduleSection('special'); return false;">Fechas especiales</a>.
+              </p>
+              <div id="courtStatusAlert" class="alert-box" style="display:none; padding: 12px; border-radius: 8px; font-size: 0.85rem; margin-bottom: 15px;"></div>
+              <div class="court-status-grid" id="courtStatusGrid">
+                <p style="color:var(--text-secondary);font-size:0.85rem;text-align:center;padding:15px">Cargando estado de las canchas...</p>
+              </div>
+            </div>
+
+            <div id="scheduleSectionSpecial" class="schedule-panel schedule-panel-card hidden">
+              <p class="schedule-panel-desc">
+                Cierra canchas o habilita todos sus horarios para un día puntual o un período (feriado, torneo, lluvia). Para cerrar una cancha sin fecha de término usa <a href="#" onclick="switchScheduleSection('status'); return false;">Estado de canchas</a>.
               </p>
 
               <div id="adminScheduleAlert" class="alert-box" style="display:none; padding: 12px; border-radius: 8px; font-size: 0.85rem; margin-bottom: 15px;"></div>
 
+              <p class="special-step"><b>1</b> ¿Qué quieres hacer?</p>
+              <div class="special-type-row">
+                <label class="special-type-option">
+                  <input type="radio" name="adminSpecialType" value="closed" checked id="typeClosed" onchange="selectAdminSpecialType('closed')">
+                  <span id="cardClosed" class="type-card special-type-card is-closed active">
+                    <span class="special-type-icon">🚫</span>
+                    <strong>Cerrar canchas</strong>
+                    <small>Nadie podrá reservar en ese período</small>
+                  </span>
+                </label>
+                <label class="special-type-option">
+                  <input type="radio" name="adminSpecialType" value="all_day" id="typeAllDay" onchange="selectAdminSpecialType('all_day')">
+                  <span id="cardAllDay" class="type-card special-type-card is-open">
+                    <span class="special-type-icon">✅</span>
+                    <strong>Abrir todos los horarios</strong>
+                    <small>Habilita de 09:00 a 21:00</small>
+                  </span>
+                </label>
+              </div>
+
+              <p class="special-step"><b>2</b> ¿Qué canchas? <button type="button" class="special-step-link" onclick="toggleAllSpecialCourts()">Marcar todas</button></p>
+              <div class="schedule-court-selector">
+                <label class="schedule-check-card">
+                  <input type="checkbox" id="admin_court_cec1" value="cec1"> CEC 1 (Arcilla)
+                </label>
+                <label class="schedule-check-card">
+                  <input type="checkbox" id="admin_court_cec2" value="cec2"> CEC 2 (Arcilla)
+                </label>
+                <label class="schedule-check-card">
+                  <input type="checkbox" id="admin_court_cjp1" value="cjp1"> CJP 1 (Asfalto)
+                </label>
+                <label class="schedule-check-card">
+                  <input type="checkbox" id="admin_court_cjp2" value="cjp2"> CJP 2 (Asfalto)
+                </label>
+              </div>
+
+              <p class="special-step"><b>3</b> ¿Cuándo?</p>
               <div class="segmented-control" id="specialDateModeToggle">
                 <button type="button" class="segmented-btn active" data-mode="single" onclick="setSpecialDateMode('single')">📅 Fecha única</button>
                 <button type="button" class="segmented-btn" data-mode="range" onclick="setSpecialDateMode('range')">🗓️ Rango de fechas</button>
@@ -702,45 +754,10 @@
                 </div>
               </div>
 
-              <p style="font-size:0.82rem;color:rgba(255,255,255,0.7);margin-bottom:10px;font-weight:600;">🎾 Canchas que aplica</p>
-              <div class="schedule-court-selector">
-                <label class="schedule-check-card">
-                  <input type="checkbox" id="admin_court_cec1" value="cec1" checked> CEC 1 (Arcilla)
-                </label>
-                <label class="schedule-check-card">
-                  <input type="checkbox" id="admin_court_cec2" value="cec2" checked> CEC 2 (Arcilla)
-                </label>
-                <label class="schedule-check-card">
-                  <input type="checkbox" id="admin_court_cjp1" value="cjp1" checked> CJP 1 (Asfalto)
-                </label>
-                <label class="schedule-check-card">
-                  <input type="checkbox" id="admin_court_cjp2" value="cjp2" checked> CJP 2 (Asfalto)
-                </label>
-              </div>
-
-              <p style="font-size:0.82rem;color:rgba(255,255,255,0.7);margin-bottom:10px;font-weight:600;">⏰ Acción</p>
-              <div style="display: flex; gap: 10px; margin-bottom: 18px;">
-                <label style="flex:1; cursor: pointer;">
-                  <input type="radio" name="adminSpecialType" value="all_day" checked style="display:none;" id="typeAllDay">
-                  <div id="cardAllDay" class="type-card active" style="display:flex; flex-direction:column; align-items:center; padding:10px; border:1px solid var(--accent-tennis); border-radius:10px; background:rgba(198,211,0,0.08); text-align:center; transition: all 0.2s;" onclick="selectAdminSpecialType('all_day')">
-                    <span style="font-size:1.4rem;">🌅</span>
-                    <strong style="font-size:0.85rem; display:block; margin:4px 0 2px;">Todos los horarios</strong>
-                    <span style="color:var(--text-secondary);font-size:0.7rem;">Habilita 09:00–21:00</span>
-                  </div>
-                </label>
-                <label style="flex:1; cursor: pointer;">
-                  <input type="radio" name="adminSpecialType" value="closed" style="display:none;" id="typeClosed">
-                  <div id="cardClosed" class="type-card" style="display:flex; flex-direction:column; align-items:center; padding:10px; border:1px solid rgba(255,255,255,0.1); border-radius:10px; background:rgba(255,255,255,0.03); text-align:center; transition: all 0.2s;" onclick="selectAdminSpecialType('closed')">
-                    <span style="font-size:1.4rem;">🚫</span>
-                    <strong style="font-size:0.85rem; display:block; margin:4px 0 2px;">Cerrar canchas</strong>
-                    <span style="color:var(--text-secondary);font-size:0.7rem;">Sin disponibilidad ese período</span>
-                  </div>
-                </label>
-              </div>
-
+              <div class="special-summary" id="specialSummary" aria-live="polite">Elige las canchas y la fecha.</div>
               <div style="display:flex;justify-content:flex-end;">
                 <button class="btn-primary" id="btnAdminSaveSchedule" type="button" onclick="saveAdminSpecialDate(event)" style="padding: 10px 20px; font-size:0.85rem;">
-                  💾 Guardar
+                  🚫 Cerrar canchas
                 </button>
               </div>
 
@@ -867,7 +884,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-<script src="db.js?v=20261019_minlead"></script>
+<script src="db.js?v=20261019_courts"></script>
 <script src="liga.js?v=20260909_v1"></script>
 <script src="datepicker.js?v=20260908_v3"></script>
 
@@ -7327,6 +7344,7 @@ window.switchAdminSubSection = function(section) {
   } else if (section === 'schedules') {
     loadSpecialDatesList();
     loadScheduleConfig();
+    updateSpecialSummary();
   } else if (section === 'bookings') {
     initAdminBookingsWeekIfNeeded();
     loadAdminBookingsForDate();
@@ -7886,28 +7904,68 @@ function showAdminScheduleAlert(msg, type = 'success') {
   box.style.border = `1px solid ${type === 'error' ? '#ef4444' : (type === 'warn' ? '#d97706' : '#10b981')}`;
   box.style.color = type === 'error' ? '#fca5a5' : (type === 'warn' ? '#fcd34d' : '#86efac');
   box.textContent = msg;
-  setTimeout(() => { box.style.display = 'none'; }, 4000);
+  clearTimeout(box._hideTimer);
+  // Los errores quedan a la vista; los avisos de éxito se ocultan solos
+  if (type !== 'error') box._hideTimer = setTimeout(() => { box.style.display = 'none'; }, 6000);
+}
+
+const SPECIAL_COURT_SHORT = { cec1: 'CEC 1', cec2: 'CEC 2', cjp1: 'CJP 1', cjp2: 'CJP 2' };
+
+function joinSpanishList(items) {
+  return items.length <= 1 ? (items[0] || '') : `${items.slice(0, -1).join(', ')} y ${items[items.length - 1]}`;
 }
 
 window.selectAdminSpecialType = function(type) {
   document.getElementById('typeAllDay').checked = (type === 'all_day');
   document.getElementById('typeClosed').checked = (type === 'closed');
-  
-  document.getElementById('cardAllDay').style.borderColor = (type === 'all_day') ? 'var(--accent-tennis)' : 'rgba(255,255,255,0.1)';
-  document.getElementById('cardAllDay').style.backgroundColor = (type === 'all_day') ? 'rgba(198,211,0,0.08)' : 'rgba(255,255,255,0.03)';
   document.getElementById('cardAllDay').classList.toggle('active', type === 'all_day');
-  
-  document.getElementById('cardClosed').style.borderColor = (type === 'closed') ? 'var(--accent-tennis)' : 'rgba(255,255,255,0.1)';
-  document.getElementById('cardClosed').style.backgroundColor = (type === 'closed') ? 'rgba(198,211,0,0.08)' : 'rgba(255,255,255,0.03)';
   document.getElementById('cardClosed').classList.toggle('active', type === 'closed');
+  updateSpecialSummary();
+};
+
+window.toggleAllSpecialCourts = function() {
+  const boxes = ['cec1', 'cec2', 'cjp1', 'cjp2'].map(id => document.getElementById(`admin_court_${id}`)).filter(Boolean);
+  const allChecked = boxes.every(cb => cb.checked);
+  boxes.forEach(cb => { cb.checked = !allChecked; });
+  updateSpecialSummary();
+};
+
+// Resume en palabras lo que va a pasar antes de guardar, y ajusta el botón
+function updateSpecialSummary() {
+  const summary = document.getElementById('specialSummary');
+  const btn = document.getElementById('btnAdminSaveSchedule');
+  if (!summary || !btn) return;
+  const closing = document.getElementById('typeClosed').checked;
+  const courts = ['cec1', 'cec2', 'cjp1', 'cjp2'].filter(id => document.getElementById(`admin_court_${id}`)?.checked).map(id => SPECIAL_COURT_SHORT[id]);
+  const isRange = document.querySelector('#specialDateModeToggle .segmented-btn.active')?.dataset.mode === 'range';
+  const single = document.getElementById('adminSpecialDate').value.trim();
+  const from = document.getElementById('adminSpecialDateStart').value.trim();
+  const to = document.getElementById('adminSpecialDateEnd').value.trim();
+  const when = isRange ? (from && to ? `del ${from} al ${to}` : '') : (single ? `el ${single}` : '');
+  const allBtn = document.querySelector('.special-step-link');
+  if (allBtn) allBtn.textContent = courts.length === 4 ? 'Quitar todas' : 'Marcar todas';
+
+  btn.textContent = closing ? '🚫 Cerrar canchas' : '✅ Abrir horarios';
+  btn.classList.toggle('is-danger', closing);
+  summary.classList.toggle('is-ready', Boolean(courts.length && when));
+  summary.classList.toggle('is-closing', closing);
+  if (!courts.length && !when) summary.textContent = 'Elige las canchas y la fecha.';
+  else if (!courts.length) summary.textContent = 'Falta elegir al menos una cancha.';
+  else if (!when) summary.textContent = isRange ? 'Falta elegir desde y hasta qué fecha.' : 'Falta elegir la fecha.';
+  else summary.innerHTML = closing
+    ? `Vas a <strong>cerrar ${joinSpanishList(courts)}</strong> ${when}. Nadie podrá reservar ahí.`
+    : `Vas a <strong>abrir todos los horarios</strong> de ${joinSpanishList(courts)} ${when}.`;
 }
+
+document.addEventListener('change', event => { if (event.target.closest && event.target.closest('#scheduleSectionSpecial')) updateSpecialSummary(); });
+document.addEventListener('input', event => { if (event.target.closest && event.target.closest('#scheduleSectionSpecial')) updateSpecialSummary(); });
 
 // ── Navegación lateral de la pestaña Horarios ──
 window.switchScheduleSection = function(section) {
   document.querySelectorAll('.schedule-nav-item').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.scheduleSection === section);
   });
-  ['special', 'regular', 'params'].forEach(key => {
+  ['status', 'special', 'regular', 'params'].forEach(key => {
     const panel = document.getElementById('scheduleSection' + key.charAt(0).toUpperCase() + key.slice(1));
     if (panel) panel.classList.toggle('hidden', key !== section);
   });
@@ -7928,6 +7986,7 @@ window.setSpecialDateMode = function(mode) {
   document.getElementById('specialDateSingleGroup').style.display = mode === 'single' ? '' : 'none';
   document.getElementById('specialDateStartGroup').style.display = mode === 'range' ? '' : 'none';
   document.getElementById('specialDateEndGroup').style.display = mode === 'range' ? '' : 'none';
+  updateSpecialSummary();
 };
 
 window.saveAdminSpecialDate = async function(event) {
@@ -7990,7 +8049,7 @@ window.saveAdminSpecialDate = async function(event) {
     showAdminScheduleAlert(`⚠️ No se pudo guardar: ${e.message}`, 'error');
   } finally {
     btn.disabled = false;
-    btn.textContent = '💾 Guardar';
+    updateSpecialSummary();
   }
 }
 
@@ -8023,7 +8082,8 @@ function showAdminBookingsAlert(msg, type = 'success') {
   box.style.border = `1px solid ${type === 'error' ? '#ef4444' : (type === 'warn' ? '#d97706' : '#10b981')}`;
   box.style.color = type === 'error' ? '#fca5a5' : (type === 'warn' ? '#fcd34d' : '#86efac');
   box.textContent = msg;
-  setTimeout(() => { box.style.display = 'none'; }, 4000);
+  clearTimeout(box._hideTimer);
+  if (type !== 'error') box._hideTimer = setTimeout(() => { box.style.display = 'none'; }, 6000);
 }
 
 // Solo canchas con al menos un horario habilitado algún día de la semana
@@ -8250,6 +8310,116 @@ const SCHEDULE_COURT_LABELS = { cec1: 'CEC 1', cec2: 'CEC 2', cjp1: 'CJP 1', cjp
 let scheduleConfigState = null;
 let scheduleConfigCourt = 'cec1';
 let scheduleConfigDirty = false;
+// true cuando ya se leyó lo guardado en Firestore: antes de eso no se permite
+// abrir/cerrar canchas, para no pisar la configuración con los valores por defecto
+let scheduleConfigCloudLoaded = false;
+
+const COURT_STATUS_INFO = {
+  cec1: { name: 'CEC · Cancha 1', surface: 'Arcilla', cx: 'cec' },
+  cec2: { name: 'CEC · Cancha 2', surface: 'Arcilla', cx: 'cec' },
+  cjp1: { name: 'CJP · Cancha 1', surface: 'Asfalto', cx: 'cjp' },
+  cjp2: { name: 'CJP · Cancha 2', surface: 'Asfalto', cx: 'cjp' }
+};
+
+function showCourtStatusAlert(msg, type = 'success') {
+  const box = document.getElementById('courtStatusAlert');
+  if (!box) return;
+  box.style.display = 'block';
+  box.style.backgroundColor = type === 'error' ? 'rgba(239,68,68,0.15)' : (type === 'warn' ? 'rgba(217,119,6,0.15)' : 'rgba(16,185,129,0.15)');
+  box.style.border = `1px solid ${type === 'error' ? '#ef4444' : (type === 'warn' ? '#d97706' : '#10b981')}`;
+  box.style.color = type === 'error' ? '#fca5a5' : (type === 'warn' ? '#fcd34d' : '#86efac');
+  box.textContent = msg;
+  clearTimeout(box._hideTimer);
+  if (type === 'success') box._hideTimer = setTimeout(() => { box.style.display = 'none'; }, 6000);
+}
+
+// Una cancha sin ningún horario en toda la semana queda sin reservas aunque esté "abierta"
+function courtHasNoRegularSlots(courtId) {
+  const slots = scheduleConfigState && scheduleConfigState.courtSlots && scheduleConfigState.courtSlots[courtId];
+  if (!slots) return false;
+  return Object.values(slots).every(day => !Array.isArray(day) || day.length === 0);
+}
+
+function renderCourtStatusCards() {
+  const grid = document.getElementById('courtStatusGrid');
+  if (!grid || !scheduleConfigState) return;
+  const closed = scheduleConfigState.closedCourts || {};
+  grid.innerHTML = Object.entries(COURT_STATUS_INFO).map(([id, info]) => {
+    const entry = closed[id];
+    const isClosed = Boolean(entry);
+    const noSlots = !isClosed && courtHasNoRegularSlots(id);
+    const since = entry && entry.since ? new Date(entry.since).toLocaleDateString('es-CL') : '';
+    const detail = isClosed
+      ? `<p class="cs-detail">${entry.reason ? escapeHTML(entry.reason) : 'Sin motivo indicado'}${since ? ` · desde el ${since}` : ''}</p>`
+      : noSlots
+        ? `<p class="cs-detail cs-warn">Abierta, pero sin horarios en <a href="#" onclick="switchScheduleSection('regular'); selectScheduleCourt('${id}'); return false;">Horarios regulares</a>: nadie puede reservarla.</p>`
+        : `<input type="text" class="cs-reason" id="csReason_${id}" maxlength="80" placeholder="Motivo si la cierras (opcional)">`;
+    return `<div class="court-status-card cs-${info.cx}${isClosed ? ' is-closed' : ' is-open'}">
+      <div class="cs-head">
+        <div><strong>${info.name}</strong><small>${info.surface}</small></div>
+        <span class="cs-pill">${isClosed ? 'Cerrada' : 'Abierta'}</span>
+      </div>
+      ${detail}
+      <button type="button" class="cs-btn" id="csBtn_${id}" onclick="toggleCourtClosed('${id}')">${isClosed ? '✅ Reabrir cancha' : '🚫 Cerrar cancha'}</button>
+    </div>`;
+  }).join('');
+}
+
+function buildScheduleConfigPayload() {
+  return {
+    courtSlots: scheduleConfigState.courtSlots,
+    maxAdvanceDays: scheduleConfigState.maxAdvanceDays,
+    maxBookingsPerDay: scheduleConfigState.maxBookingsPerDay,
+    minLeadHours: scheduleConfigState.minLeadHours,
+    closedCourts: scheduleConfigState.closedCourts || {}
+  };
+}
+
+window.toggleCourtClosed = async function(courtId) {
+  if (!scheduleConfigState || !scheduleConfigCloudLoaded) {
+    showCourtStatusAlert('Espera un momento: todavía se está cargando la configuración guardada. Si no carga, recarga la página.', 'warn');
+    return;
+  }
+  const info = COURT_STATUS_INFO[courtId];
+  const closed = { ...(scheduleConfigState.closedCourts || {}) };
+  const closing = !closed[courtId];
+  const reasonInput = document.getElementById(`csReason_${courtId}`);
+  const reason = closing && reasonInput ? reasonInput.value.trim() : '';
+  const question = closing
+    ? `¿Cerrar ${info.name}? Desde ahora nadie podrá reservarla hasta que la reabras. Las reservas que ya existen no se cancelan.`
+    : `¿Reabrir ${info.name}? Volverá a tener sus horarios regulares.`;
+  if (!confirm(question)) return;
+
+  const previous = scheduleConfigState.closedCourts;
+  if (closing) closed[courtId] = { reason, since: new Date().toISOString() };
+  else delete closed[courtId];
+  scheduleConfigState.closedCourts = closed;
+
+  const btn = document.getElementById(`csBtn_${courtId}`);
+  if (btn) { btn.disabled = true; btn.textContent = 'Guardando...'; }
+  try {
+    const session = DB.getSession();
+    const idToken = await DB.getIdTokenOrReauth();
+    if (!idToken) throw new Error(DB.lastAuthError || 'Tu sesión venció. Vuelve a ingresar.');
+    const res = await fetch(window.CONFIG.API_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'save_schedule_config', ...buildScheduleConfigPayload(), actorEmail: (session && session.email) || '', idToken })
+    });
+    const data = await res.json();
+    if (!data || !data.ok) throw new Error((data && data.msg) || 'No se pudo guardar.');
+    // Un backend sin publicar responde ok pero descarta el campo nuevo
+    if (!Array.isArray(data.savedFields) || !data.savedFields.includes('closedCourts')) {
+      throw new Error('falta publicar la versión nueva del backend en Apps Script, así que el cambio no quedó guardado.');
+    }
+    if (DB.invalidateSlotsCache) DB.invalidateSlotsCache();
+    showCourtStatusAlert(closing ? `🚫 ${info.name} quedó cerrada.` : `✅ ${info.name} quedó abierta.`);
+  } catch (e) {
+    scheduleConfigState.closedCourts = previous;
+    showCourtStatusAlert('⚠️ No se pudo guardar: ' + e.message, 'error');
+  } finally {
+    renderCourtStatusCards();
+  }
+};
 
 function markScheduleConfigDirty() {
   scheduleConfigDirty = true;
@@ -8271,7 +8441,8 @@ function showScheduleConfigAlert(msg, type = 'success') {
   box.style.border = `1px solid ${type === 'error' ? '#ef4444' : (type === 'warn' ? '#d97706' : '#10b981')}`;
   box.style.color = type === 'error' ? '#fca5a5' : (type === 'warn' ? '#fcd34d' : '#86efac');
   box.textContent = msg;
-  setTimeout(() => { box.style.display = 'none'; }, 4000);
+  clearTimeout(box._hideTimer);
+  if (type !== 'error') box._hideTimer = setTimeout(() => { box.style.display = 'none'; }, 6000);
 }
 
 function cloneDefaultCourtSlots() {
@@ -8292,6 +8463,7 @@ function applyScheduleConfigToForm() {
     }
   });
   renderScheduleGrid();
+  renderCourtStatusCards();
 }
 
 function defaultScheduleConfig() {
@@ -8299,7 +8471,8 @@ function defaultScheduleConfig() {
     courtSlots: cloneDefaultCourtSlots(),
     maxAdvanceDays: { ...(window.DEFAULT_MAX_ADVANCE_DAYS || {}) },
     maxBookingsPerDay: window.DEFAULT_MAX_BOOKINGS_PER_DAY || 1,
-    minLeadHours: window.DEFAULT_MIN_LEAD_HOURS ?? 4
+    minLeadHours: window.DEFAULT_MIN_LEAD_HOURS ?? 4,
+    closedCourts: {}
   };
 }
 
@@ -8316,12 +8489,16 @@ function loadScheduleConfig() {
   if (!DB.isCloudConfigured()) return;
 
   DB.getScheduleConfigCloud().then(saved => {
+    // Lectura correcta (exista o no el documento): ya se puede guardar sin
+    // riesgo de pisar lo configurado con los valores por defecto
+    scheduleConfigCloudLoaded = true;
     if (!saved || scheduleConfigDirty) return;
     scheduleConfigState = {
       courtSlots: saved.courtSlots || cloneDefaultCourtSlots(),
       maxAdvanceDays: { ...(window.DEFAULT_MAX_ADVANCE_DAYS || {}), ...(saved.maxAdvanceDays || {}) },
       maxBookingsPerDay: Number(saved.maxBookingsPerDay) > 0 ? Number(saved.maxBookingsPerDay) : (window.DEFAULT_MAX_BOOKINGS_PER_DAY || 1),
-      minLeadHours: window.parseMinLeadHours(saved.minLeadHours)
+      minLeadHours: window.parseMinLeadHours(saved.minLeadHours),
+      closedCourts: (saved.closedCourts && typeof saved.closedCourts === 'object') ? saved.closedCourts : {}
     };
     applyScheduleConfigToForm();
     markScheduleConfigSaved();
@@ -8420,10 +8597,7 @@ window.saveScheduleConfigAll = async function(event) {
       method: 'POST',
       body: JSON.stringify({
         action: 'save_schedule_config',
-        courtSlots: scheduleConfigState.courtSlots,
-        maxAdvanceDays: scheduleConfigState.maxAdvanceDays,
-        maxBookingsPerDay: scheduleConfigState.maxBookingsPerDay,
-        minLeadHours: scheduleConfigState.minLeadHours,
+        ...buildScheduleConfigPayload(),
         actorEmail: session?.email || '',
         idToken
       })

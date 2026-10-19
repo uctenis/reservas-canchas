@@ -874,8 +874,11 @@ const DB = {
       const doc = await firebaseDb.collection(FIREBASE_COLLECTIONS.config).doc('schedule').get();
       return doc.exists ? doc.data() : null;
     } catch (e) {
+      // Se propaga el error (en vez de devolver null como "no hay nada guardado")
+      // para que el panel de admin no sobrescriba la configuración con los
+      // valores por defecto cuando en realidad solo falló la lectura.
       console.warn('No se pudo leer la configuración de horarios:', e);
-      return null;
+      throw e;
     }
   },
 

@@ -2977,3 +2977,55 @@ tr.drag-over-bottom {
   .schedule-panel-actions button { width:auto !important; min-height:40px; flex:0 1 auto; }
   #btnAdminSaveSchedule { width:auto !important; }
 }
+
+/* ── Configuración de reservas: estado de canchas y fechas especiales en pasos ── */
+.schedule-panel-desc a { color: var(--accent-tennis); font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
+
+.court-status-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.court-status-card { --cs-accent: #38bdf8; display: flex; flex-direction: column; gap: 10px; padding: 16px; border: 1px solid rgba(255,255,255,.08); border-top: 3px solid var(--cs-accent); border-radius: 14px; background: rgba(255,255,255,.03); }
+.court-status-card.cs-cec { --cs-accent: #e2703a; }
+.cs-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.cs-head strong { display: block; color: var(--text-primary); font-size: .95rem; }
+.cs-head small { color: var(--text-secondary); font-size: .74rem; }
+.cs-pill { flex-shrink: 0; padding: 4px 10px; border-radius: 999px; font-size: .7rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.court-status-card.is-open .cs-pill { background: rgba(74,222,128,.14); color: #86efac; }
+.court-status-card.is-closed .cs-pill { background: rgba(248,113,113,.16); color: #fca5a5; }
+.court-status-card.is-closed { background: repeating-linear-gradient(135deg, rgba(248,113,113,.05) 0 8px, transparent 8px 16px), rgba(255,255,255,.02); }
+.cs-detail { margin: 0; color: var(--text-secondary); font-size: .8rem; line-height: 1.45; }
+.cs-detail.cs-warn { color: #fcd34d; }
+.cs-detail a { color: inherit; font-weight: 700; text-decoration: underline; }
+.cs-reason { width: 100%; padding: 9px 11px; border: 1px solid rgba(255,255,255,.11); border-radius: 10px; background: rgba(3,10,7,.32); color: var(--text-primary); font-size: .8rem; outline: none; }
+.cs-reason:focus { border-color: rgba(198,211,0,.7); box-shadow: 0 0 0 3px rgba(198,211,0,.1); }
+.cs-btn { align-self: flex-start; padding: 9px 16px; border: 1px solid rgba(248,113,113,.45); border-radius: 10px; background: rgba(248,113,113,.12); color: #fca5a5; font-size: .8rem; font-weight: 800; cursor: pointer; transition: background .2s, transform .2s; }
+.cs-btn:hover:not(:disabled) { background: rgba(248,113,113,.22); transform: translateY(-1px); }
+.court-status-card.is-closed .cs-btn { border-color: rgba(74,222,128,.45); background: rgba(74,222,128,.12); color: #86efac; }
+.court-status-card.is-closed .cs-btn:hover:not(:disabled) { background: rgba(74,222,128,.22); }
+.cs-btn:disabled { opacity: .6; cursor: wait; }
+
+.special-step { display: flex; align-items: center; gap: 9px; margin: 18px 0 10px; color: var(--text-primary); font-size: .88rem; font-weight: 800; }
+.special-step:first-of-type { margin-top: 4px; }
+.special-step b { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--accent-tennis); color: #06110c; font-size: .72rem; }
+.special-step-link { margin-left: auto; padding: 4px 10px; border: 1px solid rgba(255,255,255,.12); border-radius: 999px; background: transparent; color: var(--text-secondary); font-size: .72rem; font-weight: 700; cursor: pointer; }
+.special-step-link:hover { color: var(--text-primary); border-color: rgba(255,255,255,.25); }
+
+.special-type-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.special-type-option { cursor: pointer; }
+.special-type-option input { position: absolute; opacity: 0; pointer-events: none; }
+.special-type-card { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 12px 10px; border: 1.5px solid rgba(255,255,255,.1); border-radius: 12px; background: rgba(255,255,255,.03); text-align: center; transition: border-color .2s, background .2s; }
+.special-type-card .special-type-icon { font-size: 1.35rem; }
+.special-type-card strong { color: var(--text-primary); font-size: .86rem; }
+.special-type-card small { color: var(--text-secondary); font-size: .72rem; }
+.special-type-card.is-closed.active { border-color: #f87171; background: rgba(248,113,113,.1); }
+.special-type-card.is-open.active { border-color: #4ade80; background: rgba(74,222,128,.09); }
+.special-type-option input:focus-visible + .special-type-card { outline: 3px solid rgba(198,211,0,.5); outline-offset: 2px; }
+
+.special-summary { margin: 4px 0 14px; padding: 12px 14px; border: 1px dashed rgba(255,255,255,.14); border-radius: 12px; color: var(--text-secondary); font-size: .84rem; line-height: 1.45; }
+.special-summary.is-ready { border-style: solid; border-color: rgba(74,222,128,.4); background: rgba(74,222,128,.07); color: var(--text-primary); }
+.special-summary.is-ready.is-closing { border-color: rgba(248,113,113,.45); background: rgba(248,113,113,.08); }
+.special-summary strong { color: #fff; }
+#btnAdminSaveSchedule.is-danger { background: #ef4444 !important; color: #fff !important; box-shadow: 0 8px 20px -10px rgba(239,68,68,.8); }
+
+@media (max-width: 720px) {
+  .court-status-grid { grid-template-columns: 1fr; }
+  .schedule-court-selector { grid-template-columns: 1fr 1fr; }
+}

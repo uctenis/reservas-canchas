@@ -2278,6 +2278,21 @@ function parseMinLeadHours(value) {
   return Math.min(n, 72);
 }
 
+// Canchas cerradas sin fecha de término desde "Estado de canchas" del admin:
+// { cjp1: { reason: 'Mal estado', since: ISO } }. Solo se aceptan IDs reales.
+function sanitizeClosedCourts(value) {
+  const out = {};
+  if (!value || typeof value !== 'object') return out;
+  Object.keys(value).forEach(function(courtId) {
+    if (!CONFIG.CALENDARS[courtId] || !value[courtId]) return;
+    out[courtId] = {
+      reason: text(value[courtId].reason).substring(0, 80),
+      since: text(value[courtId].since) || new Date().toISOString()
+    };
+  });
+  return out;
+}
+
 function saveScheduleConfig(data) {
   if (!isAdminRequest(data)) return { ok: false, msg: 'Acceso reservado al administrador.' };
   try {
@@ -2286,6 +2301,7 @@ function saveScheduleConfig(data) {
       maxAdvanceDays: data.maxAdvanceDays || {},
       maxBookingsPerDay: Number(data.maxBookingsPerDay) > 0 ? Number(data.maxBookingsPerDay) : 1,
       minLeadHours: parseMinLeadHours(data.minLeadHours),
+      closedCourts: sanitizeClosedCourts(data.closedCourts),
       updatedAt: new Date().toISOString(),
       updatedBy: text(data.actorEmail || data.adminEmail)
     };
@@ -2299,7 +2315,8 @@ function saveScheduleConfig(data) {
     if (response.getResponseCode() < 200 || response.getResponseCode() >= 300) {
       return { ok: false, msg: 'No se pudo guardar la configuración: ' + response.getContentText().substring(0, 200) };
     }
-    return { ok: true };
+    // El panel usa savedFields para detectar si este backend ya conoce los campos nuevos
+    return { ok: true, savedFields: Object.keys(config) };
   } catch (e) {
     return { ok: false, msg: 'No se pudo guardar la configuración: ' + e.message };
   }
@@ -2895,6 +2912,10 @@ function getAvailableSlots(dateStr, idToken, courtIdFilter) {
 
   const dynamicConfig = getDynamicScheduleConfig(idToken);
   const courtSlotsSource = (dynamicConfig && dynamicConfig.courtSlots) || CONFIG.COURT_SLOTS;
+  // Cierre indefinido desde "Estado de canchas"; una fecha especial que abre
+  // todos los horarios ese día sigue mandando sobre él.
+  const adminClosedCourts = (dynamicConfig && dynamicConfig.closedCourts) || {};
+  result.closedReasons = {};
 
   // Leer Calendar una sola vez desde el calendario maestro (Cancha CEC 1)
   const mainCalId = CONFIG.MAIN_CALENDAR_ID || CONFIG.CALENDARS['cec1'];
@@ -2953,10 +2974,13 @@ function getAvailableSlots(dateStr, idToken, courtIdFilter) {
   for (let i = 0; i < courtKeys.length; i++) {
     const courtKey = courtKeys[i];
     if (courtIdFilter && courtKey !== courtIdFilter) continue;
-    if (closedCourts[courtKey]) {
+    if (closedCourts[courtKey] || (adminClosedCourts[courtKey] && !specialCourts[courtKey])) {
       result.courts[courtKey] = [];
       result.playable[courtKey] = [];
       result.busyLabels[courtKey] = {};
+      if (adminClosedCourts[courtKey] && !closedCourts[courtKey]) {
+        result.closedReasons[courtKey] = text(adminClosedCourts[courtKey].reason) || 'Cerrada';
+      }
       continue;
     }
 

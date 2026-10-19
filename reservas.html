@@ -416,7 +416,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
 
-<script src="db.js?v=20261019_minlead"></script>
+<script src="db.js?v=20261019_courts"></script>
 <script src="script.js?v=20260602_v2"></script>
 <script src="datepicker.js?v=20260908_v3"></script>
 <script>
@@ -1050,9 +1050,12 @@ function renderSlotsByCourt(apiData) {
     const notes = Object.entries(byComplex).map(([cx, list]) => {
       const info = COMPLEX_INFO[cx] || { short: cx.toUpperCase(), surface: '' };
       const total = courtsInfo.filter(ci => ci.complex === cx).length;
+      // Si el admin la cerró desde "Estado de canchas" se muestra el motivo
+      const reason = (apiData.closedReasons && list.map(ci => apiData.closedReasons[ci.court.id]).find(Boolean)) || '';
+      const status = reason ? `cerrada${reason !== 'Cerrada' ? `: ${escapeBoardText(reason)}` : ''}` : 'sin horarios este día';
       const text = list.length === total
-        ? `<strong>${info.short} · ${info.surface}</strong> sin horarios este día`
-        : `${list.map(ci => `<strong>${ci.court.label}</strong>`).join(' y ')} sin horarios este día`;
+        ? `<strong>${info.short} · ${info.surface}</strong> ${status}`
+        : `${list.map(ci => `<strong>${ci.court.label}</strong>`).join(' y ')} ${status}`;
       return `<div class="board-note-row">${text}</div>`;
     });
     html += `<div class="board-note" data-complex-note="${Object.keys(byComplex).join(' ')}">${notes.join('')}</div>`;
@@ -1135,6 +1138,10 @@ function renderSlotsByCourt(apiData) {
   if (!session) {
     container.insertAdjacentHTML('afterend', '<p class="login-prompt" id="reservationLoginPrompt">🔑 <a onclick="openAuth()" style="color:var(--accent-tennis);cursor:pointer;font-weight:600">Inicia sesión</a> para reservar un horario.</p>');
   }
+}
+
+function escapeBoardText(value) {
+  return String(value).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
 }
 
 // Versión liviana (640×260) de la foto del complejo: cec.jpg → cec-sm.jpg
