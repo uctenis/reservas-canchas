@@ -4535,11 +4535,26 @@ function applyScoreModalMode(isFriendly) {
     if (max1B) max1B.max = '7';
     if (set2A) set2A.max = '7';
     if (set2B) set2B.max = '7';
-    if (set3A) set3A.max = '7';
-    if (set3B) set3B.max = '7';
-    if (summaryInfo) summaryInfo.textContent = 'Ingresa el resultado de cada set. Si el set termina 7-6, completa el tie-break en el cuadro correspondiente.';
+    // Liga (bases §10): el tercer set se juega a tie break, ej. 10-8.
+    const leagueMatch = isCurrentScoreChallengeLeague();
+    if (set3A) set3A.max = leagueMatch ? '99' : '7';
+    if (set3B) set3B.max = leagueMatch ? '99' : '7';
+    if (summaryInfo) summaryInfo.textContent = leagueMatch
+      ? 'Liga: ingresa los dos primeros sets (si terminan 7-6, completa su tie-break). Si hay tercer set, anota el tie break tal cual, ej. 10-8.'
+      : 'Ingresa el resultado de cada set. Si el set termina 7-6, completa el tie-break en el cuadro correspondiente.';
     // Tiebreak visibility is managed by updateTiebreakVisibility()
   }
+}
+
+function isCurrentScoreChallengeLeague() {
+  const challenge = DB.getChallenges().find(item => item.id === rankingState.currentChallengeId);
+  return Boolean(challenge && challenge.tipo === 'liga');
+}
+
+// Tie break que reemplaza al tercer set: a 10 puntos, por diferencia de 2.
+function isValidMatchTiebreakScore(a, b) {
+  if (a === null || b === null) return false;
+  return Math.max(a, b) >= 10 && Math.abs(a - b) >= 2;
 }
 
 function isValidTennisSetScore(a, b) {
@@ -4611,6 +4626,11 @@ function buildScoreResult() {
       const label = `${a}-${b}`;
       const winnerId = challenge ? (a > b ? challenge.retadorId : challenge.retadoId) : (a > b ? 'A' : 'B');
       return { a, b, winnerId, label };
+    }
+
+    if (setNumber === 3 && challenge && challenge.tipo === 'liga' && isValidMatchTiebreakScore(a, b)) {
+      const winnerId = a > b ? challenge.retadorId : challenge.retadoId;
+      return { a, b, winnerId, label: `${a}-${b}` };
     }
 
     // Desafío oficial: validación estricta de tenis
