@@ -133,3 +133,9 @@ assert.equal(L.buildSeasonView(eight, [], { season, gender: 'M', today: '2026-10
 assert.equal(L.buildSeasonView(eight, [], { season, gender: 'M', today: '2026-11-22' }).phase, 'en_juego');
 
 console.log('liga.test.js (temporada 2026): OK');
+
+// La categoría elegida al inscribirse manda sobre la ficha (fichas sin género).
+const noGender = { id: 'x1', nombre: 'Sin Género', email: 'x1@uct.cl', genero: '', liga2026: { inscrito: true, rama: 'F' } };
+assert.equal(L.getEntrants([noGender], season, 'F').length, 1);
+assert.equal(L.getEntrants([noGender], season, 'M').length, 0);
+console.log('liga.test.js (categoría): OK');

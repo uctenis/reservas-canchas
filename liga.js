@@ -138,6 +138,12 @@
     return Boolean(enrollment && enrollment.retirado !== true);
   }
 
+  // Categoría en que compite: la elegida al inscribirse (`rama`) o, si no
+  // la hay, el género de la ficha.
+  function entrantGender(player, enrollment) {
+    return normalizeGender(enrollment && enrollment.rama) || normalizeGender(player.genero || player.gender);
+  }
+
   // Inscritos de una categoría en el orden que fija su número en el
   // fixture: primero el número sorteado, luego el orden de inscripción.
   // Quien se retira con la liga en curso conserva su número para no
@@ -145,8 +151,8 @@
   function getEntrants(players, season = getSeason(), gender) {
     return (Array.isArray(players) ? players : [])
       .filter(player => player && getEnrollment(player, season))
-      .filter(player => !gender || normalizeGender(player.genero || player.gender) === gender)
       .map(player => ({ player, enrollment: getEnrollment(player, season) }))
+      .filter(({ player, enrollment }) => !gender || entrantGender(player, enrollment) === gender)
       .sort((a, b) => {
         const numA = Number(a.enrollment.numero) || Infinity;
         const numB = Number(b.enrollment.numero) || Infinity;
@@ -161,7 +167,7 @@
         email: String(player.email || '').toLowerCase(),
         foto: player.foto || '',
         categoria: player.categoria || '',
-        genero: normalizeGender(player.genero || player.gender),
+        genero: entrantGender(player, enrollment),
         numero: index + 1,
         sorteado: Boolean(Number(enrollment.numero)),
         retirado: enrollment.retirado === true,
@@ -646,7 +652,7 @@
     // Temporadas
     SEASONS, PAIRING_STATES,
     getSeason, todayIso, addDays, daysBetween, getRoundWindow, normalizeGender,
-    playerKey, pairKey, getEnrollment, isEnrolled, getEntrants, buildRoundRobin,
+    playerKey, pairKey, getEnrollment, isEnrolled, entrantGender, getEntrants, buildRoundRobin,
     isSeasonMatch, scoreStats, mastersSize, buildSeasonView, findEntrant,
     getPlayerFixture, getSchedulablePairings,
     // Liga semanal (ciclo anterior)

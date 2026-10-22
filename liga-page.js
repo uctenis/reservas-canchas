@@ -157,18 +157,23 @@
         <div class="lg-mine-card"><p class="lg-muted">Tu cuenta no está enlazada a una ficha de jugador activa, así que no puedes inscribirte. Escríbele a la comisión si crees que es un error.</p></div>`;
       return;
     }
-    const gender = L.normalizeGender(me.genero || me.gender);
     const enrollment = L.getEnrollment(me, season);
+    const gender = L.entrantGender(me, enrollment);
 
     if (!enrollment) {
+      // La categoría (damas o varones) sale de la ficha; solo si la ficha no
+      // la tiene se le pide elegirla.
+      const buttons = gender
+        ? `<button class="lg-btn" type="button" data-action="enroll-self" data-rama="${gender}">Inscribirme en ${GENDER_LABEL[gender]}</button>`
+        : ['F', 'M'].map(g => `<button class="lg-btn ${g === 'F' ? 'ghost' : ''}" type="button" data-action="enroll-self" data-rama="${g}">Inscribirme en ${GENDER_LABEL[g]}</button>`).join('');
       el.innerHTML = enrollmentOpen ? `
         <div class="lg-mine-card lg-mine-cta lg-enroll">
           <div>
             <span class="lg-eyebrow">Inscripción abierta hasta el ${fmtLong(season.cierreInscripcion)}</span>
             <h2>Súmate al Campeonato de Liga ${esc(season.id)}</h2>
-            <p>Participación voluntaria y gratuita para socios con sus cuotas al día. Jugarás una vez contra cada inscrito de ${esc(GENDER_LABEL[gender] || 'tu categoría')}.</p>
+            <p>Participación voluntaria y gratuita para socios con sus cuotas al día. Hay categoría damas y varones: ${gender ? `según tu ficha, compites en <strong>${GENDER_LABEL[gender]}</strong> y jugarás una vez contra cada inscrito de esa categoría` : 'elige en cuál compites'}.</p>
           </div>
-          <button class="lg-btn" type="button" data-action="enroll-self">Inscribirme en ${esc(GENDER_LABEL[gender] || 'la liga')}</button>
+          <div class="lg-inline">${buttons}</div>
         </div>` : `
         <div class="lg-mine-card"><p class="lg-muted">La inscripción cerró el ${fmtLong(season.cierreInscripcion)}. Si quieres sumarte, habla con la comisión organizadora.</p></div>`;
       return;
@@ -425,7 +430,7 @@
     const enrolledKeys = new Set(v.entrants.map(e => e.key));
     const candidates = state.players
       .filter(isLeagueEligible)
-      .filter(p => L.normalizeGender(p.genero || p.gender) === v.gender && !enrolledKeys.has(L.playerKey(p)))
+      .filter(p => [v.gender, ''].includes(L.normalizeGender(p.genero || p.gender)) && !L.getEnrollment(p, season) && !enrolledKeys.has(L.playerKey(p)))
       .sort((a, b) => String(a.nombre).localeCompare(String(b.nombre), 'es'));
     const expired = v.rounds.flatMap(r => r.partidos.map(p => ({ r, p })))
       .filter(({ p }) => (p.state === 'wo_doble' && !p.retiro) || p.exception);
@@ -527,9 +532,9 @@
     const now = new Date().toISOString();
     if (action === 'enroll-self' && state.me) {
       if (!confirm(`¿Confirmas tu inscripción al ${season.nombre}? Te comprometes a jugar cada fecha dentro de su plazo.`)) return;
-      const gender = L.normalizeGender(state.me.genero || state.me.gender);
-      if (gender) state.gender = gender;
-      return saveEnrollment(state.me.id, { inscrito: true, retirado: false, inscritoEn: now }, '¡Listo! Quedaste inscrito en la liga.');
+      const rama = button.dataset.rama;
+      if (rama) state.gender = rama;
+      return saveEnrollment(state.me.id, { inscrito: true, retirado: false, inscritoEn: now, rama }, `¡Listo! Quedaste inscrito en ${GENDER_LABEL[rama] || 'la liga'}.`);
     }
     if (action === 'unenroll-self' && state.me) {
       if (!confirm('¿Darte de baja de la liga? Puedes volver a inscribirte mientras la inscripción siga abierta.')) return;
@@ -540,7 +545,7 @@
       const id = document.getElementById('lgAdminCandidate').value;
       const player = playerById(id);
       if (!player) return toast('Elige un jugador.', 'bad');
-      return saveEnrollment(id, { inscrito: true, retirado: false, inscritoEn: now, inscritoPor: actor().email }, `${player.nombre} quedó inscrito.`);
+      return saveEnrollment(id, { inscrito: true, retirado: false, inscritoEn: now, inscritoPor: actor().email, rama: state.gender }, `${player.nombre} quedó inscrito en ${GENDER_LABEL[state.gender]}.`);
     }
     if (action === 'admin-unenroll') {
       const player = playerById(button.dataset.id);
@@ -630,7 +635,7 @@
     state.players = players.status === 'fulfilled' ? players.value : DB.getUsers();
     state.matches = matches.status === 'fulfilled' ? matches.value : DB.getChallenges();
     state.me = findMe();
-    const myGender = state.me ? L.normalizeGender(state.me.genero || state.me.gender) : '';
+    const myGender = state.me ? L.entrantGender(state.me, L.getEnrollment(state.me, season)) : '';
     if (myGender) state.gender = myGender;
     state.loaded = true;
     render();
