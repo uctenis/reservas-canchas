@@ -200,8 +200,8 @@
   <div class="modal-content">
     <button class="modal-close-btn" type="button" data-close-modal="challengeModal" aria-label="Cerrar">×</button>
     <div id="challengeModalFormContainer">
-      <p class="modal-kicker">Desafío</p>
-      <h3>Lanzar desafío</h3>
+      <p class="modal-kicker" id="challengeModalKicker">Desafío</p>
+      <h3 id="challengeModalTitle">Lanzar desafío</h3>
       <form id="fChallenge">
         <div class="form-group">
           <label for="chal_retado">Retar a</label>
@@ -211,7 +211,7 @@
           <label for="chal_tipo">Modalidad</label>
           <select id="chal_tipo" required>
             <option value="ranking">Desafío oficial de escalerilla</option>
-            <option value="liga">Liga semanal</option>
+            <option value="liga">Campeonato de Liga</option>
           </select>
         </div>
         <div class="form-row">
@@ -895,8 +895,8 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-<script src="db.js?v=20261019_classes"></script>
-<script src="liga.js?v=20260909_v1"></script>
+<script src="db.js?v=20261022_liga"></script>
+<script src="liga.js?v=20261022_t1"></script>
 <script src="datepicker.js?v=20260908_v3"></script>
 
 <script>
@@ -999,6 +999,8 @@ const rankingState = {
 let rankingEditMode = false;
 let initialRankingOrder = [];
 let ligaEntryFlow = false;
+// Quien entra desde liga.html solo para iniciar sesión vuelve a la liga.
+let ligaLoginReturn = false;
 
 // ── Debounce util para evitar renders múltiples ──
 function debounce(fn, delay) {
@@ -1079,6 +1081,13 @@ document.addEventListener('DOMContentLoaded', () => {
       switchAdminSubSection(openParam);
     }
   }
+  if (params.get('volver') === 'liga') {
+    ligaLoginReturn = true;
+    setTimeout(() => {
+      if (DB.getSession()) window.location.href = 'liga.html';
+      else openAuthModal();
+    }, 600);
+  }
   if (params.get('liga') === '1') {
     ligaEntryFlow = true;
     setTimeout(() => {
@@ -1146,6 +1155,12 @@ function setupEvents() {
 
   document.getElementById('fChallenge').addEventListener('submit', submitChallenge);
   document.getElementById('chal_fecha').addEventListener('change', updateChallengeAvailableSlots);
+  document.getElementById('chal_retado').addEventListener('change', () => {
+    if (document.getElementById('chal_tipo').value === 'liga') {
+      applyLeagueDateLimits();
+      updateChallengeAvailableSlots();
+    }
+  });
   document.getElementById('chal_cancha').addEventListener('change', updateChallengeAvailableSlots);
   document.getElementById('chal_otro_lugar').addEventListener('change', toggleChallengeElsewhere);
   document.getElementById('fScore').addEventListener('submit', submitScore);
@@ -2317,13 +2332,14 @@ function checkBtnDesafio() {
   document.getElementById('btnNuevoAmistoso').style.display = (sessionPlayer || isAdminSession()) ? 'inline-flex' : 'none';
 }
 
-function openLeagueChallengeModal() {
+async function openLeagueChallengeModal() {
   const session = DB.getSession();
   if (!session) {
     openAuthModal();
     return;
   }
-  openChallengeModal(null, 'liga');
+  await loadLeagueRawPlayers();
+  openChallengeModal(new URLSearchParams(location.search).get('rival'), 'liga');
 }
 
 function renderMyProfile() {
@@ -3311,6 +3327,11 @@ async function handleLoginResponse(result) {
   closeModal('authModal');
   await refreshRankingPage();
 
+  if (ligaLoginReturn) {
+    window.location.href = 'liga.html';
+    return;
+  }
+
   // Si el login se disparó desde el flujo de liga, retoma el modal de desafío en vez de dejar al usuario en el ranking
   if (ligaEntryFlow) {
     setTimeout(openLeagueChallengeModal, 300);
@@ -3327,7 +3348,7 @@ function doLogout() {
   renderAll();
 }
 
-function openChallengeModal(playerKey, mode = 'ranking') {
+function openChallengeModal(playerKey, mode = 'ranking', editId = '') {
   const session = DB.getSession();
   if (!session) {
     openAuthModal();
@@ -3343,6 +3364,7 @@ function openChallengeModal(playerKey, mode = 'ranking') {
   document.getElementById('chal_tipo').value = mode === 'liga' ? 'liga' : 'ranking';
   document.getElementById('chal_id').value = '';
   document.getElementById('chal_fecha').min = todayISO();
+  document.getElementById('chal_fecha').removeAttribute('max');
   document.getElementById('chal_fecha').value = todayISO();
   document.getElementById('chal_otro_lugar').checked = false;
   document.getElementById('chalCanchaGroup').style.display = '';
@@ -3378,9 +3400,18 @@ function openChallengeModal(playerKey, mode = 'ranking') {
   }
   if (sessionPlayer.gender !== rankingState.currentGender) switchGender(sessionPlayer.gender);
 
+  document.getElementById('challengeModalKicker').textContent = mode === 'liga' ? 'Campeonato de Liga' : 'Desafío';
+  document.getElementById('challengeModalTitle').textContent = mode === 'liga' ? 'Agendar partido de la fecha' : 'Lanzar desafío';
+  if (mode === 'liga') {
+    renderLeagueRivalOptions(sessionPlayer, playerKey, editId);
+    updateChallengeAvailableSlots();
+    openModal('challengeModal');
+    return;
+  }
+
   const select = document.getElementById('chal_retado');
   const target = playerKey ? getPlayerByKey(playerKey) : null;
-  const rivals = (mode === 'liga' ? getLeagueChallengeablePlayers(sessionPlayer) : getChallengeablePlayers(sessionPlayer))
+  const rivals = getChallengeablePlayers(sessionPlayer)
     .map(player => ({ player, user: ensureLocalUserForPlayer(player) }))
     .filter(item => item.user);
 
@@ -3397,12 +3428,7 @@ function openChallengeModal(playerKey, mode = 'ranking') {
     submit.textContent = 'Enviar desafío';
     select.innerHTML = rivals.map(({ player, user }) => {
       const selected = target && samePlayer(player, target) ? 'selected' : '';
-      const suggestion = mode === 'liga'
-        ? (player.leaguePlayedThisCycle
-          ? '🔁 Ya jugaron este ciclo · '
-          : `${player.leagueCategoryDistance === 0 ? '⭐ Misma categoría' : player.leagueCategoryDistance === 1 ? '↔ Categoría cercana' : '• Otra categoría'} · `)
-        : '';
-      return `<option value="${escapeAttr(user.id)}" ${selected}>${suggestion}${escapeHTML(user.nombre)} · ${escapeHTML(normalizeCategory(player.categoria) || 'Categoría por definir')}</option>`;
+      return `<option value="${escapeAttr(user.id)}" ${selected}>${escapeHTML(user.nombre)} · ${escapeHTML(normalizeCategory(player.categoria) || 'Categoría por definir')}</option>`;
     }).join('');
   }
 
@@ -3458,6 +3484,14 @@ async function submitChallenge(event) {
   if (!jugarOtroLugar && !slot) {
     error.textContent = 'Selecciona un horario disponible.';
     return;
+  }
+  const leagueOption = tipo === 'liga' ? document.getElementById('chal_retado').selectedOptions[0] : null;
+  if (tipo === 'liga') {
+    const leagueError = getLeagueDateError(leagueOption, fecha);
+    if (leagueError) {
+      error.textContent = leagueError;
+      return;
+    }
   }
   const courtObj = DB.COURTS.find(c => c.id === courtId);
   const courtLabel = jugarOtroLugar ? 'Cancha acordada entre jugadores' : (courtObj ? courtObj.label : courtId);
@@ -3532,6 +3566,7 @@ async function submitChallenge(event) {
       courtId: courtId,
       courtLabel: courtLabel,
       tipo: tipo,
+      ...(leagueOption ? { ligaTemporada: leagueOption.dataset.season, ligaFecha: Number(leagueOption.dataset.round) } : {}),
       ...(bookingEventId ? { bookingId: bookingEventId } : {})
     });
 
@@ -3683,7 +3718,7 @@ async function updateChallengeAvailableSlots() {
 function openEditChallengeModal(challengeId) {
   const challenge = DB.getChallenges().find(c => c.id === challengeId);
   if (!challenge) return;
-  openChallengeModal(challenge.retadoId);
+  openChallengeModal(challenge.retadoId, challenge.tipo === 'liga' ? 'liga' : 'ranking', challengeId);
   const submitBtn = document.getElementById('btnSubmitChallenge');
   submitBtn.dataset.editChallengeId = challengeId;
   submitBtn.textContent = 'Guardar Cambios';
@@ -5084,10 +5119,12 @@ function showPlayerProfile(playerKey) {
   const friendlyWins   = friendlyMatches.filter(c => playerMatchesChallengeRef(player, c.ganadorId)).length;
   const friendlyLosses = friendlyMatches.filter(c => c.ganadorId && !playerMatchesChallengeRef(player, c.ganadorId)).length;
   const friendlyDraws  = friendlyMatches.filter(c => !c.ganadorId).length;
-  const currentLeagueCycle = typeof UCTennisLeague !== 'undefined' ? UCTennisLeague.getCycle(new Date()) : null;
-  const currentLeagueRow = currentLeagueCycle && typeof UCTennisLeague !== 'undefined'
-    ? UCTennisLeague.calculateStandings(getAllPlayers(), DB.getChallenges(), currentLeagueCycle).find(row => String(row.id) === String(player.id))
-    : null;
+  let currentLeagueRow = null;
+  if (typeof UCTennisLeague !== 'undefined') {
+    const leagueView = UCTennisLeague.buildSeasonView(DB.getCachedPlayersSnapshot() || leagueRawPlayers || [], DB.getChallenges(), { gender: player.gender });
+    const leagueEntrant = UCTennisLeague.findEntrant(leagueView, player);
+    currentLeagueRow = leagueEntrant ? leagueView.standings.find(row => row.key === leagueEntrant.key) : null;
+  }
 
   const pending = playerChallenges.filter(c => isChallengeActiveStatus(c.status)).length;
 
@@ -5114,7 +5151,7 @@ function showPlayerProfile(playerKey) {
             const isFriendly = c.tipo === 'amistoso';
             const isLeague = c.tipo === 'liga';
             const typeIcon = isFriendly ? '🤝' : (isLeague ? '🏆' : '⚔️');
-            const typeLabel = isFriendly ? 'Amistoso' : (isLeague ? 'Liga semanal' : 'Escalerilla');
+            const typeLabel = isFriendly ? 'Amistoso' : (isLeague ? 'Liga' : 'Escalerilla');
             const dateStr = c.fechaResultado ? formatShortDate(c.fechaResultado.split('T')[0]) : formatShortDate(c.fecha);
             return `
               <li class="profile-match-item" style="--match-color:${resultColor};">
@@ -5147,9 +5184,9 @@ function showPlayerProfile(playerKey) {
       </div>
 
       <div class="profile-record-group" style="border-color:rgba(245,158,11,.28);">
-        <span class="profile-record-label" style="color:#fbbf24;">🏆 Liga semanal</span>
+        <span class="profile-record-label" style="color:#fbbf24;">🏆 Campeonato de Liga</span>
         <div class="profile-record-stats">
-          <div><span class="stat-label" style="color:#fbbf24;">Puntos ciclo actual</span><span class="stat-value">${currentLeagueRow?.pts || 0}</span></div>
+          <div><span class="stat-label" style="color:#fbbf24;">${currentLeagueRow ? `Pts · ${currentLeagueRow.pos}° lugar` : 'Pts temporada'}</span><span class="stat-value">${currentLeagueRow?.pts || 0}</span></div>
           <div><span class="stat-label" style="color:#4ade80;">Ganados</span><span class="stat-value">${leagueWins}</span></div>
           <div><span class="stat-label" style="color:#9bb0a6;">Jugados</span><span class="stat-value">${leagueMatches.length}</span></div>
         </div>
@@ -6569,35 +6606,98 @@ function hasActiveLeagueMatch(player, ignoreId = '') {
   );
 }
 
-// Enfrentaron ya a este rival en el ciclo de liga vigente (partido con
-// resultado, no invitaciones activas: esas ya estan bloqueadas por
-// hasActiveLeagueMatch). Se usa para desincentivar -sin bloquear- que
-// alguien repita siempre al mismo rival mas debil.
-function hasPlayedLeagueOpponentThisCycle(playerA, playerB, ignoreId = '') {
-  if (typeof UCTennisLeague === 'undefined') return false;
-  const cycle = UCTennisLeague.getCycle(new Date());
-  return DB.getChallenges().some(match =>
-    match.id !== ignoreId &&
-    UCTennisLeague.isLeagueMatch(match, cycle) &&
-    ((playerMatchesChallengeSide(playerA, match, 'retador') && playerMatchesChallengeSide(playerB, match, 'retado')) ||
-     (playerMatchesChallengeSide(playerA, match, 'retado') && playerMatchesChallengeSide(playerB, match, 'retador')))
-  );
+// ── Campeonato de Liga ──────────────────────────────────────────────────
+// El rival y el plazo de cada partido de liga los fija el fixture (liga.js):
+// solo se agendan cruces propios sin resultado, dentro del plazo de su fecha.
+// La inscripción vive en la ficha cruda de Firestore, que el ranking no
+// conserva al normalizar jugadores; por eso se lee aparte.
+let leagueRawPlayers = null;
+
+async function loadLeagueRawPlayers() {
+  try {
+    leagueRawPlayers = DB.isCloudConfigured() ? await DB.getPlayersCloud() : DB.getUsers();
+  } catch (err) {
+    console.warn('No se pudo leer la inscripción de la liga:', err);
+  }
+  return leagueRawPlayers || [];
 }
 
-function getLeagueChallengeablePlayers(player, ignoreId = '') {
-  if (!isPlayerActive(player) || hasActiveLeagueMatch(player, ignoreId)) return [];
-  return (rankingState.lists[player.gender] || [])
-    .filter(candidate => candidate.id !== player.id && isPlayerActive(candidate) && candidate.gender === player.gender && !hasActiveLeagueMatch(candidate, ignoreId))
-    .map(candidate => ({
-      ...candidate,
-      leagueCategoryDistance: categoryDistance(normalizeCategory(player.categoria), normalizeCategory(candidate.categoria)),
-      leaguePlayedThisCycle: hasPlayedLeagueOpponentThisCycle(player, candidate, ignoreId)
+function getLeagueSchedulingOptions(sessionPlayer, editId = '') {
+  if (typeof UCTennisLeague === 'undefined' || !sessionPlayer) return { entrant: null, options: [] };
+  const season = UCTennisLeague.getSeason();
+  const raw = DB.getCachedPlayersSnapshot() || leagueRawPlayers || [];
+  const view = UCTennisLeague.buildSeasonView(raw, DB.getChallenges().filter(c => c.id !== editId), { season, gender: sessionPlayer.gender });
+  const entrant = UCTennisLeague.findEntrant(view, sessionPlayer);
+  if (!entrant) return { season, view, entrant: null, options: [] };
+  // Fechas en curso y la siguiente (para adelantar), no todo el calendario.
+  const horizon = UCTennisLeague.addDays(view.today, 12);
+  const options = UCTennisLeague.getSchedulablePairings(view, entrant)
+    .filter(item => item.round.window.start <= horizon)
+    .map(item => ({
+      season,
+      round: item.round.numero,
+      start: item.round.window.start,
+      deadline: item.partido.deadline,
+      rival: getAllPlayers().find(p => (item.rival.email && normalizeEmail(p.email) === item.rival.email) || p.id === item.rival.id) || null
     }))
-    .sort((a, b) =>
-      (a.leaguePlayedThisCycle === b.leaguePlayedThisCycle ? 0 : a.leaguePlayedThisCycle ? 1 : -1) ||
-      a.leagueCategoryDistance - b.leagueCategoryDistance ||
-      a.nombre.localeCompare(b.nombre, 'es')
-    );
+    .filter(option => option.rival && isPlayerActive(option.rival));
+  return { season, view, entrant, options };
+}
+
+function renderLeagueRivalOptions(sessionPlayer, targetRef, editId = '') {
+  const select = document.getElementById('chal_retado');
+  const submit = document.getElementById('btnSubmitChallenge');
+  const error = document.getElementById('challengeError');
+  const { entrant, options, season } = getLeagueSchedulingOptions(sessionPlayer, editId);
+  if (!entrant || !options.length) {
+    select.innerHTML = `<option value="">${entrant ? 'Sin partidos por agendar' : 'No estás inscrito en la liga'}</option>`;
+    select.disabled = true;
+    submit.disabled = true;
+    error.innerHTML = entrant
+      ? 'No tienes cruces pendientes por agendar ahora. Revisa tus invitaciones o el <a href="liga.html">fixture de la liga</a>.'
+      : `No estás inscrito en el ${escapeHTML(season?.nombre || 'Campeonato de Liga')}. <a href="liga.html">Ver la liga</a>.`;
+    return;
+  }
+  const today = todayISO();
+  select.disabled = false;
+  submit.disabled = false;
+  select.innerHTML = options.map(option => {
+    const user = ensureLocalUserForPlayer(option.rival);
+    if (!user) return '';
+    const isTarget = targetRef && [user.id, option.rival.id, normalizeEmail(option.rival.email)].includes(targetRef);
+    const label = option.start > today
+      ? `Fecha ${option.round} · desde ${formatLeagueDay(option.start)}`
+      : `Fecha ${option.round} · hasta ${formatLeagueDay(option.deadline)}`;
+    return `<option value="${escapeAttr(user.id)}" data-season="${escapeAttr(option.season.id)}" data-round="${option.round}" data-start="${option.start}" data-deadline="${option.deadline}" ${isTarget ? 'selected' : ''}>${label} · ${escapeHTML(user.nombre)}</option>`;
+  }).join('');
+  applyLeagueDateLimits();
+}
+
+function formatLeagueDay(iso) {
+  const date = new Date(`${iso}T00:00:00Z`);
+  return isNaN(date) ? iso : date.toLocaleDateString('es-CL', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+}
+
+// Bases §7–9: el partido se juega dentro del plazo de su fecha (se puede
+// adelantar desde el inicio de la liga, nunca atrasar).
+function applyLeagueDateLimits() {
+  const option = document.getElementById('chal_retado').selectedOptions[0];
+  const input = document.getElementById('chal_fecha');
+  if (!option || !option.dataset.deadline) return;
+  const season = UCTennisLeague.getSeason(option.dataset.season);
+  const min = [todayISO(), season ? season.inicio : ''].sort().pop();
+  input.setAttribute('min', min);
+  input.setAttribute('max', option.dataset.deadline);
+  if (!input.value || input.value < min || input.value > option.dataset.deadline) input.value = min;
+  document.getElementById('challengeError').textContent = `Fecha ${option.dataset.round}: el partido debe jugarse a más tardar el ${formatLeagueDay(option.dataset.deadline)}.`;
+}
+
+function getLeagueDateError(option, fecha) {
+  if (!option || !option.dataset.deadline) return 'Selecciona tu rival de la fecha.';
+  const season = UCTennisLeague.getSeason(option.dataset.season);
+  if (season && fecha < season.inicio) return `La liga parte el ${formatLeagueDay(season.inicio)}.`;
+  if (fecha > option.dataset.deadline) return `La Fecha ${option.dataset.round} vence el ${formatLeagueDay(option.dataset.deadline)}: elige un día dentro del plazo.`;
+  return '';
 }
 
 function categoryDistance(first, second, fallback = 99) {

@@ -1229,7 +1229,7 @@
     <div class="home-hero-copy">
       <span class="hero-kicker"><i></i>UCTenis Club · Universidad Católica de Temuco</span>
       <h1>Juega más.<span>Sube en el ranking.</span></h1>
-      <p class="hero-lead">Reserva tu cancha en segundos, desafía a tus rivales de la escalerilla y suma puntos en la liga semanal del club.</p>
+      <p class="hero-lead">Reserva tu cancha en segundos, desafía a tus rivales de la escalerilla y compite en el Campeonato de Liga del club.</p>
       <div class="hero-cta-row">
         <a class="hero-cta hero-cta-primary" href="reservas.html">
           Reservar cancha
@@ -1339,8 +1339,8 @@
     <!-- ── LANZAMIENTO DEPORTIVO ── -->
     <div class="club-sport-launch" id="clubSportLaunch" role="status">
       <div>
-        <strong id="clubSportLaunchTitle">🎾 Nueva Liga semanal UCTenis</strong>
-        <span id="clubSportLaunchText">Juega una vez por semana, suma puntos y obtén un bono para la escalerilla al cerrar el ciclo.</span>
+        <strong id="clubSportLaunchTitle">🎾 Campeonato de Liga UCTenis 2026</strong>
+        <span id="clubSportLaunchText">Todos contra todos, una fecha cada 10 días. Los mejores clasifican al Torneo de Maestros.</span>
       </div>
       <a href="liga.html">Conocer la liga</a>
     </div>
@@ -1393,17 +1393,17 @@
         </a>
       </div>
 
-      <!-- Nueva Liga semanal Card -->
+      <!-- Campeonato de Liga Card -->
       <div class="hero-card hero-card-league">
         <div>
-          <div class="hero-card-kicker">Nuevo formato · 6 semanas</div>
+          <div class="hero-card-kicker">Temporada 2026 · Todos contra todos</div>
           <div class="hero-card-content">
             <div class="hero-card-icon">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l2.4 6.9H22l-6.1 4.3 2.3 7-6.2-4.2-6.2 4.2 2.3-7L2 8.9h7.6L12 2z"/></svg>
             </div>
             <div>
-              <h2 class="hero-card-title">Liga semanal</h2>
-              <p class="hero-card-desc">Encuentra rivales de tu categoría, acuerda el horario y suma puntos por participar y ganar.</p>
+              <h2 class="hero-card-title">Campeonato de Liga</h2>
+              <p class="hero-card-desc">Un rival por fecha y 10 días para jugarlo: 3 puntos por victoria, 1 por derrota y clasificación al Torneo de Maestros.</p>
             </div>
           </div>
         </div>
@@ -1559,8 +1559,8 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
 
-<script src="db.js?v=20261019_classes"></script>
-<script src="liga.js?v=20260909_v1"></script>
+<script src="db.js?v=20261022_liga"></script>
+<script src="liga.js?v=20261022_t1"></script>
 <script src="script.js?v=20260602_v2"></script>
 <script src="home-live.js?v=20261009_r3"></script>
 <script>
@@ -2041,23 +2041,27 @@ function renderClubSportLaunchBanner() {
   const title = document.getElementById('clubSportLaunchTitle');
   const text = document.getElementById('clubSportLaunchText');
   if (!wrap || !title || !text) return;
-  const cycle = UCTennisLeague.getCycle(new Date());
-  const cycleStart = new Date(`${cycle.start}T00:00:00Z`);
-  const today = new Date();
-  const hasStarted = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()) >= cycleStart.getTime();
-  const elapsedDays = Math.max(0, Math.floor((Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()) - cycleStart.getTime()) / 86400000));
-  const currentWeek = Math.floor(elapsedDays / 7);
-  const isLaunchWeek = currentWeek === 0;
-  wrap.classList.toggle('is-launch-week', isLaunchWeek);
-  if (!hasStarted) {
-    title.textContent = `🎾 La Liga UCTenis arranca el lunes ${formatDateShort(cycle.start)}`;
-    text.textContent = `Del ${formatDateShort(cycle.start)} al ${formatDateShort(cycle.end)}. Agenda tu partido para la Semana 1 y súmate a la clasificación desde el arranque.`;
-  } else if (isLaunchWeek) {
-    title.textContent = '🎾 ¡Hoy arranca la Liga UCTenis!';
-    text.textContent = `Semana 1 de ${cycle.weeks} · Del ${formatDateShort(cycle.start)} al ${formatDateShort(cycle.end)}. Agenda tu primer partido esta semana.`;
+  const season = UCTennisLeague.getSeason();
+  const today = UCTennisLeague.todayIso();
+  const lastWindow = season.ventanas[season.ventanas.length - 1];
+  const roundIndex = season.ventanas.findIndex(([start, end]) => today >= start && today <= end);
+  wrap.classList.toggle('is-launch-week', today >= season.inicio && today <= season.ventanas[0][1]);
+  if (today <= season.cierreInscripcion) {
+    title.textContent = `🎾 Inscripciones abiertas: ${season.nombre}`;
+    text.textContent = `Gratis para socios al día. Inscríbete hasta el ${formatDateShort(season.cierreInscripcion)}; la 1ª fecha parte el ${formatDateShort(season.inicio)}.`;
+  } else if (today < season.inicio) {
+    title.textContent = `🎾 El ${season.nombre} parte el ${formatDateShort(season.inicio)}`;
+    text.textContent = 'Revisa tu rival de la 1ª fecha y agenda tu partido.';
+  } else if (roundIndex >= 0) {
+    const [, end] = season.ventanas[roundIndex];
+    title.textContent = `🎾 Campeonato de Liga · Fecha ${roundIndex + 1} en juego`;
+    text.textContent = `Los partidos de esta fecha se juegan hasta el ${formatDateShort(end)}. Revisa tu rival y agenda.`;
+  } else if (today > lastWindow[1]) {
+    title.textContent = '🏆 Campeonato de Liga: se viene el Torneo de Maestros';
+    text.textContent = 'Terminó la fase regular. Revisa la tabla final y quiénes clasificaron.';
   } else {
-    title.textContent = '🎾 Liga semanal UCTenis en curso';
-    text.textContent = `Semana ${currentWeek + 1} de ${cycle.weeks} · Juega, suma puntos y obtén un bono para la escalerilla al cerrar el ciclo.`;
+    title.textContent = '🎾 Campeonato de Liga UCTenis en curso';
+    text.textContent = 'Revisa la tabla y tu próximo rival.';
   }
 }
 
@@ -2377,7 +2381,7 @@ async function loadLiveData() {
       latestMatchCard = {
         id: `auto-latest-match-${latestMatch.id}`,
         badgeClass: isCampeonato ? 'badge-torneo' : (isFriendly ? 'badge-app' : (isLeague ? 'badge-liga' : 'badge-torneo')),
-        badgeText: isCampeonato ? 'Campeonato' : (isFriendly ? 'Amistoso' : (isLeague ? 'Liga semanal' : 'Desafío')),
+        badgeText: isCampeonato ? 'Campeonato' : (isFriendly ? 'Amistoso' : (isLeague ? 'Liga' : 'Desafío')),
         title: isCampeonato
           ? `¡Partido de Campeonato: ${winnerName} vence a ${loserName}!`
           : (isFriendly
@@ -2390,7 +2394,7 @@ async function loadLiveData() {
           : (isFriendly
             ? `En el encuentro amistoso jugado en ${latestMatch.cancha || 'UCTenis'} el ${formatDateShort(latestMatch.fecha)}, ${winnerName} superó a ${loserName} por un marcador de ${displayScore}. ¡Buen juego!`
             : (isLeague
-              ? `En el partido de Liga semanal jugado en ${latestMatch.cancha || 'UCTenis'} el ${formatDateShort(latestMatch.fecha)}, ${winnerName} superó a ${loserName} por un marcador de ${displayScore}, sumando puntos para el ciclo actual. ¡Buen partido!`
+              ? `Por el Campeonato de Liga, en ${latestMatch.cancha || 'UCTenis'} el ${formatDateShort(latestMatch.fecha)}, ${winnerName} superó a ${loserName} por ${displayScore} y suma 3 puntos en la tabla. ¡Buen partido!`
               : `En el duelo oficial del ranking ${genderText} jugado en ${latestMatch.cancha || 'UCTenis'} el ${formatDateShort(latestMatch.fecha)}, ${winnerName} superó a ${loserName} por un marcador de ${displayScore}, escalando posiciones en la escalerilla. ¡Felicitaciones a ambos!`)),
         date: formatDateShort(latestMatch.actualizado || latestMatch.creado || latestMatch.fecha)
       };
@@ -2428,35 +2432,29 @@ async function loadLiveData() {
           : (isFriendly
             ? `Un encuentro amistoso está agendado para el ${formatDateShort(nextMatch.fecha)} en ${nextMatch.cancha || 'UCTenis'}${slotStr}. ¡Éxito a ambos en este partido de práctica!`
             : (isLeague
-              ? `Un partido de Liga semanal está agendado para el ${formatDateShort(nextMatch.fecha)} en ${nextMatch.cancha || 'UCTenis'}${slotStr}. ¡Sumará puntos para el ciclo actual!`
+              ? `Un partido del Campeonato de Liga está agendado para el ${formatDateShort(nextMatch.fecha)} en ${nextMatch.cancha || 'UCTenis'}${slotStr}. ¡Suma para la tabla de la temporada!`
               : `El encuentro oficial por el ranking ${genderText} está agendado para el ${formatDateShort(nextMatch.fecha)} en ${nextMatch.cancha || 'UCTenis'}${slotStr}. ¡Mucho éxito a ambos en este importante duelo que define cambios de posiciones en la escalerilla!`)),
         date: formatDateShort(nextMatch.creado || nextMatch.fecha)
       };
     }
 
-    // 2.5. Liga semanal: quién lidera el ciclo actual (solo si ya se jugó
-    // algo esta semana/ciclo). Al recalcularse siempre contra la fecha de
-    // hoy, la tarjeta "caduca" sola: quien no jugó nada en el ciclo nuevo
-    // deja de aparecer y el líder se recalcula apenas hay resultados.
+    // 2.5. Campeonato de Liga: quién lidera cada categoría, apenas hay
+    // resultados en la temporada.
     if (typeof UCTennisLeague !== 'undefined') {
-      const leagueCycle = UCTennisLeague.getCycle(new Date());
-      const standings = UCTennisLeague.calculateStandings(playersList, challenges, leagueCycle)
-        .filter(row => row.pj > 0);
-      if (standings.length > 0) {
-        const leaderM = standings.filter(row => row.genero === 'M').sort((a, b) => b.pts - a.pts)[0];
-        const leaderF = standings.filter(row => row.genero === 'F').sort((a, b) => b.pts - a.pts)[0];
-        const cycleStartUTC = new Date(`${leagueCycle.start}T00:00:00Z`);
-        const todayUTC = Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate());
-        const currentWeek = Math.max(0, Math.floor((todayUTC - cycleStartUTC.getTime()) / 86400000 / 7)) + 1;
-        const leaderParts = [];
-        if (leaderM) leaderParts.push(`${escapeHTML(leaderM.nombre)} lidera el masculino con ${leaderM.pts} pts (${leaderM.pj} jugados)`);
-        if (leaderF) leaderParts.push(`${escapeHTML(leaderF.nombre)} lidera el femenino con ${leaderF.pts} pts (${leaderF.pj} jugados)`);
+      const season = UCTennisLeague.getSeason();
+      const views = ['M', 'F'].map(gender => UCTennisLeague.buildSeasonView(playersList, challenges, { season, gender }));
+      const leaders = views.map(view => ({ view, leader: view.standings.find(row => row.pj > 0 && row.pos === 1) }))
+        .filter(item => item.leader);
+      if (leaders.length > 0) {
+        const labels = { M: 'varones', F: 'damas' };
+        const leaderParts = leaders.map(({ view, leader }) => `${escapeHTML(leader.nombre)} lidera ${labels[view.gender]} con ${leader.pts} pts (${leader.pg}-${leader.pp})`);
+        const round = views[0].currentRound || views[1].currentRound;
         leagueLeaderCard = {
-          id: `auto-league-leader-${leagueCycle.id}`,
+          id: `auto-league-leader-${season.id}`,
           badgeClass: 'badge-liga',
-          badgeText: `Liga · Semana ${currentWeek} de ${leagueCycle.weeks}`,
-          title: '🏆 Así va la Liga semanal',
-          body: `${leaderParts.join(' · ')}. Ciclo del ${formatDateShort(leagueCycle.start)} al ${formatDateShort(leagueCycle.end)}.`,
+          badgeText: round ? `Liga · Fecha ${round.numero}` : 'Campeonato de Liga',
+          title: '🏆 Así va el Campeonato de Liga',
+          body: `${leaderParts.join(' · ')}.`,
           date: new Date().toLocaleDateString('es-CL', { day: 'numeric', month: 'short', year: 'numeric' })
         };
       }

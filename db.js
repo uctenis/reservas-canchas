@@ -1124,6 +1124,24 @@ const DB = {
    * restringido al dueño o a un admin). Retorna '' si no está guardado o
    * si falla la consulta — nunca lanza, para no romper la carga de la
    * ficha por un dato secundario. */
+  /** Inscripción de un jugador en una temporada de liga: vive en el campo
+   * `field` de su ficha (ej. liga2026) y se mezcla con lo que ya tenga. El
+   * propio jugador escribe su inscripción; el admin, la de cualquiera. */
+  async saveLeagueEnrollmentCloud(playerId, field, patch, actor = {}) {
+    if (!this.isCloudConfigured()) throw new Error('Firestore no está disponible.');
+    if (!playerId || !field) throw new Error('Falta la ficha del jugador o la temporada.');
+    await this.authReady();
+    const data = {
+      [field]: cleanFirestoreData(patch),
+      updatedAt: new Date().toISOString(),
+      updatedBy: actor.email || ''
+    };
+    await firebaseDb.collection(FIREBASE_COLLECTIONS.players).doc(playerId).set(data, { merge: true });
+    const cached = cachedPlayers.find(player => player.id === playerId);
+    if (cached) cached[field] = { ...(cached[field] || {}), ...data[field] };
+    return data[field];
+  },
+
   async getRutCloud(playerId) {
     if (!this.isCloudConfigured() || !window.CONFIG?.API_URL || !playerId) return '';
     try {
