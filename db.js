@@ -1838,7 +1838,9 @@ const DB = {
   },
 
   // Nota: Para usar la versión real que agenda en Google Calendar, se llama a esta función
-  async createBookingAPI(userId, courtId, fecha, slot) {
+  /** `motivo: 'liga'` pide la anticipación extendida de los partidos del
+   * Campeonato de Liga (el backend verifica que el jugador esté inscrito). */
+  async createBookingAPI(userId, courtId, fecha, slot, { motivo } = {}) {
     // Buscar usuario en localStorage; si no existe, intentar desde sesión activa
     let user = this.getUsers().find(u => u.id === userId);
     if (!user) {
@@ -1880,6 +1882,7 @@ const DB = {
         date: fecha,
         slot: slot
       };
+      if (motivo) payload.motivo = motivo;
       if (idToken) payload.idToken = idToken;
       const res = await fetch(window.CONFIG.API_URL, {
         method: 'POST',

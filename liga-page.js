@@ -209,14 +209,14 @@
       const rival = next.rival;
       const opensIn = L.daysBetween(v.today, r.window.start);
       const closesIn = L.daysBetween(v.today, p.deadline);
-      const canSchedule = ['por_agendar', 'proximo'].includes(p.state) && r.window.start <= L.addDays(v.today, 12);
+      const canSchedule = ['por_agendar', 'proximo'].includes(p.state) && r.window.start <= L.addDays(v.today, 10);
       let detail = '';
       let action = '';
       if (p.state === 'por_agendar' || p.state === 'proximo') {
         detail = p.state === 'proximo' ? `La fecha abre el ${fmtLong(r.window.start)}${opensIn > 0 ? ` (en ${daysLabel(opensIn)})` : ''}.` : `Tienes ${daysLabel(closesIn + 1)} para jugarlo (hasta el ${fmtLong(p.deadline)}).`;
         action = canSchedule
           ? `<a class="lg-btn" href="${scheduleLink(rival)}">Agendar con ${esc(rival.nombre.split(' ')[0])}</a>`
-          : `<span class="lg-muted">Podrás agendarlo desde el ${fmtLong(L.addDays(r.window.start, -12))}.</span>`;
+          : `<span class="lg-muted">Podrás agendarlo desde el ${fmtLong(L.addDays(r.window.start, -10))}.</span>`;
       } else if (p.state === 'invitado') {
         const mine = p.invitedBy && p.invitedBy.key === entrant.key;
         detail = `${mine ? `Esperando que ${esc(rival.nombre)} acepte` : `${esc(rival.nombre)} te invitó`} para el ${fmtLong(p.date)}${p.slot ? ` a las ${esc(p.slot)}` : ''}.`;

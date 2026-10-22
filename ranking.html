@@ -895,7 +895,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-<script src="db.js?v=20261022_liga"></script>
+<script src="db.js?v=20261022_liga2"></script>
 <script src="liga.js?v=20261022_t2"></script>
 <script src="datepicker.js?v=20260908_v3"></script>
 
@@ -3535,7 +3535,7 @@ async function submitChallenge(event) {
     // — se salta por completo si van a jugar en otro lugar: no hay cancha del club que reservar.
     try {
       if (!jugarOtroLugar) {
-        const r = await DB.createBookingAPI(session.id, courtId, fecha, slot);
+        const r = await DB.createBookingAPI(session.id, courtId, fecha, slot, tipo === 'liga' ? { motivo: 'liga' } : {});
         if (r.ok) {
           bookingEventId = r.booking?.id || null;
         } else {
@@ -6650,7 +6650,7 @@ function getLeagueSchedulingOptions(sessionPlayer, editId = '') {
   const entrant = UCTennisLeague.findEntrant(view, sessionPlayer);
   if (!entrant) return { season, view, entrant: null, options: [] };
   // Fechas en curso y la siguiente (para adelantar), no todo el calendario.
-  const horizon = UCTennisLeague.addDays(view.today, 12);
+  const horizon = UCTennisLeague.addDays(view.today, 10);
   const options = UCTennisLeague.getSchedulablePairings(view, entrant)
     .filter(item => item.round.window.start <= horizon)
     .map(item => ({

@@ -2069,6 +2069,45 @@ function updateChallengeInFirebase(challengeId, fields) {
   }
 }
 
+// Campo de la ficha con la inscripción de la temporada vigente (liga.js).
+const LEAGUE_ENROLLMENT_FIELD = 'liga2026';
+const LEAGUE_MAX_ADVANCE_DAYS = 21;
+
+/** true si el jugador con ese correo está inscrito (y no retirado) en la
+ * liga. Falla cerrado: ante cualquier error responde false. */
+function isLeagueEnrolledEmail(email) {
+  const needle = text(email).toLowerCase();
+  if (!needle || !CONFIG.FIREBASE_PROJECT_ID || !CONFIG.FIREBASE_API_KEY) return false;
+  try {
+    const url = 'https://firestore.googleapis.com/v1/projects/'
+      + encodeURIComponent(CONFIG.FIREBASE_PROJECT_ID)
+      + '/databases/(default)/documents:runQuery?key='
+      + encodeURIComponent(CONFIG.FIREBASE_API_KEY);
+    const fieldsToTry = ['emailLower', 'email'];
+    for (let i = 0; i < fieldsToTry.length; i++) {
+      const response = UrlFetchApp.fetch(url, {
+        method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+        payload: JSON.stringify({ structuredQuery: {
+          from: [{ collectionId: 'ranking_players' }],
+          where: { fieldFilter: { field: { fieldPath: fieldsToTry[i] }, op: 'EQUAL', value: { stringValue: needle } } },
+          limit: 1
+        } })
+      });
+      if (response.getResponseCode() !== 200) return false;
+      const results = JSON.parse(response.getContentText());
+      for (let j = 0; j < results.length; j++) {
+        const doc = results[j].document;
+        if (!doc) continue;
+        const enrollment = firestoreValueToJs((doc.fields || {})[LEAGUE_ENROLLMENT_FIELD]) || {};
+        return enrollment.inscrito === true && enrollment.retirado !== true;
+      }
+    }
+  } catch (err) {
+    console.warn('No se pudo verificar la inscripción de liga:', err);
+  }
+  return false;
+}
+
 function findFirebasePlayerByEmail(email) {
   const needle = text(email).toLowerCase();
   if (!needle || !CONFIG.FIREBASE_PROJECT_ID || !CONFIG.FIREBASE_API_KEY) return null;
@@ -3211,7 +3250,13 @@ function createBooking(data) {
       ? 'Las reservas deben realizarse con al menos ' + minLeadHours + ' hora' + (minLeadHours === 1 ? '' : 's') + ' de anticipación.'
       : 'Ese horario ya comenzó.' };
   }
-  if (msUntilBooking > maxAdvanceMs) {
+  // Campeonato de Liga: el partido de la fecha puede reservarse con más
+  // anticipación que una reserva normal (la fecha dura 10 días), pero solo
+  // si quien reserva está inscrito en la liga y con un tope fijo.
+  var leagueAdvanceOk = text(data.motivo) === 'liga' &&
+    msUntilBooking <= LEAGUE_MAX_ADVANCE_DAYS * 24 * 60 * 60 * 1000 &&
+    isLeagueEnrolledEmail(verifiedBookingEmail);
+  if (msUntilBooking > maxAdvanceMs && !leagueAdvanceOk) {
     var maxDiasLabel = Math.round(maxAdvanceMs / (24 * 60 * 60 * 1000) * 10) / 10;
     var maxDiasTexto = maxDiasLabel < 1 ? Math.round(maxAdvanceMs / (60 * 60 * 1000)) + ' horas' : maxDiasLabel + ' días';
     return { ok: false, msg: 'No puedes reservar con más de ' + maxDiasTexto + ' de anticipación.' };
