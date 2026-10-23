@@ -49,6 +49,9 @@ if (firebaseAuth) {
   _authReadyResolve(null);
 }
 
+// Campo de la ficha con la inscripción de la temporada vigente (liga.js).
+const LEAGUE_ENROLLMENT_FIELD = 'liga2026';
+
 const FIREBASE_COLLECTIONS = {
   players: 'ranking_players',
   challenges: 'ranking_challenges',
@@ -470,7 +473,7 @@ const DB = {
       }
       return {
         ok: true,
-        source: access.userType === 'socio' ? 'firebase' : 'staff',
+        source: access.userType === 'funcionario' ? 'staff' : 'firebase',
         player: access.profile,
         userType: access.userType,
         isAdmin: false
@@ -1142,6 +1145,29 @@ const DB = {
     return data[field];
   },
 
+  /** Ficha "solo liga" para quien juega el Campeonato de Liga sin ficha de
+   * socio (funcionarios u otros no socios). Queda inactiva para que no
+   * aparezca en la escalerilla. Si ya existe una ficha con ese correo, solo
+   * se le agrega la inscripción. */
+  async createLeagueOnlyPlayerCloud(person, field, enrollment, actor = {}) {
+    const email = normalizeEmailForDb(person.email);
+    if (!email) throw new Error('Falta el correo del jugador.');
+    const existing = cachedPlayers.find(player => normalizeEmailForDb(player.email) === email);
+    if (existing) return this.saveLeagueEnrollmentCloud(existing.id, field, enrollment, actor);
+    return this.savePlayerCloud({
+      nombre: person.nombre || email,
+      email,
+      genero: person.genero || '',
+      foto: person.foto || '',
+      categoria: person.categoria || '',
+      userType: person.userType || 'funcionario',
+      soloLiga: true,
+      activo: false,
+      participaRanking: false,
+      [field]: enrollment
+    }, actor);
+  },
+
   async getRutCloud(playerId) {
     if (!this.isCloudConfigured() || !window.CONFIG?.API_URL || !playerId) return '';
     try {
@@ -1267,6 +1293,24 @@ const DB = {
           return { allowed: true, userType: 'funcionario', profile: { id: staffSnap.docs[0].id, ...staffSnap.docs[0].data() } };
         }
       } catch (e) { console.warn('getUserAccess staff query error:', e); }
+
+      // 4b. ¿Juega el Campeonato de Liga sin ser socio activo? (ficha
+      // inactiva o "solo liga"). Entra como jugador de liga: puede ver la
+      // liga, agendar y reservar sus partidos, pero no reservas normales.
+      try {
+        const leagueSnap = await firebaseDb
+          .collection(FIREBASE_COLLECTIONS.players)
+          .where('emailLower', '==', normalized)
+          .limit(1)
+          .get();
+        if (!leagueSnap.empty) {
+          const p = { id: leagueSnap.docs[0].id, ...leagueSnap.docs[0].data() };
+          const enrollment = p[LEAGUE_ENROLLMENT_FIELD];
+          if (enrollment && enrollment.inscrito === true && enrollment.retirado !== true) {
+            return { allowed: true, userType: 'liga', profile: { ...p, userType: 'liga' } };
+          }
+        }
+      } catch (e) { console.warn('getUserAccess league query error:', e); }
     }
 
     // 5. Respaldo: listas estáticas (socios)
@@ -1851,7 +1895,7 @@ const DB = {
     }
     if (!user) return { ok: false, msg: 'Usuario no encontrado' };
 
-    if (user.userType === 'invitado' || user.readOnly) {
+    if ((user.userType === 'invitado' || user.readOnly) && motivo !== 'liga') {
       return { ok: false, msg: 'Tu cuenta @uct.cl tiene acceso de solo lectura. Escribe a un administrador de UCTenis para activarte como socio o funcionario y poder reservar canchas.' };
     }
 

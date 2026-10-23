@@ -895,7 +895,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-<script src="db.js?v=20261022_liga2"></script>
+<script src="db.js?v=20261023_liga3"></script>
 <script src="liga.js?v=20261022_t2"></script>
 <script src="datepicker.js?v=20260908_v3"></script>
 
@@ -3388,7 +3388,9 @@ function openChallengeModal(playerKey, mode = 'ranking', editId = '') {
     openModal('challengeModal');
     return;
   }
-  if (!isPlayerActive(sessionPlayer)) {
+  // La liga admite no socios y socios fuera de la escalerilla: allí manda
+  // la inscripción, no el estado en la escalerilla.
+  if (mode !== 'liga' && !isPlayerActive(sessionPlayer)) {
     const select = document.getElementById('chal_retado');
     const submit = document.getElementById('btnSubmitChallenge');
     select.innerHTML = '<option value="">Ficha inactiva</option>';
@@ -3468,7 +3470,7 @@ async function submitChallenge(event) {
     error.textContent = 'Tu cuenta no está enlazada a una ficha del ranking.';
     return;
   }
-  if (!isPlayerActive(retadorPlayer)) {
+  if (tipo !== 'liga' && !isPlayerActive(retadorPlayer)) {
     error.textContent = 'Tu ficha está inactiva para la escalerilla.';
     return;
   }
@@ -6596,9 +6598,10 @@ function hasActiveChallengeInRole(player, role, ignoreId = '') {
 function getChallengeBlockReason(retador, retado, ignoreId = '', mode = 'ranking') {
   if (!retador) return 'Tu cuenta no está enlazada a una ficha del ranking.';
   if (!retado) return 'Selecciona un rival válido.';
-  if (!isPlayerActive(retador)) return 'Tu ficha está inactiva para la escalerilla.';
-  if (!isPlayerActive(retado)) return 'El rival no está activo en la escalerilla.';
-  if (retador.gender !== retado.gender) return 'Solo puedes desafiar jugadores de tu mismo ranking.';
+  // En la liga el rival lo fija el fixture (misma categoría, inscritos).
+  if (mode !== 'liga' && !isPlayerActive(retador)) return 'Tu ficha está inactiva para la escalerilla.';
+  if (mode !== 'liga' && !isPlayerActive(retado)) return 'El rival no está activo en la escalerilla.';
+  if (mode !== 'liga' && retador.gender !== retado.gender) return 'Solo puedes desafiar jugadores de tu mismo ranking.';
   if (samePlayer(retador, retado)) return 'No puedes desafiarte a ti mismo.';
   if (mode !== 'liga' && !(retado.pos < retador.pos && retador.pos - retado.pos <= 3)) {
     return 'Solo puedes retar a jugadores ubicados hasta 3 puestos por encima de ti.';
@@ -6646,7 +6649,10 @@ function getLeagueSchedulingOptions(sessionPlayer, editId = '') {
   if (typeof UCTennisLeague === 'undefined' || !sessionPlayer) return { entrant: null, options: [] };
   const season = UCTennisLeague.getSeason();
   const raw = DB.getCachedPlayersSnapshot() || leagueRawPlayers || [];
-  const view = UCTennisLeague.buildSeasonView(raw, DB.getChallenges().filter(c => c.id !== editId), { season, gender: sessionPlayer.gender });
+  // Categoría elegida al inscribirse; si no hay, la de la ficha.
+  const rawMe = raw.find(p => (sessionPlayer.email && normalizeEmail(p.email) === normalizeEmail(sessionPlayer.email)) || p.id === sessionPlayer.id);
+  const gender = (rawMe && UCTennisLeague.entrantGender(rawMe, UCTennisLeague.getEnrollment(rawMe, season))) || sessionPlayer.gender;
+  const view = UCTennisLeague.buildSeasonView(raw, DB.getChallenges().filter(c => c.id !== editId), { season, gender });
   const entrant = UCTennisLeague.findEntrant(view, sessionPlayer);
   if (!entrant) return { season, view, entrant: null, options: [] };
   // Fechas en curso y la siguiente (para adelantar), no todo el calendario.
@@ -6660,7 +6666,7 @@ function getLeagueSchedulingOptions(sessionPlayer, editId = '') {
       deadline: item.partido.deadline,
       rival: getAllPlayers().find(p => (item.rival.email && normalizeEmail(p.email) === item.rival.email) || p.id === item.rival.id) || null
     }))
-    .filter(option => option.rival && isPlayerActive(option.rival));
+    .filter(option => option.rival);
   return { season, view, entrant, options };
 }
 

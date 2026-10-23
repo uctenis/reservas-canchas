@@ -3200,11 +3200,15 @@ function createBooking(data) {
   // es un correo @uct.cl registrado en el sistema).
   const isFuncionario = data.userType === 'funcionario' || memberCheck.source === 'staff' ||
     (memberCheck.player && memberCheck.player.userType === 'funcionario');
-  if (!memberCheck.ok && !isFuncionario) return memberCheck;
+  // Jugador inscrito en el Campeonato de Liga reservando un partido de liga:
+  // puede hacerlo aunque no sea socio activo (funcionarios, socios fuera de
+  // la escalerilla, fichas "solo liga").
+  const isLeagueBooking = text(data.motivo) === 'liga' && isLeagueEnrolledEmail(verifiedBookingEmail);
+  if (!memberCheck.ok && !isFuncionario && !isLeagueBooking) return memberCheck;
   // Si es funcionario sin estar en Sheets, aceptamos igual (su validación
   // primaria ya ocurrió via Firebase en el cliente).
 
-  if (memberCheck.readOnly && !isFuncionario) {
+  if (memberCheck.readOnly && !isFuncionario && !isLeagueBooking) {
     return { ok: false, msg: 'Tu cuenta @uct.cl tiene acceso de solo lectura. Escribe a un administrador de UCTenis para activarte como socio o funcionario y poder reservar canchas.' };
   }
 
@@ -3253,9 +3257,8 @@ function createBooking(data) {
   // Campeonato de Liga: el partido de la fecha puede reservarse con más
   // anticipación que una reserva normal (la fecha dura 10 días), pero solo
   // si quien reserva está inscrito en la liga y con un tope fijo.
-  var leagueAdvanceOk = text(data.motivo) === 'liga' &&
-    msUntilBooking <= LEAGUE_MAX_ADVANCE_DAYS * 24 * 60 * 60 * 1000 &&
-    isLeagueEnrolledEmail(verifiedBookingEmail);
+  var leagueAdvanceOk = isLeagueBooking &&
+    msUntilBooking <= LEAGUE_MAX_ADVANCE_DAYS * 24 * 60 * 60 * 1000;
   if (msUntilBooking > maxAdvanceMs && !leagueAdvanceOk) {
     var maxDiasLabel = Math.round(maxAdvanceMs / (24 * 60 * 60 * 1000) * 10) / 10;
     var maxDiasTexto = maxDiasLabel < 1 ? Math.round(maxAdvanceMs / (60 * 60 * 1000)) + ' horas' : maxDiasLabel + ' días';
