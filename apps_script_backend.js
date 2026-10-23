@@ -879,7 +879,9 @@ function createChallengeCalendarInvite(data) {
       '',
       isFriendly
         ? 'Acepten o rechacen el partido amistoso en la pagina de UCTenis.'
-        : 'La cancha ya queda reservada por el sistema. Acepten o rechacen el desafio en la pagina de ranking.'
+        : (isLeague
+          ? 'La cancha ya queda reservada por el sistema. El invitado acepta o rechaza el partido de liga en la pagina de UCTenis; debe jugarse dentro del plazo de la fecha.'
+          : 'La cancha ya queda reservada por el sistema. Acepten o rechacen el desafio en la pagina de ranking.')
     ].filter(Boolean).join('\n');
 
     // La reserva de cancha es la cita principal. Se reutiliza y se agregan
@@ -4098,7 +4100,7 @@ function sendWeeklyChallengesSummary() {
   for (let i = 1; i < values.length; i++) {
     const c = challengeFromRow(values[i]);
     if (!c.id) continue;
-    const tipo = text(c.tipo) === 'amistoso' ? '[Amistoso]' : '[Ranking]';
+    const tipo = text(c.tipo) === 'amistoso' ? '[Amistoso]' : (text(c.tipo) === 'liga' ? '[Liga]' : '[Ranking]');
     if (['completado','wo_retado','wo_retador'].indexOf(c.status) >= 0) {
       const at = new Date(c.fechaConfirmacion || c.actualizado || '');
       if (!isNaN(at) && at >= weekAgo) completados.push(tipo + ' ' + (c.retadorNombre||'?') + ' vs ' + (c.retadoNombre||'?') + ' — ' + (c.marcador||'W.O.'));
