@@ -896,7 +896,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-<script src="db.js?v=20261023_liga3"></script>
+<script src="db.js?v=20261023_inact"></script>
 <script src="liga.js?v=20261022_t2"></script>
 <script src="datepicker.js?v=20260908_v3"></script>
 
@@ -3389,9 +3389,7 @@ function openChallengeModal(playerKey, mode = 'ranking', editId = '') {
     openModal('challengeModal');
     return;
   }
-  // La liga admite no socios y socios fuera de la escalerilla: allí manda
-  // la inscripción, no el estado en la escalerilla.
-  if (mode !== 'liga' && !isPlayerActive(sessionPlayer)) {
+  if (!isPlayerActive(sessionPlayer)) {
     const select = document.getElementById('chal_retado');
     const submit = document.getElementById('btnSubmitChallenge');
     select.innerHTML = '<option value="">Ficha inactiva</option>';
@@ -3471,7 +3469,7 @@ async function submitChallenge(event) {
     error.textContent = 'Tu cuenta no está enlazada a una ficha del ranking.';
     return;
   }
-  if (tipo !== 'liga' && !isPlayerActive(retadorPlayer)) {
+  if (!isPlayerActive(retadorPlayer)) {
     error.textContent = 'Tu ficha está inactiva para la escalerilla.';
     return;
   }
@@ -6602,9 +6600,9 @@ function hasActiveChallengeInRole(player, role, ignoreId = '') {
 function getChallengeBlockReason(retador, retado, ignoreId = '', mode = 'ranking') {
   if (!retador) return 'Tu cuenta no está enlazada a una ficha del ranking.';
   if (!retado) return 'Selecciona un rival válido.';
-  // En la liga el rival lo fija el fixture (misma categoría, inscritos).
-  if (mode !== 'liga' && !isPlayerActive(retador)) return 'Tu ficha está inactiva para la escalerilla.';
-  if (mode !== 'liga' && !isPlayerActive(retado)) return 'El rival no está activo en la escalerilla.';
+  if (!isPlayerActive(retador)) return 'Tu ficha está inactiva para la escalerilla.';
+  if (!isPlayerActive(retado)) return 'El rival no está activo en la escalerilla.';
+  // En la liga el rival lo fija el fixture, que ya separa damas y varones.
   if (mode !== 'liga' && retador.gender !== retado.gender) return 'Solo puedes desafiar jugadores de tu mismo ranking.';
   if (samePlayer(retador, retado)) return 'No puedes desafiarte a ti mismo.';
   if (mode !== 'liga' && !(retado.pos < retador.pos && retador.pos - retado.pos <= 3)) {
@@ -6670,7 +6668,7 @@ function getLeagueSchedulingOptions(sessionPlayer, editId = '') {
       deadline: item.partido.deadline,
       rival: getAllPlayers().find(p => (item.rival.email && normalizeEmail(p.email) === item.rival.email) || p.id === item.rival.id) || null
     }))
-    .filter(option => option.rival);
+    .filter(option => option.rival && isPlayerActive(option.rival));
   return { season, view, entrant, options };
 }
 

@@ -16,7 +16,6 @@
     tab: '',
     round: null,
     players: [],
-    staff: [],
     matches: [],
     session: null,
     me: null,
@@ -69,12 +68,10 @@
     toast.timer = setTimeout(() => { el.className = 'lg-toast'; }, 4200);
   }
 
-  // La liga está abierta a socios y no socios (funcionarios, socios fuera
-  // de la escalerilla): basta con estar inscrito. Solo queda fuera la
-  // cuenta administradora del club.
+  // La liga es para jugadores activos; la cuenta administradora no juega.
   function isLeagueEligible(player) {
     const email = String(player?.email || '').trim().toLowerCase();
-    return Boolean(player) && !PURE_ADMIN_EMAILS.includes(email);
+    return Boolean(player) && !PURE_ADMIN_EMAILS.includes(email) && player.activo !== false && player.participaRanking !== false;
   }
 
   function findMe() {
@@ -155,19 +152,13 @@
         </div>`;
       return;
     }
-    const session = state.session;
-    const sessionEmail = String(session.email || '').toLowerCase();
-    if (PURE_ADMIN_EMAILS.includes(sessionEmail)) { el.innerHTML = ''; return; }
-    // Sin ficha de jugador (ej. funcionarios): se inscribe igual y la
-    // inscripción le crea una ficha "solo liga". Un correo @uct.cl que el
-    // club aún no registró (solo lectura) lo inscribe la comisión.
-    if (!state.me && (session.readOnly || session.userType === 'invitado')) {
-      el.innerHTML = `
-        <div class="lg-mine-card"><p class="lg-muted">Tu correo aún no está registrado en el club. Pídele a la comisión organizadora que te inscriba en la liga.</p></div>`;
+    const me = state.me;
+    if (!me || !isLeagueEligible(me)) {
+      el.innerHTML = state.isAdmin ? '' : `
+        <div class="lg-mine-card"><p class="lg-muted">El Campeonato de Liga es para jugadores activos del club. Si crees que tu ficha debería estar activa, escríbele a la comisión.</p></div>`;
       return;
     }
-    const me = state.me || { email: sessionEmail, nombre: session.nombre, genero: session.genero || session.gender || '' };
-    const enrollment = state.me ? L.getEnrollment(me, season) : null;
+    const enrollment = L.getEnrollment(me, season);
     const gender = L.entrantGender(me, enrollment);
 
     if (!enrollment) {
@@ -181,7 +172,7 @@
           <div>
             <span class="lg-eyebrow">Inscripción abierta hasta el ${fmtLong(season.cierreInscripcion)}</span>
             <h2>Súmate al Campeonato de Liga ${esc(season.id)}</h2>
-            <p>Participación voluntaria y gratuita, abierta a socios y no socios del club. Hay categoría damas y varones: ${gender ? `según tu ficha, compites en <strong>${GENDER_LABEL[gender]}</strong> y jugarás una vez contra cada inscrito de esa categoría` : 'elige en cuál compites'}.</p>
+            <p>Participación voluntaria y gratuita para jugadores activos con sus cuotas al día. Hay categoría damas y varones: ${gender ? `según tu ficha, compites en <strong>${GENDER_LABEL[gender]}</strong> y jugarás una vez contra cada inscrito de esa categoría` : 'elige en cuál compites'}.</p>
           </div>
           <div class="lg-inline">${buttons}</div>
         </div>` : `
@@ -438,16 +429,11 @@
     if (!state.isAdmin) return;
     const phase = v.phase;
     const enrolledKeys = new Set(v.entrants.map(e => e.key));
-    const playerEmails = new Set(state.players.map(p => String(p.email || '').toLowerCase()));
-    const candidates = [
-      ...state.players
-        .filter(isLeagueEligible)
-        .filter(p => [v.gender, ''].includes(L.normalizeGender(p.genero || p.gender)) && !L.getEnrollment(p, season) && !enrolledKeys.has(L.playerKey(p)))
-        .map(p => ({ value: `p:${p.id}`, nombre: p.nombre, detail: p.activo === false ? (p.soloLiga ? 'solo liga' : 'fuera de la escalerilla') : category(p.categoria) })),
-      ...state.staff
-        .filter(f => f.activo !== false && [v.gender, ''].includes(L.normalizeGender(f.genero || f.gender)) && !playerEmails.has(String(f.email || '').toLowerCase()))
-        .map(f => ({ value: `s:${String(f.email || '').toLowerCase()}`, nombre: f.nombre, detail: 'funcionario' }))
-    ].sort((a, b) => String(a.nombre).localeCompare(String(b.nombre), 'es'));
+    const candidates = state.players
+      .filter(isLeagueEligible)
+      .filter(p => [v.gender, ''].includes(L.normalizeGender(p.genero || p.gender)) && !L.getEnrollment(p, season) && !enrolledKeys.has(L.playerKey(p)))
+      .map(p => ({ value: p.id, nombre: p.nombre, detail: category(p.categoria) }))
+      .sort((a, b) => String(a.nombre).localeCompare(String(b.nombre), 'es'));
     const expired = v.rounds.flatMap(r => r.partidos.map(p => ({ r, p })))
       .filter(({ p }) => (p.state === 'wo_doble' && !p.retiro) || p.exception);
 
@@ -543,27 +529,6 @@
 
   function playerById(id) { return state.players.find(p => p.id === id); }
 
-  // Inscribe a alguien sin ficha de jugador creándole una ficha "solo liga".
-  async function createLeagueOnlyPlayer(person, enrollment, okMessage) {
-    if (state.busy) return;
-    state.busy = true;
-    try {
-      const saved = await DB.createLeagueOnlyPlayerCloud(person, season.field, enrollment, actor());
-      const email = String(person.email || '').toLowerCase();
-      const existing = state.players.find(p => String(p.email || '').toLowerCase() === email);
-      if (existing) existing[season.field] = { ...(existing[season.field] || {}), ...enrollment };
-      else if (saved && saved.id) state.players.push(saved);
-      state.me = findMe();
-      toast(okMessage);
-    } catch (err) {
-      console.error('No se pudo crear la ficha de liga:', err);
-      toast(/permission/i.test(String(err && err.message)) ? 'No tienes permiso para hacer este cambio.' : 'No se pudo guardar. Revisa tu conexión e intenta de nuevo.', 'bad');
-    } finally {
-      state.busy = false;
-      render();
-    }
-  }
-
   async function onAction(button) {
     const action = button.dataset.action;
     const now = new Date().toISOString();
@@ -571,11 +536,8 @@
       if (!confirm(`¿Confirmas tu inscripción al ${season.nombre}? Te comprometes a jugar cada fecha dentro de su plazo.`)) return;
       const rama = button.dataset.rama;
       if (rama) state.gender = rama;
-      const enrollment = { inscrito: true, retirado: false, inscritoEn: now, rama };
-      const message = `¡Listo! Quedaste inscrito en ${GENDER_LABEL[rama] || 'la liga'}.`;
-      if (state.me) return saveEnrollment(state.me.id, enrollment, message);
-      const s = state.session;
-      return createLeagueOnlyPlayer({ nombre: s.nombre, email: s.email, genero: rama, foto: s.foto, userType: s.userType === 'funcionario' ? 'funcionario' : 'liga' }, enrollment, message);
+      if (!state.me || !isLeagueEligible(state.me)) return;
+      return saveEnrollment(state.me.id, { inscrito: true, retirado: false, inscritoEn: now, rama }, `¡Listo! Quedaste inscrito en ${GENDER_LABEL[rama] || 'la liga'}.`);
     }
     if (action === 'unenroll-self' && state.me) {
       if (!confirm('¿Darte de baja de la liga? Puedes volver a inscribirte mientras la inscripción siga abierta.')) return;
@@ -583,16 +545,9 @@
     }
     if (!state.isAdmin) return;
     if (action === 'admin-enroll') {
-      const value = document.getElementById('lgAdminCandidate').value;
-      const enrollment = { inscrito: true, retirado: false, inscritoEn: now, inscritoPor: actor().email, rama: state.gender };
-      if (value.startsWith('s:')) {
-        const staff = state.staff.find(f => String(f.email || '').toLowerCase() === value.slice(2));
-        if (!staff) return toast('Elige un jugador.', 'bad');
-        return createLeagueOnlyPlayer({ nombre: staff.nombre, email: staff.email, genero: state.gender, foto: staff.foto, userType: 'funcionario' }, enrollment, `${staff.nombre} quedó inscrito en ${GENDER_LABEL[state.gender]}.`);
-      }
-      const player = playerById(value.slice(2));
+      const player = playerById(document.getElementById('lgAdminCandidate').value);
       if (!player) return toast('Elige un jugador.', 'bad');
-      return saveEnrollment(player.id, enrollment, `${player.nombre} quedó inscrito en ${GENDER_LABEL[state.gender]}.`);
+      return saveEnrollment(player.id, { inscrito: true, retirado: false, inscritoEn: now, inscritoPor: actor().email, rama: state.gender }, `${player.nombre} quedó inscrito en ${GENDER_LABEL[state.gender]}.`);
     }
     if (action === 'admin-unenroll') {
       const player = playerById(button.dataset.id);
@@ -681,9 +636,6 @@
     ]);
     state.players = players.status === 'fulfilled' ? players.value : DB.getUsers();
     state.matches = matches.status === 'fulfilled' ? matches.value : DB.getChallenges();
-    if (state.isAdmin && DB.isCloudConfigured()) {
-      try { state.staff = await DB.getStaffCloud(); } catch (err) { console.warn('No se pudo leer la lista de funcionarios:', err); }
-    }
     state.me = findMe();
     const myGender = state.me ? L.entrantGender(state.me, L.getEnrollment(state.me, season)) : '';
     if (myGender) state.gender = myGender;

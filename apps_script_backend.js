@@ -1943,6 +1943,13 @@ function validateMember(email) {
     return { ok: true, msg: 'Funcionario validado.', player: staffResult.staff, source: 'staff' };
   }
 
+  // 3. Socio inactivo (fuera de la escalerilla): sigue siendo socio y puede
+  // reservar cancha; solo no juega escalerilla ni liga.
+  const inactiveResult = findFirebasePlayerByEmail(needle, true);
+  if (inactiveResult && inactiveResult.player) {
+    return { ok: true, msg: 'Socio validado (inactivo en la escalerilla).', player: inactiveResult.player, source: 'firebase', inactive: true };
+  }
+
   if ((result && result.connectionError) || (staffResult && staffResult.connectionError)) {
     if (KNOWN_PLAYER_EMAILS.indexOf(needle) !== -1) {
       console.warn('Firebase no disponible, validando por lista de respaldo: ' + needle);
@@ -1951,7 +1958,7 @@ function validateMember(email) {
     return { ok: false, msg: 'Error temporal al verificar acceso. Por favor intenta nuevamente en unos segundos.' };
   }
 
-  // 3. Cualquier correo institucional @uct.cl obtiene acceso de solo lectura,
+  // 4. Cualquier correo institucional @uct.cl obtiene acceso de solo lectura,
   // aunque aún no esté cargado como socio/funcionario (debe activarlo un admin).
   if (needle.endsWith('@uct.cl') && needle !== '@uct.cl') {
     return { ok: true, msg: 'Acceso de solo lectura (correo institucional).', source: 'uct_domain', readOnly: true };
@@ -2126,7 +2133,9 @@ function isLeagueEnrolledEmail(email) {
   return false;
 }
 
-function findFirebasePlayerByEmail(email) {
+/** Busca la ficha de un socio por correo. Por defecto solo fichas activas;
+ * con includeInactive también las inactivas (fuera de la escalerilla). */
+function findFirebasePlayerByEmail(email, includeInactive) {
   const needle = text(email).toLowerCase();
   if (!needle || !CONFIG.FIREBASE_PROJECT_ID || !CONFIG.FIREBASE_API_KEY) return null;
 
@@ -2136,7 +2145,7 @@ function findFirebasePlayerByEmail(email) {
   for (let attempt = 0; attempt < 2; attempt++) {
     lastConnectionError = false;
     for (let i = 0; i < fieldsToTry.length; i++) {
-      const result = queryFirebasePlayerByEmailField(fieldsToTry[i], needle);
+      const result = queryFirebasePlayerByEmailField(fieldsToTry[i], needle, includeInactive);
       if (result && result.player) return result;
       if (result && result.connectionError) lastConnectionError = true;
     }
@@ -2148,7 +2157,7 @@ function findFirebasePlayerByEmail(email) {
   return null;
 }
 
-function queryFirebasePlayerByEmailField(fieldPath, email) {
+function queryFirebasePlayerByEmailField(fieldPath, email, includeInactive) {
   try {
     const firestoreUrl = 'https://firestore.googleapis.com/v1/projects/'
       + encodeURIComponent(CONFIG.FIREBASE_PROJECT_ID)
@@ -2179,7 +2188,7 @@ function queryFirebasePlayerByEmailField(fieldPath, email) {
     for (let i = 0; i < results.length; i++) {
       if (!results[i].document) continue;
       const player = firebasePlayerFromDocument(results[i].document);
-      if (player && player.email && text(player.email).toLowerCase() === email && isFirebasePlayerActive(player)) {
+      if (player && player.email && text(player.email).toLowerCase() === email && (includeInactive || isFirebasePlayerActive(player))) {
         return { player: player };
       }
     }
@@ -3218,15 +3227,14 @@ function createBooking(data) {
   // es un correo @uct.cl registrado en el sistema).
   const isFuncionario = data.userType === 'funcionario' || memberCheck.source === 'staff' ||
     (memberCheck.player && memberCheck.player.userType === 'funcionario');
-  // Jugador inscrito en el Campeonato de Liga reservando un partido de liga:
-  // puede hacerlo aunque no sea socio activo (funcionarios, socios fuera de
-  // la escalerilla, fichas "solo liga").
+  // Partido del Campeonato de Liga de un jugador inscrito: puede reservarse
+  // con más anticipación (ver más abajo).
   const isLeagueBooking = text(data.motivo) === 'liga' && isLeagueEnrolledEmail(verifiedBookingEmail);
-  if (!memberCheck.ok && !isFuncionario && !isLeagueBooking) return memberCheck;
+  if (!memberCheck.ok && !isFuncionario) return memberCheck;
   // Si es funcionario sin estar en Sheets, aceptamos igual (su validación
   // primaria ya ocurrió via Firebase en el cliente).
 
-  if (memberCheck.readOnly && !isFuncionario && !isLeagueBooking) {
+  if (memberCheck.readOnly && !isFuncionario) {
     return { ok: false, msg: 'Tu cuenta @uct.cl tiene acceso de solo lectura. Escribe a un administrador de UCTenis para activarte como socio o funcionario y poder reservar canchas.' };
   }
 
@@ -3315,8 +3323,7 @@ function createBooking(data) {
   }
 
   const now = new Date().toISOString();
-  var tipoLabel = isFuncionario ? 'Funcionario UCT'
-    : ((!memberCheck.ok || memberCheck.readOnly) && isLeagueBooking ? 'Jugador de liga' : 'Socio UCTenis');
+  var tipoLabel = isFuncionario ? 'Funcionario UCT' : 'Socio UCTenis';
   let booking = {
     id: bookingId,
     courtId: courtId,

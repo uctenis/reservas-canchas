@@ -49,9 +49,6 @@ if (firebaseAuth) {
   _authReadyResolve(null);
 }
 
-// Campo de la ficha con la inscripción de la temporada vigente (liga.js).
-const LEAGUE_ENROLLMENT_FIELD = 'liga2026';
-
 const FIREBASE_COLLECTIONS = {
   players: 'ranking_players',
   challenges: 'ranking_challenges',
@@ -293,6 +290,9 @@ function playerToSessionUser(player, current = {}) {
     telefono: player.telefono || current.telefono || '',
     rut: player.rut || current.rut || '',
     userType: player.userType || current.userType || 'socio',
+    // Se conserva para que completar el perfil no reactive en la escalerilla
+    // a un socio inactivo.
+    activo: player.activo !== undefined ? player.activo !== false : current.activo !== false,
     unidad: player.unidad || current.unidad || '',
     isAdmin: isPermanentAdmin || player.isAdmin === true ||
       (player.isAdmin === undefined && current.isAdmin === true),
@@ -1145,29 +1145,6 @@ const DB = {
     return data[field];
   },
 
-  /** Ficha "solo liga" para quien juega el Campeonato de Liga sin ficha de
-   * socio (funcionarios u otros no socios). Queda inactiva para que no
-   * aparezca en la escalerilla. Si ya existe una ficha con ese correo, solo
-   * se le agrega la inscripción. */
-  async createLeagueOnlyPlayerCloud(person, field, enrollment, actor = {}) {
-    const email = normalizeEmailForDb(person.email);
-    if (!email) throw new Error('Falta el correo del jugador.');
-    const existing = cachedPlayers.find(player => normalizeEmailForDb(player.email) === email);
-    if (existing) return this.saveLeagueEnrollmentCloud(existing.id, field, enrollment, actor);
-    return this.savePlayerCloud({
-      nombre: person.nombre || email,
-      email,
-      genero: person.genero || '',
-      foto: person.foto || '',
-      categoria: person.categoria || '',
-      userType: person.userType || 'funcionario',
-      soloLiga: true,
-      activo: false,
-      participaRanking: false,
-      [field]: enrollment
-    }, actor);
-  },
-
   async getRutCloud(playerId) {
     if (!this.isCloudConfigured() || !window.CONFIG?.API_URL || !playerId) return '';
     try {
@@ -1294,23 +1271,18 @@ const DB = {
         }
       } catch (e) { console.warn('getUserAccess staff query error:', e); }
 
-      // 4b. ¿Juega el Campeonato de Liga sin ser socio activo? (ficha
-      // inactiva o "solo liga"). Entra como jugador de liga: puede ver la
-      // liga, agendar y reservar sus partidos, pero no reservas normales.
+      // 4b. ¿Socio inactivo (fuera de la escalerilla)? Sigue siendo socio del
+      // club y puede reservar cancha; solo no juega escalerilla ni liga.
       try {
-        const leagueSnap = await firebaseDb
+        const inactiveSnap = await firebaseDb
           .collection(FIREBASE_COLLECTIONS.players)
           .where('emailLower', '==', normalized)
           .limit(1)
           .get();
-        if (!leagueSnap.empty) {
-          const p = { id: leagueSnap.docs[0].id, ...leagueSnap.docs[0].data() };
-          const enrollment = p[LEAGUE_ENROLLMENT_FIELD];
-          if (enrollment && enrollment.inscrito === true && enrollment.retirado !== true) {
-            return { allowed: true, userType: 'liga', profile: { ...p, userType: 'liga' } };
-          }
+        if (!inactiveSnap.empty) {
+          return { allowed: true, userType: 'socio', profile: { id: inactiveSnap.docs[0].id, ...inactiveSnap.docs[0].data() } };
         }
-      } catch (e) { console.warn('getUserAccess league query error:', e); }
+      } catch (e) { console.warn('getUserAccess inactive socio query error:', e); }
     }
 
     // 5. Respaldo: listas estáticas (socios)
@@ -1895,7 +1867,7 @@ const DB = {
     }
     if (!user) return { ok: false, msg: 'Usuario no encontrado' };
 
-    if ((user.userType === 'invitado' || user.readOnly) && motivo !== 'liga') {
+    if (user.userType === 'invitado' || user.readOnly) {
       return { ok: false, msg: 'Tu cuenta @uct.cl tiene acceso de solo lectura. Escribe a un administrador de UCTenis para activarte como socio o funcionario y poder reservar canchas.' };
     }
 
