@@ -1856,6 +1856,26 @@ const DB = {
   // Nota: Para usar la versión real que agenda en Google Calendar, se llama a esta función
   /** `motivo: 'liga'` pide la anticipación extendida de los partidos del
    * Campeonato de Liga (el backend verifica que el jugador esté inscrito). */
+  /** Una sesión de solo lectura guardada antes de que la cuenta quedara
+   * habilitada (ej. socio inactivo, funcionario recién registrado) se
+   * actualiza sola, sin obligar a cerrar sesión. Devuelve la sesión vigente. */
+  async refreshGuestSession() {
+    const session = this.getSession();
+    if (!session || !(session.readOnly || session.userType === 'invitado') || !session.email) return session;
+    try {
+      const access = await this.getUserAccess(session.email);
+      if (!access.allowed || !access.profile || access.userType === 'invitado' || access.userType === 'admin') return session;
+      const user = playerToSessionUser(access.profile, { ...session, userType: access.userType });
+      if (access.userType === 'funcionario') user.unidad = access.profile.unidad || '';
+      this.upsertUserLocal(user);
+      localStorage.setItem('uctenis_session', JSON.stringify(user));
+      return user;
+    } catch (e) {
+      console.warn('No se pudo actualizar la sesión de solo lectura:', e);
+      return session;
+    }
+  },
+
   async createBookingAPI(userId, courtId, fecha, slot, { motivo } = {}) {
     // Buscar usuario en localStorage; si no existe, intentar desde sesión activa
     let user = this.getUsers().find(u => u.id === userId);
@@ -1867,6 +1887,12 @@ const DB = {
     }
     if (!user) return { ok: false, msg: 'Usuario no encontrado' };
 
+    if (user.userType === 'invitado' || user.readOnly) {
+      // La sesión pudo quedar guardada como solo lectura antes de que su
+      // cuenta se habilitara: se revisa de nuevo antes de rechazar.
+      const refreshed = await this.refreshGuestSession();
+      if (refreshed && !refreshed.readOnly && refreshed.userType !== 'invitado') user = refreshed;
+    }
     if (user.userType === 'invitado' || user.readOnly) {
       return { ok: false, msg: 'Tu cuenta @uct.cl tiene acceso de solo lectura. Escribe a un administrador de UCTenis para activarte como socio o funcionario y poder reservar canchas.' };
     }
@@ -2128,3 +2154,20 @@ const DB = {
     }
   }
 };
+
+// Al cargar la página: una sesión guardada como solo lectura cuya cuenta ya
+// está habilitada se actualiza y la página se recarga una vez con ella.
+if (typeof window !== 'undefined' && firebaseDb) {
+  const storedSession = DB.getSession();
+  if (storedSession && (storedSession.readOnly || storedSession.userType === 'invitado')) {
+    DB.authReady().then(() => DB.refreshGuestSession()).then(user => {
+      if (user && !user.readOnly && user.userType !== 'invitado') {
+        try {
+          if (sessionStorage.getItem('uctenis_guest_refreshed')) return;
+          sessionStorage.setItem('uctenis_guest_refreshed', '1');
+        } catch (e) { return; }
+        location.reload();
+      }
+    });
+  }
+}
