@@ -1,0 +1,474 @@
+(() => {
+  const API_URL = window.CONFIG.API_URL;
+  const ADMIN_EMAILS = ['uctenisclub@gmail.com','dsilva@uct.cl'];
+  const state = { tournaments:[], current:null, participants:[], clubPlayers:[] };
+  const $ = id => document.getElementById(id);
+  const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const courtNames = {cec1:'CEC Cancha 1',cec2:'CEC Cancha 2',cjp1:'CJP Cancha 1',cjp2:'CJP Cancha 2'};
+  const slots = ['09:00','10:30','12:00','13:30','15:00','16:30','18:00','19:30','20:00','21:00'];
+  const statusLabels = {draft:'Borrador',registration:'Inscripciones abiertas',draw:'Cuadro generado',in_progress:'En juego',finished:'Finalizado',archived:'Archivado'};
+
+  function isAdmin(session) {
+    return Boolean(session && (session.isAdmin === true || ADMIN_EMAILS.includes(String(session.email || '').toLowerCase())));
+  }
+  function notice(message, error = false) {
+    const el = $('adminAlert');
+    el.textContent = message;
+    el.className = 'admin-alert' + (error ? ' error' : '');
+    el.style.display = 'block';
+    clearTimeout(notice.timer);
+    notice.timer = setTimeout(() => { el.style.display = 'none'; }, error ? 9000 : 5500);
+  }
+  async function api(action, payload = {}, requireAdmin = true) {
+    const body = { action, ...payload };
+    if (requireAdmin) {
+      const token = await DB.getIdTokenOrReauth();
+      if (!token) throw new Error(DB.lastAuthError || 'La sesion administrativa vencio.');
+      body.idToken = token;
+      body.actorEmail = DB.getSession()?.email || '';
+    }
+    const response = await fetch(API_URL, { method:'POST', body:JSON.stringify(body) });
+    const data = await response.json();
+    if (!data.ok) {
+      const error = new Error(data.msg || 'No se pudo completar la operacion.');
+      error.data = data;
+      throw error;
+    }
+    return data;
+  }
+
+  function blankTournament() {
+    return {name:'',edition:'',tagline:'',description:'',venue:'',surface:'Mixta',category:'Todo competidor',gender:'Abierto',startDate:'',endDate:'',registrationDeadline:'',rules:'Al mejor de 3 sets. En caso de empate 1-1, match tie-break a 10 puntos en el tercer set.',prize:'',organizer:'UCTenis Club',contact:'uctenisclub@gmail.com',size:8,status:'draft',published:false,featured:false,participants:[],matches:[],news:[]};
+  }
+  function readForm() {
+    return {
+      ...(state.current || {}),
+      name:$('tourName').value.trim(), edition:$('tourEdition').value.trim(), size:Number($('tourSize').value),
+      category:$('tourCategory').value.trim(), gender:$('tourGender').value, startDate:$('tourStart').value,
+      endDate:$('tourEnd').value, registrationDeadline:$('tourDeadline').value, venue:$('tourVenue').value.trim(),
+      surface:$('tourSurface').value, status:$('tourStatus').disabled ? state.current.status : $('tourStatus').value, prize:$('tourPrize').value.trim(),
+      tagline:$('tourTagline').value.trim(), description:$('tourDescription').value.trim(), rules:$('tourRules').value.trim(),
+      organizer:$('tourOrganizer').value.trim(), contact:$('tourContact').value.trim(),
+      published:$('tourPublished').checked, featured:$('tourFeatured').checked,
+      participants:state.participants
+    };
+  }
+  function fillForm(t) {
+    const values = {
+      tourName:t.name,tourEdition:t.edition,tourSize:t.size,tourCategory:t.category,tourGender:t.gender,
+      tourStart:t.startDate,tourEnd:t.endDate,tourDeadline:t.registrationDeadline,tourVenue:t.venue,
+      tourSurface:t.surface,tourStatus:t.status,tourPrize:t.prize,tourTagline:t.tagline,
+      tourDescription:t.description,tourRules:t.rules,tourOrganizer:t.organizer,tourContact:t.contact
+    };
+    Object.entries(values).forEach(([id,value]) => { if ($(id)) $(id).value = value ?? ''; });
+    const operationalStatus = !['draft','registration'].includes(t.status) || Boolean(t.matches?.length || t.champion);
+    $('tourStatus').disabled = operationalStatus;
+    $('tourStatusHelp').textContent = operationalStatus
+      ? `Estado automático: ${statusLabels[t.status] || t.status}. Cambia al generar el cuadro, programar partidos y publicar la final.`
+      : 'Elige si aún es borrador o si ya recibe inscripciones. Los siguientes estados los actualizará el sistema.';
+    $('tourEnd').min = t.startDate || '';
+    $('tourPublished').checked = t.published === true;
+    $('tourFeatured').checked = t.featured === true;
+    state.participants = JSON.parse(JSON.stringify(t.participants || []));
+    $('editorTitle').textContent = t.name || 'Nuevo campeonato';
+    $('editorSubtitle').textContent = t.id ? `${t.participants?.length || 0}/${t.size} inscritos - ${t.matches?.filter(m => m.status === 'completed').length || 0} resultados` : 'Configura, publica y opera el torneo desde aqui.';
+    $('archiveTournamentBtn').style.display = t.id ? '' : 'none';
+    $('deleteTournamentBtn').style.display = t.id ? '' : 'none';
+    $('publicPreviewLink').href = t.id ? `campeonato.html?id=${encodeURIComponent(t.id)}` : 'campeonato.html';
+    $('bracketPreviewLink').href = t.id ? `campeonato.html?id=${encodeURIComponent(t.id)}` : 'campeonato.html';
+    renderParticipants();
+    renderMatches();
+  }
+  function selectTournament(id) {
+    state.current = state.tournaments.find(t => t.id === id) || blankTournament();
+    fillForm(state.current);
+    renderList();
+  }
+  function renderList() {
+    $('tournamentList').innerHTML = state.tournaments.length ? state.tournaments.map(t => `
+      <button class="admin-list-item ${state.current?.id === t.id ? 'active' : ''}" data-id="${esc(t.id)}"><strong>${esc(t.name)}</strong><span>${esc(statusLabels[t.status] || t.status)} - ${t.participants?.length || 0}/${t.size} inscritos</span></button>`).join('') : '<div class="empty-state">No hay campeonatos creados.</div>';
+  }
+  async function loadTournaments(preferredId) {
+    const data = await api('get_tournaments');
+    state.tournaments = data.tournaments || [];
+    renderList();
+    if (preferredId) selectTournament(preferredId);
+    else if (state.current?.id) selectTournament(state.current.id);
+    else if (state.tournaments[0]) selectTournament(state.tournaments[0].id);
+    else { state.current = blankTournament(); fillForm(state.current); }
+  }
+  // Cada accion (guardar, sortear, programar un partido, publicar un
+  // resultado) ya devuelve el campeonato completo y actualizado en la misma
+  // respuesta -- pedir la lista entera de nuevo despues (loadTournaments)
+  // era una segunda vuelta a Apps Script por accion, y Apps Script es lento
+  // (arranque en frio + proxy hacia Firestore). Se actualiza el estado local
+  // con lo que ya se tiene, sin esperar otra ronda de red.
+  function applyTournamentUpdate(tournament) {
+    state.current = tournament;
+    const idx = state.tournaments.findIndex(t => t.id === tournament.id);
+    if (idx >= 0) state.tournaments[idx] = tournament;
+    else state.tournaments.unshift(tournament);
+    renderList();
+    fillForm(tournament);
+  }
+  function removeTournamentFromState(id) {
+    state.tournaments = state.tournaments.filter(t => t.id !== id);
+    state.current = state.tournaments[0] || blankTournament();
+    renderList();
+    fillForm(state.current);
+  }
+  // El ranking oficial del club vive en Firestore (la misma fuente que usa
+  // ranking.html), no en el Sheet legado que leia la accion "get_ranking" del
+  // Apps Script -- ese Sheet ya no se actualiza desde que el ranking se migro
+  // a Firestore, asi que quedarse con el dejaba la siembra de los cuadros
+  // basada en datos desactualizados. db.js ya esta cargado en esta pagina,
+  // asi que se consulta Firestore directo, igual que hace el ranking.
+  async function loadClubPlayers() {
+    try {
+      const raw = DB.isCloudConfigured() ? await DB.getPlayersCloud() : DB.getUsers();
+      const byGender = { M: [], F: [] };
+      raw.forEach(player => {
+        const genero = String(player.genero || player.gender || '').toUpperCase().startsWith('F') ? 'F' : 'M';
+        const activo = player.activo !== false && player.participaRanking !== false;
+        if (!activo) return;
+        const pos = Number(player.pos ?? player.posicion ?? player.rank ?? player.ranking);
+        byGender[genero].push({ ...player, genero, pos: Number.isFinite(pos) && pos > 0 ? pos : null });
+      });
+      // Si a alguien le falta la posicion explicita, igual se le asigna un
+      // lugar relativo (por nombre) para que no quede fuera de la siembra.
+      ['M', 'F'].forEach(genero => {
+        byGender[genero].sort((a, b) => (a.pos ?? 9999) - (b.pos ?? 9999) || String(a.nombre).localeCompare(String(b.nombre), 'es'));
+        byGender[genero].forEach((player, index) => { player.livePos = index + 1; });
+      });
+      state.clubPlayers = [...byGender.M, ...byGender.F];
+      // La posicion va antes del correo en la sugerencia: al escribir el
+      // nombre de un socio, se ve de inmediato si esta en el top10 de su
+      // escalerilla, sin tener que ir a revisar el ranking aparte.
+      $('clubPlayers').innerHTML = state.clubPlayers.map(p => `<option value="${esc(p.nombre)}" data-id="${esc(p.id)}">${p.livePos ? '#' + esc(p.livePos) + ' &middot; ' : ''}${esc(p.email || '')}</option>`).join('');
+      renderParticipants();
+    } catch (_) {}
+  }
+
+  // Asigna la siembra (1, 2, 3...) segun la posicion actual de cada inscrito
+  // en el ranking oficial del club, no segun el orden en que se anotaron.
+  // Solo se siembra a quienes tienen ficha en el ranking; el resto
+  // (externos o sin ranking) queda sin sembrar, al final -- igual que en un
+  // cuadro real. Se aplica sola cada vez que cambia la nomina (inscribir o
+  // quitar un jugador) para que la base de la siembra sea siempre el
+  // ranking oficial y no el orden de inscripcion; el admin puede seguir
+  // ajustando cualquier numero a mano despues si necesita una excepcion.
+  function applyRankingSeeds() {
+    const withRanking = [];
+    const withoutRanking = [];
+    state.participants.forEach(participant => {
+      const club = state.clubPlayers.find(p => p.id === participant.clubPlayerId);
+      if (club && club.livePos) withRanking.push({ participant, livePos: club.livePos });
+      else withoutRanking.push(participant);
+    });
+    if (!withRanking.length) return false;
+    withRanking.sort((a, b) => a.livePos - b.livePos);
+    withRanking.forEach((entry, index) => { entry.participant.seed = index + 1; });
+    withoutRanking.forEach((participant, index) => { participant.seed = withRanking.length + index + 1; });
+    return true;
+  }
+  function seedFromRanking() {
+    if (!applyRankingSeeds()) return notice('Ningun inscrito tiene ficha en el ranking del club para sembrar.', true);
+    renderParticipants();
+    const withRankingCount = state.participants.filter(p => state.clubPlayers.some(cp => cp.id === p.clubPlayerId && cp.livePos)).length;
+    notice(`Siembra actualizada segun el ranking (${withRankingCount} inscrito${withRankingCount === 1 ? '' : 's'} con ficha).`);
+  }
+  async function saveCurrent(message = 'Campeonato guardado.') {
+    const data = await api('admin_save_tournament', { tournament:readForm() });
+    applyTournamentUpdate(data.tournament);
+    notice(message);
+    return state.current;
+  }
+  function renderParticipants() {
+    const size = Number($('tourSize').value || state.current?.size || 8);
+    $('capacityLabel').textContent = `(${state.participants.length}/${size})`;
+    $('participantBody').innerHTML = state.participants.length ? state.participants
+      .sort((a,b)=>(a.seed||99)-(b.seed||99))
+      .map((p,index) => {
+        // Posicion actual en la escalerilla del club (por genero), para
+        // identificar de un vistazo a los inscritos top10 -- sutil (mismo
+        // estilo que la siembra del cuadro publico) pero visible.
+        const club = p.clubPlayerId ? state.clubPlayers.find(cp => cp.id === p.clubPlayerId) : null;
+        const rankBadge = club?.livePos ? ` <span class="seed-pill" title="Posicion en la escalerilla UCTenis">#${club.livePos}</span>` : '';
+        return `<tr><td><input class="score-input seed-edit" type="number" min="1" max="${size}" value="${p.seed || index + 1}" data-id="${esc(p.id)}"></td><td><strong>${esc(p.name)}</strong>${rankBadge}</td><td>${p.clubMember ? 'Socio UCTenis' : 'Externo'}</td><td>${esc(p.email || p.phone || '-')}</td><td><button class="tour-btn danger remove-player" type="button" data-id="${esc(p.id)}">Quitar</button></td></tr>`;
+      }).join('') : '<tr><td colspan="5" class="empty-state">Agrega jugadores para comenzar.</td></tr>';
+  }
+  // "Programar" no debe permitir elegir una hora que en realidad ya esta
+  // ocupada (por una reserva normal, una clase o otro partido) -- se
+  // consulta la misma disponibilidad real que usa el modulo de reservas
+  // (Firestore + Calendar + horarios especiales) y se deshabilitan las
+  // horas/canchas ya tomadas en el selector. El backend igual vuelve a
+  // validar todo antes de guardar (adminScheduleTournamentMatch), asi que
+  // esto es una ayuda visual, no la unica barrera contra duplicar agendas.
+  const availabilityCache = new Map();
+  function fetchAvailability(date) {
+    if (!availabilityCache.has(date)) availabilityCache.set(date, DB.getSlotsAPI(date));
+    return availabilityCache.get(date);
+  }
+  function findMatchById(matchId) {
+    return (state.current?.matches || []).find(m => m.id === matchId);
+  }
+  function refreshHourOptions(row, availability) {
+    const dateVal = row.querySelector('[data-field=date]')?.value;
+    const courtSelect = row.querySelector('[data-field=courtId]');
+    const slotSelect = row.querySelector('[data-field=slot]');
+    if (!courtSelect || !slotSelect) return;
+    const courtId = courtSelect.value;
+    const currentSlot = slotSelect.value;
+    const match = findMatchById(row.dataset.matchId);
+    const isOwnSlot = s => match && match.date === dateVal && match.courtId === courtId && match.slot === s;
+    const free = (availability?.ok && courtId) ? (availability.courts?.[courtId] || []) : null;
+    slotSelect.innerHTML = '<option value="">Hora</option>' + slots.map(s => {
+      const busy = free && free.indexOf(s) < 0 && !isOwnSlot(s);
+      return `<option value="${s}" ${busy ? 'disabled' : ''}>${s}${busy ? ' (ocupado)' : ''}</option>`;
+    }).join('');
+    if (Array.from(slotSelect.options).some(o => o.value === currentSlot)) slotSelect.value = currentSlot;
+  }
+  function applyAvailabilityToRow(row, availability) {
+    const courtSelect = row.querySelector('[data-field=courtId]');
+    const dateSelect = row.querySelector('[data-field=date]');
+    if (!courtSelect || !dateSelect) return;
+    const currentCourt = courtSelect.value;
+    const match = findMatchById(row.dataset.matchId);
+    Array.from(courtSelect.options).forEach(opt => {
+      if (!opt.value) return;
+      const free = availability?.ok ? (availability.courts?.[opt.value] || []) : null;
+      const isOwnCourt = match && match.courtId === opt.value && match.date === dateSelect.value;
+      const empty = Array.isArray(free) && !free.length && !isOwnCourt;
+      opt.disabled = empty;
+      opt.textContent = courtNames[opt.value] + (empty ? ' (sin horas libres)' : '');
+    });
+    if (Array.from(courtSelect.options).some(o => o.value === currentCourt)) courtSelect.value = currentCourt;
+    refreshHourOptions(row, availability);
+  }
+  function scoreFields(match) {
+    const score = match.score || [];
+    return [0,1,2].map(i => `<span><input class="score-input" type="number" min="0" data-score="${i}-a" value="${score[i]?.a ?? ''}" aria-label="Games jugador 1 set ${i+1}"> - <input class="score-input" type="number" min="0" data-score="${i}-b" value="${score[i]?.b ?? ''}" aria-label="Games jugador 2 set ${i+1}"></span>`).join('');
+  }
+  function renderMatches() {
+    const matches = state.current?.matches || [];
+    $('bracketPreviewLink').hidden = !(state.current?.id && matches.length);
+    if (!matches.length) {
+      $('adminMatches').innerHTML = '<div class="empty-state">Guarda los inscritos y genera el cuadro para programar los partidos.</div>';
+      return;
+    }
+    const grouped = [...new Set(matches.map(m => m.round))];
+    $('adminMatches').innerHTML = grouped.map(round => {
+      const items = matches.filter(m => m.round === round);
+      return `<div class="tour-section"><h3 class="round-title">${esc(items[0].roundName)}</h3>${items.map(match => {
+        const ready = match.player1 && match.player2;
+        // BYE (avance automatico por falta de rival) o VOID (ronda vacia):
+        // el partido ya quedo resuelto solo, no hay nada que programar ni
+        // registrar. Antes se mostraban los mismos campos que un partido
+        // real pero deshabilitados, sin explicar por que -- parecia roto.
+        const isSettled = match.status === 'bye' || match.status === 'void';
+        if (isSettled) {
+          return `<article class="match-admin match-admin-settled" data-match-id="${esc(match.id)}">
+            <div><strong>${esc(match.player1?.name || 'Por definir')} vs ${esc(match.player2?.name || 'Por definir')}</strong><div class="schedule-meta">${match.status === 'bye' ? 'BYE -- avanza automáticamente, no requiere programación' : 'Sin rivales definidos en esta llave'}</div></div>
+          </article>`;
+        }
+        return `<article class="match-admin" data-match-id="${esc(match.id)}">
+          <div><strong>${esc(match.player1?.name || 'Por definir')} vs ${esc(match.player2?.name || 'Por definir')}</strong><div class="schedule-meta">${ready ? esc(match.scoreLabel || match.status) : 'Esperando el resultado de la ronda anterior'}${match.date ? ' - ' + esc(match.date + ' ' + match.slot + ' ' + (courtNames[match.courtId] || '')) : ''}</div></div>
+          <div>
+            <div class="match-admin-controls">
+              <input type="text" class="uct-date" data-field="date" readonly autocomplete="off" value="${esc(match.date || '')}" ${ready ? '' : 'disabled'}>
+              <select data-field="slot" ${ready ? '' : 'disabled'}><option value="">Hora</option>${slots.map(s=>`<option ${match.slot===s?'selected':''}>${s}</option>`).join('')}</select>
+              <select data-field="courtId" ${ready ? '' : 'disabled'}><option value="">Cancha</option>${Object.entries(courtNames).map(([id,name])=>`<option value="${id}" ${match.courtId===id?'selected':''}>${name}</option>`).join('')}</select>
+              <button class="tour-btn save-schedule" type="button" title="Guarda fecha/hora/cancha y bloquea ese horario en la agenda de reservas del club (queda ocupado para todos)." ${ready ? '' : 'disabled'}>Programar</button>
+            </div>
+            <div class="match-admin-controls" style="margin-top:8px">
+              ${scoreFields(match)}
+              <select data-field="walkover"><option value="">Marcador normal</option>${ready ? `<option value="${esc(match.player1.id)}">W.O. gana ${esc(match.player1.name)}</option><option value="${esc(match.player2.id)}">W.O. gana ${esc(match.player2.name)}</option>` : ''}</select>
+              <button class="tour-btn primary save-result" type="button" ${ready ? '' : 'disabled'}>Publicar resultado</button>
+            </div>
+          </div>
+        </article>`;
+      }).join('')}</div>`;
+    }).join('');
+    // Precarga la disponibilidad real para los partidos que ya tienen fecha
+    // asignada, asi el selector de hora sale filtrado sin que el admin tenga
+    // que re-tocar el campo de fecha primero.
+    document.querySelectorAll('#adminMatches .match-admin[data-match-id]').forEach(row => {
+      const dateVal = row.querySelector('[data-field=date]')?.value;
+      if (dateVal) fetchAvailability(dateVal).then(availability => applyAvailabilityToRow(row, availability));
+    });
+  }
+  async function generateBracket(confirmReplace = false) {
+    if (!state.current?.id) await saveCurrent('Campeonato creado. Ahora puedes generar el cuadro.');
+    try {
+      const data = await api('admin_generate_bracket', { id:state.current.id, confirmReplace });
+      applyTournamentUpdate(data.tournament);
+      switchTab('bracket');
+      notice('Cuadro generado y llaves BYE avanzadas automaticamente.');
+    } catch (error) {
+      if (error.data?.needsConfirmation && confirm('El cuadro actual contiene horarios o resultados. ?Deseas reemplazarlo?')) return generateBracket(true);
+      throw error;
+    }
+  }
+  function switchTab(name) {
+    document.querySelectorAll('.admin-tab').forEach(btn => btn.classList.toggle('active', btn.dataset.tab === name));
+    document.querySelectorAll('.admin-panel').forEach(panel => panel.classList.toggle('active', panel.dataset.panel === name));
+  }
+
+  $('tournamentForm').addEventListener('submit', async event => {
+    event.preventDefault();
+    try { await saveCurrent(); } catch (e) { notice(e.message, true); }
+  });
+  $('newTournamentBtn').addEventListener('click', () => { state.current = blankTournament(); fillForm(state.current); renderList(); switchTab('details'); });
+  $('tournamentList').addEventListener('click', event => { const item = event.target.closest('[data-id]'); if (item) selectTournament(item.dataset.id); });
+  // En desktop la lista de campeonatos ya queda siempre visible (sidebar
+  // sticky), pero en mobile el layout se apila en una sola columna y, al
+  // bajar a editar, la lista queda arriba fuera de pantalla sin ninguna
+  // forma de volver salvo hacer scroll manual hasta el principio.
+  $('backToListBtn').addEventListener('click', () => {
+    $('adminApp').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+  document.querySelector('.admin-tabs').addEventListener('click', event => { const tab = event.target.closest('[data-tab]'); if (tab) switchTab(tab.dataset.tab); });
+  $('tourSize').addEventListener('change', renderParticipants);
+  // La fecha de termino no puede quedar antes que la de inicio: se actualiza
+  // el minimo seleccionable del calendario de termino, y si el valor que ya
+  // tenia quedo antes del nuevo inicio, se limpia para que lo vuelvan a fijar.
+  $('tourStart').addEventListener('change', () => {
+    const startVal = $('tourStart').value;
+    $('tourEnd').min = startVal || '';
+    if (startVal && $('tourEnd').value && $('tourEnd').value < startVal) {
+      $('tourEnd').value = '';
+    }
+  });
+  // Autocompletar correo/telefono al elegir un socio de la lista (datalist):
+  // "change" solo no bastaba -- al elegir una opcion del datalist, algunos
+  // navegadores (Chrome incluido) disparan "input" pero no "change" hasta que
+  // el campo pierde el foco, asi que se veia como que no cargaba de inmediato.
+  function fillParticipantFromClub() {
+    const p = state.clubPlayers.find(player => player.nombre.toLowerCase() === $('participantName').value.trim().toLowerCase());
+    if (!p) return;
+    $('participantEmail').value = p.email || '';
+    $('participantPhone').value = p.telefono || '';
+    $('participantMember').checked = true;
+  }
+  $('participantName').addEventListener('input', fillParticipantFromClub);
+  $('participantName').addEventListener('change', fillParticipantFromClub);
+  $('participantForm').addEventListener('submit', event => {
+    event.preventDefault();
+    const size = Number($('tourSize').value);
+    if (state.participants.length >= size) return notice('El cuadro ya alcanzo su capacidad maxima.', true);
+    const name = $('participantName').value.trim();
+    if (state.participants.some(p => p.name.toLowerCase() === name.toLowerCase())) return notice('Ese jugador ya esta inscrito.', true);
+    const club = state.clubPlayers.find(p => p.nombre.toLowerCase() === name.toLowerCase());
+    state.participants.push({id:club?.id || `ext_${Date.now().toString(36)}`,name,email:$('participantEmail').value.trim(),phone:$('participantPhone').value.trim(),clubMember:$('participantMember').checked,clubPlayerId:club?.id || '',category:club?.categoria || '',seed:state.participants.length + 1,status:'active'});
+    event.target.reset();
+    // La base de la siembra siempre es el ranking oficial del club, no el
+    // orden de inscripcion -- se reordena sola cada vez que entra un nuevo
+    // inscrito. Si no queda nadie con ficha en el ranking (p.ej. cuadro
+    // recien empezado con puros externos) simplemente no cambia nada.
+    applyRankingSeeds();
+    renderParticipants();
+  });
+  $('participantBody').addEventListener('click', event => {
+    const btn = event.target.closest('.remove-player');
+    if (!btn) return;
+    state.participants = state.participants.filter(p => p.id !== btn.dataset.id);
+    // Si nadie tiene ficha en el ranking, se cae al simple cierre de huecos
+    // de antes (1..N sin saltos); si alguien si tiene, manda el ranking.
+    if (!applyRankingSeeds()) state.participants.forEach((p,i) => { p.seed = i + 1; });
+    renderParticipants();
+  });
+  $('participantBody').addEventListener('change', event => {
+    if (event.target.matches('.seed-edit')) {
+      const player = state.participants.find(p => p.id === event.target.dataset.id);
+      if (player) player.seed = Number(event.target.value);
+    }
+  });
+  $('seedFromRankingBtn').addEventListener('click', seedFromRanking);
+  $('saveParticipantsBtn').addEventListener('click', async () => { try { await saveCurrent('Nomina de inscritos guardada.'); } catch(e) { notice(e.message,true); } });
+  $('generateBracketBtn').addEventListener('click', async () => { try { await saveCurrent('Inscritos guardados.'); await generateBracket(false); } catch(e) { notice(e.message,true); } });
+  $('regenerateBracketBtn').addEventListener('click', async () => { try { await generateBracket(false); } catch(e) { notice(e.message,true); } });
+  $('archiveTournamentBtn').addEventListener('click', async () => {
+    if (!state.current?.id || !confirm('?Archivar este campeonato? Dejaria de aparecer publicamente.')) return;
+    try {
+      const archivedId = state.current.id;
+      await api('admin_delete_tournament',{id:archivedId});
+      removeTournamentFromState(archivedId);
+      notice('Campeonato archivado.');
+    } catch(e) { notice(e.message,true); }
+  });
+  $('deleteTournamentBtn').addEventListener('click', async () => {
+    if (!state.current?.id) return;
+    const name = state.current.name || 'este campeonato';
+    // Un solo dialogo de confirmacion (antes pedia ademas escribir "ELIMINAR"
+    // a mano en un segundo prompt -- un paso extra que fallaba en silencio
+    // ante cualquier diferencia minima de texto, sin dejar claro por que).
+    if (!confirm(`¿Eliminar "${name}" para siempre?\n\nSe borran inscritos, cuadro y resultados. No se puede deshacer.`)) return;
+    const deletedId = state.current.id;
+    try {
+      await api('admin_permanently_delete_tournament', { id: deletedId });
+      removeTournamentFromState(deletedId);
+      notice('Campeonato eliminado definitivamente.');
+    } catch(e) {
+      // alert() ademas del toast: esta accion es rara y critica, y un error
+      // aca casi siempre significa que apps_script_backend.js todavia no se
+      // redesplego en script.google.com con esta funcion -- que no se vea
+      // el aviso no debe parecer "no paso nada".
+      notice(e.message, true);
+      alert('No se pudo eliminar el campeonato:\n\n' + e.message);
+    }
+  });
+  $('adminMatches').addEventListener('change', async event => {
+    const row = event.target.closest('.match-admin');
+    if (!row) return;
+    if (event.target.matches('[data-field=date]')) {
+      const date = event.target.value;
+      if (!date) { refreshHourOptions(row, null); return; }
+      const availability = await fetchAvailability(date);
+      applyAvailabilityToRow(row, availability);
+      if (!availability?.ok) notice('No se pudo confirmar la disponibilidad real de las canchas; revisa la agenda antes de programar.', true);
+    } else if (event.target.matches('[data-field=courtId]')) {
+      const date = row.querySelector('[data-field=date]')?.value;
+      if (date) refreshHourOptions(row, await fetchAvailability(date));
+    }
+  });
+  $('adminMatches').addEventListener('click', async event => {
+    const row = event.target.closest('.match-admin');
+    if (!row) return;
+    try {
+      if (event.target.closest('.save-schedule')) {
+        const date=row.querySelector('[data-field=date]').value, slot=row.querySelector('[data-field=slot]').value, courtId=row.querySelector('[data-field=courtId]').value;
+        if (!date || !slot || !courtId) throw new Error('Selecciona fecha, hora y cancha.');
+        const data=await api('admin_schedule_match',{id:state.current.id,matchId:row.dataset.matchId,date,slot,courtId});
+        applyTournamentUpdate(data.tournament);
+        notice(data.calendarPending ? 'Cancha bloqueada; Calendar quedo en cola de sincronizacion.' : 'Partido programado y cancha bloqueada.');
+      }
+      if (event.target.closest('.save-result')) {
+        const sets=[0,1,2].map(i=>({a:row.querySelector(`[data-score="${i}-a"]`).value,b:row.querySelector(`[data-score="${i}-b"]`).value})).filter(s=>s.a!==''&&s.b!=='');
+        const walkoverWinnerId=row.querySelector('[data-field=walkover]').value;
+        if (!walkoverWinnerId && !confirm('?Publicar este marcador? El ganador avanzara automaticamente en el cuadro.')) return;
+        const data=await api('admin_record_match',{id:state.current.id,matchId:row.dataset.matchId,sets,walkoverWinnerId});
+        applyTournamentUpdate(data.tournament);
+        notice('Resultado publicado, noticia creada y cuadro actualizado.');
+      }
+    } catch(e) { notice(e.message,true); }
+  });
+
+  async function boot() {
+    await DB.authReady();
+    const session = DB.getSession();
+    if (!isAdmin(session)) {
+      $('adminGate').innerHTML = '<h1>Acceso administrativo</h1><p>Ingresa con una cuenta autorizada para administrar campeonatos.</p><button class="tour-btn primary" id="adminLoginBtn">Ingresar con Google</button><p><a class="tour-link" href="ranking.html">Volver al ranking</a></p>';
+      $('adminLoginBtn').addEventListener('click', async () => {
+        const result = await DB.loginWithGoogle();
+        if (result.ok && isAdmin(result.user)) location.reload();
+        else notice(result.msg || 'La cuenta no tiene permisos de administrador.', true);
+      });
+      return;
+    }
+    $('adminGate').hidden = true;
+    $('adminApp').hidden = false;
+    try { await Promise.all([loadTournaments(),loadClubPlayers()]); }
+    catch (error) { notice(error.message,true); }
+  }
+  boot();
+})();

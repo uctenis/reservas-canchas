@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Campeonato de Liga | UCTenis</title>
+  <link rel="icon" href="logo_uctenis_v03.png" type="image/png">
+  <link rel="stylesheet" href="style.css?v=20260813_v1">
+  <link rel="stylesheet" href="liga.css?v=20261022_t1">
+  <link rel="stylesheet" href="theme.css?v=20261009_r3">
+  <script src="site.js?v=20261009_r3" defer></script>
+</head>
+<body>
+  <main class="league-page lg-page">
+    <a class="league-brand" href="index.html" aria-label="Volver al inicio">
+      <img src="logo_uctenis_v03.png" alt="UCTenis">
+      <span>UCTenis</span>
+    </a>
+
+    <header class="lg-hero">
+      <div class="lg-hero-copy">
+        <div class="lg-kicker" id="lgKicker">Temporada 2026 · Damas y varones</div>
+        <h1>Campeonato de Liga</h1>
+        <p>Todos contra todos, una fecha cada 10 días. Cada partido suma a la tabla y los mejores clasifican al Torneo de Maestros.</p>
+        <ul class="lg-facts" aria-label="Lo esencial">
+          <li><strong>3</strong> pts victoria</li>
+          <li><strong>1</strong> pt derrota</li>
+          <li><strong>0</strong> no presentación</li>
+          <li>Gratis para socios al día</li>
+        </ul>
+      </div>
+      <div class="lg-status" id="lgStatus" aria-live="polite">
+        <span class="lg-status-label">Cargando temporada…</span>
+      </div>
+    </header>
+
+    <section class="lg-mine" id="lgMine" aria-label="Mi liga"></section>
+
+    <div class="lg-toolbar">
+      <div class="lg-segment" role="tablist" aria-label="Categoría">
+        <button type="button" role="tab" data-gender="M" class="active" aria-selected="true">Varones</button>
+        <button type="button" role="tab" data-gender="F" aria-selected="false">Damas</button>
+      </div>
+      <nav class="lg-tabs" role="tablist" aria-label="Secciones de la liga">
+        <button type="button" role="tab" data-tab="posiciones">Posiciones</button>
+        <button type="button" role="tab" data-tab="fixture">Fixture</button>
+        <button type="button" role="tab" data-tab="inscritos">Inscritos</button>
+        <button type="button" role="tab" data-tab="bases">Bases</button>
+      </nav>
+    </div>
+
+    <section class="lg-panel" id="lgView" aria-live="polite">
+      <p class="lg-empty">Cargando…</p>
+    </section>
+
+    <section class="lg-panel lg-admin" id="lgAdmin" hidden aria-label="Comisión organizadora"></section>
+
+    <details class="lg-panel lg-legacy" id="lgLegacy" hidden>
+      <summary>Liga semanal · ciclo de prueba 21 sep – 1 nov</summary>
+      <p class="lg-muted">Clasificación final del formato semanal que antecedió al campeonato. No suma a la temporada 2026.</p>
+      <div id="lgLegacyTable"></div>
+    </details>
+  </main>
+
+  <div class="lg-toast" id="lgToast" role="status" aria-live="polite"></div>
+
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+  <script src="db.js?v=20261023_guest"></script>
+  <script src="liga.js?v=20261022_t2"></script>
+  <script src="liga-page.js?v=20261023_t5"></script>
+</body>
+</html>
