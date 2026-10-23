@@ -326,6 +326,7 @@
           <option value="ranking">Oficial (Ranking)</option>
           <option value="amistoso">Amistoso</option>
           <option id="scoreTypeCampeonato" value="campeonato" style="display:none;">Torneo / Campeonato</option>
+          <option id="scoreTypeLiga" value="liga" style="display:none;">Campeonato de Liga</option>
         </select>
       </div>
       <div class="score-summary">
@@ -4375,7 +4376,10 @@ function openScoreModal(challengeId) {
   // Enable and set match type select
   const typeSelect = document.getElementById('scoreType');
   typeSelect.value = challenge.tipo || 'ranking';
-  typeSelect.disabled = false;
+  // Un partido de liga no puede cambiar de modalidad al registrar su
+  // resultado: sin la opción "liga" el selector quedaba vacío y el partido
+  // se guardaba sin tipo (fuera de la tabla), o pasaba a mover la escalerilla.
+  typeSelect.disabled = challenge.tipo === 'liga';
 
   document.getElementById('scorePlayers').textContent = `${retadorName} vs ${retadoName} · ${formatShortDate(challenge.fecha)}`;
   document.getElementById('scorePlayerA').textContent = retadorName;
@@ -8240,7 +8244,7 @@ function getOperativeCourts() {
 
 const ADMIN_BOOKINGS_DAY_LABELS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 const ADMIN_BOOKINGS_DAY_LABELS_SHORT = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
-const ADMIN_BOOKINGS_TYPE_LABELS = { ranking: 'Desafío', amistoso: 'Amistoso' };
+const ADMIN_BOOKINGS_TYPE_LABELS = { ranking: 'Desafío', amistoso: 'Amistoso', liga: 'Liga' };
 let adminBookingsWeekStart = null; // yyyy-mm-dd de un lunes
 
 function mondayOfWeek(dateStr) {
@@ -8285,6 +8289,7 @@ function bookingTypeBadge(b) {
   }
   if (b.tipo === 'amistoso') return { cls: 'is-amistoso', label: ADMIN_BOOKINGS_TYPE_LABELS.amistoso };
   if (b.tipo === 'ranking') return { cls: 'is-ranking', label: ADMIN_BOOKINGS_TYPE_LABELS.ranking };
+  if (b.tipo === 'liga') return { cls: 'is-ranking', label: ADMIN_BOOKINGS_TYPE_LABELS.liga };
   return { cls: 'is-reserva', label: 'Reserva' };
 }
 

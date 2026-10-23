@@ -236,6 +236,7 @@ function notifyChallenge(data) {
   const slot = text(data.slot) || '';
   const retadoTelefono = text(data.retadoTelefono);
   const isFriendly = text(data.tipo) === 'amistoso';
+  const isLeague = text(data.tipo) === 'liga';
 
   if (!retadoEmail) return { ok: false, msg: 'Correo del jugador retado no proporcionado.' };
 
@@ -255,14 +256,20 @@ function notifyChallenge(data) {
   });
 
   const rankingUrl = 'https://uctenis.github.io/reservas-canchas/ranking.html';
-  const headline = isFriendly ? '¡Tienes una invitación a un amistoso!' : '¡Tienes un nuevo desafío!';
-  const introLine = isFriendly
-    ? '<strong>' + retadorNombre + '</strong> reservó un partido amistoso contigo en UCTenis.'
-    : '<strong>' + retadorNombre + '</strong> te ha retado en el ranking UCTenis.';
-  const ctaLabel = isFriendly ? 'Aceptar o Rechazar amistoso' : 'Aceptar o Rechazar desafío';
-  const subjectLabel = isFriendly
-    ? '🎾 Invitación amistoso UCTenis: ' + retadorNombre + ' vs ' + retadoNombre
-    : '🎾 ¡Te desafían en UCTenis! ' + retadorNombre + ' te reta';
+  const headline = isLeague ? '¡Agendaron tu partido del Campeonato de Liga!'
+    : (isFriendly ? '¡Tienes una invitación a un amistoso!' : '¡Tienes un nuevo desafío!');
+  const introLine = isLeague
+    ? '<strong>' + retadorNombre + '</strong> propuso día, hora y cancha para su partido de la fecha del Campeonato de Liga.'
+    : (isFriendly
+      ? '<strong>' + retadorNombre + '</strong> reservó un partido amistoso contigo en UCTenis.'
+      : '<strong>' + retadorNombre + '</strong> te ha retado en el ranking UCTenis.');
+  const ctaLabel = isLeague ? 'Aceptar o Rechazar partido de liga'
+    : (isFriendly ? 'Aceptar o Rechazar amistoso' : 'Aceptar o Rechazar desafío');
+  const subjectLabel = isLeague
+    ? '🎾 Liga UCTenis: ' + retadorNombre + ' vs ' + retadoNombre + ' — confirma el partido'
+    : (isFriendly
+      ? '🎾 Invitación amistoso UCTenis: ' + retadorNombre + ' vs ' + retadoNombre
+      : '🎾 ¡Te desafían en UCTenis! ' + retadorNombre + ' te reta');
   const slotLine = slot ? '<tr><td style="padding:6px 12px;color:#555;">Hora</td><td style="padding:6px 12px;font-weight:600;">' + slot + '</td></tr>' : '';
   const calendarLine = calendarResult.ok
     ? (calendarResult.pending
@@ -309,7 +316,7 @@ function notifyChallenge(data) {
   }
 
   if (retadorEmail && retadorEmail.toLowerCase() !== retadoEmail.toLowerCase()) {
-    const confirmationTitle = isFriendly ? 'Amistoso enviado' : 'Desafío enviado';
+    const confirmationTitle = isLeague ? 'Partido de liga enviado' : (isFriendly ? 'Amistoso enviado' : 'Desafío enviado');
     const confirmationBody = [
       '<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;border:1px solid #e0e0e0;border-radius:10px;overflow:hidden;">',
       '<div style="background:#1a6b3a;padding:24px;text-align:center;"><h1 style="color:#fff;margin:0;font-size:22px;">🎾 UCTenis</h1>',
@@ -338,7 +345,9 @@ function notifyChallenge(data) {
     }
   }
 
-  const waText = isFriendly
+  const waText = isLeague
+    ? '🎾 ¡Hola ' + retadoNombre + '! ' + retadorNombre + ' agendó nuestro partido del Campeonato de Liga UCTenis: ' + fechaLabel + (slot ? ', ' + slot : '') + ' en ' + cancha + '. Acepta o rechaza en: ' + rankingUrl
+    : isFriendly
     ? '🎾 ¡Hola ' + retadoNombre + '! ' + retadorNombre + ' reservó un amistoso contigo en UCTenis. Fecha: ' + fechaLabel + (slot ? ', ' + slot : '') + ' en ' + cancha + '. Acepta o rechaza en: ' + rankingUrl
     : '🎾 ¡Hola ' + retadoNombre + '! ' + retadorNombre + ' te ha retado en UCTenis. Fecha: ' + fechaLabel + (slot ? ', ' + slot : '') + ' en ' + cancha + '. Acepta o rechaza en: ' + rankingUrl;
   const cleanPhone = retadoTelefono.replace(/[^0-9]/g, '');
@@ -368,6 +377,8 @@ function notifyResult(data) {
   const marcador = text(data.marcador) || 'sin marcador';
   const fecha = text(data.fecha) || '';
   const cancha = text(data.cancha) || '';
+  const isLeague = text(data.tipo) === 'liga';
+  const matchLabel = isLeague ? 'partido de liga' : 'desafío';
 
   if (!perdedorEmail && !ganadorEmail) return { ok: false, msg: 'Correos de los jugadores no proporcionados.' };
 
@@ -384,10 +395,10 @@ function notifyResult(data) {
     const body = [
       '<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;border:1px solid #e0e0e0;border-radius:10px;overflow:hidden;">',
       '<div style="background:#1a6b3a;padding:24px;text-align:center;"><h1 style="color:#fff;margin:0;font-size:22px;">🎾 UCTenis</h1>',
-      '<p style="color:#c8e6c9;margin:6px 0 0;">Resultado de tu desafío</p></div>',
+      '<p style="color:#c8e6c9;margin:6px 0 0;">Resultado de tu ' + matchLabel + '</p></div>',
       '<div style="padding:24px;">',
       '<p style="font-size:16px;margin:0 0 16px;">Hola <strong>' + perdedorNombre + '</strong>,</p>',
-      '<p style="margin:0 0 16px;">Se registró el resultado de tu desafío contra <strong>' + ganadorNombre + '</strong>.</p>',
+      '<p style="margin:0 0 16px;">Se registró el resultado de tu ' + matchLabel + ' contra <strong>' + ganadorNombre + '</strong>.</p>',
       '<table style="width:100%;border-collapse:collapse;margin-bottom:20px;">',
       fechaRow, canchaRow,
       '<tr style="background:#f5f5f5;"><td style="padding:6px 12px;color:#555;">Marcador</td><td style="padding:6px 12px;font-weight:600;">' + marcador + '</td></tr>',
@@ -415,7 +426,7 @@ function notifyResult(data) {
       '<p style="color:#c8e6c9;margin:6px 0 0;">🏆 ¡Victoria registrada!</p></div>',
       '<div style="padding:24px;">',
       '<p style="font-size:16px;margin:0 0 16px;">¡Felicitaciones <strong>' + ganadorNombre + '</strong>! 🎉</p>',
-      '<p style="margin:0 0 16px;">Ganaste tu desafío contra <strong>' + perdedorNombre + '</strong>. Pendiente de confirmación por tu rival (48 horas).</p>',
+      '<p style="margin:0 0 16px;">Ganaste tu ' + matchLabel + ' contra <strong>' + perdedorNombre + '</strong>. Pendiente de confirmación por tu rival (48 horas).</p>',
       '<table style="width:100%;border-collapse:collapse;margin-bottom:20px;">',
       fechaRow, canchaRow,
       '<tr style="background:#f5f5f5;"><td style="padding:6px 12px;color:#555;">Marcador</td><td style="padding:6px 12px;font-weight:600;">' + marcador + '</td></tr>',
@@ -427,7 +438,7 @@ function notifyResult(data) {
       '</div></div>'
     ].join('');
     try {
-      MailApp.sendEmail({ to: ganadorEmail, subject: '🏆 ¡Ganaste tu desafío UCTenis! vs ' + perdedorNombre, htmlBody: body, name: 'UCTenis Club' });
+      MailApp.sendEmail({ to: ganadorEmail, subject: '🏆 ¡Ganaste tu ' + matchLabel + ' UCTenis! vs ' + perdedorNombre, htmlBody: body, name: 'UCTenis Club' });
       deliveries.ganador = { ok: true };
     } catch(e) {
       deliveries.ganador = { ok: false, msg: e.message };
@@ -533,7 +544,8 @@ function notifyChallengeResponse(challenge, nuevoStatus) {
   const cancha = text(challenge.cancha) || '';
   const slot = text(challenge.slot) || '';
   const isFriendly = text(challenge.tipo) === 'amistoso';
-  const tipoLabel = isFriendly ? 'amistoso' : 'desafío';
+  const isLeague = text(challenge.tipo) === 'liga';
+  const tipoLabel = isLeague ? 'partido de liga' : (isFriendly ? 'amistoso' : 'desafío');
   const aceptado = nuevoStatus === 'aceptado';
   const RANKING_URL = 'https://uctenis.github.io/reservas-canchas/ranking.html#desafios';
 
@@ -546,7 +558,9 @@ function notifyChallengeResponse(challenge, nuevoStatus) {
     : '<strong>' + retadoNombre + '</strong> rechazó tu ' + tipoLabel + '. La reserva de cancha fue liberada.';
   const extra = aceptado
     ? '<p style="margin:0 0 16px;color:#555;">La cancha ya está reservada. Recuerda presentarte 5 minutos antes.</p>'
-    : '<p style="margin:0 0 16px;color:#555;">Puedes desafiar a otro jugador desde la página de ranking.</p>';
+    : (isLeague
+      ? '<p style="margin:0 0 16px;color:#555;">Coordinen otro día dentro del plazo de la fecha: si no se juega a tiempo es W.O. para ambos.</p>'
+      : '<p style="margin:0 0 16px;color:#555;">Puedes desafiar a otro jugador desde la página de ranking.</p>');
 
   try {
     const htmlBody = [
@@ -849,13 +863,14 @@ function createChallengeCalendarInvite(data) {
     const guestList = [text(data.retadorEmail), text(data.retadoEmail)].filter(Boolean);
     const guests = guestList.join(',');
     const isFriendly = text(data.tipo) === 'amistoso';
+    const isLeague = text(data.tipo) === 'liga';
     // Igual que en detectCourtFromEvent: si no llega courtId, jamás asumir
     // una cancha CEC (bloqueadas por mal estado) — el fallback es cjp1.
     const courtKey = text(data.courtId || (data.cancha && data.cancha.toLowerCase().includes('cec') ? 'cec1' : 'cjp1'));
     const courtName = getCourtName(courtKey);
-    const title = '[' + courtName + '] ' + (isFriendly ? 'Partido amistoso UCTenis: ' : 'Desafio ranking UCTenis: ') + text(data.retadorNombre) + ' vs ' + text(data.retadoNombre);
+    const title = '[' + courtName + '] ' + (isLeague ? 'Partido de liga UCTenis: ' : (isFriendly ? 'Partido amistoso UCTenis: ' : 'Desafio ranking UCTenis: ')) + text(data.retadorNombre) + ' vs ' + text(data.retadoNombre);
     const description = [
-      isFriendly ? 'Partido amistoso UCTenis.' : 'Desafio de ranking UCTenis.',
+      isLeague ? 'Partido del Campeonato de Liga UCTenis.' : (isFriendly ? 'Partido amistoso UCTenis.' : 'Desafio de ranking UCTenis.'),
       'Cancha: ' + courtName + ' (' + courtKey + ')',
       'Organizador: ' + text(data.retadorNombre) + ' <' + text(data.retadorEmail) + '>',
       'Invitado: ' + text(data.retadoNombre) + ' <' + text(data.retadoEmail) + '>',
@@ -878,7 +893,7 @@ function createChallengeCalendarInvite(data) {
         const booking = stored.booking;
         booking.guestEmails = guestList;
         booking.challengeId = text(data.challengeId);
-        booking.matchType = isFriendly ? 'amistoso' : 'ranking';
+        booking.matchType = isLeague ? 'liga' : (isFriendly ? 'amistoso' : 'ranking');
         booking.matchTitle = title;
         booking.updatedAt = new Date().toISOString();
         const bookingSaved = saveBookingDocument(booking);
@@ -1343,7 +1358,8 @@ function submitChallengeResult(data) {
         perdedorEmail: winnerIsChallenger ? updated.retadoEmail : updated.retadorEmail,
         marcador: updated.marcador,
         fecha: updated.fecha,
-        cancha: updated.cancha
+        cancha: updated.cancha,
+        tipo: updated.tipo
       });
     } catch (notificationError) {
       resultNotification = { ok: false, msg: notificationError.message };
@@ -3297,7 +3313,8 @@ function createBooking(data) {
   }
 
   const now = new Date().toISOString();
-  var tipoLabel = isFuncionario ? 'Funcionario UCT' : 'Socio UCTenis';
+  var tipoLabel = isFuncionario ? 'Funcionario UCT'
+    : ((!memberCheck.ok || memberCheck.readOnly) && isLeagueBooking ? 'Jugador de liga' : 'Socio UCTenis');
   let booking = {
     id: bookingId,
     courtId: courtId,
@@ -3521,7 +3538,7 @@ const RANKING_HEADERS = ['Posicion','Nombre','Pos. Anterior','','','ID'];
 function applyChallengeResultToRanking(challenge) {
   if (text(challenge.tipo) === 'amistoso') return { ok: true, moved: false, msg: 'Partido amistoso: no se altera el ranking.' };
   if (text(challenge.tipo) === 'campeonato') return { ok: true, moved: false, msg: 'Partido de campeonato: no se altera el ranking.' };
-  if (text(challenge.tipo) === 'liga') return { ok: true, moved: false, msg: 'Partido de liga registrado: el bono de escalerilla se procesa al cierre del ciclo.' };
+  if (text(challenge.tipo) === 'liga') return { ok: true, moved: false, msg: 'Partido de liga registrado: suma en la tabla del Campeonato de Liga y no altera la escalerilla.' };
   if (challenge.status === 'resultado_pendiente') return { ok: true, moved: false, msg: 'Resultado pendiente de confirmación: no se altera el ranking.' };
   if (challenge.status === 'wo_retador') return { ok: true, moved: false, msg: 'W.O. del retador: gana el retado y no cambia la escalerilla.' };
   if (['completado','wo_retado'].indexOf(challenge.status) < 0) return { ok: true, moved: false, msg: 'Estado sin movimiento de ranking.' };
@@ -3989,7 +4006,8 @@ function sendChallengeReminders() {
     ].forEach(function(j) {
       if (!j.email) return;
       try {
-        const tipoLabel = text(challenge.tipo) === 'amistoso' ? 'amistoso' : 'desafío de ranking';
+        const tipoLabel = text(challenge.tipo) === 'amistoso' ? 'amistoso'
+          : (text(challenge.tipo) === 'liga' ? 'partido del Campeonato de Liga' : 'desafío de ranking');
         const htmlBody = [
           '<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;border:1px solid #e0e0e0;border-radius:10px;overflow:hidden;">',
           '<div style="background:#1a6b3a;padding:24px;text-align:center;"><h1 style="color:#fff;margin:0;font-size:22px;">🎾 UCTenis</h1>',
@@ -4033,7 +4051,8 @@ function sendExpiringChallengeAlerts() {
     const remaining = CHALLENGE_RESPONSE_MS - (now - createdAt);
     if (remaining <= 0 || remaining > WARN_BEFORE_MS) continue;
     const horas = Math.ceil(remaining / (60 * 60 * 1000));
-    const tipoLabel = text(challenge.tipo) === 'amistoso' ? 'amistoso' : 'desafío';
+    const tipoLabel = text(challenge.tipo) === 'amistoso' ? 'amistoso'
+      : (text(challenge.tipo) === 'liga' ? 'partido de liga' : 'desafío');
     try {
       const htmlBody = [
         '<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;border:1px solid #e0e0e0;border-radius:10px;overflow:hidden;">',
@@ -4244,7 +4263,7 @@ function getBookingsForDate(dateStr) {
         const title = ev.getTitle() || '';
         const titleLower = title.toLowerCase();
         // Incluir reservas UCTenis, desafíos y amistosos
-        if (!titleLower.includes('reserva uctenis') && !titleLower.includes('desafio') && !titleLower.includes('amistoso')) return;
+        if (!titleLower.includes('reserva uctenis') && !titleLower.includes('desafio') && !titleLower.includes('amistoso') && !titleLower.includes('partido de liga')) return;
 
         const courtKey = detectCourtFromEvent(ev);
         const desc = ev.getDescription() || '';
@@ -4258,7 +4277,7 @@ function getBookingsForDate(dateStr) {
         const email = emailMatch ? emailMatch[1].trim() : '';
         const rut = rutMatch ? rutMatch[1].trim() : '';
         const userTypeLabel = tipoMatch ? tipoMatch[1].trim() : '';
-        const tipo = titleLower.includes('amistoso') ? 'amistoso' : (titleLower.includes('desafio') ? 'ranking' : '');
+        const tipo = titleLower.includes('amistoso') ? 'amistoso' : (titleLower.includes('partido de liga') ? 'liga' : (titleLower.includes('desafio') ? 'ranking' : ''));
         const start = ev.getStartTime();
         const slot = Utilities.formatDate(start, 'America/Santiago', 'HH:mm');
         const bookingKey = courtKey + '|' + slot;
@@ -4357,7 +4376,7 @@ function getBookingsForDateRange(dateFromStr, dateToStr) {
       events.forEach(function(ev) {
         const title = ev.getTitle() || '';
         const titleLower = title.toLowerCase();
-        if (!titleLower.includes('reserva uctenis') && !titleLower.includes('desafio') && !titleLower.includes('amistoso')) return;
+        if (!titleLower.includes('reserva uctenis') && !titleLower.includes('desafio') && !titleLower.includes('amistoso') && !titleLower.includes('partido de liga')) return;
 
         const start = ev.getStartTime();
         const dateStr = Utilities.formatDate(start, 'America/Santiago', 'yyyy-MM-dd');
@@ -4375,7 +4394,7 @@ function getBookingsForDateRange(dateFromStr, dateToStr) {
         const email = emailMatch ? emailMatch[1].trim() : '';
         const rut = rutMatch ? rutMatch[1].trim() : '';
         const userTypeLabel = tipoMatch ? tipoMatch[1].trim() : '';
-        const tipo = titleLower.includes('amistoso') ? 'amistoso' : (titleLower.includes('desafio') ? 'ranking' : '');
+        const tipo = titleLower.includes('amistoso') ? 'amistoso' : (titleLower.includes('partido de liga') ? 'liga' : (titleLower.includes('desafio') ? 'ranking' : ''));
         const slot = Utilities.formatDate(start, 'America/Santiago', 'HH:mm');
         const bookingKey = courtKey + '|' + slot;
         if (occupiedKeysByDay[dateStr][bookingKey]) return;
