@@ -1027,7 +1027,7 @@ function renderSlotsByCourt(apiData) {
     if (isMine) return { kind: 'mine', label: 'Tu reserva', aria: `${where}: tu reserva` };
     if (isBusy) {
       const vs = match ? `${firstName(match.retadorNombre)} vs ${firstName(match.retadoNombre)}` : '';
-      if (isSystemClass || (!match && ci.busyLabels[slot] === 'Clases UCTenis')) {
+      if (isSystemClass) {
         return { kind: 'clases', label: 'Clase', aria: `${where}: clases UCTenis`, past: isTooClose };
       }
       if (match) {
@@ -1035,7 +1035,7 @@ function renderSlotsByCourt(apiData) {
         const label = kind === 'amistoso' ? 'Amistoso' : kind === 'campeonato' ? 'Torneo' : 'Desafío';
         return { kind, label, sub: vs, aria: `${where}: ${label.toLowerCase()} ${vs}`, past: isTooClose };
       }
-      const why = ci.busyLabels[slot] || '';
+      const why = ci.busyLabels[slot] === 'Clases UCTenis' ? '' : (ci.busyLabels[slot] || '');
       return { kind: 'busy', label: 'Ocupada', sub: why, aria: `${where}: ocupada${why ? ' (' + why + ')' : ''}`, past: isTooClose };
     }
     if (isTooClose) return { kind: 'past', label: isPast ? 'Pasada' : `Límite ${leadLabel}`, aria: `${where}: ${isPast ? 'ya pasó' : `se reserva con ${leadLabel} de anticipación`}`, past: true };

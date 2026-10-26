@@ -180,6 +180,7 @@ function handleRequest(data) {
       case "get_special_dates":      response = getSpecialDatesList(); break;
       case "get_player_rut":         response = getPlayerRut(data); break;
       case "save_player_rut":        response = savePlayerRut(data); break;
+      case "save_league_enrollment": response = saveLeagueEnrollment(data); break;
       case "save_schedule_config":   response = saveScheduleConfig(data); break;
       case "get_schedule_config":    response = getScheduleConfigPublic(data.idToken); break;
       case "get_tournaments":        response = getTournaments(data); break;
@@ -2316,6 +2317,55 @@ function savePlayerRut(data) {
   }
 }
 
+/** Inscripción a la liga: se escribe en el campo `ligaAAAA` de la ficha
+ * (ranking_players/{id}) con la identidad del Apps Script. El dueño de la
+ * ficha solo puede inscribirse/darse de baja; el admin puede cambiar todo. */
+function saveLeagueEnrollment(data) {
+  const playerId = text(data.playerId);
+  const field = text(data.field);
+  if (!playerId) return { ok: false, msg: 'Falta el ID del jugador.' };
+  if (!/^liga\d{4}$/.test(field)) return { ok: false, msg: 'Temporada inválida.' };
+  if (!isOwnerOrAdminOfPlayer(playerId, data.idToken)) {
+    return { ok: false, msg: 'No tienes permiso para editar esta inscripción.' };
+  }
+  const isAdmin = isAdminRequest({ idToken: data.idToken });
+  const patch = (data.patch && typeof data.patch === 'object') ? data.patch : {};
+  const allowedForOwner = { inscrito: 1, retirado: 1, inscritoEn: 1, rama: 1, numero: 1 };
+  const keys = Object.keys(patch);
+  if (!keys.length) return { ok: false, msg: 'Sin cambios.' };
+  for (let i = 0; i < keys.length; i++) {
+    const k = keys[i];
+    if (!/^\w+$/.test(k)) return { ok: false, msg: 'Campo inválido.' };
+    if (isAdmin) continue;
+    if (!allowedForOwner[k]) return { ok: false, msg: 'No tienes permiso para cambiar "' + k + '".' };
+    if (k === 'retirado' && patch[k] !== false) return { ok: false, msg: 'No tienes permiso para retirarte.' };
+    if (k === 'numero' && patch[k] !== null) return { ok: false, msg: 'No tienes permiso para fijar tu número.' };
+  }
+  patch.updatedAt = patch.updatedAt || new Date().toISOString();
+  try {
+    const fields = {};
+    const mask = [];
+    Object.keys(patch).forEach(function(k) {
+      if (k === 'updatedAt') return;
+      fields[k] = jsToFirestoreValue(patch[k]);
+      mask.push('updateMask.fieldPaths=' + encodeURIComponent(field + '.' + k));
+    });
+    const doc = { fields: {} };
+    doc.fields[field] = { mapValue: { fields: fields } };
+    doc.fields.updatedAt = { stringValue: new Date().toISOString() };
+    mask.push('updateMask.fieldPaths=updatedAt');
+    const url = playerPublicFirestoreUrl(playerId) + '&' + mask.join('&');
+    const response = UrlFetchApp.fetch(url, bookingFetchOptions('patch', doc, data.idToken));
+    const code = response.getResponseCode();
+    if (code < 200 || code >= 300) {
+      return { ok: false, msg: 'No se pudo guardar la inscripción (' + code + '): ' + response.getContentText().substring(0, 160) };
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, msg: 'No se pudo guardar la inscripción: ' + e.message };
+  }
+}
+
 // =======================================================
 // ⚙️ CONFIGURACIÓN DINÁMICA DE HORARIOS (editable por el admin)
 // =======================================================
@@ -3099,9 +3149,7 @@ function getAvailableSlots(dateStr, idToken, courtIdFilter) {
     if (isSpecialPeriodMirrorEvent(e)) return;
     const rawTitle = e.getTitle() || '';
     const title = rawTitle.toLowerCase();
-    let busyLabel = '';
     const isClass = title.includes('clases uctenis') || title.includes('clase uctenis');
-    if (isClass) busyLabel = 'Clases UCTenis';
 
     // Modo estricto: un evento cuya cancha no se puede determinar con
     // certeza NO debe asumirse como 'cec1' — eso liberaría las otras 3
@@ -3109,7 +3157,9 @@ function getAvailableSlots(dateStr, idToken, courtIdFilter) {
     // Se trata como ocupado en las 4 canchas (falla cerrado) hasta que un
     // admin lo etiquete correctamente.
     const eventCourt = detectCourtFromEvent(e, true);
-    const timeItem = { start: e.getStartTime().getTime(), end: e.getEndTime().getTime(), label: busyLabel };
+    // Calendar solo informa ocupación. El rótulo "Clase" lo determina
+    // classBlocks por cancha; un evento antiguo sin cancha no configura CEC.
+    const timeItem = { start: e.getStartTime().getTime(), end: e.getEndTime().getTime(), label: '' };
 
     if (isClass) {
       if (title.includes('cjp') || (eventCourt && eventCourt.startsWith('cjp'))) {
@@ -3119,7 +3169,19 @@ function getAvailableSlots(dateStr, idToken, courtIdFilter) {
         busyTimesByCourt['cec1'].push(timeItem);
         busyTimesByCourt['cec2'].push(timeItem);
       } else {
-        ['cec1', 'cec2', 'cjp1', 'cjp2'].forEach(c => {
+        // Los eventos antiguos de clases suelen no indicar cancha. Asociar
+        // su horario a las franjas administradas antes de bloquear CEC.
+        const configuredCourts = classBlocks.filter(function(block) {
+          if (block.day !== dayOfWeek) return false;
+          const blockStart = makeLocalDate(dateStr, block.slot).getTime();
+          return blockStart < timeItem.end && blockStart + 90 * 60000 > timeItem.start;
+        }).reduce(function(courts, block) {
+          block.courts.forEach(function(courtId) {
+            if (courts.indexOf(courtId) < 0) courts.push(courtId);
+          });
+          return courts;
+        }, []);
+        (configuredCourts.length ? configuredCourts : ['cec1', 'cec2', 'cjp1', 'cjp2']).forEach(c => {
           if (!busyTimesByCourt[c]) busyTimesByCourt[c] = [];
           busyTimesByCourt[c].push(timeItem);
         });
@@ -4079,6 +4141,141 @@ function sendExpiringChallengeAlerts() {
   }
 }
 
+// =======================================================
+// 🎂 SALUDOS DE CUMPLEAÑOS
+// =======================================================
+const BIRTHDAY_SITE_URL = 'https://uctenis.github.io/reservas-canchas/';
+
+/** Lista todas las fichas de ranking_players (con identidad del Apps Script). */
+function listAllFirebasePlayerDocs() {
+  const docs = [];
+  let pageToken = '';
+  for (let guard = 0; guard < 20; guard++) {
+    const url = 'https://firestore.googleapis.com/v1/projects/' + encodeURIComponent(CONFIG.FIREBASE_PROJECT_ID)
+      + '/databases/(default)/documents/ranking_players?pageSize=300&key=' + encodeURIComponent(CONFIG.FIREBASE_API_KEY)
+      + (pageToken ? '&pageToken=' + encodeURIComponent(pageToken) : '');
+    const response = UrlFetchApp.fetch(url, bookingFetchOptions('get'));
+    if (response.getResponseCode() !== 200) {
+      throw new Error('Firestore ' + response.getResponseCode() + ': ' + response.getContentText().substring(0, 160));
+    }
+    const body = JSON.parse(response.getContentText());
+    (body.documents || []).forEach(function(d) {
+      docs.push(firestoreValueToJs({ mapValue: { fields: d.fields || {} } }) || {});
+    });
+    pageToken = body.nextPageToken || '';
+    if (!pageToken) break;
+  }
+  return docs;
+}
+
+function escapeHtmlBday(value) {
+  return String(value == null ? '' : value).replace(/[&<>"']/g, function(c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+
+/** true si hoy (hora de Chile) es el cumpleaños de `birth` (yyyy-MM-dd).
+ * Quien nace un 29 de febrero celebra el 28 en los años no bisiestos. */
+function isBirthdayToday(birth, now) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(text(birth));
+  if (!m) return false;
+  const today = Utilities.formatDate(now, 'America/Santiago', 'yyyy-MM-dd').split('-').map(Number);
+  const month = Number(m[2]);
+  let day = Number(m[3]);
+  const year = today[0];
+  const leap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+  if (month === 2 && day === 29 && !leap) day = 28;
+  return today[1] === month && today[2] === day;
+}
+
+function birthdayHeadline(player) {
+  const lines = [
+    'Que este año te traiga puntos ganadores y cero dobles faltas',
+    'Hoy el marcador es 40-0 a tu favor',
+    'Un año más de golpes, de risas y de buenas tardes de cancha',
+    'Hoy te toca a ti sacar: que sea un ace',
+    'Que tu año venga con drive profundo y revés sin errores'
+  ];
+  const seed = String(player.id || player.nombre || '').split('').reduce(function(s, ch) { return s + ch.charCodeAt(0); }, 0);
+  return lines[seed % lines.length];
+}
+
+function buildBirthdayEmail(player, now) {
+  const first = escapeHtmlBday(text(player.nombre).split(/\s+/)[0] || 'amigo/a');
+  const birth = /^(\d{4})/.exec(text(player.fechaNacimiento));
+  const age = birth ? Number(Utilities.formatDate(now, 'America/Santiago', 'yyyy')) - Number(birth[1]) : 0;
+  const female = text(player.genero || player.gender).toUpperCase().charAt(0) === 'F';
+  const pos = Number(player.posicion != null && player.posicion !== '' ? player.posicion : player.pos);
+  const detalles = [];
+  if (age > 0 && age < 100) detalles.push('Hoy cumples <strong>' + age + '</strong> y el club entero lo celebra contigo.');
+  if (pos > 0 && player.participaRanking !== false) {
+    detalles.push('Mientras tanto, en la escalerilla ' + (female ? 'damas' : 'varones') + ' estás en el <strong>puesto #' + pos + '</strong>'
+      + (pos === 1 ? ': ¡el mejor regalo ya lo tienes, la cima!' : ': un buen día para empezar a escalar.'));
+  }
+  if (player.liga2026 && player.liga2026.inscrito === true && player.liga2026.retirado !== true) {
+    detalles.push('Y como ya estás en el <strong>Campeonato de Liga 2026</strong>, cada partido de este año suma para tu historia.');
+  }
+  const detalleHtml = detalles.map(function(d) { return '<p style="margin:0 0 12px;font-size:15px;line-height:1.6;color:#33443b;">' + d + '</p>'; }).join('');
+  const headline = birthdayHeadline(player);
+  const html = [
+    '<div style="background:#f3f6f4;padding:24px 12px;font-family:Arial,Helvetica,sans-serif;">',
+    '<div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 6px 24px rgba(10,23,18,.12);">',
+    '<div style="background:linear-gradient(135deg,#0a1712,#1a6b3a);padding:34px 24px;text-align:center;">',
+    '<div style="font-size:46px;line-height:1;">🎂🎾</div>',
+    '<h1 style="color:#ffffff;margin:14px 0 6px;font-size:26px;letter-spacing:.3px;">¡Feliz cumpleaños, ' + first + '!</h1>',
+    '<p style="color:#f5c76a;margin:0;font-size:14px;font-weight:bold;letter-spacing:1.2px;text-transform:uppercase;">UCTenis Club</p>',
+    '</div>',
+    '<div style="padding:28px 28px 8px;">',
+    '<p style="margin:0 0 14px;font-size:18px;color:#0a1712;font-weight:bold;">' + headline + '.</p>',
+    '<p style="margin:0 0 12px;font-size:15px;line-height:1.6;color:#33443b;">Todo el equipo de UCTenis te manda un abrazo grande en tu día. Gracias por ser parte del club, por cuidar la cancha y por hacer de cada tarde de tenis un buen momento.</p>',
+    detalleHtml,
+    '<p style="margin:0 0 20px;font-size:15px;line-height:1.6;color:#33443b;">Te invitamos a celebrarlo como más te gusta: <strong>con una raqueta en la mano</strong>. 🎉</p>',
+    '<div style="text-align:center;margin:8px 0 26px;"><a href="' + BIRTHDAY_SITE_URL + 'reservas.html" style="background:#f59e0b;color:#0a1712;padding:14px 30px;border-radius:999px;text-decoration:none;font-weight:bold;font-size:15px;display:inline-block;">Reservar mi cancha de cumpleaños</a></div>',
+    '</div>',
+    '<div style="background:#f3f6f4;padding:16px 24px;text-align:center;">',
+    '<p style="margin:0;color:#6b7c73;font-size:12px;">Con cariño, la comisión de UCTenis · Universidad Católica de Temuco</p>',
+    '</div>',
+    '</div></div>'
+  ].join('');
+  const plain = '¡Feliz cumpleaños, ' + text(player.nombre).split(/\s+/)[0] + '! ' + headline + '. Todo el equipo de UCTenis te manda un abrazo. Reserva tu cancha: ' + BIRTHDAY_SITE_URL + 'reservas.html';
+  return { subject: '🎂 ¡Feliz cumpleaños, ' + text(player.nombre).split(/\s+/)[0] + '! — UCTenis', html: html, plain: plain };
+}
+
+/** Envía el saludo a quien cumple años hoy. Seguro de re-ejecutar: guarda una
+ * marca por socio y año para no repetir el correo. */
+function sendBirthdayGreetings() {
+  const now = new Date();
+  const props = PropertiesService.getScriptProperties();
+  const year = Utilities.formatDate(now, 'America/Santiago', 'yyyy');
+  let players;
+  try { players = listAllFirebasePlayerDocs(); } catch (e) { console.error('sendBirthdayGreetings:', e.message); return { ok: false, msg: e.message }; }
+  let sent = 0;
+  players.forEach(function(player) {
+    try {
+      const email = text(player.email).toLowerCase();
+      if (!email || !/@/.test(email) || /@uctenis\.local$/.test(email)) return;
+      if (player.activo === false || player.activo === 'false') return;
+      if (!isBirthdayToday(player.fechaNacimiento, now)) return;
+      const key = 'bday_' + text(player.id || email) + '_' + year;
+      if (props.getProperty(key)) return;
+      const mail = buildBirthdayEmail(player, now);
+      MailApp.sendEmail({ to: email, subject: mail.subject, htmlBody: mail.html, body: mail.plain, name: 'UCTenis Club' });
+      props.setProperty(key, '1');
+      sent++;
+    } catch (e) { console.warn('Cumpleaños error ' + player.email + ':', e.message); }
+  });
+  return { ok: true, sent: sent };
+}
+
+/** Prueba: envía un saludo de ejemplo a `toEmail` (por defecto el 1er admin). */
+function previewBirthdayEmail(toEmail) {
+  const to = toEmail || (CONFIG.ADMINS.emails || [])[0];
+  const sample = { id: 'demo', nombre: 'David Silva', fechaNacimiento: '1990-' + Utilities.formatDate(new Date(), 'America/Santiago', 'MM-dd'), genero: 'M', posicion: 3, liga2026: { inscrito: true } };
+  const mail = buildBirthdayEmail(sample, new Date());
+  MailApp.sendEmail({ to: to, subject: '[PRUEBA] ' + mail.subject, htmlBody: mail.html, body: mail.plain, name: 'UCTenis Club' });
+  return 'Enviado a ' + to;
+}
+
 /**
  * Función unificada para el trigger diario.
  * Instalar como trigger: Tiempo → Día → entre 8 y 9 AM
@@ -4088,6 +4285,7 @@ function runDailyTrigger() {
   try { sendChallengeReminders(); } catch(e) { console.error('sendChallengeReminders:', e.message); }
   try { sendExpiringChallengeAlerts(); } catch(e) { console.error('sendExpiringChallengeAlerts:', e.message); }
   try { sendDailyCourtDigest(); } catch(e) { console.error('sendDailyCourtDigest:', e.message); }
+  try { sendBirthdayGreetings(); } catch(e) { console.error('sendBirthdayGreetings:', e.message); }
 }
 
 /**
