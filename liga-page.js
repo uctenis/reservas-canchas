@@ -523,7 +523,7 @@
       toast(okMessage);
     } catch (err) {
       console.error('No se pudo guardar la inscripción de liga:', err);
-      toast(/permission/i.test(String(err && err.message)) ? 'No tienes permiso para hacer este cambio.' : 'No se pudo guardar. Revisa tu conexión e intenta de nuevo.', 'bad');
+      toast(/permission|permiso/i.test(String(err && err.message)) ? 'No tienes permiso para hacer este cambio.' : 'No se pudo guardar. Revisa tu conexión e intenta de nuevo.', 'bad');
     } finally {
       state.busy = false;
       render();

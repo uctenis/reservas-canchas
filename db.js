@@ -1139,7 +1139,33 @@ const DB = {
       updatedAt: new Date().toISOString(),
       updatedBy: actor.email || ''
     };
-    await firebaseDb.collection(FIREBASE_COLLECTIONS.players).doc(playerId).set(data, { merge: true });
+    let savedViaBackend = false;
+    let backendError = '';
+    if (window.CONFIG?.API_URL) {
+      try {
+        const idToken = await this.getIdTokenOrReauth();
+        if (idToken) {
+          const res = await fetch(window.CONFIG.API_URL, {
+            method: 'POST',
+            body: JSON.stringify({ action: 'save_league_enrollment', playerId, field, patch: cleanFirestoreData(patch), idToken })
+          });
+          const result = await res.json();
+          if (result && result.ok) savedViaBackend = true;
+          else backendError = (result && result.msg) || '';
+        }
+      } catch (e) {
+        backendError = String(e && e.message || '');
+      }
+    }
+    if (!savedViaBackend) {
+      // Backend sin la acción nueva o sin red: se intenta el guardado directo.
+      try {
+        await firebaseDb.collection(FIREBASE_COLLECTIONS.players).doc(playerId).set(data, { merge: true });
+      } catch (directError) {
+        if (backendError) throw new Error(backendError);
+        throw directError;
+      }
+    }
     const cached = cachedPlayers.find(player => player.id === playerId);
     if (cached) cached[field] = { ...(cached[field] || {}), ...data[field] };
     return data[field];
