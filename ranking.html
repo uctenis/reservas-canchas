@@ -10,7 +10,7 @@
   <meta property="og:image" content="https://uctenis.github.io/reservas-canchas/logo_uctenis_v03.png">
   <link rel="icon" href="logo_uctenis_v03.png" type="image/png">
   <link rel="stylesheet" href="style.css?v=20260813_v1">
-  <link rel="stylesheet" href="ranking.css?v=20261019_classes">
+  <link rel="stylesheet" href="ranking.css?v=20261026_estado">
   <link rel="stylesheet" href="datepicker.css?v=20260908_v3">
   <script>
     // Quien llega desde liga.html (?liga=1) solo quiere el modal de desafio de
@@ -489,11 +489,12 @@
         </div>
         <div class="form-row">
           <div class="form-group">
-            <label for="adminEstado">Estado</label>
-            <select id="adminEstado">
-              <option value="activo">Participa en escalerilla</option>
-              <option value="inactivo">Inactivo del ranking</option>
-            </select>
+            <label for="adminEstadoToggle">Estado</label>
+            <input type="hidden" id="adminEstado" value="activo">
+            <button type="button" id="adminEstadoToggle" class="admin-estado-toggle is-active" role="switch" aria-checked="true" data-action="admin-toggle-estado">
+              <span class="admin-estado-knob" aria-hidden="true"></span>
+              <span class="admin-estado-label">Activo · participa en escalerilla</span>
+            </button>
           </div>
           <div class="form-group">
             <label for="adminTelefono">Teléfono (WhatsApp)</label>
@@ -1239,6 +1240,12 @@ function setupEvents() {
 
     const openAdmin = event.target.closest('[data-action="open-admin"]');
     if (openAdmin) openAdminModal();
+
+    const editModeToggleActive = event.target.closest('[data-action="edit-mode-toggle-active"]');
+    if (editModeToggleActive) toggleActiveFromEditMode(editModeToggleActive.dataset.playerKey);
+
+    const toggleEstado = event.target.closest('[data-action="admin-toggle-estado"]');
+    if (toggleEstado) setAdminEstado(document.getElementById('adminEstado').value === 'inactivo');
 
     const clearAdmin = event.target.closest('[data-action="admin-clear-form"]');
     if (clearAdmin) resetAdminForm();
@@ -2111,6 +2118,7 @@ function renderRanking() {
           <div class="action-buttons">
             <button class="btn-mini-profile" type="button" data-action="show-profile" data-player-key="${escapeAttr(player.id)}">Ver</button>
             ${challengeButton}
+            ${isAdmin && rankingEditMode ? `<button class="btn-mini-estado is-active" type="button" data-action="edit-mode-toggle-active" data-player-key="${escapeAttr(player.id)}" title="Pasar a inactivo">● Activo</button>` : ''}
           </div>
         </td>
       </tr>`;
@@ -2231,6 +2239,7 @@ function renderInactivePlayers() {
           <strong>${escapeHTML(player.nombre)} ${genderTag}</strong>
         </div>
         <button class="btn-mini-profile" type="button" data-action="show-profile" data-player-key="${escapeAttr(player.id)}">Ver</button>
+        ${rankingEditMode ? `<button class="btn-mini-estado" type="button" data-action="edit-mode-toggle-active" data-player-key="${escapeAttr(player.id)}" title="Reactivar en la escalerilla">○ Inactivo</button>` : ''}
       </article>`;
   }).join('');
 }
@@ -5792,6 +5801,16 @@ function closeAdminRowMenu() {
 }
 function closeAdminRowMenuOnEscape(e) { if (e.key === 'Escape') closeAdminRowMenu(); }
 
+function setAdminEstado(active) {
+  document.getElementById('adminEstado').value = active ? 'activo' : 'inactivo';
+  const toggle = document.getElementById('adminEstadoToggle');
+  toggle.classList.toggle('is-active', active);
+  toggle.setAttribute('aria-checked', String(active));
+  toggle.querySelector('.admin-estado-label').textContent = active
+    ? 'Activo · participa en escalerilla'
+    : 'Inactivo · fuera del ranking';
+}
+
 function resetAdminForm() {
   document.getElementById('fAdminPlayer').reset();
   document.getElementById('adminPlayerId').value = '';
@@ -5800,7 +5819,7 @@ function resetAdminForm() {
   document.getElementById('adminRut').value = '';
   document.getElementById('adminRutDv').value = '';
   document.getElementById('adminGenero').value = rankingState.currentGender;
-  document.getElementById('adminEstado').value = 'activo';
+  setAdminEstado(true);
   document.getElementById('adminEsAdministrador').checked = false;
   document.getElementById('adminEsAdministrador').disabled = !isPermanentAdminSession();
   document.getElementById('adminTelefono').value = '+569';
@@ -5826,7 +5845,7 @@ function fillAdminForm(playerKey) {
   document.getElementById('adminEmail').value = player.email || '';
   document.getElementById('adminGenero').value = player.gender;
   document.getElementById('adminPosicion').value = player.pos || '';
-  document.getElementById('adminEstado').value = isPlayerActive(player) ? 'activo' : 'inactivo';
+  setAdminEstado(isPlayerActive(player));
   document.getElementById('adminEsAdministrador').checked = player.isAdmin === true ||
     ADMIN_IDENTITIES.emails.some(item => normalizeEmail(item) === normalizeEmail(player.email));
   document.getElementById('adminEsAdministrador').disabled = !isPermanentAdminSession();
@@ -6315,6 +6334,38 @@ function toggleRankingEditMode() {
   }
   
   renderRanking();
+  renderInactivePlayers();
+}
+
+// Activar/inactivar un jugador desde el Modo Edición del ranking. Se guarda
+// al instante (como "Inactivar jugador" del panel admin), así que primero
+// hay que guardar o cancelar un reordenamiento pendiente.
+async function toggleActiveFromEditMode(playerKey) {
+  const session = DB.getSession();
+  if (!isPlayerAdminSession(session) || !rankingEditMode) return;
+  const gender = rankingState.currentGender;
+  const currentOrder = (rankingState.lists[gender] || []).map(p => p.id || p.key);
+  if (currentOrder.some((id, idx) => id !== initialRankingOrder[idx])) {
+    alert('Guarda o cancela el nuevo orden del ranking antes de cambiar el estado de un jugador.');
+    return;
+  }
+  const player = getPlayerByKey(playerKey);
+  if (!player) return;
+  const newActive = !isPlayerActive(player);
+  const msg = newActive
+    ? `¿Reactivar a ${player.nombre} en la escalerilla?`
+    : `¿Marcar a ${player.nombre} como inactivo en la escalerilla?`;
+  if (!confirm(msg)) return;
+
+  try {
+    await DB.setPlayerActiveCloud(player, newActive, adminPayload(session));
+    await refreshRankingPage();
+  } catch (err) {
+    alert('No se pudo cambiar el estado: ' + (err.message || err));
+  }
+  initialRankingOrder = (rankingState.lists[gender] || []).map(p => p.id || p.key);
+  renderRanking();
+  renderInactivePlayers();
 }
 
 async function saveRankingEdits() {

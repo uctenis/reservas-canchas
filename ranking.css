@@ -3051,3 +3051,17 @@ tr.drag-over-bottom {
   .class-block-row { grid-template-columns: 1fr 1fr auto; }
   .class-block-courts { grid-column: 1 / -1; grid-row: 2; }
 }
+
+/* Interruptor Activo/Inactivo del formulario de jugador (admin) */
+.admin-estado-toggle { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 42px; padding: 8px 12px; border-radius: 10px; border: 1px solid rgba(248,113,113,0.4); background: rgba(248,113,113,0.08); color: #fca5a5; font: inherit; font-weight: 700; font-size: 0.85rem; cursor: pointer; text-align: left; }
+.admin-estado-toggle.is-active { border-color: rgba(198,211,0,0.45); background: rgba(198,211,0,0.1); color: var(--accent-tennis); }
+.admin-estado-knob { position: relative; flex: 0 0 38px; height: 22px; border-radius: 999px; background: rgba(255,255,255,0.18); transition: background .2s; }
+.admin-estado-knob::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .2s; }
+.admin-estado-toggle.is-active .admin-estado-knob { background: var(--accent-tennis); }
+.admin-estado-toggle.is-active .admin-estado-knob::after { transform: translateX(16px); }
+.admin-estado-toggle:focus-visible { outline: 2px solid var(--accent-tennis); outline-offset: 2px; }
+
+/* Botón Activo/Inactivo por jugador en el Modo Edición del ranking */
+.btn-mini-estado { padding: 6px 10px; border-radius: 8px; border: 1px solid rgba(248,113,113,0.45); background: rgba(248,113,113,0.1); color: #fca5a5; font: inherit; font-size: 0.75rem; font-weight: 800; cursor: pointer; white-space: nowrap; }
+.btn-mini-estado.is-active { border-color: rgba(198,211,0,0.5); background: rgba(198,211,0,0.12); color: var(--accent-tennis); }
+.btn-mini-estado:hover { filter: brightness(1.2); }
