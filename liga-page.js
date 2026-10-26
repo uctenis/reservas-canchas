@@ -68,10 +68,13 @@
     toast.timer = setTimeout(() => { el.className = 'lg-toast'; }, 4200);
   }
 
-  // La liga es para jugadores activos; la cuenta administradora no juega.
+  // La liga es para cualquier socio activo; la cuenta administradora no juega.
+  // participaRanking es un flag de la escalerilla (los socios nuevos parten en
+  // false hasta que el admin los suma), por eso NO condiciona la liga.
   function isLeagueEligible(player) {
     const email = String(player?.email || '').trim().toLowerCase();
-    return Boolean(player) && !PURE_ADMIN_EMAILS.includes(email) && player.activo !== false && player.participaRanking !== false;
+    const activo = player && player.activo !== false && player.activo !== 'false';
+    return Boolean(activo) && !PURE_ADMIN_EMAILS.includes(email);
   }
 
   function findMe() {
