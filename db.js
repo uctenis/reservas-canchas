@@ -538,6 +538,9 @@ const DB = {
 
     try {
       const provider = new firebase.auth.GoogleAuthProvider();
+      // Sin esto Google entra en silencio con la cuenta por defecto del
+      // navegador (a menudo un Gmail personal que no está en el club).
+      provider.setCustomParameters({ prompt: 'select_account' });
       const result = await firebaseAuth.signInWithPopup(provider);
       const user = result.user;
 
@@ -571,7 +574,7 @@ const DB = {
       const validation = await this.validateMemberAPI(user.email);
       if (!validation.ok) {
         await firebaseAuth.signOut();
-        return { ok: false, msg: validation.msg };
+        return { ok: false, msg: 'Entraste con ' + user.email + ', que no está registrado en el club. Vuelve a ingresar y elige la cuenta de Google del correo con que te inscribiste (normalmente tu correo @uct.cl).' };
       }
 
       if (validation.userType === 'invitado') {
@@ -836,7 +839,7 @@ const DB = {
 
       if (!authenticatedEmail || authenticatedEmail !== expectedEmail) {
         await firebaseAuth.signOut();
-        this.lastAuthError = 'Debes seleccionar la misma cuenta administradora: ' + (session.email || 'la cuenta actual') + '.';
+        this.lastAuthError = 'Debes elegir la misma cuenta de Google con que ingresaste: ' + (session.email || 'la cuenta actual') + '.';
         return null;
       }
 
@@ -1144,6 +1147,15 @@ const DB = {
     if (window.CONFIG?.API_URL) {
       try {
         const idToken = await this.getIdTokenOrReauth();
+        if (!idToken) backendError = this.lastAuthError || 'Tu sesión de Google expiró. Cierra sesión y vuelve a ingresar.';
+        // El backend solo acepta la inscripción si la cuenta de Google es la
+        // de la ficha; se avisa aquí con el correo exacto para que se note.
+        const googleEmail = normalizeEmailForDb(firebaseAuth && firebaseAuth.currentUser && firebaseAuth.currentUser.email);
+        const owner = cachedPlayers.find(player => player.id === playerId);
+        const ownerEmail = normalizeEmailForDb(owner && (owner.emailLower || owner.email));
+        if (idToken && googleEmail && ownerEmail && googleEmail !== ownerEmail && !this.getSession()?.isAdmin) {
+          throw new Error('Tu sesión de Google es ' + googleEmail + ', pero tu ficha del club está con ' + ownerEmail + '. Cierra sesión y vuelve a entrar eligiendo la cuenta ' + ownerEmail + '.');
+        }
         if (idToken) {
           const res = await fetch(window.CONFIG.API_URL, {
             method: 'POST',

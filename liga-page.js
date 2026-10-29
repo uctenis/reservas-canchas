@@ -156,6 +156,19 @@
       return;
     }
     const me = state.me;
+    if (!me && !state.isAdmin) {
+      // Pasa cuando se entra con una cuenta de Google distinta a la de la
+      // ficha (p. ej. un Gmail personal): se muestra con cuál entró.
+      el.innerHTML = `
+        <div class="lg-mine-card lg-mine-cta">
+          <div>
+            <h2>No encontramos tu ficha</h2>
+            <p>Entraste con <strong>${esc(state.session.email || 'una cuenta sin correo')}</strong>, que no corresponde a ningún socio del club. Cierra sesión y vuelve a ingresar eligiendo la cuenta de Google del correo con que te inscribiste en el club (normalmente tu correo @uct.cl).</p>
+          </div>
+          <button class="lg-btn" type="button" data-action="switch-account">Cambiar de cuenta</button>
+        </div>`;
+      return;
+    }
     if (!me || !isLeagueEligible(me)) {
       el.innerHTML = state.isAdmin ? '' : `
         <div class="lg-mine-card"><p class="lg-muted">El Campeonato de Liga es para jugadores activos del club. Si crees que tu ficha debería estar activa, escríbele a la comisión.</p></div>`;
@@ -523,7 +536,11 @@
       toast(okMessage);
     } catch (err) {
       console.error('No se pudo guardar la inscripción de liga:', err);
-      toast(/permission|permiso/i.test(String(err && err.message)) ? 'No tienes permiso para hacer este cambio.' : 'No se pudo guardar. Revisa tu conexión e intenta de nuevo.', 'bad');
+      // Los mensajes en español vienen del backend o de la validación de la
+      // cuenta y dicen qué hacer; los del SDK de Firebase no.
+      const message = String(err && err.message || '');
+      toast(/[áéíóúñ]|sesión|correo|cuenta/i.test(message) && !/insufficient permissions/i.test(message) ? message
+        : /permission|permiso/i.test(message) ? 'No tienes permiso para hacer este cambio.' : 'No se pudo guardar. Revisa tu conexión e intenta de nuevo.', 'bad');
     } finally {
       state.busy = false;
       render();
@@ -535,6 +552,11 @@
   async function onAction(button) {
     const action = button.dataset.action;
     const now = new Date().toISOString();
+    if (action === 'switch-account') {
+      DB.logout();
+      location.href = 'ranking.html?volver=liga';
+      return;
+    }
     if (action === 'enroll-self' && state.session) {
       if (!confirm(`¿Confirmas tu inscripción al ${season.nombre}? Te comprometes a jugar cada fecha dentro de su plazo.`)) return;
       const rama = button.dataset.rama;
