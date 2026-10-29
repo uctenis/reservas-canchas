@@ -520,7 +520,11 @@ const DB = {
 
     const userType = user.userType || 'socio';
     if (userType === 'socio') {
-      if (!user.categoria || !user.mano || !user.reves || !user.fechaNacimiento) {
+      // La fecha de nacimiento tampoco bloquea: varias fichas activas no la
+      // tienen y el socio no puede guardarla él mismo (las reglas de
+      // Firestore solo dejan editar fichas al admin), así que quedaba
+      // atrapado en "completar perfil" sin poder entrar ni inscribirse.
+      if (!user.categoria || !user.mano || !user.reves) {
         return false;
       }
     } else if (userType === 'funcionario') {

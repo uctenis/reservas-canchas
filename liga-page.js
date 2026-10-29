@@ -65,7 +65,7 @@
     el.textContent = message;
     el.className = `lg-toast show ${kind}`;
     clearTimeout(toast.timer);
-    toast.timer = setTimeout(() => { el.className = 'lg-toast'; }, 4200);
+    toast.timer = setTimeout(() => { el.className = 'lg-toast'; }, kind === 'bad' ? 9000 : 4200);
   }
 
   // La liga es para cualquier socio activo; la cuenta administradora no juega.
