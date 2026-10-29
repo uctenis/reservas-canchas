@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex">
+  <title>Corregir fichas | UCTenis</title>
+  <link rel="icon" href="logo_uctenis_v03.png" type="image/png">
+  <link rel="stylesheet" href="style.css?v=20260813_v1">
+  <link rel="stylesheet" href="theme.css?v=20261009_r3">
+  <style>
+    .cf { max-width: 760px; margin: 32px auto; padding: 0 16px; }
+    .cf-item { display: flex; gap: 12px; align-items: flex-start; padding: 14px; border: 1px solid rgba(127,127,127,.3); border-radius: 12px; margin: 10px 0; }
+    .cf-item input { margin-top: 4px; width: 18px; height: 18px; }
+    .cf-item small { display: block; opacity: .75; margin-top: 4px; }
+    .cf-warn { color: #b45309; }
+    .cf-ok { color: #15803d; } .cf-bad { color: #b91c1c; }
+    .cf button { padding: 10px 18px; border-radius: 10px; border: 0; background: #1d4ed8; color: #fff; font-weight: 600; cursor: pointer; }
+    .cf button:disabled { opacity: .5; cursor: default; }
+  </style>
+</head>
+<body>
+  <main class="cf">
+    <h1>Corregir fichas de socios</h1>
+    <p>Página de un solo uso para que la comisión deje habilitados en la liga a los socios activos de la Lista de miembros. Requiere sesión de administrador.</p>
+    <div id="cfBody"><p>Cargando…</p></div>
+  </main>
+
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+  <script src="db.js?v=20261029_perfil"></script>
+  <script>
+  (function () {
+    // Activar = habilitar en la liga; participaRanking queda en false para no
+    // meterlos en la escalerilla sin que la comisión lo decida.
+    const FIXES = [
+      { id: 'f010', label: 'Natalia Cárdenas: correo ncardenas@uct.cl y ficha activa', patch: { email: 'ncardenas@uct.cl', emailLower: 'ncardenas@uct.cl', activo: true, participaRanking: false }, checked: true },
+      { id: 'm014', label: 'Pablo Lagos: ficha activa (fuera de la escalerilla)', patch: { activo: true, participaRanking: false }, checked: true },
+      { id: 'm013', label: 'Francisco Muñoz: ficha activa (fuera de la escalerilla)', patch: { activo: true, participaRanking: false }, checked: true },
+      { id: 'm031', label: 'Paulo Garrido: ficha activa (fuera de la escalerilla)', patch: { activo: true, participaRanking: false }, checked: true },
+      { id: 'f008', label: 'Carolina Cárdenas: correo ccardeneas@uct.cl → carolina.cardenas@uct.cl', patch: { email: 'carolina.cardenas@uct.cl', emailLower: 'carolina.cardenas@uct.cl' }, checked: false,
+        warn: 'Márcalo solo si confirmaste que ella entra con carolina.cardenas@uct.cl: el sitio tenía ccardeneas@uct.cl puesto a propósito y, si ese es su correo real, dejaría de poder entrar.' }
+    ];
+    const body = document.getElementById('cfBody');
+    const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+    async function start() {
+      await DB.authReady();
+      const session = DB.getSession();
+      const authEmail = String(firebaseAuth && firebaseAuth.currentUser && firebaseAuth.currentUser.email || '').toLowerCase();
+      if (!session || !session.isAdmin || !authEmail) {
+        body.innerHTML = '<p class="cf-bad">Necesitas entrar como administrador. <a href="ranking.html">Ingresa en el ranking</a> y vuelve a abrir esta página.</p>';
+        return;
+      }
+      const rows = await Promise.all(FIXES.map(async fix => {
+        const doc = await firebaseDb.collection(FIREBASE_COLLECTIONS.players).doc(fix.id).get();
+        const d = doc.exists ? doc.data() : {};
+        const done = Object.keys(fix.patch).every(k => d[k] === fix.patch[k]);
+        return `<label class="cf-item"><input type="checkbox" data-id="${fix.id}" ${fix.checked && !done ? 'checked' : ''} ${done ? 'disabled' : ''}>
+          <span><strong>${esc(fix.label)}</strong>${done ? ' <span class="cf-ok">— ya aplicado</span>' : ''}
+          <small>Hoy: correo ${esc(d.email || '—')} · activo ${esc(d.activo)} · escalerilla ${esc(d.participaRanking)}</small>
+          ${fix.warn ? `<small class="cf-warn">${esc(fix.warn)}</small>` : ''}
+          <small id="cfRes-${fix.id}"></small></span></label>`;
+      }));
+      body.innerHTML = `<p>Sesión: <strong>${esc(authEmail)}</strong></p>${rows.join('')}<p><button id="cfApply" type="button">Aplicar cambios marcados</button></p>`;
+      document.getElementById('cfApply').addEventListener('click', apply);
+    }
+
+    async function apply() {
+      const button = document.getElementById('cfApply');
+      button.disabled = true;
+      const actor = String(firebaseAuth.currentUser.email || '').toLowerCase();
+      for (const box of document.querySelectorAll('input[data-id]:checked:not(:disabled)')) {
+        const fix = FIXES.find(f => f.id === box.dataset.id);
+        const out = document.getElementById('cfRes-' + fix.id);
+        try {
+          await firebaseDb.collection(FIREBASE_COLLECTIONS.players).doc(fix.id)
+            .set({ ...fix.patch, updatedAt: new Date().toISOString(), updatedBy: actor }, { merge: true });
+          out.className = 'cf-ok'; out.textContent = 'Listo.';
+          box.disabled = true;
+        } catch (err) {
+          out.className = 'cf-bad'; out.textContent = 'No se pudo: ' + (err && err.message);
+        }
+      }
+      button.disabled = false;
+    }
+
+    start().catch(err => { body.innerHTML = '<p class="cf-bad">Error: ' + esc(err && err.message) + '</p>'; });
+  })();
+  </script>
+</body>
+</html>
