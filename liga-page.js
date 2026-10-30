@@ -26,6 +26,8 @@
     busy: false,
     // Cantidad y reparto de grupos elegidos en el panel, por categoría.
     groupDraft: {},
+    // Propuestas de horario pendientes en las que participo.
+    proposals: [],
     // Anima la aparición de los grupos recién armados.
     revealGroups: false
   };
@@ -240,8 +242,13 @@
       let action = '';
       if (p.state === 'por_agendar' || p.state === 'proximo') {
         detail = p.state === 'proximo' ? `La fecha abre el ${fmtLong(r.window.start)}${opensIn > 0 ? ` (en ${daysLabel(opensIn)})` : ''}.` : `Tienes ${daysLabel(closesIn + 1)} para jugarlo (hasta el ${fmtLong(p.deadline)}).`;
+        const sentToRival = state.proposals.some(pr => pr.fromEmail === myEmail() && pr.toEmail === rival.email);
         action = canSchedule
-          ? `<a class="lg-btn" href="${scheduleLink(rival)}">Agendar con ${esc(rival.nombre.split(' ')[0])}</a>`
+          ? `<div class="lg-inline lg-next-actions">
+              <button class="lg-btn" type="button" data-action="propose" data-rival="${esc(rival.key)}">${sentToRival ? 'Cambiar mi propuesta' : '📅 Proponer horarios'}</button>
+              <a class="lg-btn ghost" href="${scheduleLink(rival)}">Reservar directo</a>
+            </div>
+            <p class="lg-hint">Propón hasta 3 horarios con cancha libre y ${esc(rival.nombre.split(' ')[0])} elige uno con un clic desde su correo.</p>`
           : `<span class="lg-muted">Podrás agendarlo desde el ${fmtLong(L.addDays(r.window.start, -10))}.</span>`;
       } else if (p.state === 'invitado') {
         const mine = p.invitedBy && p.invitedBy.key === entrant.key;
@@ -267,6 +274,7 @@
             </div>
             <p>${detail}</p>
             ${action}
+            ${whatsAppButton(rival, r)}
           </div>
         </div>`;
     } else if (started && !entrant.retirado) {
@@ -295,7 +303,376 @@
     const leave = v.phase === 'inscripcion' && enrollmentOpen
       ? `<button class="lg-link" type="button" data-action="unenroll-self">Darme de baja</button>` : '';
 
-    el.innerHTML = `<div class="lg-mine-card">${head}${nextHtml}${strip}${leave}</div>`;
+    el.innerHTML = `<div class="lg-mine-card">${head}${proposalsHtml()}${nextHtml}${strip}${leave}</div>`;
+  }
+
+  // ── Propuestas de horario ─────────────────────────────────────────────
+  function myEmail() { return String(state.session?.email || '').trim().toLowerCase(); }
+
+  function courtName(courtId) {
+    const court = (DB.COURTS || []).find(c => c.id === courtId);
+    return court ? court.label.replace(/\s*–\s*/, ' · ') : String(courtId || '').toUpperCase();
+  }
+
+  function optionParts(option) {
+    const date = new Date(`${option.date}T00:00:00Z`);
+    const day = date.toLocaleDateString('es-CL', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).replace(/[.,]/g, '');
+    return { day: day.charAt(0).toUpperCase() + day.slice(1), slot: option.slot, court: courtName(option.courtId) };
+  }
+  function optionLabel(option) { const o = optionParts(option); return `${o.day} · ${o.slot} · ${o.court}`; }
+
+  // WhatsApp a teléfonos chilenos guardados como 9XXXXXXXX, +56 9…, etc.
+  function waUrl(phone, message) {
+    let digits = String(phone || '').replace(/[^0-9]/g, '');
+    if (digits.length === 8) digits = `569${digits}`;
+    else if (digits.length === 9 && digits[0] === '9') digits = `56${digits}`;
+    return digits.length >= 10 ? `https://wa.me/${digits}?text=${encodeURIComponent(message)}` : '';
+  }
+
+  function whatsAppButton(rival, round) {
+    const phone = rival.player && rival.player.telefono;
+    const url = waUrl(phone, `Hola ${rival.nombre.split(' ')[0]}, nos toca la Fecha ${round.numero} de la liga UCTenis 🎾 ¿Qué días te acomodan?`);
+    return url ? `<a class="lg-wa" href="${esc(url)}" target="_blank" rel="noopener"><span aria-hidden="true">💬</span> WhatsApp de ${esc(rival.nombre.split(' ')[0])} · ${esc(phone)}</a>` : '';
+  }
+
+  // Propuestas pendientes en las que participo: recibidas (para elegir) y
+  // enviadas (esperando respuesta).
+  function proposalsHtml() {
+    const me = myEmail();
+    if (!state.proposals.length || !me) return '';
+    return state.proposals.map(pr => {
+      const received = pr.toEmail === me;
+      const other = received ? pr.fromNombre : pr.toNombre;
+      const options = (pr.options || []).map((o, i) => {
+        const parts = optionParts(o);
+        const inner = `<span>${esc(parts.day)}</span><b>${esc(parts.slot)}</b><small>${esc(parts.court)}</small>`;
+        return received
+          ? `<button type="button" class="lg-option" data-action="accept-proposal" data-id="${esc(pr.id)}" data-opcion="${i + 1}">${inner}</button>`
+          : `<div class="lg-option is-static">${inner}</div>`;
+      }).join('');
+      return `
+        <div class="lg-proposal ${received ? 'is-received' : 'is-sent'}">
+          <div class="lg-proposal-head">
+            <span class="lg-eyebrow">${received ? `${esc(other)} te propone horarios` : `Le propusiste horarios a ${esc(other)}`}${pr.fecha ? ` · Fecha ${pr.fecha}` : ''}</span>
+            <span class="lg-chip ${received ? 'warn' : 'info'}">${received ? 'Elige uno' : 'Esperando respuesta'}</span>
+          </div>
+          ${pr.nota ? `<p class="lg-proposal-note">“${esc(pr.nota)}”</p>` : ''}
+          <div class="lg-options">${options}</div>
+          ${received
+            ? `<p class="lg-hint">Al elegir se reserva la cancha y el partido queda confirmado para los dos.</p>
+               <button class="lg-link" type="button" data-action="counter-proposal" data-id="${esc(pr.id)}">Ninguna me sirve · proponer otros horarios</button>`
+            : `<button class="lg-link" type="button" data-action="propose" data-rival-email="${esc(pr.toEmail)}">Cambiar propuesta</button>`}
+        </div>`;
+    }).join('');
+  }
+
+  async function api(action, payload) {
+    if (!window.CONFIG || !window.CONFIG.API_URL) throw new Error('No hay conexión con el servidor del club.');
+    const idToken = await DB.getIdTokenOrReauth();
+    if (!idToken) throw new Error(DB.lastAuthError || 'Tu sesión venció. Vuelve a ingresar.');
+    const res = await fetch(window.CONFIG.API_URL, { method: 'POST', body: JSON.stringify({ action, ...payload, idToken }) });
+    const data = await res.json().catch(() => null);
+    if (!data || data.ok !== true) {
+      const error = new Error((data && data.msg) || 'No se pudo completar la acción. Intenta de nuevo.');
+      error.data = data;
+      throw error;
+    }
+    return data;
+  }
+
+  async function loadProposals() {
+    if (!state.session || !window.CONFIG || !window.CONFIG.API_URL) return;
+    try {
+      const data = await api('league_my_proposals', {});
+      state.proposals = Array.isArray(data.proposals) ? data.proposals : [];
+    } catch (err) {
+      // Backend sin la acción nueva todavía: la página sigue igual.
+      console.warn('No se pudieron leer las propuestas de horario:', err.message);
+      state.proposals = [];
+    }
+    render();
+  }
+
+  // Cruce pendiente entre yo y un rival (por clave o correo).
+  function pairingWith(ref) {
+    if (!state.me) return null;
+    const gender = L.entrantGender(state.me, L.getEnrollment(state.me, season));
+    const v = view(gender);
+    const me = L.findEntrant(v, state.me);
+    if (!me) return null;
+    const item = L.getPlayerFixture(v, me).find(it => it.partido && it.rival &&
+      ((ref.key && it.rival.key === ref.key) || (ref.email && it.rival.email === ref.email)) &&
+      ['por_agendar', 'proximo', 'invitado'].includes(it.partido.state));
+    return item ? { me, rival: item.rival, round: item.round, deadline: item.partido.deadline, gender } : null;
+  }
+
+  // ── Diálogo para proponer horarios ────────────────────────────────────
+  const propose = { ctx: null, day: '', slots: {}, picked: [], note: '' };
+
+  function dialog() {
+    let dlg = document.getElementById('lgDialog');
+    if (!dlg) {
+      dlg = document.createElement('dialog');
+      dlg.id = 'lgDialog';
+      dlg.className = 'lg-dialog';
+      document.body.appendChild(dlg);
+      dlg.addEventListener('click', onDialogClick);
+      dlg.addEventListener('input', event => { if (event.target.id === 'lgProposeNote') propose.note = event.target.value; });
+      dlg.addEventListener('close', () => { propose.ctx = null; dlg.onconfirm = null; });
+    }
+    return dlg;
+  }
+
+  function proposeDates(ctx) {
+    const today = L.todayIso();
+    const from = ctx.round.window.start > today ? ctx.round.window.start : today;
+    const limit = L.addDays(today, 21);
+    const to = ctx.deadline < limit ? ctx.deadline : limit;
+    const dates = [];
+    for (let d = from; d <= to && dates.length < 21; d = L.addDays(d, 1)) dates.push(d);
+    return dates;
+  }
+
+  function openPropose(ctx) {
+    propose.ctx = ctx;
+    propose.picked = [];
+    propose.note = '';
+    const dates = proposeDates(ctx);
+    propose.day = dates[0] || '';
+    const dlg = dialog();
+    dlg.onconfirm = null;
+    renderPropose();
+    if (!dlg.open) dlg.showModal();
+    if (propose.day) loadDay(propose.day);
+  }
+
+  async function loadDay(date) {
+    if (propose.slots[date] && propose.slots[date] !== 'error') { renderPropose(); return; }
+    propose.slots[date] = 'loading';
+    renderPropose();
+    try {
+      const data = await DB.getSlotsAPI(date);
+      const minStart = Date.now() + 4 * 3600000;
+      const courts = {};
+      Object.entries((data && data.ok && data.courts) || {}).forEach(([courtId, list]) => {
+        if (!Array.isArray(list)) return;
+        const free = list.filter(slot => new Date(`${date}T${slot}:00`).getTime() >= minStart);
+        if (free.length) courts[courtId] = free;
+      });
+      propose.slots[date] = data && data.ok ? courts : 'error';
+    } catch (e) {
+      propose.slots[date] = 'error';
+    }
+    if (propose.ctx) renderPropose();
+  }
+
+  function renderPropose() {
+    const ctx = propose.ctx;
+    if (!ctx) return;
+    const dlg = dialog();
+    const dates = proposeDates(ctx);
+    const first = ctx.rival.nombre.split(' ')[0];
+    const slots = propose.slots[propose.day];
+    const isPicked = (courtId, slot) => propose.picked.some(o => o.date === propose.day && o.courtId === courtId && o.slot === slot);
+    let grid;
+    if (!dates.length) grid = '<p class="lg-empty">El plazo de esta fecha ya no deja días disponibles.</p>';
+    else if (slots === 'loading' || slots === undefined) grid = '<p class="lg-muted lg-loading">Buscando canchas libres…</p>';
+    else if (slots === 'error') grid = '<p class="lg-warn">No se pudo consultar la disponibilidad. <button class="lg-link" type="button" data-dlg="retry">Reintentar</button></p>';
+    else if (!Object.keys(slots).length) grid = '<p class="lg-muted">No quedan horarios libres este día. Prueba otro.</p>';
+    else grid = Object.entries(slots).map(([courtId, list]) => `
+      <div class="lg-court-row"><span>${esc(courtName(courtId))}</span>
+        <div>${list.map(slot => `<button type="button" class="lg-slot ${isPicked(courtId, slot) ? 'is-picked' : ''}" data-dlg="slot" data-court="${esc(courtId)}" data-slot="${esc(slot)}">${esc(slot)}</button>`).join('')}</div>
+      </div>`).join('');
+
+    dlg.innerHTML = `
+      <div class="lg-dialog-inner">
+        <div class="lg-dialog-head">
+          <div><span class="lg-eyebrow">Fecha ${ctx.round.numero} · plazo ${esc(fmtLong(ctx.deadline))}</span><h3>Propón horarios a ${esc(first)}</h3></div>
+          <button type="button" class="lg-dialog-x" data-dlg="close" aria-label="Cerrar">×</button>
+        </div>
+        <p class="lg-muted lg-dialog-intro">Elige hasta 3 horarios con cancha libre. ${esc(first)} recibe un correo y elige uno con un clic: la cancha se reserva sola.</p>
+        <div class="lg-days" role="tablist" aria-label="Días">${dates.map(d => {
+          const count = propose.picked.filter(o => o.date === d).length;
+          const parts = optionParts({ date: d, slot: '', courtId: '' });
+          const [weekday, num] = parts.day.split(' ');
+          return `<button type="button" role="tab" class="lg-day ${d === propose.day ? 'active' : ''}" data-dlg="day" data-date="${d}" aria-selected="${d === propose.day}"><small>${esc(weekday)}</small><b>${esc(num)}</b>${count ? `<i>${count}</i>` : ''}</button>`;
+        }).join('')}</div>
+        <div class="lg-slots">${grid}</div>
+        <div class="lg-tray">
+          <span class="lg-eyebrow">Tu propuesta (${propose.picked.length}/3)</span>
+          ${propose.picked.length ? `<div class="lg-options">${propose.picked.map((o, i) => {
+            const parts = optionParts(o);
+            return `<div class="lg-option is-static"><span>${esc(parts.day)}</span><b>${esc(parts.slot)}</b><small>${esc(parts.court)}</small><button type="button" class="lg-option-x" data-dlg="unpick" data-i="${i}" aria-label="Quitar">×</button></div>`;
+          }).join('')}</div>` : '<p class="lg-muted">Toca un horario para agregarlo. Mientras más opciones, más fácil que le acomode.</p>'}
+          <label class="lg-note-field">Mensaje para ${esc(first)} (opcional)
+            <input id="lgProposeNote" maxlength="200" value="${esc(propose.note)}" placeholder="Ej: prefiero en la tarde">
+          </label>
+        </div>
+        <div class="lg-dialog-foot">
+          <button type="button" class="lg-btn ghost" data-dlg="close">Cancelar</button>
+          <button type="button" class="lg-btn" data-dlg="send" ${propose.picked.length && !state.busy ? '' : 'disabled'}>${state.busy ? 'Enviando…' : `Enviar propuesta${propose.picked.length ? ` (${propose.picked.length})` : ''}`}</button>
+        </div>
+      </div>`;
+  }
+
+  async function onDialogClick(event) {
+    const dlg = dialog();
+    if (event.target === dlg) { if (!state.busy) dlg.close(); return; } // clic fuera del cuadro
+    if (dlg.onconfirm) { dlg.onconfirm(event); return; }
+    const btn = event.target.closest('[data-dlg]');
+    if (!btn) return;
+    const kind = btn.dataset.dlg;
+    if (kind === 'close') { dlg.close(); return; }
+    if (kind === 'day') { propose.day = btn.dataset.date; loadDay(propose.day); return; }
+    if (kind === 'retry') { delete propose.slots[propose.day]; loadDay(propose.day); return; }
+    if (kind === 'unpick') { propose.picked.splice(Number(btn.dataset.i), 1); renderPropose(); return; }
+    if (kind === 'slot') {
+      const option = { date: propose.day, courtId: btn.dataset.court, slot: btn.dataset.slot };
+      const at = propose.picked.findIndex(o => o.date === option.date && o.slot === option.slot && o.courtId === option.courtId);
+      if (at >= 0) propose.picked.splice(at, 1);
+      else if (propose.picked.some(o => o.date === option.date && o.slot === option.slot)) toast('Ya elegiste ese mismo horario en otra cancha.', 'bad');
+      else if (propose.picked.length >= 3) toast('Máximo 3 horarios. Quita uno para cambiarlo.', 'bad');
+      else propose.picked.push(option);
+      renderPropose();
+      return;
+    }
+    if (kind === 'send') await sendProposal();
+  }
+
+  async function sendProposal() {
+    const ctx = propose.ctx;
+    if (!ctx || !propose.picked.length || state.busy) return;
+    state.busy = true;
+    renderPropose();
+    try {
+      await api('league_propose_slots', {
+        temporada: season.id, fecha: ctx.round.numero, plazo: ctx.deadline, genero: ctx.gender,
+        fromId: state.me.id, fromNombre: state.me.nombre,
+        toId: ctx.rival.id, toEmail: ctx.rival.email, toNombre: ctx.rival.nombre,
+        options: propose.picked.slice().sort((a, b) => (a.date + a.slot).localeCompare(b.date + b.slot)),
+        nota: propose.note.trim()
+      });
+      state.busy = false;
+      dialog().close();
+      toast(`¡Listo! ${ctx.rival.nombre.split(' ')[0]} recibió tus horarios por correo.`);
+      await loadProposals();
+    } catch (err) {
+      state.busy = false;
+      toast(err.message, 'bad');
+      // Si un horario se ocupó, se vuelve a consultar ese día.
+      propose.slots = {};
+      if (propose.day) loadDay(propose.day);
+    }
+  }
+
+  // ── Elegir una opción (aceptar) ───────────────────────────────────────
+  function confirmAccept(proposal, opcion) {
+    const option = (proposal.options || [])[opcion - 1];
+    if (!option) return toast('Esa opción ya no está disponible.', 'bad');
+    const parts = optionParts(option);
+    const dlg = dialog();
+    propose.ctx = null;
+    dlg.innerHTML = `
+      <div class="lg-dialog-inner lg-confirm">
+        <span class="lg-eyebrow">${proposal.fecha ? `Fecha ${proposal.fecha} · ` : ''}Campeonato de Liga</span>
+        <h3>¿Confirmas este partido?</h3>
+        <div class="lg-confirm-card">
+          <strong>${esc(proposal.fromNombre)} <i>vs</i> ${esc(proposal.toNombre)}</strong>
+          <span class="lg-confirm-when">${esc(parts.day)} · ${esc(parts.slot)}</span>
+          <span>${esc(parts.court)}</span>
+        </div>
+        <p class="lg-muted">Se reserva la cancha a tu nombre y ambos reciben la confirmación y la invitación de Google Calendar.</p>
+        <div class="lg-dialog-foot">
+          <button type="button" class="lg-btn ghost" data-confirm="no">Ver otras opciones</button>
+          <button type="button" class="lg-btn" data-confirm="yes">Confirmar partido</button>
+        </div>
+      </div>`;
+    dlg.onconfirm = async event => {
+      const btn = event.target.closest('[data-confirm]');
+      if (!btn || state.busy) return;
+      if (btn.dataset.confirm === 'no') { dlg.close(); return; }
+      btn.disabled = true;
+      btn.textContent = 'Reservando cancha…';
+      await acceptProposal(proposal, opcion);
+      if (dlg.open) dlg.close();
+    };
+    if (!dlg.open) dlg.showModal();
+  }
+
+  async function acceptProposal(proposal, opcion) {
+    state.busy = true;
+    try {
+      const data = await api('league_accept_proposal', { id: proposal.id, opcion });
+      const challenge = data.challenge;
+      if (challenge) {
+        state.matches = [...state.matches.filter(m => m.id !== challenge.id), challenge];
+        if (DB.isCloudConfigured() && DB.saveChallengeCloud) DB.saveChallengeCloud(challenge).catch(() => {});
+      }
+      state.proposals = state.proposals.filter(p => p.id !== proposal.id);
+      toast(`¡Partido confirmado! ${optionLabel(proposal.options[opcion - 1])}. Revisa tu correo.`);
+    } catch (err) {
+      toast(err.data && err.data.slotTaken ? `${err.message} Elige otra opción o propón otros horarios.` : err.message, 'bad');
+      loadProposals();
+    } finally {
+      state.busy = false;
+      render();
+    }
+  }
+
+  async function findProposal(id) {
+    const local = state.proposals.find(p => p.id === id);
+    if (local) return local;
+    const data = await api('league_get_proposal', { id });
+    return data.proposal;
+  }
+
+  function openCounter(proposal) {
+    const ctx = pairingWith({ email: proposal.fromEmail });
+    if (!ctx) return toast('Ya no tienes un partido pendiente con ese jugador.', 'bad');
+    openPropose(ctx);
+  }
+
+  // Enlaces de los correos: ?propuesta=ID&opcion=N y ?proponer=rival. Sin
+  // sesión, la intención se guarda y se retoma al volver de ingresar.
+  async function handleIntent() {
+    const params = new URLSearchParams(location.search);
+    let intent = null;
+    if (params.get('propuesta') || params.get('proponer')) {
+      intent = { propuesta: params.get('propuesta'), opcion: params.get('opcion'), proponer: params.get('proponer') };
+      history.replaceState(null, '', location.pathname + location.hash);
+    } else {
+      try { intent = JSON.parse(sessionStorage.getItem('uctenis_liga_intent') || 'null'); } catch (e) {}
+    }
+    if (!intent) return;
+    if (!state.session) {
+      try { sessionStorage.setItem('uctenis_liga_intent', JSON.stringify(intent)); } catch (e) {}
+      toast('Ingresa con tu cuenta del club para responder.');
+      return;
+    }
+    try { sessionStorage.removeItem('uctenis_liga_intent'); } catch (e) {}
+    try {
+      if (intent.proponer) {
+        const ctx = pairingWith({ key: intent.proponer, email: String(intent.proponer).toLowerCase() });
+        if (ctx) openPropose(ctx);
+        else toast('Ya no tienes un partido pendiente con ese rival.', 'bad');
+        return;
+      }
+      const proposal = await findProposal(intent.propuesta);
+      if (!proposal) return;
+      if (proposal.status !== 'pendiente') {
+        toast(proposal.status === 'aceptada' ? 'Esa propuesta ya fue aceptada: el partido está agendado.' : 'Esa propuesta fue reemplazada por una más nueva.', 'bad');
+        return;
+      }
+      if (proposal.toEmail !== myEmail()) {
+        toast(`Esta propuesta es para ${proposal.toNombre}. Entraste como ${myEmail()}.`, 'bad');
+        return;
+      }
+      const opcion = Number(intent.opcion);
+      if (opcion > 0) confirmAccept(proposal, opcion);
+      else openCounter(proposal);
+    } catch (err) {
+      toast(err.message, 'bad');
+    }
   }
 
   function reverseScore(score) {
@@ -704,6 +1081,19 @@
       location.href = 'ranking.html?volver=liga';
       return;
     }
+    if (action === 'propose') {
+      const ctx = pairingWith({ key: button.dataset.rival, email: button.dataset.rivalEmail });
+      if (ctx) openPropose(ctx);
+      else toast('Ya no tienes un partido pendiente con ese rival.', 'bad');
+      return;
+    }
+    if (action === 'accept-proposal' || action === 'counter-proposal') {
+      const proposal = state.proposals.find(p => p.id === button.dataset.id);
+      if (!proposal) return;
+      if (action === 'accept-proposal') confirmAccept(proposal, Number(button.dataset.opcion));
+      else openCounter(proposal);
+      return;
+    }
     if (action === 'enroll-self' && state.session) {
       if (!confirm(`¿Confirmas tu inscripción al ${season.nombre}? Te comprometes a jugar cada fecha dentro de su plazo.`)) return;
       const rama = button.dataset.rama;
@@ -865,6 +1255,7 @@
     if (myGender) state.gender = myGender;
     state.loaded = true;
     render();
+    loadProposals().then(handleIntent);
 
     // Tabla y fixture en vivo: cualquier resultado o inscripción se refleja
     // sin recargar.

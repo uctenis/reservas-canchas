@@ -184,6 +184,10 @@ function handleRequest(data) {
       case "get_player_rut":         response = getPlayerRut(data); break;
       case "save_player_rut":        response = savePlayerRut(data); break;
       case "save_league_enrollment": response = saveLeagueEnrollment(data); break;
+      case "league_propose_slots":   response = leagueProposeSlots(data); break;
+      case "league_my_proposals":    response = leagueMyProposals(data); break;
+      case "league_get_proposal":    response = leagueGetProposal(data); break;
+      case "league_accept_proposal": response = leagueAcceptProposal(data); break;
       case "save_schedule_config":   response = saveScheduleConfig(data); break;
       case "get_schedule_config":    response = getScheduleConfigPublic(data.idToken); break;
       case "get_tournaments":        response = getTournaments(data); break;
@@ -4297,6 +4301,7 @@ function runDailyTrigger() {
   try { sendExpiringChallengeAlerts(); } catch(e) { console.error('sendExpiringChallengeAlerts:', e.message); }
   try { sendDailyCourtDigest(); } catch(e) { console.error('sendDailyCourtDigest:', e.message); }
   try { sendBirthdayGreetings(); } catch(e) { console.error('sendBirthdayGreetings:', e.message); }
+  try { sendLeagueNotifications(); } catch(e) { console.error('sendLeagueNotifications:', e.message); }
 }
 
 /**
@@ -5833,4 +5838,512 @@ function adminPermanentlyDeleteTournament(data) {
   } finally {
     lock.releaseLock();
   }
+}
+
+
+// =======================================================
+// 🎾 LIGA — PROPUESTAS DE HORARIO Y AVISOS AUTOMÁTICOS
+// =======================================================
+// Un jugador propone hasta 3 horarios (cancha libre dentro del plazo de la
+// fecha) y su rival elige uno con un clic desde el correo: al aceptar se
+// reserva la cancha y el partido queda confirmado para ambos. Además, el
+// trigger diario avisa cuando abre cada fecha, recuerda los partidos sin
+// agendar (día 5 y últimas 48 h) y manda a la comisión los pendientes.
+//
+// Los avisos calculan el fixture con liga.js: en el editor de Apps Script
+// debe existir un archivo "liga.gs" con el mismo contenido que liga.js.
+
+const LEAGUE_PROPOSALS_COLLECTION = 'league_proposals';
+const LEAGUE_SITE_URL = 'https://uctenis.github.io/reservas-canchas/';
+const LEAGUE_MAX_OPTIONS = 3;
+
+function leagueProposalUrl(id) {
+  return 'https://firestore.googleapis.com/v1/projects/'
+    + encodeURIComponent(CONFIG.FIREBASE_PROJECT_ID)
+    + '/databases/(default)/documents/' + LEAGUE_PROPOSALS_COLLECTION
+    + (id ? '/' + encodeURIComponent(id) : '')
+    + '?key=' + encodeURIComponent(CONFIG.FIREBASE_API_KEY);
+}
+
+function saveLeagueProposal(proposal) {
+  const fields = {};
+  Object.keys(proposal).forEach(function(k) { fields[k] = jsToFirestoreValue(proposal[k]); });
+  const response = UrlFetchApp.fetch(leagueProposalUrl(proposal.id), bookingFetchOptions('patch', { fields: fields }));
+  const code = response.getResponseCode();
+  if (code < 200 || code >= 300) return { ok: false, msg: 'No se pudo guardar la propuesta (' + code + ').' };
+  return { ok: true };
+}
+
+function readLeagueProposal(id) {
+  const response = UrlFetchApp.fetch(leagueProposalUrl(id), bookingFetchOptions('get'));
+  if (response.getResponseCode() === 404) return null;
+  if (response.getResponseCode() !== 200) throw new Error('No se pudo leer la propuesta.');
+  const doc = JSON.parse(response.getContentText());
+  return firestoreValueToJs({ mapValue: { fields: doc.fields || {} } }) || null;
+}
+
+/** Propuestas pendientes; con `email`, solo las que involucran a ese jugador. */
+function listPendingLeagueProposals(email) {
+  const url = 'https://firestore.googleapis.com/v1/projects/' + encodeURIComponent(CONFIG.FIREBASE_PROJECT_ID)
+    + '/databases/(default)/documents:runQuery?key=' + encodeURIComponent(CONFIG.FIREBASE_API_KEY);
+  const query = { structuredQuery: { from: [{ collectionId: LEAGUE_PROPOSALS_COLLECTION }],
+    where: { fieldFilter: { field: { fieldPath: 'status' }, op: 'EQUAL', value: { stringValue: 'pendiente' } } } } };
+  const response = UrlFetchApp.fetch(url, bookingFetchOptions('post', query));
+  if (response.getResponseCode() !== 200) throw new Error('No se pudieron leer las propuestas.');
+  const needle = text(email).toLowerCase();
+  return (JSON.parse(response.getContentText()) || [])
+    .filter(function(row) { return row.document; })
+    .map(function(row) { return firestoreValueToJs({ mapValue: { fields: row.document.fields || {} } }) || {}; })
+    .filter(function(p) { return !needle || p.fromEmail === needle || p.toEmail === needle; });
+}
+
+function leagueOptionLabel(option) {
+  const parts = text(option.date).split('-').map(Number);
+  const d = new Date(parts[0], parts[1] - 1, parts[2]);
+  const days = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+  const months = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+  return days[d.getDay()] + ' ' + d.getDate() + ' ' + months[d.getMonth()] + ' · ' + option.slot + ' · ' + getCourtName(option.courtId);
+}
+
+function leagueDateLabel(iso) {
+  const parts = text(iso).split('-').map(Number);
+  if (parts.length !== 3) return text(iso);
+  const months = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+  return parts[2] + ' de ' + months[parts[1] - 1];
+}
+
+/** Enlace de WhatsApp a un teléfono chileno (acepta 9XXXXXXXX, +569…, etc.). */
+function leagueWhatsAppUrl(phone, message) {
+  let digits = text(phone).replace(/[^0-9]/g, '');
+  if (!digits) return '';
+  if (digits.length === 8) digits = '569' + digits;
+  else if (digits.length === 9 && digits.charAt(0) === '9') digits = '56' + digits;
+  if (digits.length < 10) return '';
+  return 'https://wa.me/' + digits + '?text=' + encodeURIComponent(message || '');
+}
+
+function leaguePlayerPhone(email) {
+  try {
+    const found = findFirebasePlayerByEmail(email, true);
+    return found && found.player ? text(found.player.telefono) : '';
+  } catch (e) { return ''; }
+}
+
+/** Carcasa común de los correos de la liga (ámbar, como la página). */
+function leagueEmailHtml(headline, greeting, paragraphs, buttonsHtml, footnote) {
+  return [
+    '<div style="background:#f4f1e8;padding:22px 10px;font-family:Arial,Helvetica,sans-serif;">',
+    '<div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 6px 24px rgba(10,23,18,.12);">',
+    '<div style="background:linear-gradient(135deg,#78350f,#0a1712);padding:26px 24px;text-align:center;">',
+    '<p style="color:#fbbf24;margin:0;font-size:12px;font-weight:bold;letter-spacing:1.6px;text-transform:uppercase;">Campeonato de Liga UCTenis</p>',
+    '<h1 style="color:#ffffff;margin:10px 0 0;font-size:22px;line-height:1.3;">' + headline + '</h1>',
+    '</div>',
+    '<div style="padding:24px 26px 10px;">',
+    greeting ? '<p style="margin:0 0 14px;font-size:16px;color:#0a1712;">' + greeting + '</p>' : '',
+    paragraphs.map(function(p) { return '<p style="margin:0 0 12px;font-size:15px;line-height:1.6;color:#33443b;">' + p + '</p>'; }).join(''),
+    buttonsHtml || '',
+    '</div>',
+    '<div style="background:#f4f1e8;padding:14px 24px;text-align:center;">',
+    '<p style="margin:0;color:#6b7c73;font-size:12px;">' + (footnote || 'Comisión organizadora · UCTenis Club') + '</p>',
+    '</div></div></div>'
+  ].join('');
+}
+
+function leagueButton(href, label, primary) {
+  return '<a href="' + href + '" style="display:block;margin:0 0 10px;padding:13px 18px;border-radius:10px;text-align:center;text-decoration:none;font-weight:bold;font-size:15px;'
+    + (primary ? 'background:#f59e0b;color:#0a1712;' : 'background:#ffffff;color:#0a1712;border:2px solid #f59e0b;') + '">' + label + '</a>';
+}
+
+function leagueWhatsAppButton(url, name) {
+  return url ? '<a href="' + url + '" style="display:block;margin:0 0 10px;padding:12px 18px;border-radius:10px;text-align:center;text-decoration:none;font-weight:bold;font-size:14px;background:#25d366;color:#ffffff;">💬 Escribirle a ' + escapeHtmlBday(name) + ' por WhatsApp</a>' : '';
+}
+
+function sendLeagueMail(to, subject, html) {
+  if (!to) return false;
+  try {
+    MailApp.sendEmail({ to: to, subject: subject, htmlBody: html, name: 'UCTenis Liga', replyTo: (CONFIG.ADMINS.emails || [])[0] || '' });
+    return true;
+  } catch (e) {
+    console.warn('Correo de liga a ' + to + ' falló:', e.message);
+    return false;
+  }
+}
+
+/**
+ * Jugador propone horarios a su rival de la fecha.
+ * data: { idToken, fromId, toId, toEmail, toNombre, fromNombre, genero, fecha (n° de fecha), plazo (yyyy-MM-dd), options: [{date, slot, courtId}], nota }
+ */
+function leagueProposeSlots(data) {
+  const fromEmail = verifyGoogleIdToken(data && data.idToken);
+  if (!fromEmail) return { ok: false, msg: 'Tu sesión de Google venció. Vuelve a ingresar.' };
+  if (!isLeagueEnrolledEmail(fromEmail)) return { ok: false, msg: 'Solo los inscritos en la liga pueden proponer horarios.' };
+  const toEmail = text(data.toEmail).toLowerCase();
+  if (!toEmail || toEmail === fromEmail) return { ok: false, msg: 'Rival no válido.' };
+
+  const today = Utilities.formatDate(new Date(), 'America/Santiago', 'yyyy-MM-dd');
+  const limit = Utilities.formatDate(new Date(Date.now() + LEAGUE_MAX_ADVANCE_DAYS * 86400000), 'America/Santiago', 'yyyy-MM-dd');
+  const plazo = text(data.plazo);
+  const raw = Array.isArray(data.options) ? data.options.slice(0, LEAGUE_MAX_OPTIONS) : [];
+  const options = [];
+  for (let i = 0; i < raw.length; i++) {
+    const o = { date: text(raw[i].date), slot: text(raw[i].slot), courtId: text(raw[i].courtId) };
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(o.date) || !/^\d{1,2}:\d{2}$/.test(o.slot) || !CONFIG.CALENDARS[o.courtId]) {
+      return { ok: false, msg: 'Uno de los horarios no es válido.' };
+    }
+    if (o.date < today || o.date > limit || (plazo && o.date > plazo)) {
+      return { ok: false, msg: 'El ' + leagueOptionLabel(o) + ' queda fuera del plazo de la fecha.' };
+    }
+    const free = getAvailableSlots(o.date, data.idToken, o.courtId);
+    if (!free.ok || !Array.isArray(free.courts[o.courtId]) || free.courts[o.courtId].indexOf(o.slot) < 0) {
+      return { ok: false, msg: 'El ' + leagueOptionLabel(o) + ' ya no está libre. Elige otro.' };
+    }
+    options.push(o);
+  }
+  if (!options.length) return { ok: false, msg: 'Elige al menos un horario.' };
+
+  // Una propuesta nueva entre los mismos dos reemplaza a las anteriores
+  // (también la contrapropuesta de quien respondió "ninguna me sirve").
+  try {
+    listPendingLeagueProposals(fromEmail).forEach(function(p) {
+      if ((p.fromEmail === fromEmail && p.toEmail === toEmail) || (p.fromEmail === toEmail && p.toEmail === fromEmail)) {
+        p.status = 'reemplazada';
+        p.respondedAt = new Date().toISOString();
+        saveLeagueProposal(p);
+      }
+    });
+  } catch (e) { console.warn('No se pudieron cerrar propuestas anteriores:', e.message); }
+
+  const now = new Date().toISOString();
+  const proposal = {
+    id: 'prop_' + Utilities.getUuid().replace(/-/g, '').substring(0, 16),
+    temporada: text(data.temporada) || '2026',
+    fecha: Number(data.fecha) || 0,
+    plazo: plazo,
+    genero: text(data.genero),
+    fromId: text(data.fromId), fromEmail: fromEmail, fromNombre: text(data.fromNombre) || fromEmail,
+    toId: text(data.toId), toEmail: toEmail, toNombre: text(data.toNombre) || toEmail,
+    options: options,
+    nota: text(data.nota).substring(0, 240),
+    status: 'pendiente',
+    createdAt: now
+  };
+  const saved = saveLeagueProposal(proposal);
+  if (!saved.ok) return saved;
+
+  const first = escapeHtmlBday(text(proposal.toNombre).split(' ')[0]);
+  const fromName = escapeHtmlBday(proposal.fromNombre);
+  const buttons = options.map(function(o, i) {
+    return leagueButton(LEAGUE_SITE_URL + 'liga.html?propuesta=' + proposal.id + '&opcion=' + (i + 1), '✅ ' + leagueOptionLabel(o), i === 0);
+  }).join('')
+    + leagueButton(LEAGUE_SITE_URL + 'liga.html?propuesta=' + proposal.id + '&opcion=0', 'Ninguna me sirve · proponer otros horarios', false)
+    + leagueWhatsAppButton(leagueWhatsAppUrl(leaguePlayerPhone(fromEmail), 'Hola ' + text(proposal.fromNombre).split(' ')[0] + ', vi tu propuesta para nuestro partido de liga 🎾'), text(proposal.fromNombre).split(' ')[0]);
+  const html = leagueEmailHtml(
+    fromName + ' te propone horarios' + (proposal.fecha ? ' para la Fecha ' + proposal.fecha : ''),
+    'Hola <strong>' + first + '</strong>,',
+    [
+      '<strong>' + fromName + '</strong> eligió ' + (options.length === 1 ? 'un horario' : options.length + ' horarios') + ' con cancha libre para su partido' + (proposal.plazo ? ' (plazo: <strong>' + leagueDateLabel(proposal.plazo) + '</strong>)' : '') + '. Toca el que te acomode: se reserva la cancha y el partido queda confirmado para los dos.',
+      proposal.nota ? '<em style="color:#78350f;">“' + escapeHtmlBday(proposal.nota) + '”</em>' : ''
+    ].filter(Boolean),
+    buttons,
+    'Si alguien toma la cancha antes, te pediremos elegir otro horario.'
+  );
+  sendLeagueMail(toEmail, '🎾 Liga: ' + proposal.fromNombre + ' te propone ' + (options.length === 1 ? 'un horario' : options.length + ' horarios'), html);
+  return { ok: true, proposal: proposal };
+}
+
+/** Propuestas pendientes del jugador (enviadas y recibidas). */
+function leagueMyProposals(data) {
+  const email = verifyGoogleIdToken(data && data.idToken);
+  if (!email) return { ok: false, msg: 'Tu sesión de Google venció.' };
+  try {
+    const today = Utilities.formatDate(new Date(), 'America/Santiago', 'yyyy-MM-dd');
+    const list = listPendingLeagueProposals(email).map(function(p) {
+      p.options = (p.options || []).filter(function(o) { return o.date >= today; });
+      return p;
+    }).filter(function(p) { return p.options.length; });
+    return { ok: true, email: email, proposals: list };
+  } catch (e) {
+    return { ok: false, msg: e.message };
+  }
+}
+
+function leagueGetProposal(data) {
+  const email = verifyGoogleIdToken(data && data.idToken);
+  if (!email) return { ok: false, msg: 'Tu sesión de Google venció.' };
+  try {
+    const p = readLeagueProposal(text(data.id));
+    if (!p) return { ok: false, msg: 'La propuesta ya no existe.' };
+    if (p.fromEmail !== email && p.toEmail !== email && !isLeagueAdminRequest(data.idToken)) return { ok: false, msg: 'Esta propuesta no es tuya.' };
+    return { ok: true, email: email, proposal: p };
+  } catch (e) {
+    return { ok: false, msg: e.message };
+  }
+}
+
+/**
+ * El rival elige una opción: se reserva la cancha a su nombre (con la
+ * anticipación extendida de liga), se registra el partido ya aceptado,
+ * se agregan ambos a la cita de Calendar y se avisa a los dos.
+ */
+function leagueAcceptProposal(data) {
+  const email = verifyGoogleIdToken(data && data.idToken);
+  if (!email) return { ok: false, msg: 'Tu sesión de Google venció. Vuelve a ingresar.' };
+  let proposal;
+  try { proposal = readLeagueProposal(text(data.id)); } catch (e) { return { ok: false, msg: e.message }; }
+  if (!proposal) return { ok: false, msg: 'La propuesta ya no existe.' };
+  if (proposal.toEmail !== email) return { ok: false, msg: 'Solo ' + proposal.toNombre + ' puede aceptar esta propuesta.' };
+  if (proposal.status !== 'pendiente') {
+    return { ok: false, msg: proposal.status === 'aceptada' ? 'Esta propuesta ya fue aceptada.' : 'Esta propuesta fue reemplazada por una más nueva. Revisa la liga.' };
+  }
+  const option = (proposal.options || [])[Number(data.opcion) - 1];
+  if (!option) return { ok: false, msg: 'Opción no válida.' };
+
+  const booking = createBooking({
+    idToken: data.idToken, email: email, name: proposal.toNombre, userId: proposal.toId,
+    date: option.date, slot: option.slot, courtId: option.courtId, motivo: 'liga'
+  });
+  if (!booking.ok) return { ok: false, msg: booking.msg || 'No se pudo reservar la cancha.', slotTaken: true };
+
+  const now = new Date().toISOString();
+  const courtName = getCourtName(option.courtId);
+  const challenge = normalizeChallengeCompletion({
+    id: 'chal-' + Date.now(),
+    retadorId: proposal.fromId, retadorNombre: proposal.fromNombre, retadorEmail: proposal.fromEmail,
+    retadoId: proposal.toId, retadoNombre: proposal.toNombre, retadoEmail: proposal.toEmail,
+    genero: proposal.genero, fecha: option.date, cancha: courtName, status: 'aceptado',
+    marcador: '', ganadorId: '', creado: now, actualizado: now,
+    slot: option.slot, courtId: option.courtId, eventId: '', bookingId: (booking.booking && booking.booking.id) || '',
+    tipo: 'liga', fechaResultado: '', resultadoIngresadoPor: '', resultadoIngresadoPorEmail: '',
+    fechaConfirmacion: '', confirmadoPor: '', resultadoReclamado: false, reclamoResultado: '',
+    fechaReclamo: '', reclamadoPor: '', rankingAplicado: ''
+  });
+  getChallengesSheet().appendRow(challengeToRow(challenge));
+
+  const invite = createChallengeCalendarInvite({
+    challengeId: challenge.id, retadorNombre: challenge.retadorNombre, retadorEmail: challenge.retadorEmail,
+    retadoNombre: challenge.retadoNombre, retadoEmail: challenge.retadoEmail,
+    fecha: option.date, fechaLabel: leagueOptionLabel(option), slot: option.slot, cancha: courtName,
+    courtId: option.courtId, bookingId: challenge.bookingId, tipo: 'liga'
+  });
+
+  // Espejo en Firestore (lo que leen la página de la liga y la portada).
+  const mirror = publicChallenge(challenge);
+  mirror.retadorEmail = challenge.retadorEmail;
+  mirror.retadoEmail = challenge.retadoEmail;
+  mirror.courtLabel = courtName;
+  mirror.ligaTemporada = text(proposal.temporada);
+  mirror.ligaFecha = Number(proposal.fecha) || 0;
+  mirror.propuestaId = proposal.id;
+  try {
+    const fields = {};
+    Object.keys(mirror).forEach(function(k) { fields[k] = jsToFirestoreValue(mirror[k]); });
+    UrlFetchApp.fetch('https://firestore.googleapis.com/v1/projects/' + encodeURIComponent(CONFIG.FIREBASE_PROJECT_ID)
+      + '/databases/(default)/documents/ranking_challenges/' + encodeURIComponent(challenge.id)
+      + '?key=' + encodeURIComponent(CONFIG.FIREBASE_API_KEY), bookingFetchOptions('patch', { fields: fields }));
+  } catch (e) { console.warn('Espejo Firestore del partido de liga:', e.message); }
+
+  proposal.status = 'aceptada';
+  proposal.respondedAt = now;
+  proposal.chosen = Number(data.opcion);
+  proposal.challengeId = challenge.id;
+  saveLeagueProposal(proposal);
+
+  const when = leagueOptionLabel(option);
+  [{ to: proposal.fromEmail, me: proposal.fromNombre, rival: proposal.toNombre },
+   { to: proposal.toEmail, me: proposal.toNombre, rival: proposal.fromNombre }].forEach(function(p) {
+    sendLeagueMail(p.to, '✅ Liga confirmada: ' + proposal.fromNombre + ' vs ' + proposal.toNombre + ' · ' + when,
+      leagueEmailHtml('¡Partido confirmado!', 'Hola <strong>' + escapeHtmlBday(text(p.me).split(' ')[0]) + '</strong>,', [
+        'Tu partido' + (proposal.fecha ? ' de la <strong>Fecha ' + proposal.fecha + '</strong>' : '') + ' contra <strong>' + escapeHtmlBday(p.rival) + '</strong> quedó agendado y la cancha reservada:',
+        '<span style="display:block;padding:14px;border-radius:12px;background:#fef3c7;color:#78350f;font-size:17px;font-weight:bold;text-align:center;">📅 ' + escapeHtmlBday(when) + '</span>',
+        'Lleven pelotas en buen estado. Al terminar, registren el resultado en la página de la liga.'
+      ], leagueButton(LEAGUE_SITE_URL + 'liga.html', 'Ver mi liga', true)));
+  });
+
+  return { ok: true, challenge: mirror, calendar: invite };
+}
+
+// ── Avisos automáticos (trigger diario) ───────────────────────────────────
+
+function leagueAllPlayers() {
+  const docs = [];
+  let pageToken = '';
+  for (let guard = 0; guard < 20; guard++) {
+    const url = 'https://firestore.googleapis.com/v1/projects/' + encodeURIComponent(CONFIG.FIREBASE_PROJECT_ID)
+      + '/databases/(default)/documents/ranking_players?pageSize=300&key=' + encodeURIComponent(CONFIG.FIREBASE_API_KEY)
+      + (pageToken ? '&pageToken=' + encodeURIComponent(pageToken) : '');
+    const response = UrlFetchApp.fetch(url, bookingFetchOptions('get'));
+    if (response.getResponseCode() !== 200) throw new Error('Firestore ' + response.getResponseCode());
+    const body = JSON.parse(response.getContentText());
+    (body.documents || []).forEach(function(d) {
+      const player = firestoreValueToJs({ mapValue: { fields: d.fields || {} } }) || {};
+      player.id = text(player.id) || text(d.name).split('/').pop();
+      docs.push(player);
+    });
+    pageToken = body.nextPageToken || '';
+    if (!pageToken) break;
+  }
+  return docs;
+}
+
+function leagueOnce(key) {
+  const props = PropertiesService.getScriptProperties();
+  if (props.getProperty(key)) return false;
+  props.setProperty(key, new Date().toISOString());
+  return true;
+}
+
+function leagueDaysBetween(fromIso, toIso) {
+  return Math.round((new Date(toIso + 'T00:00:00Z') - new Date(fromIso + 'T00:00:00Z')) / 86400000);
+}
+
+/**
+ * Avisos de la liga del día:
+ *  · fecha que abre (sus 2 primeros días): a cada jugador, su rival y plazo;
+ *  · día 5 de la fecha sin partido agendado: recordatorio a ambos;
+ *  · últimas 48 h sin jugar: advertencia de W.O. doble;
+ *  · el día 5 y en las últimas 48 h: resumen de pendientes a la comisión.
+ * Cada aviso se manda una sola vez (marca en Script Properties).
+ */
+function sendLeagueNotifications() {
+  const L = typeof UCTennisLeague !== 'undefined' ? UCTennisLeague : null;
+  if (!L) {
+    console.warn('sendLeagueNotifications: falta el archivo liga.gs (copia de liga.js) en el proyecto.');
+    return { ok: false, msg: 'Falta liga.gs' };
+  }
+  const season = L.getSeason();
+  const today = L.todayIso();
+  const players = leagueAllPlayers();
+  const challenges = loadAllChallenges(getChallengesSheet());
+  let pending = [];
+  try { pending = listPendingLeagueProposals(); } catch (e) { console.warn(e.message); }
+  const byEmail = {};
+  players.forEach(function(p) { if (p.email) byEmail[text(p.email).toLowerCase()] = p; });
+  const labels = { M: 'Varones', F: 'Damas' };
+  const digest = [];
+  let sent = 0;
+
+  ['M', 'F'].forEach(function(gender) {
+    const view = L.buildSeasonView(players, challenges, { season: season, gender: gender, today: today });
+    view.rounds.forEach(function(round) {
+      if (today < round.window.start) return;
+      const sinceStart = leagueDaysBetween(round.window.start, today);
+      const tag = 'liga_' + season.id + '_' + gender + '_F' + round.numero + '_';
+
+      round.partidos.forEach(function(p) {
+        if (today > p.deadline || p.a.retirado || p.b.retirado) return;
+        const unscheduled = p.state === 'por_agendar' || p.state === 'invitado';
+        const left = leagueDaysBetween(today, p.deadline);
+        const pairTag = tag + L.pairKey(p.a, p.b) + '_';
+        const proposal = pending.find(function(x) {
+          return (x.fromEmail === p.a.email && x.toEmail === p.b.email) || (x.fromEmail === p.b.email && x.toEmail === p.a.email);
+        });
+
+        let kind = '';
+        if (sinceStart <= 2 && today <= round.window.end && ['por_agendar', 'invitado', 'agendado'].indexOf(p.state) >= 0) kind = 'abre';
+        else if (unscheduled && sinceStart >= 4 && sinceStart <= 5 && left > 1) kind = 'dia5';
+        else if (unscheduled && left <= 1) kind = 'ultimas48';
+        if (!kind) return;
+
+        if (kind !== 'abre') digest.push({ gender: gender, round: round.numero, a: p.a.nombre, b: p.b.nombre, deadline: p.deadline, state: p.state, proposal: proposal, kind: kind });
+        [[p.a, p.b], [p.b, p.a]].forEach(function(pair) {
+          const me = pair[0], rival = pair[1];
+          if (!me.email || !leagueOnce(pairTag + kind + '_' + me.email)) return;
+          if (sendLeagueRoundMail(kind, me, rival, round, p, proposal, byEmail[rival.email])) sent++;
+        });
+      });
+
+      // Fecha libre: un aviso corto al abrir.
+      if (sinceStart <= 2) {
+        (round.libres || []).forEach(function(bye) {
+          if (!bye.email || bye.retirado || !leagueOnce(tag + 'libre_' + bye.email)) return;
+          sendLeagueMail(bye.email, '🎾 Liga · Fecha ' + round.numero + ': esta fecha descansas',
+            leagueEmailHtml('Fecha ' + round.numero + ': te toca descansar', 'Hola <strong>' + escapeHtmlBday(text(bye.nombre).split(' ')[0]) + '</strong>,',
+              ['En la Fecha ' + round.numero + ' (' + leagueDateLabel(round.window.start) + ' al ' + leagueDateLabel(round.window.end) + ') quedas libre. Aprovecha de entrenar: la próxima fecha vuelves a la cancha.'],
+              leagueButton(LEAGUE_SITE_URL + 'liga.html#fixture', 'Ver el fixture', true)));
+          sent++;
+        });
+      }
+    });
+  });
+
+  // Resumen para la comisión organizadora.
+  const commission = (CONFIG.ADMINS.emails || []).concat(CONFIG.LEAGUE_ADMIN_EMAILS || [])
+    .map(function(e) { return text(e).toLowerCase(); })
+    .filter(function(e, i, all) { return e && all.indexOf(e) === i; });
+  ['dia5', 'ultimas48'].forEach(function(kind) {
+    const items = digest.filter(function(d) { return d.kind === kind; });
+    // Una vez por fecha del campeonato (no por día): el día 5 y las 48 h
+    // abarcan dos días seguidos.
+    const rounds = items.map(function(d) { return d.gender + d.round; })
+      .filter(function(r, i, all) { return all.indexOf(r) === i; }).sort().join('-');
+    if (!items.length || !commission.length || !leagueOnce('liga_resumen_' + season.id + '_' + kind + '_' + rounds)) return;
+    const rows = items.map(function(d) {
+      const status = d.state === 'invitado' ? 'Invitación sin responder' : (d.proposal ? 'Propuesta enviada por ' + escapeHtmlBday(d.proposal.fromNombre) : 'Sin agendar');
+      return '<tr><td style="padding:7px 10px;border-bottom:1px solid #eee;">' + labels[d.gender] + ' · F' + d.round + '</td>'
+        + '<td style="padding:7px 10px;border-bottom:1px solid #eee;font-weight:bold;">' + escapeHtmlBday(d.a) + ' vs ' + escapeHtmlBday(d.b) + '</td>'
+        + '<td style="padding:7px 10px;border-bottom:1px solid #eee;">' + status + '</td>'
+        + '<td style="padding:7px 10px;border-bottom:1px solid #eee;white-space:nowrap;">' + leagueDateLabel(d.deadline) + '</td></tr>';
+    }).join('');
+    const html = leagueEmailHtml(
+      (kind === 'dia5' ? 'Partidos aún sin agendar' : '⚠️ Partidos a punto de vencer') + ' (' + items.length + ')',
+      '',
+      [kind === 'dia5'
+        ? 'Estos partidos de la fecha en curso todavía no tienen día. Los jugadores ya recibieron un recordatorio.'
+        : 'A estos partidos les quedan 48 horas o menos. Si no se juegan, serán W.O. doble. Puedes extender el plazo desde el panel de la comisión en la página de la liga.',
+       '<table style="width:100%;border-collapse:collapse;font-size:13px;color:#33443b;"><tr style="background:#fef3c7;"><th style="padding:7px 10px;text-align:left;">Fecha</th><th style="padding:7px 10px;text-align:left;">Partido</th><th style="padding:7px 10px;text-align:left;">Estado</th><th style="padding:7px 10px;text-align:left;">Plazo</th></tr>' + rows + '</table>'],
+      leagueButton(LEAGUE_SITE_URL + 'liga.html', 'Abrir el panel de la comisión', true));
+    sendLeagueMail(commission.join(','), (kind === 'dia5' ? '📋 Liga: ' : '⚠️ Liga: ') + items.length + (items.length === 1 ? ' partido pendiente' : ' partidos pendientes'), html);
+    sent++;
+  });
+
+  return { ok: true, sent: sent };
+}
+
+function sendLeagueRoundMail(kind, me, rival, round, p, proposal, rivalDoc) {
+  const first = escapeHtmlBday(text(me.nombre).split(' ')[0]);
+  const rivalName = escapeHtmlBday(rival.nombre);
+  const rivalFirst = text(rival.nombre).split(' ')[0];
+  const phone = rivalDoc ? text(rivalDoc.telefono) : '';
+  const wa = leagueWhatsAppUrl(phone, 'Hola ' + rivalFirst + ', nos toca jugar la Fecha ' + round.numero + ' de la liga UCTenis 🎾 ¿Qué días te acomodan?');
+  const proposeUrl = LEAGUE_SITE_URL + 'liga.html?proponer=' + encodeURIComponent(rival.id || rival.email);
+  const plazo = leagueDateLabel(p.deadline);
+  const phoneLine = phone ? 'Teléfono de ' + escapeHtmlBday(rivalFirst) + ': <strong>' + escapeHtmlBday(phone) + '</strong>.' : '';
+  const theyProposed = proposal && proposal.fromEmail === rival.email;
+  const iProposed = proposal && proposal.fromEmail === me.email;
+
+  // Botones según la situación: elegir lo que propuso el rival, esperar la
+  // respuesta a lo que propuse yo, o proponer.
+  let buttons;
+  if (theyProposed) {
+    buttons = (proposal.options || []).map(function(o, i) {
+      return leagueButton(LEAGUE_SITE_URL + 'liga.html?propuesta=' + proposal.id + '&opcion=' + (i + 1), '✅ ' + leagueOptionLabel(o), i === 0);
+    }).join('') + leagueButton(LEAGUE_SITE_URL + 'liga.html?propuesta=' + proposal.id + '&opcion=0', 'Ninguna me sirve · proponer otros', false);
+  } else {
+    buttons = leagueButton(proposeUrl, iProposed ? 'Cambiar mi propuesta de horarios' : '📅 Proponer 3 horarios', true);
+  }
+  buttons += leagueWhatsAppButton(wa, rivalFirst);
+
+  if (kind === 'abre') {
+    const scheduled = p.state === 'agendado' || p.state === 'invitado';
+    const body = scheduled && p.date
+      ? ['Arranca la <strong>Fecha ' + round.numero + '</strong> y tu partido contra <strong>' + rivalName + '</strong> ya tiene día: <strong>' + leagueDateLabel(p.date) + (p.slot ? ' a las ' + escapeHtmlBday(p.slot) : '') + '</strong>' + (p.cancha ? ' en ' + escapeHtmlBday(p.cancha) : '') + '. ¡Éxito!']
+      : ['Arranca la <strong>Fecha ' + round.numero + '</strong> y tu rival es <strong>' + rivalName + '</strong>. Tienen hasta el <strong>' + plazo + '</strong> para jugar.',
+         theyProposed ? escapeHtmlBday(rivalFirst) + ' ya te propuso horarios: elige uno y queda listo.' : 'Lo más rápido: propón 3 horarios con cancha libre y ' + escapeHtmlBday(rivalFirst) + ' elige uno con un clic. Se reserva la cancha sola.',
+         phoneLine].filter(Boolean);
+    return sendLeagueMail(me.email, '🎾 Liga · Fecha ' + round.numero + ': juegas contra ' + rival.nombre,
+      leagueEmailHtml('Fecha ' + round.numero + ': te toca ' + rivalName, 'Hola <strong>' + first + '</strong>,', body,
+        scheduled && p.date ? leagueButton(LEAGUE_SITE_URL + 'liga.html', 'Ver mi liga', true) : buttons));
+  }
+  if (kind === 'dia5') {
+    return sendLeagueMail(me.email, '⏰ Liga · Fecha ' + round.numero + ': tu partido con ' + rival.nombre + ' aún no tiene día',
+      leagueEmailHtml('Tu partido aún no tiene día', 'Hola <strong>' + first + '</strong>,', [
+        'Vamos en la mitad de la <strong>Fecha ' + round.numero + '</strong> y tu partido contra <strong>' + rivalName + '</strong> todavía no está agendado. El plazo vence el <strong>' + plazo + '</strong>.',
+        theyProposed ? escapeHtmlBday(rivalFirst) + ' te propuso horarios: elige uno.' : iProposed ? 'Le propusiste horarios y aún no responde. Escríbele para apurarlo o cambia tu propuesta.' : 'Propón 3 horarios y ' + escapeHtmlBday(rivalFirst) + ' elige uno con un clic.',
+        phoneLine].filter(Boolean), buttons));
+  }
+  return sendLeagueMail(me.email, '⚠️ Liga · Fecha ' + round.numero + ': quedan 48 horas para jugar con ' + rival.nombre,
+    leagueEmailHtml('⚠️ Quedan 48 horas', 'Hola <strong>' + first + '</strong>,', [
+      'Tu partido de la <strong>Fecha ' + round.numero + '</strong> contra <strong>' + rivalName + '</strong> vence el <strong>' + plazo + '</strong>. Si no se juega a tiempo es <strong>W.O. doble: ninguno de los dos suma puntos</strong>.',
+      'Si tienen un problema de fuerza mayor, avísenle a la comisión antes de que venza.',
+      phoneLine].filter(Boolean), buttons));
 }
