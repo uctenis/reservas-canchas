@@ -172,3 +172,11 @@ assert.equal(gv14.sinGrupo.length, 1);
 assert.equal(gv14.rounds.flatMap(r => r.partidos).some(p => p.a.key === 'g14' || p.b.key === 'g14'), false);
 assert.equal(L.getPlayerFixture(gv14, gv14.entrants.find(e => e.key === 'g14')).every(item => !item.partido), true);
 console.log('liga.test.js (grupos): OK');
+
+// El backend de Apps Script lleva una copia de liga.js (sync_liga_backend.js).
+const fs = require('fs');
+const { embedded } = require('./sync_liga_backend.js');
+const backendSrc = fs.readFileSync(require.resolve('./apps_script_backend.js'), 'utf8');
+assert.equal(embedded(backendSrc, fs.readFileSync(require.resolve('./liga.js'), 'utf8')), backendSrc,
+  'apps_script_backend.js tiene una copia vieja de liga.js: corre `node sync_liga_backend.js`');
+console.log('liga.test.js (copia en backend): OK');
