@@ -139,3 +139,36 @@ const noGender = { id: 'x1', nombre: 'Sin Género', email: 'x1@uct.cl', genero: 
 assert.equal(L.getEntrants([noGender], season, 'F').length, 1);
 assert.equal(L.getEntrants([noGender], season, 'M').length, 0);
 console.log('liga.test.js (categoría): OK');
+
+// Grupos armados por ranking: 13 inscritos en 2 grupos (7 y 6).
+const thirteen = Array.from({ length: 13 }, (_, i) => ({ ...enrolled(`g${i + 1}`, `Rank ${i + 1}`), inscritoEn: '', posicion: i + 1 }));
+const ents13 = L.getEntrants(thirteen, season, 'M');
+const alt = L.assignGroups(ents13, 2, 'alternado');
+assert.deepEqual(ents13.filter(e => alt.get(e.key) === 1).map(e => e.ranking).sort((x, y) => x - y), [1, 3, 5, 7, 9, 11, 13]);
+const snake = L.assignGroups(ents13, 2, 'serpentina');
+assert.deepEqual(ents13.filter(e => snake.get(e.key) === 1).map(e => e.ranking).sort((x, y) => x - y), [1, 4, 5, 8, 9, 12, 13]);
+// Quien no está en la escalerilla va al final.
+const noRank = [...thirteen.slice(0, 3), { ...enrolled('g99', 'Nuevo'), posicion: '' }];
+assert.equal(L.assignGroups(L.getEntrants(noRank, season, 'M'), 2).get('g99'), 2);
+
+const groupedPlayers = thirteen.map(p => ({ ...p, liga2026: { ...p.liga2026, grupo: alt.get(p.id) } }));
+const gv = L.buildSeasonView(groupedPlayers, [], { season, gender: 'M', today: '2026-11-01' });
+assert.equal(gv.grouped, true);
+assert.equal(gv.groups.length, 2);
+assert.deepEqual(gv.groups.map(g => g.entrants.length), [7, 6]);
+assert.equal(gv.rounds.length, 7); // el grupo impar manda: 7 fechas
+assert.equal(gv.rounds[0].partidos.length, 3 + 3);
+assert.equal(gv.rounds[0].libres.length, 1);
+assert.equal(gv.rounds[5].partidos.length, 3); // el grupo de 6 ya terminó (5 fechas)
+assert.equal(gv.rounds.flatMap(r => r.partidos).every(p => p.a.grupo === p.b.grupo), true);
+assert.equal(gv.rounds.flatMap(r => r.partidos).length, 21 + 15);
+assert.deepEqual(gv.groups.map(g => g.maestros), [4, 4]); // 13 inscritos → 8, cuatro por grupo
+assert.equal(gv.standings.filter(r => r.pos === 1).length, 2);
+assert.equal(gv.groups[1].entrants[0].numero, 1); // numeración dentro del grupo
+// Inscrito sin grupo cuando ya hay grupos: queda fuera del fixture.
+const late14 = [...groupedPlayers, enrolled('g14', 'Tardío')];
+const gv14 = L.buildSeasonView(late14, [], { season, gender: 'M', today: '2026-11-01' });
+assert.equal(gv14.sinGrupo.length, 1);
+assert.equal(gv14.rounds.flatMap(r => r.partidos).some(p => p.a.key === 'g14' || p.b.key === 'g14'), false);
+assert.equal(L.getPlayerFixture(gv14, gv14.entrants.find(e => e.key === 'g14')).every(item => !item.partido), true);
+console.log('liga.test.js (grupos): OK');

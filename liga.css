@@ -83,6 +83,10 @@
 .lg-warn { color:var(--lg-amber-hi); font-size:.8rem; margin:8px 0 0; }
 .lg-legend { color:var(--text-muted); font-size:.78rem; line-height:1.5; margin:14px 0 0; }
 .lg-sub { margin:22px 0 10px; font-size:.95rem; }
+.lg-group-title { display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; margin:22px 0 10px; font-family:var(--font-display); font-size:1.05rem; font-weight:900; color:var(--lg-amber-hi); }
+.lg-group-title:first-child, .lg-note + .lg-group-title { margin-top:4px; }
+.lg-group-title small { font-family:inherit; font-size:.78rem; font-weight:700; color:var(--text-secondary); }
+.lg-admin-list select { padding:4px 8px; border-radius:8px; }
 
 /* ── Barra de categoría y secciones ── */
 .lg-toolbar { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:12px; }

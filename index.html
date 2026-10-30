@@ -1564,7 +1564,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
 
 <script src="db.js?v=20261029_fichas"></script>
-<script src="liga.js?v=20261022_t2"></script>
+<script src="liga.js?v=20261029_grupos"></script>
 <script src="script.js?v=20260602_v2"></script>
 <script src="home-live.js?v=20261009_r3"></script>
 <script src="cumple.js?v=20261026_t1"></script>
@@ -2448,11 +2448,11 @@ async function loadLiveData() {
     if (typeof UCTennisLeague !== 'undefined') {
       const season = UCTennisLeague.getSeason();
       const views = ['M', 'F'].map(gender => UCTennisLeague.buildSeasonView(playersList, challenges, { season, gender }));
-      const leaders = views.map(view => ({ view, leader: view.standings.find(row => row.pj > 0 && row.pos === 1) }))
-        .filter(item => item.leader);
+      // Con grupos hay un líder por grupo.
+      const leaders = views.flatMap(view => view.standings.filter(row => row.pj > 0 && row.pos === 1).map(leader => ({ view, leader })));
       if (leaders.length > 0) {
         const labels = { M: 'varones', F: 'damas' };
-        const leaderParts = leaders.map(({ view, leader }) => `${escapeHTML(leader.nombre)} lidera ${labels[view.gender]} con ${leader.pts} pts (${leader.pg}-${leader.pp})`);
+        const leaderParts = leaders.map(({ view, leader }) => `${escapeHTML(leader.nombre)} lidera ${view.grouped ? `el grupo ${leader.grupo} de ` : ''}${labels[view.gender]} con ${leader.pts} pts (${leader.pg}-${leader.pp})`);
         const round = views[0].currentRound || views[1].currentRound;
         leagueLeaderCard = {
           id: `auto-league-leader-${season.id}`,

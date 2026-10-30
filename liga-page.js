@@ -200,6 +200,7 @@
     const entrant = L.findEntrant(v, me);
     if (!entrant) { el.innerHTML = ''; return; }
     const row = v.standings.find(r => r.key === entrant.key);
+    const group = L.groupOf(v, entrant);
     const fixture = L.getPlayerFixture(v, entrant);
     const next = fixture.find(item => item.partido && !FINAL_STATES.includes(item.partido.state));
     const started = v.phase !== 'inscripcion';
@@ -208,14 +209,16 @@
       <div class="lg-mine-head">
         ${avatar(entrant, 'lg')}
         <div>
-          <span class="lg-eyebrow">${entrant.retirado ? 'Retirado de la liga' : `Inscrito · N° ${entrant.numero} en el fixture de ${GENDER_LABEL[gender]}`}</span>
+          <span class="lg-eyebrow">${entrant.retirado ? 'Retirado de la liga'
+            : v.grouped && !group ? `Inscrito en ${GENDER_LABEL[gender]} · grupo por asignar`
+              : `Inscrito · ${v.grouped ? `${groupName(group.numero)} · ` : ''}N° ${entrant.numero} en el fixture de ${GENDER_LABEL[gender]}`}</span>
           <h2>${esc(entrant.nombre)}</h2>
         </div>
         <div class="lg-mine-stats">
           ${started ? `<div><strong>${row ? `${row.pos}°` : '–'}</strong><span>Lugar</span></div>
           <div><strong>${row ? row.pts : 0}</strong><span>Puntos</span></div>
           <div><strong>${row ? `${row.pg}-${row.pp}` : '0-0'}</strong><span>G-P</span></div>`
-          : `<div><strong>${v.rounds.length}</strong><span>Fechas</span></div><div><strong>${v.entrants.length - 1}</strong><span>Rivales</span></div>`}
+          : group ? `<div><strong>${group.rounds.length}</strong><span>Fechas</span></div><div><strong>${group.entrants.length - 1}</strong><span>Rivales</span></div>` : ''}
         </div>
       </div>`;
 
@@ -302,13 +305,28 @@
     }).join('') || '<em>—</em>'}</span>`;
   }
 
+  function groupName(numero) { return `Grupo ${numero}`; }
+
   function renderStandings(v) {
     if (!v.entrants.length) return emptyCategory(v);
-    const meKey = state.me ? (L.findEntrant(v, state.me) || {}).key : '';
     const pre = v.phase === 'inscripcion'
       ? `<div class="lg-note">La tabla empieza a moverse el ${fmtLong(season.inicio)}. Por ahora todos parten en cero.</div>` : '';
-    const rows = v.standings.map((row, index) => {
-      const cut = index === v.maestros - 1 && v.standings.length > v.maestros
+    const tables = v.groups.map(group => `
+      ${v.grouped ? `<h3 class="lg-group-title">${groupName(group.numero)} <small>${group.entrants.length} jugadores · clasifican ${group.maestros}</small></h3>` : ''}
+      ${standingsTable(v, group.standings, group.maestros)}`).join('');
+    const quota = v.grouped
+      ? `Clasifican ${v.maestros} al Torneo de Maestros: ${v.groups.map(g => `${g.maestros} del ${groupName(g.numero)}`).join(' y ')}.`
+      : `Clasifican ${v.maestros} al Torneo de Maestros.`;
+    return `
+      ${pre}
+      ${tables}
+      <p class="lg-legend">Desempate: puntos → enfrentamiento directo (si empatan dos) → partidos ganados → diferencia de sets → diferencia de games. ${quota}</p>`;
+  }
+
+  function standingsTable(v, standings, maestros) {
+    const meKey = state.me ? (L.findEntrant(v, state.me) || {}).key : '';
+    const rows = standings.map((row, index) => {
+      const cut = index === maestros - 1 && standings.length > maestros
         ? `<tr class="lg-cut"><td colspan="10"><span>Clasifican al Torneo de Maestros ↑</span></td></tr>` : '';
       return `
         <tr class="${row.maestros ? 'is-masters' : ''} ${row.key === meKey ? 'is-me' : ''} ${row.retirado ? 'is-out' : ''}">
@@ -325,7 +343,6 @@
         </tr>${cut}`;
     }).join('');
     return `
-      ${pre}
       <div class="lg-table-wrap">
         <table class="lg-table">
           <thead><tr>
@@ -334,8 +351,7 @@
           </tr></thead>
           <tbody>${rows}</tbody>
         </table>
-      </div>
-      <p class="lg-legend">Desempate: puntos → enfrentamiento directo (si empatan dos) → partidos ganados → diferencia de sets → diferencia de games. Clasifican ${v.maestros} al Torneo de Maestros.</p>`;
+      </div>`;
   }
 
   // ── Fixture ───────────────────────────────────────────────────────────
@@ -354,7 +370,7 @@
     const played = round.partidos.filter(p => FINAL_STATES.includes(p.state)).length;
     const meKey = state.me ? (L.findEntrant(v, state.me) || {}).key : '';
 
-    const cards = round.partidos.map(p => {
+    const card = p => {
       const final = p.state === 'jugado' || p.state === 'wo';
       const sideHtml = (entrant, isWinner) => {
         const sets = p.state === 'jugado' ? (p.setsBy[entrant.key] || []) : [];
@@ -375,7 +391,17 @@
           ${sideHtml(p.b, final && p.winner.key === p.b.key)}
           ${foot ? `<footer>${foot}</footer>` : ''}
         </article>`;
-    }).join('');
+    };
+    const byes = list => list.length ? `<p class="lg-bye">Libre esta fecha: <strong>${list.map(e => esc(e.nombre)).join(', ')}</strong></p>` : '';
+    const body = v.grouped
+      ? v.groups.map(group => {
+        const partidos = round.partidos.filter(p => p.grupo === group.numero);
+        const libres = round.libres.filter(e => e.grupo === group.numero);
+        return `<h4 class="lg-group-title">${groupName(group.numero)}</h4>
+          ${partidos.length ? `<div class="lg-matches">${partidos.map(card).join('')}</div>` : `<p class="lg-muted">Este grupo ya completó sus cruces.</p>`}
+          ${byes(libres)}`;
+      }).join('')
+      : `<div class="lg-matches">${round.partidos.map(card).join('')}</div>${byes(round.libres)}`;
 
     return `
       <div class="lg-rounds" role="tablist" aria-label="Fechas">${strip}</div>
@@ -383,8 +409,7 @@
         <div><h3>Fecha ${round.numero}</h3><span>${esc(fmtLong(round.window.start))} al ${esc(fmtLong(round.window.end))} · ${statusLine}</span></div>
         <span class="lg-round-count">${played}/${round.partidos.length} resueltos</span>
       </div>
-      <div class="lg-matches">${cards}</div>
-      ${round.libre ? `<p class="lg-bye">Libre esta fecha: <strong>${esc(round.libre.nombre)}</strong></p>` : ''}`;
+      ${body}`;
   }
 
   // ── Inscritos ─────────────────────────────────────────────────────────
@@ -395,17 +420,24 @@
       : v.phase === 'inscripcion'
         ? 'El número de cada jugador sigue el orden de inscripción; la comisión puede sortearlos al cerrar la inscripción.'
         : 'Números según el orden de inscripción.';
+    const list = entrants => `
+      <ul class="lg-entrants">
+        ${entrants.map(e => `<li class="${e.retirado ? 'is-out' : ''}"><span class="lg-num">${e.numero}</span>${avatar(e)}<span><strong>${esc(e.nombre)}</strong><small>${esc(category(e.categoria) || 'Jugador')}${e.ranking ? ` · Ranking ${e.ranking}°` : ''}${e.retirado ? ' · Retirado' : ''}</small></span></li>`).join('')}
+      </ul>`;
+    const sections = v.grouped
+      ? v.groups.map(g => `<h3 class="lg-group-title">${groupName(g.numero)} <small>${g.entrants.length} jugadores · ${g.rounds.length} fechas</small></h3>${list(g.entrants)}`).join('') +
+        (v.sinGrupo.length ? `<h3 class="lg-group-title">Sin grupo asignado</h3>${list(v.sinGrupo)}` : '')
+      : list(v.entrants);
     return `
       <div class="lg-summary">
         <div><strong>${v.entrants.filter(e => !e.retirado).length}</strong><span>Inscritos</span></div>
+        ${v.grouped ? `<div><strong>${v.groups.length}</strong><span>Grupos</span></div>` : ''}
         <div><strong>${v.rounds.length}</strong><span>Fechas</span></div>
         <div><strong>${v.maestros}</strong><span>Al Maestros</span></div>
         <div><strong>${v.rounds.length ? esc(fmt(v.rounds[v.rounds.length - 1].window.end, { day: 'numeric', month: 'short', year: 'numeric' })) : '–'}</strong><span>Última fecha</span></div>
       </div>
-      <ul class="lg-entrants">
-        ${v.entrants.map(e => `<li class="${e.retirado ? 'is-out' : ''}"><span class="lg-num">${e.numero}</span>${avatar(e)}<span><strong>${esc(e.nombre)}</strong><small>${esc(category(e.categoria) || 'Jugador')}${e.retirado ? ' · Retirado' : ''}</small></span></li>`).join('')}
-      </ul>
-      <p class="lg-legend">${note}${v.rounds.length > season.ventanas.length ? ` Con ${v.entrants.length} inscritos hacen falta ${v.rounds.length} fechas: las que exceden el calendario oficial siguen el mismo patrón de 10 días.` : ''}</p>`;
+      ${sections}
+      <p class="lg-legend">${note}${v.grouped ? ' Los grupos los armó la comisión repartiendo a los inscritos según su lugar en el ranking.' : ''}${v.rounds.length > season.ventanas.length ? ` Con ${v.entrants.length} inscritos hacen falta ${v.rounds.length} fechas: las que exceden el calendario oficial siguen el mismo patrón de 10 días.` : ''}</p>`;
   }
 
   function emptyCategory(v) {
@@ -427,7 +459,7 @@
           <div class="lg-points"><div><strong>${p.victoria}</strong><span>Ganador</span></div><div><strong>${p.derrota}</strong><span>Perdedor</span></div><div><strong>${p.noPresentacion}</strong><span>No presentación</span></div></div>
           <p>Fecha a fecha los puntos se acumulan y definen el ranking de la liga.</p></article>
         <article><h4>Quién juega</h4><p>Todos los integrantes de UCTenis con sus cuotas al día. Participación voluntaria y gratuita, en categoría damas y varones.</p></article>
-        <article><h4>Sistema</h4><p>Todos contra todos por fechas: en cada fecha juegas con un rival distinto hasta completar todos los cruces. Si los inscritos son impares, en cada fecha alguien queda libre.</p></article>
+        <article><h4>Sistema</h4><p>Todos contra todos por fechas: en cada fecha juegas con un rival distinto hasta completar todos los cruces. Si los inscritos son impares, en cada fecha alguien queda libre.${v.grouped ? ` En ${GENDER_LABEL[v.gender]} se juega en ${v.groups.length} grupos armados según el ranking: juegas contra todos los de tu grupo y de cada uno clasifican los mejores al Maestros.` : ''}</p></article>
         <article><h4>Plazos</h4><p>Cada partido es obligatorio y se juega dentro de los 10 días de su fecha. La fecha vence y no se recupera en forma retroactiva.</p></article>
         <article><h4>W.O.</h4><p>Si no se juega dentro del plazo, es W.O. para ambos y nadie suma. Si uno no se presenta, gana el jugador presente.</p></article>
         <article><h4>Casos especiales</h4><p>Licencias médicas justificadas o fuerza mayor se presentan a la comisión organizadora, que puede extender el plazo de ese partido.</p></article>
@@ -439,6 +471,12 @@
   }
 
   // ── Comisión organizadora (admin) ─────────────────────────────────────
+  // Fechas que toma la rueda con `groups` grupos: las del grupo más grande.
+  function roundsFor(count, groups) {
+    const size = Math.ceil(count / groups);
+    return size % 2 ? size : size - 1;
+  }
+
   function renderAdmin(v) {
     const el = document.getElementById('lgAdmin');
     el.hidden = !state.isAdmin;
@@ -465,15 +503,31 @@
           ${phase !== 'inscripcion' ? '<p class="lg-warn">La liga ya partió: inscribir a alguien ahora cambia todos los cruces del fixture.</p>' : ''}
         </article>
         <article>
-          <h4>Sorteo del fixture</h4>
-          <p class="lg-muted">${v.drawDone ? 'Números ya sorteados.' : 'Hoy los números siguen el orden de inscripción.'} Las bases asignan un número a cada inscrito al cerrar la inscripción.</p>
-          <button class="lg-btn sm ghost" type="button" data-action="admin-draw" ${v.entrants.length < 2 ? 'disabled' : ''}>${v.drawDone ? 'Volver a sortear' : 'Sortear números'}</button>
+          <h4>Grupos según ranking</h4>
+          <p class="lg-muted">${v.grouped ? `Hoy hay ${v.groups.length} grupos (${v.groups.map(g => `${groupName(g.numero)}: ${g.entrants.length}`).join(' · ')}).` : 'Hoy juegan todos contra todos en un solo grupo.'} Fechas necesarias con ${v.entrants.length} inscritos: ${[1, 2, 3, 4].filter(k => k === 1 || v.entrants.length >= k * 3).map(k => `${k === 1 ? 'sin grupos' : `${k} grupos`} → ${roundsFor(v.entrants.length, k)}`).join(' · ')}.</p>
+          <div class="lg-inline">
+            <select id="lgGroupCount" aria-label="Cantidad de grupos">${[1, 2, 3, 4].filter(k => k === 1 || v.entrants.length >= k * 3).map(k => `<option value="${k}" ${k === Math.max(1, v.groups.length) && (k > 1) === v.grouped ? 'selected' : ''}>${k === 1 ? 'Sin grupos' : `${k} grupos`}</option>`).join('')}</select>
+            <select id="lgGroupMode" aria-label="Forma de repartir">
+              <option value="alternado">Alternado (1°→G1, 2°→G2, 3°→G1…)</option>
+              <option value="serpentina">Serpentina (1°→G1, 2°→G2, 3°→G2, 4°→G1…)</option>
+            </select>
+            <button class="lg-btn sm" type="button" data-action="admin-groups" ${v.entrants.length < 2 ? 'disabled' : ''}>Armar grupos</button>
+          </div>
+          <p class="lg-muted">Se ordena por el lugar de cada uno en el ranking; quienes no están en la escalerilla van al final. Después puedes mover a cualquiera de grupo en la lista de inscritos.</p>
+          ${phase !== 'inscripcion' ? '<p class="lg-warn">La liga ya partió: rearmar los grupos cambia todos los cruces del fixture.</p>' : ''}
+          ${v.sinGrupo.length ? `<p class="lg-warn">${v.sinGrupo.length === 1 ? 'Hay 1 inscrito' : `Hay ${v.sinGrupo.length} inscritos`} sin grupo (${v.sinGrupo.map(e => esc(e.nombre)).join(', ')}): no juegan hasta que les asignes uno.</p>` : ''}
+        </article>
+        <article>
+          <h4>Sorteo de partidos</h4>
+          <p class="lg-muted">${v.drawDone ? 'Números ya sorteados.' : 'Hoy los números siguen el orden de inscripción.'} El sorteo asigna un número a cada inscrito${v.grouped ? ' dentro de su grupo' : ''}, y ese número fija quién juega con quién en cada fecha.</p>
+          <button class="lg-btn sm ghost" type="button" data-action="admin-draw" ${v.entrants.length < 2 ? 'disabled' : ''}>${v.drawDone ? 'Volver a sortear' : 'Sortear partidos'}</button>
           ${phase !== 'inscripcion' ? '<p class="lg-warn">Sortear con la liga en curso reordena los cruces de fechas ya jugadas.</p>' : ''}
         </article>
       </div>
       <h4 class="lg-sub">Inscritos (${v.entrants.length})</h4>
       <ul class="lg-admin-list">${v.entrants.map(e => `
-        <li><span class="lg-num">${e.numero}</span><span>${esc(e.nombre)}${e.retirado ? ` <em>· retirado ${e.retiradoEn ? esc(fmt(e.retiradoEn)) : ''}</em>` : ''}</span>
+        <li><span class="lg-num">${v.grouped ? (e.grupo ? `G${e.grupo}·${e.numero}` : '–') : e.numero}</span><span>${esc(e.nombre)}${e.ranking ? ` <em>· ranking ${e.ranking}°</em>` : ''}${e.retirado ? ` <em>· retirado ${e.retiradoEn ? esc(fmt(e.retiradoEn)) : ''}</em>` : ''}</span>
+          ${v.grouped ? `<select data-group-for="${esc(e.id)}" aria-label="Grupo de ${esc(e.nombre)}">${e.grupo ? '' : '<option value="" selected>Sin grupo</option>'}${v.groups.map(g => `<option value="${g.numero}" ${g.numero === e.grupo ? 'selected' : ''}>${groupName(g.numero)}</option>`).join('')}</select>` : ''}
           ${phase === 'inscripcion'
             ? `<button class="lg-link" type="button" data-action="admin-unenroll" data-id="${esc(e.id)}">Quitar</button>`
             : e.retirado
@@ -600,30 +654,61 @@
       const excepciones = { ...(enrollment.excepciones || {}), [L.pairKey(a, b)]: date };
       return saveEnrollment(a.id, { excepciones }, 'Plazo extendido.');
     }
+    if (action === 'admin-groups') {
+      const v = view();
+      const count = Number(document.getElementById('lgGroupCount').value) || 1;
+      const mode = document.getElementById('lgGroupMode').value;
+      const msg = count === 1
+        ? `¿Quitar los grupos de ${GENDER_LABEL[v.gender]}? Volverán a jugar todos contra todos.`
+        : `¿Repartir a los ${v.entrants.length} inscritos de ${GENDER_LABEL[v.gender]} en ${count} grupos según el ranking (${mode})? Después hay que sortear los partidos.`;
+      if (!confirm(v.phase === 'inscripcion' ? msg : `La liga ya partió y esto cambia todos los cruces. ${msg}`)) return;
+      const groups = count > 1 ? L.assignGroups(v.entrants, count, mode) : null;
+      const patches = v.entrants.map(e => [e.id, { grupo: groups ? groups.get(e.key) || null : null, numero: null }]);
+      return saveMany(patches, count === 1 ? 'Grupos eliminados.' : `Listo: ${count} grupos armados según el ranking. Ahora sortea los partidos.`, 'Los grupos quedaron a medias; vuelve a armarlos.');
+    }
     if (action === 'admin-draw') {
       const v = view();
+      const scope = v.grouped ? ` dentro de cada uno de los ${v.groups.length} grupos` : '';
       const msg = v.phase === 'inscripcion'
-        ? `¿Sortear los números del fixture de ${GENDER_LABEL[v.gender]} (${v.entrants.length} inscritos)?`
+        ? `¿Sortear los partidos de ${GENDER_LABEL[v.gender]} (${v.entrants.length} inscritos)${scope}?`
         : 'La liga ya partió. Sortear de nuevo cambia los cruces, incluidas fechas ya jugadas. ¿Continuar igual?';
       if (!confirm(msg)) return;
-      const order = v.entrants.map(e => e.id);
-      for (let i = order.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [order[i], order[j]] = [order[j], order[i]];
-      }
-      state.busy = true;
-      try {
-        await Promise.all(order.map((id, index) => DB.saveLeagueEnrollmentCloud(id, season.field, { numero: index + 1 }, actor())
-          .then(() => { const p = playerById(id); if (p) p[season.field] = { ...(p[season.field] || {}), numero: index + 1 }; })));
-        toast('Números sorteados. El fixture ya está actualizado.');
-      } catch (err) {
-        console.error('Sorteo incompleto:', err);
-        toast('El sorteo quedó incompleto; vuelve a intentarlo.', 'bad');
-      } finally {
-        state.busy = false;
-        render();
-      }
+      const patches = v.groups.flatMap(group => {
+        const order = group.entrants.map(e => e.id);
+        for (let i = order.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [order[i], order[j]] = [order[j], order[i]];
+        }
+        return order.map((id, index) => [id, { numero: index + 1 }]);
+      });
+      return saveMany(patches, 'Partidos sorteados. El fixture ya está actualizado.', 'El sorteo quedó incompleto; vuelve a intentarlo.');
     }
+  }
+
+  // Guarda varias inscripciones a la vez (grupos, sorteo).
+  async function saveMany(patches, okMessage, failMessage) {
+    if (state.busy) return;
+    state.busy = true;
+    try {
+      await Promise.all(patches.map(([id, patch]) => DB.saveLeagueEnrollmentCloud(id, season.field, patch, actor())
+        .then(() => { const p = playerById(id); if (p) p[season.field] = { ...(p[season.field] || {}), ...patch }; })));
+      toast(okMessage);
+    } catch (err) {
+      console.error(failMessage, err);
+      toast(failMessage, 'bad');
+    } finally {
+      state.busy = false;
+      render();
+    }
+  }
+
+  async function onGroupChange(select) {
+    if (!state.isAdmin) return;
+    const player = playerById(select.dataset.groupFor);
+    const grupo = Number(select.value) || null;
+    if (!player || !grupo) return;
+    if (!confirm(`¿Mover a ${player.nombre} al ${groupName(grupo)}?${view().phase !== 'inscripcion' ? ' La liga ya partió: cambian los cruces de ambos grupos.' : ''}`)) { render(); return; }
+    return saveEnrollment(player.id, { grupo, numero: null }, `${player.nombre} pasó al ${groupName(grupo)}.`);
   }
 
   // ── Arranque ──────────────────────────────────────────────────────────
@@ -647,6 +732,10 @@
       if (round) { state.round = Number(round.dataset.round); render(); return; }
       const action = event.target.closest('[data-action]');
       if (action && action.closest('.lg-page')) onAction(action);
+    });
+    document.addEventListener('change', event => {
+      const select = event.target.closest('select[data-group-for]');
+      if (select) onGroupChange(select);
     });
   }
 

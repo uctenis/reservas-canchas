@@ -144,15 +144,23 @@
     return normalizeGender(enrollment && enrollment.rama) || normalizeGender(player.genero || player.gender);
   }
 
+  // Grupo asignado por la comisión (1, 2, …); 0 = sin grupo.
+  function entrantGroup(enrollment) {
+    const group = Number(enrollment && enrollment.grupo);
+    return Number.isInteger(group) && group > 0 ? group : 0;
+  }
+
   // Inscritos de una categoría en el orden que fija su número en el
   // fixture: primero el número sorteado, luego el orden de inscripción.
   // Quien se retira con la liga en curso conserva su número para no
-  // reordenar los cruces de todos los demás.
-  function getEntrants(players, season = getSeason(), gender) {
+  // reordenar los cruces de todos los demás. Con `group` se numera dentro
+  // de ese grupo.
+  function getEntrants(players, season = getSeason(), gender, group) {
     return (Array.isArray(players) ? players : [])
       .filter(player => player && getEnrollment(player, season))
       .map(player => ({ player, enrollment: getEnrollment(player, season) }))
       .filter(({ player, enrollment }) => !gender || entrantGender(player, enrollment) === gender)
+      .filter(({ enrollment }) => group === undefined || entrantGroup(enrollment) === group)
       .sort((a, b) => {
         const numA = Number(a.enrollment.numero) || Infinity;
         const numB = Number(b.enrollment.numero) || Infinity;
@@ -168,6 +176,8 @@
         foto: player.foto || '',
         categoria: player.categoria || '',
         genero: entrantGender(player, enrollment),
+        grupo: entrantGroup(enrollment),
+        ranking: rankingPosition(player),
         numero: index + 1,
         sorteado: Boolean(Number(enrollment.numero)),
         retirado: enrollment.retirado === true,
@@ -175,6 +185,40 @@
         excepciones: enrollment.excepciones && typeof enrollment.excepciones === 'object' ? enrollment.excepciones : {},
         player
       }));
+  }
+
+  // Posición en la escalerilla (ranking.html); 0 si no está en ella.
+  function rankingPosition(player) {
+    const pos = Number(player && (player.posicion ?? player.pos));
+    return player && player.activo !== false && Number.isFinite(pos) && pos > 0 ? pos : 0;
+  }
+
+  // Inscritos ordenados para repartirlos en grupos: primero por su lugar en
+  // el ranking; los que no están en la escalerilla van al final, en el
+  // orden en que llegan (el de getEntrants).
+  function seedOrder(entrants) {
+    return entrants
+      .map((entrant, index) => ({ entrant, index }))
+      .sort((a, b) => (a.entrant.ranking || Infinity) - (b.entrant.ranking || Infinity) || a.index - b.index)
+      .map(item => item.entrant);
+  }
+
+  /**
+   * Reparte los inscritos en `count` grupos según el ranking. "alternado"
+   * reparte 1→G1, 2→G2, 3→G1, 4→G2…; "serpentina" va y vuelve (1→G1, 2→G2,
+   * 3→G2, 4→G1…), que equilibra mejor la fuerza de los grupos. Devuelve un
+   * Map clave del inscrito → número de grupo.
+   */
+  function assignGroups(entrants, count, mode = 'alternado') {
+    const groups = new Map();
+    const total = Math.max(1, Math.floor(Number(count) || 1));
+    seedOrder(entrants).forEach((entrant, index) => {
+      const lap = Math.floor(index / total);
+      const offset = index % total;
+      const group = mode === 'serpentina' && lap % 2 ? total - offset : offset + 1;
+      groups.set(entrant.key, group);
+    });
+    return groups;
   }
 
   // Todos contra todos por el método del círculo: con N inscritos son N-1
@@ -338,7 +382,7 @@
   function emptyRow(entrant) {
     return {
       key: entrant.key, id: entrant.id, nombre: entrant.nombre, foto: entrant.foto, categoria: entrant.categoria,
-      numero: entrant.numero, retirado: entrant.retirado,
+      numero: entrant.numero, grupo: entrant.grupo, retirado: entrant.retirado,
       pts: 0, pj: 0, pg: 0, pp: 0, woGanados: 0, woPerdidos: 0, woDobles: 0,
       setsFor: 0, setsAgainst: 0, gamesFor: 0, gamesAgainst: 0, forma: [], pendientes: 0
     };
@@ -348,6 +392,16 @@
   function mastersSize(count) {
     const size = count >= 12 ? 8 : count >= 8 ? 6 : 4;
     return Math.min(size, count);
+  }
+
+  // Con grupos, los cupos al Maestros se reparten parejo entre ellos (los
+  // primeros grupos se quedan con el sobrante), sin pasar del tamaño de
+  // cada grupo.
+  function mastersByGroup(total, sizes) {
+    const slots = mastersSize(total);
+    const base = Math.floor(slots / sizes.length);
+    const extra = slots % sizes.length;
+    return sizes.map((size, index) => Math.min(size, base + (index < extra ? 1 : 0)));
   }
 
   function compareSecondary(a, b) {
@@ -381,24 +435,16 @@
     return today > last ? 'maestros' : 'en_juego';
   }
 
-  /**
-   * Vista completa de una categoría: fixture con el estado de cada cruce,
-   * tabla de posiciones y zona de clasificación al Torneo de Maestros.
-   */
-  function buildSeasonView(players, matches, options = {}) {
-    const season = options.season || getSeason();
-    const gender = options.gender || 'M';
-    const today = options.today || todayIso();
+  // Fixture y tabla de un grupo (o de toda la categoría si no hay grupos).
+  function playGroup(entrants, season, seasonMatches, today) {
     const points = season.puntos;
-    const entrants = getEntrants(players, season, gender);
-    const seasonMatches = (Array.isArray(matches) ? matches : []).filter(match => isSeasonMatch(match, season));
     const rows = new Map(entrants.map(entrant => [entrant.key, emptyRow(entrant)]));
     const headToHead = new Map();
 
     const rounds = buildRoundRobin(entrants).map((round, index) => {
       const number = index + 1;
       const window = getRoundWindow(season, number);
-      const partidos = round.pairs.map(([a, b]) => resolvePairing(a, b, window, seasonMatches, today));
+      const partidos = round.pairs.map(([a, b]) => ({ ...resolvePairing(a, b, window, seasonMatches, today), grupo: a.grupo }));
       partidos.forEach(partido => {
         const rowA = rows.get(partido.a.key);
         const rowB = rows.get(partido.b.key);
@@ -428,10 +474,7 @@
           rowA.pendientes++; rowB.pendientes++;
         }
       });
-      const open = window.start <= today && today <= window.end;
-      const closed = today > window.end;
-      const done = partidos.length > 0 && partidos.every(p => ['jugado', 'wo', 'wo_doble'].includes(p.state));
-      return { numero: number, window, partidos, libre: round.bye, open, closed, done };
+      return { partidos, libre: round.bye };
     });
 
     const standings = sortStandings(Array.from(rows.values()), headToHead).map(row => ({
@@ -440,8 +483,57 @@
       diffSets: row.setsFor - row.setsAgainst,
       diffGames: row.gamesFor - row.gamesAgainst
     }));
-    const mastersCount = mastersSize(entrants.length);
-    standings.forEach(row => { row.maestros = row.pos <= mastersCount; });
+    return { rounds, standings };
+  }
+
+  /**
+   * Vista completa de una categoría: fixture con el estado de cada cruce,
+   * tabla de posiciones y zona de clasificación al Torneo de Maestros.
+   * Si la comisión dividió la categoría en grupos, cada grupo juega su
+   * propio todos contra todos en las mismas ventanas de fechas y tiene su
+   * tabla; `rounds` junta los partidos de todos los grupos por fecha.
+   */
+  function buildSeasonView(players, matches, options = {}) {
+    const season = options.season || getSeason();
+    const gender = options.gender || 'M';
+    const today = options.today || todayIso();
+    const entrants = getEntrants(players, season, gender);
+    const seasonMatches = (Array.isArray(matches) ? matches : []).filter(match => isSeasonMatch(match, season));
+
+    // Con grupos, quien no tiene grupo asignado (p. ej. inscrito después de
+    // armarlos) queda fuera del fixture hasta que la comisión lo ubique.
+    const groupIds = Array.from(new Set(entrants.map(entrant => entrant.grupo).filter(Boolean))).sort((a, b) => a - b);
+    const grouped = groupIds.length > 0;
+    const members = grouped
+      ? groupIds.map(id => getEntrants(players, season, gender, id))
+      : [entrants];
+    const quotas = grouped ? mastersByGroup(entrants.length, members.map(list => list.length)) : [mastersSize(entrants.length)];
+    const groups = members.map((list, index) => {
+      const played = playGroup(list, season, seasonMatches, today);
+      played.standings.forEach(row => { row.maestros = row.pos <= quotas[index]; });
+      return { numero: grouped ? groupIds[index] : 0, entrants: list, maestros: quotas[index], ...played };
+    });
+    // Numeración final (dentro del grupo si los hay) para listados y fichas.
+    const numbered = new Map(members.flat().map(entrant => [entrant.key, entrant]));
+    const allEntrants = grouped
+      ? [...members.flat(), ...entrants.filter(entrant => !numbered.has(entrant.key))]
+      : entrants;
+
+    const totalRounds = Math.max(0, ...groups.map(group => group.rounds.length));
+    const rounds = Array.from({ length: totalRounds }, (_, index) => {
+      const number = index + 1;
+      const window = getRoundWindow(season, number);
+      const parts = groups.map(group => group.rounds[index]).filter(Boolean);
+      const partidos = parts.flatMap(part => part.partidos);
+      const libres = parts.map(part => part.libre).filter(Boolean);
+      const open = window.start <= today && today <= window.end;
+      const closed = today > window.end;
+      const done = partidos.length > 0 && partidos.every(p => ['jugado', 'wo', 'wo_doble'].includes(p.state));
+      return { numero: number, window, partidos, libres, libre: libres[0] || null, open, closed, done };
+    });
+
+    const standings = groups.flatMap(group => group.standings);
+    const mastersCount = groups.reduce((sum, group) => sum + group.maestros, 0);
 
     const openRounds = rounds.filter(round => round.open);
     const currentRound = openRounds[0] || rounds.find(round => today < round.window.start) || rounds[rounds.length - 1] || null;
@@ -451,12 +543,20 @@
     return {
       season, gender, today,
       phase: getPhase(season, rounds, today),
-      entrants, rounds, standings,
+      entrants: allEntrants, rounds, standings,
+      groups, grouped,
+      sinGrupo: grouped ? allEntrants.filter(entrant => !entrant.grupo) : [],
       maestros: mastersCount,
       currentRound, openRounds,
       progress: { total: totalPartidos, resueltos, pct: totalPartidos ? Math.round((resueltos / totalPartidos) * 100) : 0 },
-      drawDone: entrants.length > 0 && entrants.every(entrant => entrant.sorteado)
+      drawDone: allEntrants.length > 0 && allEntrants.every(entrant => entrant.sorteado)
     };
+  }
+
+  // Grupo de un inscrito dentro de la vista (el único si no hay grupos).
+  function groupOf(view, entrant) {
+    if (!view || !entrant) return null;
+    return view.groups.find(group => group.entrants.some(member => member.key === entrant.key)) || null;
   }
 
   function findEntrant(view, ref) {
@@ -475,7 +575,7 @@
     return view.rounds.map(round => {
       const partido = round.partidos.find(p => p.a.key === entrant.key || p.b.key === entrant.key) || null;
       const rival = partido ? (partido.a.key === entrant.key ? partido.b : partido.a) : null;
-      return { round, partido, rival, libre: !partido && round.libre && round.libre.key === entrant.key };
+      return { round, partido, rival, libre: !partido && round.libres.some(bye => bye.key === entrant.key) };
     });
   }
 
@@ -653,6 +753,7 @@
     SEASONS, PAIRING_STATES,
     getSeason, todayIso, addDays, daysBetween, getRoundWindow, normalizeGender,
     playerKey, pairKey, getEnrollment, isEnrolled, entrantGender, getEntrants, buildRoundRobin,
+    rankingPosition, assignGroups, mastersByGroup, groupOf,
     isSeasonMatch, scoreStats, mastersSize, buildSeasonView, findEntrant,
     getPlayerFixture, getSchedulablePairings,
     // Liga semanal (ciclo anterior)
