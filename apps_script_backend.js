@@ -25,6 +25,9 @@ const CONFIG = {
     names: ["UCTenis Club", "David Silva"]
   },
   ADMIN_PIN: "",
+  // Comisión organizadora de la liga: administran solo las inscripciones,
+  // grupos y sorteo del Campeonato de Liga (no el resto del sitio).
+  LEAGUE_ADMIN_EMAILS: ["profesorbermudez@gmail.com"],
 
   MAIN_CALENDAR_ID: "e500541f01f115243cc82fdd8cb8af53885461cb6d91e8f6e2c22ed07557c23c@group.calendar.google.com",
 
@@ -2317,6 +2320,14 @@ function savePlayerRut(data) {
   }
 }
 
+/** Admin del sitio o integrante de la comisión de la liga. */
+function isLeagueAdminRequest(idToken) {
+  const verifiedEmail = verifyGoogleIdToken(idToken);
+  if (!verifiedEmail) return false;
+  const league = (CONFIG.LEAGUE_ADMIN_EMAILS || []).map(email => text(email).toLowerCase());
+  return league.indexOf(verifiedEmail) >= 0 || isAdminRequest({ idToken: idToken });
+}
+
 /** Inscripción a la liga: se escribe en el campo `ligaAAAA` de la ficha
  * (ranking_players/{id}) con la identidad del Apps Script. El dueño de la
  * ficha solo puede inscribirse/darse de baja; el admin puede cambiar todo. */
@@ -2325,10 +2336,10 @@ function saveLeagueEnrollment(data) {
   const field = text(data.field);
   if (!playerId) return { ok: false, msg: 'Falta el ID del jugador.' };
   if (!/^liga\d{4}$/.test(field)) return { ok: false, msg: 'Temporada inválida.' };
-  if (!isOwnerOrAdminOfPlayer(playerId, data.idToken)) {
+  const isAdmin = isLeagueAdminRequest(data.idToken);
+  if (!isAdmin && !isOwnerOrAdminOfPlayer(playerId, data.idToken)) {
     return { ok: false, msg: 'No tienes permiso para editar esta inscripción.' };
   }
-  const isAdmin = isAdminRequest({ idToken: data.idToken });
   const patch = (data.patch && typeof data.patch === 'object') ? data.patch : {};
   const allowedForOwner = { inscrito: 1, retirado: 1, inscritoEn: 1, rama: 1, numero: 1 };
   const keys = Object.keys(patch);

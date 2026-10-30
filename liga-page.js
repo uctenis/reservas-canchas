@@ -6,7 +6,9 @@
 
   const L = window.UCTennisLeague;
   const season = L.getSeason();
-  const ADMIN_EMAILS = ['uctenisclub@gmail.com', 'dsilva@uct.cl'];
+  // Admins del sitio y la comisión organizadora de la liga (en el backend:
+  // CONFIG.LEAGUE_ADMIN_EMAILS).
+  const ADMIN_EMAILS = ['uctenisclub@gmail.com', 'dsilva@uct.cl', 'profesorbermudez@gmail.com'];
   const PURE_ADMIN_EMAILS = ['uctenisclub@gmail.com'];
   const FINAL_STATES = ['jugado', 'wo', 'wo_doble'];
   const GENDER_LABEL = { M: 'Varones', F: 'Damas' };
@@ -21,7 +23,11 @@
     me: null,
     isAdmin: false,
     loaded: false,
-    busy: false
+    busy: false,
+    // Cantidad y reparto de grupos elegidos en el panel, por categoría.
+    groupDraft: {},
+    // Anima la aparición de los grupos recién armados.
+    revealGroups: false
   };
 
   // ── Utilidades ────────────────────────────────────────────────────────
@@ -307,12 +313,89 @@
 
   function groupName(numero) { return `Grupo ${numero}`; }
 
+  // Cada grupo tiene su color para reconocerlo en tablas, fixture y fichas.
+  const GROUP_COLORS = ['#f59e0b', '#7dd3fc', '#4ade80', '#f472b6'];
+  function groupColor(numero) { return GROUP_COLORS[(Math.max(1, numero) - 1) % GROUP_COLORS.length]; }
+
+  function groupTitle(numero, detail = '', tag = 'h3') {
+    return `<${tag} class="lg-group-title" style="--gc:${groupColor(numero)}"><span class="lg-group-dot">${numero}</span>${groupName(numero)}${detail ? ` <small>${detail}</small>` : ''}</${tag}>`;
+  }
+
+  function fechasFor(size) { return size < 2 ? 0 : size % 2 ? size : size - 1; }
+
+  function averageRanking(entrants) {
+    const ranks = entrants.map(e => e.ranking).filter(Boolean);
+    return ranks.length ? ranks.reduce((sum, rank) => sum + rank, 0) / ranks.length : 0;
+  }
+
+  /**
+   * Tarjetas de los grupos: jugadores ordenados por su lugar en el ranking
+   * (el primero es el cabeza de serie), con fechas, cupos al Maestros y
+   * ranking promedio para ver de un vistazo que los grupos quedaron parejos.
+   * `groups`: [{ numero, entrants, fechas, maestros }].
+   */
+  function groupCards(groups, { compact = false, reveal = false, showNumbers = false } = {}) {
+    const meKey = state.me ? L.playerKey(state.me) : '';
+    const averages = groups.map(g => averageRanking(g.entrants)).filter(Boolean);
+    const spread = averages.length > 1 ? Math.max(...averages) - Math.min(...averages) : null;
+    const cards = groups.map((g, i) => {
+      const seeds = g.entrants.slice().sort((a, b) => (a.ranking || Infinity) - (b.ranking || Infinity) || a.numero - b.numero);
+      const last = g.fechas ? L.getRoundWindow(season, g.fechas) : null;
+      const avg = averageRanking(g.entrants);
+      return `
+        <section class="lg-group" style="--gc:${groupColor(g.numero)};--i:${i}">
+          <div class="lg-group-head">
+            <span class="lg-group-badge" aria-hidden="true">${g.numero}</span>
+            <div class="lg-group-name"><span>${GENDER_LABEL[state.gender]} · ${season.id}</span><h3>${groupName(g.numero)}</h3></div>
+            <span class="lg-group-count"><b>${g.entrants.length}</b> jugadores</span>
+          </div>
+          <dl class="lg-group-stats">
+            <div><dt>Fechas</dt><dd>${g.fechas}</dd></div>
+            <div><dt>Al Maestros</dt><dd>${g.maestros}</dd></div>
+            <div><dt>Ranking prom.</dt><dd>${avg ? avg.toLocaleString('es-CL', { maximumFractionDigits: 1 }) : '–'}</dd></div>
+          </dl>
+          <ol class="lg-seeds">
+            ${seeds.map((e, j) => `
+              <li class="${j === 0 ? 'is-head' : ''} ${e.key === meKey ? 'is-me' : ''} ${e.retirado ? 'is-out' : ''}" style="--j:${j}">
+                <span class="lg-seed-rank" title="${e.ranking ? `${e.ranking}° del ranking` : 'Sin lugar en la escalerilla'}">${e.ranking ? `${e.ranking}°` : '–'}</span>
+                ${avatar(e, 'sm')}
+                <span class="lg-seed-name"><strong>${esc(e.nombre)}</strong><small>${j === 0 ? '<i>★ Cabeza de serie</i>' : esc(category(e.categoria) || 'Jugador')}${e.key === meKey ? ' · Tú' : ''}${e.retirado ? ' · Retirado' : ''}</small></span>
+                ${showNumbers ? `<span class="lg-seed-num" title="Número sorteado en el fixture">N° ${e.numero}</span>` : ''}
+              </li>`).join('')}
+          </ol>
+          ${!compact && last ? `<div class="lg-group-foot">Todos contra todos · del ${esc(fmtLong(season.inicio))} al ${esc(fmtLong(last.end))}</div>` : ''}
+        </section>`;
+    }).join('');
+    const balance = spread === null ? '' : `<p class="lg-balance ${spread <= 1 ? 'ok' : ''}">⚖️ ${spread <= 1 ? 'Grupos parejos' : 'Ojo con el equilibrio'}: el ranking promedio varía ${spread.toLocaleString('es-CL', { maximumFractionDigits: 1 })} ${spread === 1 ? 'puesto' : 'puestos'} entre grupos.</p>`;
+    return `<div class="lg-groups ${compact ? 'compact' : ''} ${reveal ? 'is-reveal' : ''}">${cards}</div>${balance}`;
+  }
+
+  function viewGroups(v) {
+    return v.groups.map(g => ({ numero: g.numero, entrants: g.entrants, fechas: g.rounds.length, maestros: g.maestros }));
+  }
+
+  // Lo elegido en el panel (cantidad y reparto) mientras no se guarde.
+  function groupDraft(v) {
+    const draft = state.groupDraft[v.gender] || {};
+    return { count: draft.count || (v.grouped ? v.groups.length : 1), mode: draft.mode || 'alternado' };
+  }
+
+  // Grupos que resultarían con lo elegido en el panel.
+  function draftGroups(v) {
+    const { count, mode } = groupDraft(v);
+    if (count < 2) return [];
+    const assignment = L.assignGroups(v.entrants, count, mode);
+    const groups = Array.from({ length: count }, (_, i) => ({ numero: i + 1, entrants: v.entrants.filter(e => assignment.get(e.key) === i + 1) }));
+    const quotas = L.mastersByGroup(v.entrants.length, groups.map(g => g.entrants.length));
+    return groups.map((g, i) => ({ ...g, fechas: fechasFor(g.entrants.length), maestros: quotas[i] }));
+  }
+
   function renderStandings(v) {
     if (!v.entrants.length) return emptyCategory(v);
     const pre = v.phase === 'inscripcion'
       ? `<div class="lg-note">La tabla empieza a moverse el ${fmtLong(season.inicio)}. Por ahora todos parten en cero.</div>` : '';
     const tables = v.groups.map(group => `
-      ${v.grouped ? `<h3 class="lg-group-title">${groupName(group.numero)} <small>${group.entrants.length} jugadores · clasifican ${group.maestros}</small></h3>` : ''}
+      ${v.grouped ? groupTitle(group.numero, `${group.entrants.length} jugadores · clasifican ${group.maestros}`) : ''}
       ${standingsTable(v, group.standings, group.maestros)}`).join('');
     const quota = v.grouped
       ? `Clasifican ${v.maestros} al Torneo de Maestros: ${v.groups.map(g => `${g.maestros} del ${groupName(g.numero)}`).join(' y ')}.`
@@ -397,7 +480,7 @@
       ? v.groups.map(group => {
         const partidos = round.partidos.filter(p => p.grupo === group.numero);
         const libres = round.libres.filter(e => e.grupo === group.numero);
-        return `<h4 class="lg-group-title">${groupName(group.numero)}</h4>
+        return `${groupTitle(group.numero, '', 'h4')}
           ${partidos.length ? `<div class="lg-matches">${partidos.map(card).join('')}</div>` : `<p class="lg-muted">Este grupo ya completó sus cruces.</p>`}
           ${byes(libres)}`;
       }).join('')
@@ -425,8 +508,8 @@
         ${entrants.map(e => `<li class="${e.retirado ? 'is-out' : ''}"><span class="lg-num">${e.numero}</span>${avatar(e)}<span><strong>${esc(e.nombre)}</strong><small>${esc(category(e.categoria) || 'Jugador')}${e.ranking ? ` · Ranking ${e.ranking}°` : ''}${e.retirado ? ' · Retirado' : ''}</small></span></li>`).join('')}
       </ul>`;
     const sections = v.grouped
-      ? v.groups.map(g => `<h3 class="lg-group-title">${groupName(g.numero)} <small>${g.entrants.length} jugadores · ${g.rounds.length} fechas</small></h3>${list(g.entrants)}`).join('') +
-        (v.sinGrupo.length ? `<h3 class="lg-group-title">Sin grupo asignado</h3>${list(v.sinGrupo)}` : '')
+      ? groupCards(viewGroups(v), { reveal: state.revealGroups, showNumbers: v.drawDone }) +
+        (v.sinGrupo.length ? `<h3 class="lg-sub">Sin grupo asignado</h3>${list(v.sinGrupo)}` : '')
       : list(v.entrants);
     return `
       <div class="lg-summary">
@@ -488,6 +571,11 @@
       .filter(p => [v.gender, ''].includes(L.normalizeGender(p.genero || p.gender)) && !L.getEnrollment(p, season) && !enrolledKeys.has(L.playerKey(p)))
       .map(p => ({ value: p.id, nombre: p.nombre, detail: category(p.categoria) }))
       .sort((a, b) => String(a.nombre).localeCompare(String(b.nombre), 'es'));
+    const draft = groupDraft(v);
+    const preview = draftGroups(v);
+    // Sin cambios respecto de lo guardado: no hace falta la vista previa.
+    const sameAsCurrent = v.grouped && preview.length === v.groups.length &&
+      preview.every(g => g.entrants.every(e => e.grupo === g.numero));
     const expired = v.rounds.flatMap(r => r.partidos.map(p => ({ r, p })))
       .filter(({ p }) => (p.state === 'wo_doble' && !p.retiro) || p.exception);
 
@@ -506,14 +594,14 @@
           <h4>Grupos según ranking</h4>
           <p class="lg-muted">${v.grouped ? `Hoy hay ${v.groups.length} grupos (${v.groups.map(g => `${groupName(g.numero)}: ${g.entrants.length}`).join(' · ')}).` : 'Hoy juegan todos contra todos en un solo grupo.'} Fechas necesarias con ${v.entrants.length} inscritos: ${[1, 2, 3, 4].filter(k => k === 1 || v.entrants.length >= k * 3).map(k => `${k === 1 ? 'sin grupos' : `${k} grupos`} → ${roundsFor(v.entrants.length, k)}`).join(' · ')}.</p>
           <div class="lg-inline">
-            <select id="lgGroupCount" aria-label="Cantidad de grupos">${[1, 2, 3, 4].filter(k => k === 1 || v.entrants.length >= k * 3).map(k => `<option value="${k}" ${k === Math.max(1, v.groups.length) && (k > 1) === v.grouped ? 'selected' : ''}>${k === 1 ? 'Sin grupos' : `${k} grupos`}</option>`).join('')}</select>
-            <select id="lgGroupMode" aria-label="Forma de repartir">
-              <option value="alternado">Alternado (1°→G1, 2°→G2, 3°→G1…)</option>
-              <option value="serpentina">Serpentina (1°→G1, 2°→G2, 3°→G2, 4°→G1…)</option>
+            <select id="lgGroupCount" data-draft="count" aria-label="Cantidad de grupos">${[1, 2, 3, 4].filter(k => k === 1 || v.entrants.length >= k * 3).map(k => `<option value="${k}" ${k === draft.count ? 'selected' : ''}>${k === 1 ? 'Sin grupos' : `${k} grupos`}</option>`).join('')}</select>
+            <select id="lgGroupMode" data-draft="mode" aria-label="Forma de repartir">
+              <option value="alternado" ${draft.mode === 'alternado' ? 'selected' : ''}>Alternado (1°→G1, 2°→G2, 3°→G1…)</option>
+              <option value="serpentina" ${draft.mode === 'serpentina' ? 'selected' : ''}>Serpentina (1°→G1, 2°→G2, 3°→G2, 4°→G1…)</option>
             </select>
             <button class="lg-btn sm" type="button" data-action="admin-groups" ${v.entrants.length < 2 ? 'disabled' : ''}>Armar grupos</button>
           </div>
-          <p class="lg-muted">Se ordena por el lugar de cada uno en el ranking; quienes no están en la escalerilla van al final. Después puedes mover a cualquiera de grupo en la lista de inscritos.</p>
+          <p class="lg-muted">Se ordena por el lugar de cada uno en el ranking; quienes no están en la escalerilla van al final. Abajo ves cómo quedarían antes de guardar; después puedes mover a cualquiera de grupo en la lista de inscritos.</p>
           ${phase !== 'inscripcion' ? '<p class="lg-warn">La liga ya partió: rearmar los grupos cambia todos los cruces del fixture.</p>' : ''}
           ${v.sinGrupo.length ? `<p class="lg-warn">${v.sinGrupo.length === 1 ? 'Hay 1 inscrito' : `Hay ${v.sinGrupo.length} inscritos`} sin grupo (${v.sinGrupo.map(e => esc(e.nombre)).join(', ')}): no juegan hasta que les asignes uno.</p>` : ''}
         </article>
@@ -524,6 +612,11 @@
           ${phase !== 'inscripcion' ? '<p class="lg-warn">Sortear con la liga en curso reordena los cruces de fechas ya jugadas.</p>' : ''}
         </article>
       </div>
+      ${preview.length && !sameAsCurrent ? `
+        <div class="lg-group-preview">
+          <div class="lg-group-preview-head"><span class="lg-eyebrow">Vista previa · aún no se guarda</span><span class="lg-muted">Aprieta «Armar grupos» para confirmarlos.</span></div>
+          ${groupCards(preview, { compact: true })}
+        </div>` : ''}
       <h4 class="lg-sub">Inscritos (${v.entrants.length})</h4>
       <ul class="lg-admin-list">${v.entrants.map(e => `
         <li><span class="lg-num">${v.grouped ? (e.grupo ? `G${e.grupo}·${e.numero}` : '–') : e.numero}</span><span>${esc(e.nombre)}${e.ranking ? ` <em>· ranking ${e.ranking}°</em>` : ''}${e.retirado ? ` <em>· retirado ${e.retiradoEn ? esc(fmt(e.retiradoEn)) : ''}</em>` : ''}</span>
@@ -578,7 +671,7 @@
   }
 
   // ── Acciones ──────────────────────────────────────────────────────────
-  function actor() { return { email: state.session ? state.session.email : '' }; }
+  function actor() { return { email: state.session ? state.session.email : '', leagueAdmin: state.isAdmin }; }
 
   async function saveEnrollment(playerId, patch, okMessage) {
     if (state.busy) return;
@@ -664,7 +757,17 @@
       if (!confirm(v.phase === 'inscripcion' ? msg : `La liga ya partió y esto cambia todos los cruces. ${msg}`)) return;
       const groups = count > 1 ? L.assignGroups(v.entrants, count, mode) : null;
       const patches = v.entrants.map(e => [e.id, { grupo: groups ? groups.get(e.key) || null : null, numero: null }]);
-      return saveMany(patches, count === 1 ? 'Grupos eliminados.' : `Listo: ${count} grupos armados según el ranking. Ahora sortea los partidos.`, 'Los grupos quedaron a medias; vuelve a armarlos.');
+      delete state.groupDraft[v.gender];
+      return saveMany(patches, count === 1 ? 'Grupos eliminados.' : `Listo: ${count} grupos armados según el ranking. Ahora sortea los partidos.`, 'Los grupos quedaron a medias; vuelve a armarlos.', () => {
+        if (count === 1) return;
+        state.tab = 'inscritos';
+        state.revealGroups = true;
+        setTimeout(() => {
+          state.revealGroups = false;
+          const panel = document.getElementById('lgView');
+          if (panel && panel.scrollIntoView) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 0);
+      });
     }
     if (action === 'admin-draw') {
       const v = view();
@@ -686,13 +789,14 @@
   }
 
   // Guarda varias inscripciones a la vez (grupos, sorteo).
-  async function saveMany(patches, okMessage, failMessage) {
+  async function saveMany(patches, okMessage, failMessage, onSaved) {
     if (state.busy) return;
     state.busy = true;
     try {
       await Promise.all(patches.map(([id, patch]) => DB.saveLeagueEnrollmentCloud(id, season.field, patch, actor())
         .then(() => { const p = playerById(id); if (p) p[season.field] = { ...(p[season.field] || {}), ...patch }; })));
       toast(okMessage);
+      if (onSaved) onSaved();
     } catch (err) {
       console.error(failMessage, err);
       toast(failMessage, 'bad');
@@ -736,6 +840,12 @@
     document.addEventListener('change', event => {
       const select = event.target.closest('select[data-group-for]');
       if (select) onGroupChange(select);
+      const draft = event.target.closest('select[data-draft]');
+      if (draft) {
+        const current = state.groupDraft[state.gender] || {};
+        state.groupDraft[state.gender] = { ...current, [draft.dataset.draft]: draft.dataset.draft === 'count' ? Number(draft.value) : draft.value };
+        render();
+      }
     });
   }
 

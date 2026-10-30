@@ -1157,7 +1157,7 @@ const DB = {
         const googleEmail = normalizeEmailForDb(firebaseAuth && firebaseAuth.currentUser && firebaseAuth.currentUser.email);
         const owner = cachedPlayers.find(player => player.id === playerId);
         const ownerEmail = normalizeEmailForDb(owner && (owner.emailLower || owner.email));
-        if (idToken && googleEmail && ownerEmail && googleEmail !== ownerEmail && !this.getSession()?.isAdmin) {
+        if (idToken && googleEmail && ownerEmail && googleEmail !== ownerEmail && !this.getSession()?.isAdmin && !actor.leagueAdmin) {
           throw new Error('Tu sesión de Google es ' + googleEmail + ', pero tu ficha del club está con ' + ownerEmail + '. Cierra sesión y vuelve a entrar eligiendo la cuenta ' + ownerEmail + '.');
         }
         if (idToken) {
