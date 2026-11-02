@@ -380,3 +380,5 @@ button.lg-option:hover small, button.lg-option:hover span { color:#0a1712; }
 .lg-result-summary { margin:0; padding:12px 14px; border-radius:12px; background:rgba(255,255,255,.05); font-size:.92rem; }
 .lg-result-summary.ok { background:var(--lg-amber-soft, rgba(245,158,11,.12)); border:1px solid var(--lg-amber-line, rgba(245,158,11,.32)); }
 @media (max-width: 420px) { .lg-score-table tbody th > span:last-child { max-width:6em; } .lg-score-table input { min-width:38px; } }
+.lg-result-unfinished { display:flex; gap:10px; align-items:flex-start; padding:12px 14px; border-radius:12px; border:1px solid var(--line-strong, rgba(255,255,255,.18)); background:rgba(255,255,255,.04); font-size:.86rem; line-height:1.45; cursor:pointer; }
+.lg-result-unfinished input { flex:0 0 auto; width:22px; height:22px; margin:1px 0 0; accent-color:var(--lg-amber, #f59e0b); }

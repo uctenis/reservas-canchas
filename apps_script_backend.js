@@ -6173,22 +6173,40 @@ function mirrorLeagueChallenge(challenge, extra) {
 
 /** Valida los sets de un partido de liga ([{a, b}], games de cada jugador).
  * Sets normales a 6 (7-5 o 7-6 si se alarga); el 3er set puede ser
- * súper tie-break a 10 (bases §10). Devuelve el ganador ('a' o 'b'). */
-function validateLeagueSets(sets) {
-  if (!Array.isArray(sets) || sets.length < 2 || sets.length > 3) return { ok: false, msg: 'Anota 2 o 3 sets.' };
-  let winsA = 0, winsB = 0;
+ * súper tie-break a 10 (bases §10). Devuelve el ganador ('a' o 'b').
+ * Con `inconcluso` (se acabó la hora antes de terminar) el último set puede
+ * quedar a medias y gana quien lleve más sets; si van igualados, quien
+ * lleve más games. Mantener igual a checkResultSets() de liga-page.js. */
+function validateLeagueSets(sets, inconcluso) {
+  if (!Array.isArray(sets) || sets.length < (inconcluso ? 1 : 2) || sets.length > 3) {
+    return { ok: false, msg: inconcluso ? 'Anota al menos el primer set.' : 'Anota 2 o 3 sets.' };
+  }
+  let winsA = 0, winsB = 0, gamesA = 0, gamesB = 0;
   for (let i = 0; i < sets.length; i++) {
     const a = Number(sets[i].a), b = Number(sets[i].b);
     if (!Number.isInteger(a) || !Number.isInteger(b) || a < 0 || b < 0) return { ok: false, msg: 'El set ' + (i + 1) + ' está incompleto.' };
     const hi = Math.max(a, b), lo = Math.min(a, b);
     const regular = (hi === 6 && lo <= 4) || (hi === 7 && (lo === 5 || lo === 6));
     const superTiebreak = i === 2 && hi >= 10 && hi - lo >= 2 && (hi === 10 || hi - lo === 2);
-    if (!regular && !superTiebreak) return { ok: false, msg: 'El set ' + (i + 1) + ' (' + a + '-' + b + ') no es un marcador válido.' };
+    const complete = regular || superTiebreak;
+    const partial = inconcluso && i === sets.length - 1 && !complete;
     if (winsA === 2 || winsB === 2) return { ok: false, msg: 'El partido ya estaba definido en 2 sets.' };
-    if (a > b) winsA++; else winsB++;
+    if (partial) {
+      if (a + b === 0) return { ok: false, msg: 'Borra el set ' + (i + 1) + ': no alcanzaron a jugar games.' };
+      if (hi > (i === 2 ? 20 : 6)) return { ok: false, msg: 'El set ' + (i + 1) + ' (' + a + '-' + b + ') no es un marcador válido.' };
+    } else if (!complete) {
+      return { ok: false, msg: 'El set ' + (i + 1) + ' (' + a + '-' + b + ') no es un marcador válido.' };
+    }
+    if (complete) { if (a > b) winsA++; else winsB++; }
+    const tiebreak = superTiebreak && !regular;
+    gamesA += tiebreak ? (a > b ? 1 : 0) : a;
+    gamesB += tiebreak ? (b > a ? 1 : 0) : b;
   }
-  if (winsA < 2 && winsB < 2) return { ok: false, msg: 'Falta el set que define el partido.' };
-  return { ok: true, winner: winsA > winsB ? 'a' : 'b' };
+  if (winsA === 2 || winsB === 2) return { ok: true, winner: winsA > winsB ? 'a' : 'b', inconcluso: false };
+  if (!inconcluso) return { ok: false, msg: 'Falta el set que define el partido.' };
+  if (winsA !== winsB) return { ok: true, winner: winsA > winsB ? 'a' : 'b', inconcluso: true };
+  if (gamesA !== gamesB) return { ok: true, winner: gamesA > gamesB ? 'a' : 'b', inconcluso: true, byGames: true };
+  return { ok: false, msg: 'Quedaron empatados en sets y en games: terminen el partido o pidan a la comisión que lo resuelva.' };
 }
 
 /**
@@ -6199,7 +6217,7 @@ function validateLeagueSets(sets) {
  *    confirma o reclama desde el Ranking, y a las 48 h se confirma solo.
  *  · Lo anota la comisión → queda confirmado de inmediato.
  * data: { idToken, playerA: {id, nombre, email}, playerB, sets: [{a, b}],
- *         fecha (día jugado), genero, temporada, temporadaInicio, ligaFecha }
+ *         inconcluso, fecha (día jugado), genero, temporada, temporadaInicio, ligaFecha }
  */
 function leagueRecordResult(data) {
   const email = verifyGoogleIdToken(data && data.idToken);
@@ -6213,8 +6231,9 @@ function leagueRecordResult(data) {
   if (!isPlayer && !byCommission) return { ok: false, msg: 'Solo los jugadores del partido o la comisión pueden anotar este resultado.' };
 
   const sets = (Array.isArray(data.sets) ? data.sets : []).map(function(set) { return { a: Number(set && set.a), b: Number(set && set.b) }; });
-  const check = validateLeagueSets(sets);
+  const check = validateLeagueSets(sets, data.inconcluso === true || data.inconcluso === 'true');
   if (!check.ok) return check;
+  const inconcluso = check.inconcluso === true;
   const fecha = text(data.fecha);
   const today = Utilities.formatDate(new Date(), 'America/Santiago', 'yyyy-MM-dd');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return { ok: false, msg: 'Indica el día en que jugaron.' };
@@ -6243,7 +6262,9 @@ function leagueRecordResult(data) {
     // El marcador se guarda desde la óptica del retador.
     const flip = Boolean(existing && challengePlayerMatchesRole(existing.challenge, 'retador', B));
     const retador = flip ? B : A, retado = flip ? A : B;
-    const marcador = sets.map(function(set) { return flip ? set.b + '-' + set.a : set.a + '-' + set.b; }).join(', ');
+    // Un partido inconcluso lo dice en el propio marcador, para que se note
+    // en todas partes (Ranking, correos, planilla).
+    const marcador = sets.map(function(set) { return flip ? set.b + '-' + set.a : set.a + '-' + set.b; }).join(', ') + (inconcluso ? ' (inconcluso)' : '');
     const winner = check.winner === 'a' ? A : B;
     const now = new Date().toISOString();
     const result = {
@@ -6286,13 +6307,17 @@ function leagueRecordResult(data) {
     const mirror = mirrorLeagueChallenge(challenge, {
       ligaTemporada: text(data.temporada),
       ligaFecha: Number(data.ligaFecha) || 0,
+      inconcluso: inconcluso,
       resultadoIngresadoPorNombre: byCommission ? 'Comisión organizadora' : (email === A.email ? A.nombre : B.nombre)
     });
 
     // Aviso a ambos jugadores, con el marcador desde la óptica del ganador.
     const winnerScore = sets.map(function(set) { return check.winner === 'a' ? set.a + '-' + set.b : set.b + '-' + set.a; }).join(', ');
     const scoreBox = '<span style="display:block;padding:14px;border-radius:12px;background:#fef3c7;color:#78350f;font-size:17px;font-weight:bold;text-align:center;">🏆 ' +
-      escapeHtmlBday(winner.nombre) + ' · ' + escapeHtmlBday(winnerScore) + '</span>';
+      escapeHtmlBday(winner.nombre) + ' · ' + escapeHtmlBday(winnerScore) + (inconcluso ? ' (inconcluso)' : '') + '</span>';
+    const unfinishedNote = inconcluso
+      ? 'El partido quedó <strong>inconcluso</strong>: gana quien iba adelante ' + (check.byGames ? 'en games (estaban igualados en sets)' : 'en sets') + ' y suma como un partido normal.'
+      : '';
     [{ me: A, rival: B }, { me: B, rival: A }].forEach(function(p) {
       if (!p.me.email) return;
       const reportedByMe = p.me.email === email;
@@ -6306,8 +6331,9 @@ function leagueRecordResult(data) {
         leagueEmailHtml(byCommission ? 'Resultado registrado' : 'Resultado anotado', 'Hola <strong>' + escapeHtmlBday(p.me.nombre.split(' ')[0]) + '</strong>,', [
           'Se anotó el resultado de tu partido de liga contra <strong>' + escapeHtmlBday(p.rival.nombre) + '</strong>, jugado el ' + escapeHtmlBday(leagueDateLabel(fecha)) + ':',
           scoreBox,
+          unfinishedNote,
           next
-        ], leagueButton(LEAGUE_SITE_URL + (toLeague ? 'liga.html' : 'ranking.html#desafios'), toLeague ? 'Ver la liga' : 'Revisar resultado', true)));
+        ].filter(Boolean), leagueButton(LEAGUE_SITE_URL + (toLeague ? 'liga.html' : 'ranking.html#desafios'), toLeague ? 'Ver la liga' : 'Revisar resultado', true)));
     });
 
     return { ok: true, challenge: mirror, pending: !byCommission };
@@ -6839,13 +6865,27 @@ function sendLeagueRoundMail(kind, me, rival, round, p, proposal, rivalDoc) {
     }).filter(Boolean);
   }
 
+  // Set terminado: a 6 (7-5 o 7-6 si se alarga) o súper tie-break en el 3º.
+  function isCompleteSet(a, b, index) {
+    const hi = Math.max(a, b), lo = Math.min(a, b);
+    return (hi === 6 && lo <= 4) || (hi === 7 && (lo === 5 || lo === 6)) || (index === 2 && hi >= 10 && hi - lo >= 2);
+  }
+
+  // Partido que no alcanzó a terminar (p. ej. se acabó la hora de la
+  // cancha): se anota hasta donde llegó y gana quien iba adelante.
+  function isUnfinishedMatch(match) {
+    return match?.inconcluso === true || match?.inconcluso === 'true' || /inconclus/i.test(String(match?.marcador || ''));
+  }
+
   // Sets y games desde la óptica del retador. El tercer set se juega a Tie
   // Break (bases §10): cuenta como set, pero solo como un game para no
-  // inflar la diferencia con los puntos del desempate.
-  function scoreStats(score) {
+  // inflar la diferencia con los puntos del desempate. En un partido
+  // inconcluso el set que quedó a medias suma games, pero no como set.
+  function scoreStats(score, unfinished) {
     return parseScore(score).reduce((stats, [a, b], index) => {
-      if (a > b) stats.setsA++;
-      if (b > a) stats.setsB++;
+      const countsAsSet = !unfinished || isCompleteSet(a, b, index);
+      if (countsAsSet && a > b) stats.setsA++;
+      if (countsAsSet && b > a) stats.setsB++;
       const isMatchTiebreak = index === 2 && Math.max(a, b) >= 10;
       stats.gamesA += isMatchTiebreak ? (a > b ? 1 : 0) : a;
       stats.gamesB += isMatchTiebreak ? (b > a ? 1 : 0) : b;
@@ -6893,7 +6933,8 @@ function sendLeagueRoundMail(kind, me, rival, round, p, proposal, rivalDoc) {
       if (!winnerSide) return { ...base, state: 'por_confirmar' };
       const loserSide = winnerSide === 'retador' ? 'retado' : 'retador';
       const isWo = match.status === 'wo_retador' || match.status === 'wo_retado';
-      const stats = scoreStats(match.marcador);
+      const inconcluso = isUnfinishedMatch(match);
+      const stats = scoreStats(match.marcador, inconcluso);
       const flip = winnerSide === 'retado';
       const sets = parseScore(match.marcador);
       return {
@@ -6908,6 +6949,7 @@ function sendLeagueRoundMail(kind, me, rival, round, p, proposal, rivalDoc) {
         setsBy: isWo ? {} : { [sides.retador.key]: sets.map(set => set[0]), [sides.retado.key]: sets.map(set => set[1]) },
         sets: isWo ? null : { winner: flip ? stats.setsB : stats.setsA, loser: flip ? stats.setsA : stats.setsB },
         games: isWo ? null : { winner: flip ? stats.gamesB : stats.gamesA, loser: flip ? stats.gamesA : stats.gamesB },
+        inconcluso: !isWo && inconcluso,
         date: played
       };
     }
@@ -7307,7 +7349,7 @@ function sendLeagueRoundMail(kind, me, rival, round, p, proposal, rivalDoc) {
     getSeason, todayIso, addDays, daysBetween, getRoundWindow, normalizeGender,
     playerKey, pairKey, getEnrollment, isEnrolled, entrantGender, getEntrants, buildRoundRobin,
     rankingPosition, assignGroups, mastersByGroup, groupOf,
-    isSeasonMatch, scoreStats, mastersSize, buildSeasonView, findEntrant,
+    isSeasonMatch, scoreStats, isUnfinishedMatch, mastersSize, buildSeasonView, findEntrant,
     getPlayerFixture, getSchedulablePairings,
     // Liga semanal (ciclo anterior)
     DEFAULT_RULES, getCycle, isLeagueMatch, calculateStandings

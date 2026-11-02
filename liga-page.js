@@ -297,7 +297,7 @@
           if (p.state === 'jugado' || p.state === 'wo') {
             const won = p.winner.key === entrant.key;
             tone = won ? 'win' : 'loss';
-            result = `${won ? 'G' : 'P'} ${p.state === 'wo' ? 'W.O.' : esc(won ? p.winnerScore : reverseScore(p.winnerScore))}`;
+            result = `${won ? 'G' : 'P'} ${p.state === 'wo' ? 'W.O.' : esc(won ? p.winnerScore : reverseScore(p.winnerScore))}${p.inconcluso ? ' (inc.)' : ''}`;
           } else if (p.state === 'wo_doble') { tone = 'void'; result = 'W.O. doble'; }
           else result = STATE_CHIP[p.state][0];
           return `<li class="${tone} ${next && next.round === r ? 'is-next' : ''}"><span>F${r.numero}</span><b>${esc(item.rival.nombre)}</b><em>${result}</em></li>`;
@@ -597,6 +597,10 @@
           <button class="lg-dialog-x" type="button" data-confirm="no" aria-label="Cerrar">×</button>
         </div>
         <p class="lg-dialog-intro">Escribe los games de cada set. Si hubo 3er set, se juega a súper tie-break (a 10): anota esos puntos, por ejemplo 10-7.</p>
+        <label class="lg-result-unfinished">
+          <input type="checkbox" id="lgResultUnfinished">
+          <span><strong>El partido quedó inconcluso</strong> (por ejemplo, se acabó la hora de la cancha). Anota hasta donde llegaron: gana quien llevaba más sets y, si iban igualados, quien llevaba más games.</span>
+        </label>
         <table class="lg-score-table">
           <thead><tr><th></th><th>Set 1</th><th>Set 2</th><th>Set 3</th></tr></thead>
           <tbody>${row(a, 'a')}${row(b, 'b')}</tbody>
@@ -639,34 +643,55 @@
   }
 
   // Misma regla que validateLeagueSets() del backend.
-  function checkResultSets(sets) {
-    if (sets.length < 2) return { ok: false, msg: 'Anota al menos 2 sets.' };
-    let winsA = 0, winsB = 0;
+  function checkResultSets(sets, inconcluso) {
+    if (sets.length < (inconcluso ? 1 : 2)) return { ok: false, msg: inconcluso ? 'Anota al menos el primer set.' : 'Anota al menos 2 sets.' };
+    let winsA = 0, winsB = 0, gamesA = 0, gamesB = 0;
     for (let i = 0; i < sets.length; i++) {
       const { a, b } = sets[i];
       if (!Number.isInteger(a) || !Number.isInteger(b) || a < 0 || b < 0) return { ok: false, msg: `Completa el set ${i + 1}.` };
       const hi = Math.max(a, b), lo = Math.min(a, b);
       const regular = (hi === 6 && lo <= 4) || (hi === 7 && (lo === 5 || lo === 6));
       const superTiebreak = i === 2 && hi >= 10 && hi - lo >= 2 && (hi === 10 || hi - lo === 2);
-      if (!regular && !superTiebreak) return { ok: false, msg: `El set ${i + 1} (${a}-${b}) no es un marcador válido.` };
+      const complete = regular || superTiebreak;
+      const partial = inconcluso && i === sets.length - 1 && !complete;
       if (winsA === 2 || winsB === 2) return { ok: false, msg: 'El partido ya estaba definido en 2 sets: borra el 3er set.' };
-      if (a > b) winsA++; else winsB++;
+      if (partial) {
+        if (a + b === 0) return { ok: false, msg: `Borra el set ${i + 1}: no alcanzaron a jugar games.` };
+        if (hi > (i === 2 ? 20 : 6)) return { ok: false, msg: `El set ${i + 1} (${a}-${b}) no es un marcador válido.` };
+      } else if (!complete) {
+        return { ok: false, msg: inconcluso && i < sets.length - 1
+          ? `El set ${i + 1} (${a}-${b}) no está terminado: solo el último puede quedar a medias.`
+          : `El set ${i + 1} (${a}-${b}) no es un marcador válido.${inconcluso ? '' : ' Si se acabó la hora, marca «inconcluso».'}` };
+      }
+      if (complete) { if (a > b) winsA++; else winsB++; }
+      const tiebreak = superTiebreak && !regular;
+      gamesA += tiebreak ? (a > b ? 1 : 0) : a;
+      gamesB += tiebreak ? (b > a ? 1 : 0) : b;
     }
-    if (winsA < 2 && winsB < 2) return { ok: false, msg: 'Están 1 set a 1: falta el 3er set.' };
-    return { ok: true, winner: winsA > winsB ? 'a' : 'b' };
+    if (winsA === 2 || winsB === 2) return { ok: true, winner: winsA > winsB ? 'a' : 'b', inconcluso: false };
+    if (!inconcluso) return { ok: false, msg: 'Están 1 set a 1: falta el 3er set. Si se acabó la hora, marca «inconcluso».' };
+    if (winsA !== winsB) return { ok: true, winner: winsA > winsB ? 'a' : 'b', inconcluso: true };
+    if (gamesA !== gamesB) return { ok: true, winner: gamesA > gamesB ? 'a' : 'b', inconcluso: true, byGames: true };
+    return { ok: false, msg: 'Van empatados en sets y en games: terminen el partido o pidan a la comisión que lo resuelva.' };
+  }
+
+  function resultUnfinished() {
+    const box = document.getElementById('lgResultUnfinished');
+    return Boolean(box && box.checked);
   }
 
   function updateResultSummary() {
     const ctx = result.ctx;
     if (!ctx) return;
     const sets = readResultSets();
-    const check = sets.length ? checkResultSets(sets) : { ok: false, msg: 'Anota el marcador para ver el ganador.' };
+    const check = sets.length ? checkResultSets(sets, resultUnfinished()) : { ok: false, msg: 'Anota el marcador para ver el ganador.' };
     const summary = document.getElementById('lgResultSummary');
     const save = document.getElementById('lgResultSave');
     if (check.ok) {
       const winner = check.winner === 'a' ? ctx.a : ctx.b;
       const score = sets.map(set => check.winner === 'a' ? `${set.a}-${set.b}` : `${set.b}-${set.a}`).join(', ');
-      summary.innerHTML = `🏆 Gana <strong>${esc(winner.nombre)}</strong> · ${esc(score)}`;
+      summary.innerHTML = `🏆 Gana <strong>${esc(winner.nombre)}</strong> · ${esc(score)}${check.inconcluso
+        ? `<br><small>Inconcluso: iba adelante en ${check.byGames ? 'games (igualados en sets)' : 'sets'}.</small>` : ''}`;
       summary.className = 'lg-result-summary ok';
     } else {
       summary.textContent = check.msg;
@@ -678,7 +703,8 @@
   async function saveResult(btn) {
     const ctx = result.ctx;
     const sets = readResultSets();
-    const check = checkResultSets(sets);
+    const inconcluso = resultUnfinished();
+    const check = checkResultSets(sets, inconcluso);
     if (!ctx || !check.ok) return toast(check.msg || 'Revisa el marcador.', 'bad');
     const fecha = document.getElementById('lgResultDate').value;
     if (!fecha || fecha > L.todayIso()) return toast('Indica el día en que jugaron.', 'bad');
@@ -689,7 +715,7 @@
     btn.textContent = 'Guardando…';
     try {
       const data = await api('league_record_result', {
-        playerA: ref(ctx.a), playerB: ref(ctx.b), sets, fecha,
+        playerA: ref(ctx.a), playerB: ref(ctx.b), sets, fecha, inconcluso,
         genero: ctx.gender, temporada: season.id, temporadaInicio: season.inicio, ligaFecha: ctx.round.numero
       });
       const challenge = data.challenge;
@@ -1027,6 +1053,7 @@
       if (p.state === 'agendado' || p.state === 'invitado') foot = `📅 ${fmt(p.date)}${p.slot ? ` · ${esc(p.slot)}` : ''}${p.cancha ? ` · ${esc(p.cancha)}` : ''}`;
       if (p.state === 'wo_doble') foot = p.fueraDePlazo ? 'Se jugó fuera de plazo: no suma (bases §9)' : p.retiro ? 'Ambos retirados' : 'No se jugó dentro del plazo: 0 pts para ambos';
       if (p.state === 'wo' && p.retiro) foot = 'Rival retirado de la liga';
+      if (p.state === 'jugado' && p.inconcluso) foot = 'Inconcluso: se tomó hasta donde llegó';
       if (p.exception) foot = `${foot ? `${foot} · ` : ''}Plazo extendido al ${fmt(p.deadline)}`;
       if (state.isAdmin && canRecordResult(p, v.today, true)) {
         foot = `${foot ? `${foot} · ` : ''}<button class="lg-link" type="button" data-action="record-result" data-gender="${esc(v.gender)}" data-round="${round.numero}" data-a="${esc(p.a.key)}" data-b="${esc(p.b.key)}">Anotar resultado</button>`;

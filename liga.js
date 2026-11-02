@@ -286,13 +286,27 @@
     }).filter(Boolean);
   }
 
+  // Set terminado: a 6 (7-5 o 7-6 si se alarga) o súper tie-break en el 3º.
+  function isCompleteSet(a, b, index) {
+    const hi = Math.max(a, b), lo = Math.min(a, b);
+    return (hi === 6 && lo <= 4) || (hi === 7 && (lo === 5 || lo === 6)) || (index === 2 && hi >= 10 && hi - lo >= 2);
+  }
+
+  // Partido que no alcanzó a terminar (p. ej. se acabó la hora de la
+  // cancha): se anota hasta donde llegó y gana quien iba adelante.
+  function isUnfinishedMatch(match) {
+    return match?.inconcluso === true || match?.inconcluso === 'true' || /inconclus/i.test(String(match?.marcador || ''));
+  }
+
   // Sets y games desde la óptica del retador. El tercer set se juega a Tie
   // Break (bases §10): cuenta como set, pero solo como un game para no
-  // inflar la diferencia con los puntos del desempate.
-  function scoreStats(score) {
+  // inflar la diferencia con los puntos del desempate. En un partido
+  // inconcluso el set que quedó a medias suma games, pero no como set.
+  function scoreStats(score, unfinished) {
     return parseScore(score).reduce((stats, [a, b], index) => {
-      if (a > b) stats.setsA++;
-      if (b > a) stats.setsB++;
+      const countsAsSet = !unfinished || isCompleteSet(a, b, index);
+      if (countsAsSet && a > b) stats.setsA++;
+      if (countsAsSet && b > a) stats.setsB++;
       const isMatchTiebreak = index === 2 && Math.max(a, b) >= 10;
       stats.gamesA += isMatchTiebreak ? (a > b ? 1 : 0) : a;
       stats.gamesB += isMatchTiebreak ? (b > a ? 1 : 0) : b;
@@ -340,7 +354,8 @@
       if (!winnerSide) return { ...base, state: 'por_confirmar' };
       const loserSide = winnerSide === 'retador' ? 'retado' : 'retador';
       const isWo = match.status === 'wo_retador' || match.status === 'wo_retado';
-      const stats = scoreStats(match.marcador);
+      const inconcluso = isUnfinishedMatch(match);
+      const stats = scoreStats(match.marcador, inconcluso);
       const flip = winnerSide === 'retado';
       const sets = parseScore(match.marcador);
       return {
@@ -355,6 +370,7 @@
         setsBy: isWo ? {} : { [sides.retador.key]: sets.map(set => set[0]), [sides.retado.key]: sets.map(set => set[1]) },
         sets: isWo ? null : { winner: flip ? stats.setsB : stats.setsA, loser: flip ? stats.setsA : stats.setsB },
         games: isWo ? null : { winner: flip ? stats.gamesB : stats.gamesA, loser: flip ? stats.gamesA : stats.gamesB },
+        inconcluso: !isWo && inconcluso,
         date: played
       };
     }
@@ -754,7 +770,7 @@
     getSeason, todayIso, addDays, daysBetween, getRoundWindow, normalizeGender,
     playerKey, pairKey, getEnrollment, isEnrolled, entrantGender, getEntrants, buildRoundRobin,
     rankingPosition, assignGroups, mastersByGroup, groupOf,
-    isSeasonMatch, scoreStats, mastersSize, buildSeasonView, findEntrant,
+    isSeasonMatch, scoreStats, isUnfinishedMatch, mastersSize, buildSeasonView, findEntrant,
     getPlayerFixture, getSchedulablePairings,
     // Liga semanal (ciclo anterior)
     DEFAULT_RULES, getCycle, isLeagueMatch, calculateStandings
