@@ -730,6 +730,18 @@
     return { a, b, rival: mine ? b : a, round, deadline: p.deadline, gender, byCommission };
   }
 
+  // Mi partido sin resultado contra el rival de ese correo.
+  function resultContextWith(rivalEmail) {
+    if (!state.me) return null;
+    const gender = L.entrantGender(state.me, L.getEnrollment(state.me, season));
+    const v = view(gender);
+    const me = L.findEntrant(v, state.me);
+    if (!me) return null;
+    const item = L.getPlayerFixture(v, me).find(it => it.partido && it.rival && it.rival.email === rivalEmail &&
+      canRecordResult(it.partido, v.today));
+    return item ? resultContext({ dataset: { gender, round: String(item.round.numero), a: me.key, b: item.rival.key } }) : null;
+  }
+
   // ── Elegir una opción (aceptar) ───────────────────────────────────────
   function confirmAccept(proposal, opcion) {
     const option = (proposal.options || [])[opcion - 1];
@@ -802,8 +814,8 @@
   async function handleIntent() {
     const params = new URLSearchParams(location.search);
     let intent = null;
-    if (params.get('propuesta') || params.get('proponer')) {
-      intent = { propuesta: params.get('propuesta'), opcion: params.get('opcion'), proponer: params.get('proponer') };
+    if (params.get('propuesta') || params.get('proponer') || params.get('anotar')) {
+      intent = { propuesta: params.get('propuesta'), opcion: params.get('opcion'), proponer: params.get('proponer'), anotar: params.get('anotar') };
       history.replaceState(null, '', location.pathname + location.hash);
     } else {
       try { intent = JSON.parse(sessionStorage.getItem('uctenis_liga_intent') || 'null'); } catch (e) {}
@@ -816,6 +828,13 @@
     }
     try { sessionStorage.removeItem('uctenis_liga_intent'); } catch (e) {}
     try {
+      if (intent.anotar) {
+        // Enlace del correo "¿Cómo les fue?": abre directo el marcador.
+        const ctx = resultContextWith(String(intent.anotar).toLowerCase());
+        if (ctx) openResult(ctx);
+        else toast('Ese partido ya tiene resultado anotado.', 'ok');
+        return;
+      }
       if (intent.proponer) {
         const ctx = pairingWith({ key: intent.proponer, email: String(intent.proponer).toLowerCase() });
         if (ctx) openPropose(ctx);

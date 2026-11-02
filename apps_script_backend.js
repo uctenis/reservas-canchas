@@ -6316,6 +6316,54 @@ function leagueRecordResult(data) {
   }
 }
 
+// ── Recordatorio para anotar el resultado ────────────────────────────────
+
+const LEAGUE_RESULT_REMINDER_HOURS = 3;
+
+/**
+ * Partidos de liga agendados en la página que siguen sin resultado
+ * LEAGUE_RESULT_REMINDER_HOURS horas después de la hora reservada: se pide
+ * a ambos jugadores que anoten el marcador. Un solo correo por partido, y
+ * solo dentro de los 2 días siguientes (no se insiste con partidos viejos).
+ * Corre con su propio trigger cada 30 minutos (installLeagueResultReminderTrigger).
+ */
+function sendLeagueResultReminders() {
+  const nowMs = Date.now();
+  const sheet = getChallengesSheet();
+  const values = sheet.getDataRange().getValues();
+  let sent = 0;
+  for (let i = 1; i < values.length; i++) {
+    const c = challengeFromRow(values[i]);
+    if (!c.id || text(c.tipo) !== 'liga' || c.status !== 'aceptado') continue;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(text(c.fecha)) || !/^\d{1,2}:\d{2}$/.test(text(c.slot))) continue;
+    const dueMs = makeLocalDate(c.fecha, c.slot).getTime() + LEAGUE_RESULT_REMINDER_HOURS * 3600000;
+    if (nowMs < dueMs || nowMs > dueMs + 2 * 86400000) continue;
+    if (!leagueOnce('liga_anotar_' + c.id)) continue;
+    [{ email: c.retadorEmail, nombre: c.retadorNombre, rival: c.retadoNombre, rivalEmail: c.retadoEmail },
+     { email: c.retadoEmail, nombre: c.retadoNombre, rival: c.retadorNombre, rivalEmail: c.retadorEmail }].forEach(function(p) {
+      if (!p.email) return;
+      const link = LEAGUE_SITE_URL + 'liga.html?anotar=' + encodeURIComponent(text(p.rivalEmail).toLowerCase());
+      const ok = sendLeagueMail(p.email, '🎾 ¿Cómo les fue? Anota el resultado vs ' + p.rival,
+        leagueEmailHtml('¿Cómo les fue?', 'Hola <strong>' + escapeHtmlBday(text(p.nombre).split(' ')[0]) + '</strong>,', [
+          'Tu partido de liga contra <strong>' + escapeHtmlBday(p.rival) + '</strong> estaba agendado el ' + escapeHtmlBday(leagueDateLabel(c.fecha)) + ' a las ' + escapeHtmlBday(c.slot) + ' y todavía no tiene resultado.',
+          'Anótalo con el botón de abajo: escribes los games de cada set y listo. Basta con que lo haga <strong>uno de los dos</strong>; el otro lo confirma.',
+          'Si no alcanzaron a jugar, reagenden dentro del plazo de la fecha.'
+        ], leagueButton(link, 'Anotar resultado', true)));
+      if (ok) sent++;
+    });
+  }
+  return { ok: true, sent: sent };
+}
+
+/** Ejecutar UNA vez desde el editor: instala el trigger de
+ * sendLeagueResultReminders cada 30 minutos (no lo duplica si ya existe). */
+function installLeagueResultReminderTrigger() {
+  const exists = ScriptApp.getProjectTriggers().some(function(t) { return t.getHandlerFunction() === 'sendLeagueResultReminders'; });
+  if (exists) return 'El recordatorio de resultados ya estaba instalado.';
+  ScriptApp.newTrigger('sendLeagueResultReminders').timeBased().everyMinutes(30).create();
+  return 'Listo: recordatorio de resultados instalado (cada 30 minutos).';
+}
+
 // ── Avisos automáticos (trigger diario) ───────────────────────────────────
 
 function leagueAllPlayers() {
