@@ -188,6 +188,7 @@ function handleRequest(data) {
       case "league_my_proposals":    response = leagueMyProposals(data); break;
       case "league_get_proposal":    response = leagueGetProposal(data); break;
       case "league_accept_proposal": response = leagueAcceptProposal(data); break;
+      case "league_record_result":   response = leagueRecordResult(data); break;
       case "save_schedule_config":   response = saveScheduleConfig(data); break;
       case "get_schedule_config":    response = getScheduleConfigPublic(data.idToken); break;
       case "get_tournaments":        response = getTournaments(data); break;
@@ -6126,21 +6127,12 @@ function leagueAcceptProposal(data) {
     courtId: option.courtId, bookingId: challenge.bookingId, tipo: 'liga'
   });
 
-  // Espejo en Firestore (lo que leen la página de la liga y la portada).
-  const mirror = publicChallenge(challenge);
-  mirror.retadorEmail = challenge.retadorEmail;
-  mirror.retadoEmail = challenge.retadoEmail;
-  mirror.courtLabel = courtName;
-  mirror.ligaTemporada = text(proposal.temporada);
-  mirror.ligaFecha = Number(proposal.fecha) || 0;
-  mirror.propuestaId = proposal.id;
-  try {
-    const fields = {};
-    Object.keys(mirror).forEach(function(k) { fields[k] = jsToFirestoreValue(mirror[k]); });
-    UrlFetchApp.fetch('https://firestore.googleapis.com/v1/projects/' + encodeURIComponent(CONFIG.FIREBASE_PROJECT_ID)
-      + '/databases/(default)/documents/ranking_challenges/' + encodeURIComponent(challenge.id)
-      + '?key=' + encodeURIComponent(CONFIG.FIREBASE_API_KEY), bookingFetchOptions('patch', { fields: fields }));
-  } catch (e) { console.warn('Espejo Firestore del partido de liga:', e.message); }
+  const mirror = mirrorLeagueChallenge(challenge, {
+    courtLabel: courtName,
+    ligaTemporada: text(proposal.temporada),
+    ligaFecha: Number(proposal.fecha) || 0,
+    propuestaId: proposal.id
+  });
 
   proposal.status = 'aceptada';
   proposal.respondedAt = now;
@@ -6160,6 +6152,168 @@ function leagueAcceptProposal(data) {
   });
 
   return { ok: true, challenge: mirror, calendar: invite };
+}
+
+/** Espejo en Firestore de un partido de liga (lo que leen la página de la
+ * liga y la portada). Devuelve el registro público con los correos. */
+function mirrorLeagueChallenge(challenge, extra) {
+  const mirror = publicChallenge(challenge);
+  mirror.retadorEmail = challenge.retadorEmail;
+  mirror.retadoEmail = challenge.retadoEmail;
+  Object.keys(extra || {}).forEach(function(k) { mirror[k] = extra[k]; });
+  try {
+    const fields = {};
+    Object.keys(mirror).forEach(function(k) { fields[k] = jsToFirestoreValue(mirror[k]); });
+    UrlFetchApp.fetch('https://firestore.googleapis.com/v1/projects/' + encodeURIComponent(CONFIG.FIREBASE_PROJECT_ID)
+      + '/databases/(default)/documents/ranking_challenges/' + encodeURIComponent(challenge.id)
+      + '?key=' + encodeURIComponent(CONFIG.FIREBASE_API_KEY), bookingFetchOptions('patch', { fields: fields }));
+  } catch (e) { console.warn('Espejo Firestore del partido de liga:', e.message); }
+  return mirror;
+}
+
+/** Valida los sets de un partido de liga ([{a, b}], games de cada jugador).
+ * Sets normales a 6 (7-5 o 7-6 si se alarga); el 3er set puede ser
+ * súper tie-break a 10 (bases §10). Devuelve el ganador ('a' o 'b'). */
+function validateLeagueSets(sets) {
+  if (!Array.isArray(sets) || sets.length < 2 || sets.length > 3) return { ok: false, msg: 'Anota 2 o 3 sets.' };
+  let winsA = 0, winsB = 0;
+  for (let i = 0; i < sets.length; i++) {
+    const a = Number(sets[i].a), b = Number(sets[i].b);
+    if (!Number.isInteger(a) || !Number.isInteger(b) || a < 0 || b < 0) return { ok: false, msg: 'El set ' + (i + 1) + ' está incompleto.' };
+    const hi = Math.max(a, b), lo = Math.min(a, b);
+    const regular = (hi === 6 && lo <= 4) || (hi === 7 && (lo === 5 || lo === 6));
+    const superTiebreak = i === 2 && hi >= 10 && hi - lo >= 2 && (hi === 10 || hi - lo === 2);
+    if (!regular && !superTiebreak) return { ok: false, msg: 'El set ' + (i + 1) + ' (' + a + '-' + b + ') no es un marcador válido.' };
+    if (winsA === 2 || winsB === 2) return { ok: false, msg: 'El partido ya estaba definido en 2 sets.' };
+    if (a > b) winsA++; else winsB++;
+  }
+  if (winsA < 2 && winsB < 2) return { ok: false, msg: 'Falta el set que define el partido.' };
+  return { ok: true, winner: winsA > winsB ? 'a' : 'b' };
+}
+
+/**
+ * Anota el resultado de un partido de liga aunque no se haya agendado en
+ * línea (hay socios a los que la tecnología les cuesta). Si ya había una
+ * invitación o un partido agendado entre ambos, se completa ese mismo.
+ *  · Lo anota un jugador del partido → queda por confirmar: el rival lo
+ *    confirma o reclama desde el Ranking, y a las 48 h se confirma solo.
+ *  · Lo anota la comisión → queda confirmado de inmediato.
+ * data: { idToken, playerA: {id, nombre, email}, playerB, sets: [{a, b}],
+ *         fecha (día jugado), genero, temporada, temporadaInicio, ligaFecha }
+ */
+function leagueRecordResult(data) {
+  const email = verifyGoogleIdToken(data && data.idToken);
+  if (!email) return { ok: false, msg: 'Tu sesión de Google venció. Vuelve a ingresar.' };
+  const ref = function(p) { return { id: text(p && p.id), nombre: text(p && p.nombre), email: text(p && p.email).toLowerCase() }; };
+  const A = ref(data.playerA), B = ref(data.playerB);
+  if ((!A.id && !A.email) || (!B.id && !B.email) || isSamePlayerReference(A, B)) return { ok: false, msg: 'Jugadores no válidos.' };
+  const isPlayer = email === A.email || email === B.email;
+  // Un admin que juega el partido lo anota como cualquier jugador.
+  const byCommission = !isPlayer && isLeagueAdminRequest(data.idToken);
+  if (!isPlayer && !byCommission) return { ok: false, msg: 'Solo los jugadores del partido o la comisión pueden anotar este resultado.' };
+
+  const sets = (Array.isArray(data.sets) ? data.sets : []).map(function(set) { return { a: Number(set && set.a), b: Number(set && set.b) }; });
+  const check = validateLeagueSets(sets);
+  if (!check.ok) return check;
+  const fecha = text(data.fecha);
+  const today = Utilities.formatDate(new Date(), 'America/Santiago', 'yyyy-MM-dd');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return { ok: false, msg: 'Indica el día en que jugaron.' };
+  if (fecha > today) return { ok: false, msg: 'El día del partido no puede ser futuro.' };
+  const temporadaInicio = text(data.temporadaInicio);
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  try {
+    const sheet = getChallengesSheet();
+    const values = sheet.getDataRange().getValues();
+    let existing = null;
+    for (let i = 1; i < values.length; i++) {
+      const c = challengeFromRow(values[i]);
+      if (!c.id || text(c.tipo) !== 'liga') continue;
+      if (['eliminado', 'rechazado', 'vencido'].indexOf(c.status) >= 0) continue;
+      const involves = (challengePlayerMatchesRole(c, 'retador', A) && challengePlayerMatchesRole(c, 'retado', B)) ||
+        (challengePlayerMatchesRole(c, 'retador', B) && challengePlayerMatchesRole(c, 'retado', A));
+      if (!involves) continue;
+      if (c.status === 'pendiente' || c.status === 'aceptado') { existing = { rowNumber: i + 1, challenge: c }; continue; }
+      if (c.status === 'resultado_pendiente' || !temporadaInicio || text(c.fecha || c.fechaResultado) >= temporadaInicio) {
+        return { ok: false, msg: 'Este partido ya tiene un resultado anotado. Si no es correcto, reclámalo desde Ranking › Mis desafíos.' };
+      }
+    }
+
+    // El marcador se guarda desde la óptica del retador.
+    const flip = Boolean(existing && challengePlayerMatchesRole(existing.challenge, 'retador', B));
+    const retador = flip ? B : A, retado = flip ? A : B;
+    const marcador = sets.map(function(set) { return flip ? set.b + '-' + set.a : set.a + '-' + set.b; }).join(', ');
+    const winner = check.winner === 'a' ? A : B;
+    const now = new Date().toISOString();
+    const result = {
+      status: byCommission ? 'completado' : 'resultado_pendiente',
+      marcador: marcador,
+      ganadorId: winner.id || winner.email,
+      actualizado: now,
+      tipo: 'liga',
+      fechaResultado: now,
+      resultadoIngresadoPor: email,
+      resultadoIngresadoPorEmail: email,
+      fechaConfirmacion: byCommission ? now : '',
+      confirmadoPor: byCommission ? email : '',
+      resultadoReclamado: false,
+      reclamoResultado: '',
+      fechaReclamo: '',
+      reclamadoPor: ''
+    };
+
+    let challenge;
+    if (existing) {
+      setChallengeRowPatch(sheet, existing.rowNumber, result);
+      sheet.getRange(existing.rowNumber, 9).setValue(fecha);
+      challenge = Object.assign({}, existing.challenge, result, { fecha: fecha });
+      // Jugaron antes de la hora reservada: se libera esa cancha.
+      if (challenge.bookingId && text(existing.challenge.fecha) > today) {
+        try { releaseChallengeBooking(challenge.bookingId, challenge.courtId); } catch (e) { console.warn('Liberar cancha del partido de liga:', e.message); }
+      }
+    } else {
+      challenge = Object.assign({
+        id: 'chal-' + Date.now(),
+        retadorId: retador.id, retadorNombre: retador.nombre, retadorEmail: retador.email,
+        retadoId: retado.id, retadoNombre: retado.nombre, retadoEmail: retado.email,
+        genero: text(data.genero), fecha: fecha, cancha: '', creado: now,
+        slot: '', courtId: '', eventId: '', bookingId: '', rankingAplicado: ''
+      }, result);
+      sheet.appendRow(challengeToRow(challenge));
+    }
+
+    const mirror = mirrorLeagueChallenge(challenge, {
+      ligaTemporada: text(data.temporada),
+      ligaFecha: Number(data.ligaFecha) || 0,
+      resultadoIngresadoPorNombre: byCommission ? 'Comisión organizadora' : (email === A.email ? A.nombre : B.nombre)
+    });
+
+    // Aviso a ambos jugadores, con el marcador desde la óptica del ganador.
+    const winnerScore = sets.map(function(set) { return check.winner === 'a' ? set.a + '-' + set.b : set.b + '-' + set.a; }).join(', ');
+    const scoreBox = '<span style="display:block;padding:14px;border-radius:12px;background:#fef3c7;color:#78350f;font-size:17px;font-weight:bold;text-align:center;">🏆 ' +
+      escapeHtmlBday(winner.nombre) + ' · ' + escapeHtmlBday(winnerScore) + '</span>';
+    [{ me: A, rival: B }, { me: B, rival: A }].forEach(function(p) {
+      if (!p.me.email) return;
+      const reportedByMe = p.me.email === email;
+      const next = byCommission
+        ? 'Lo anotó la comisión organizadora y ya suma en la tabla de la liga.'
+        : reportedByMe
+          ? escapeHtmlBday(p.rival.nombre.split(' ')[0]) + ' tiene 48 horas para confirmarlo; si no responde, se confirma solo.'
+          : 'Si está bien, no tienes que hacer nada: se confirma solo en 48 horas (o confírmalo ya en Ranking › Mis desafíos). Si <strong>no</strong> es correcto, reclámalo ahí mismo dentro de ese plazo.';
+      const toLeague = byCommission || reportedByMe;
+      sendLeagueMail(p.me.email, '🎾 Liga: resultado ' + A.nombre + ' vs ' + B.nombre,
+        leagueEmailHtml(byCommission ? 'Resultado registrado' : 'Resultado anotado', 'Hola <strong>' + escapeHtmlBday(p.me.nombre.split(' ')[0]) + '</strong>,', [
+          'Se anotó el resultado de tu partido de liga contra <strong>' + escapeHtmlBday(p.rival.nombre) + '</strong>, jugado el ' + escapeHtmlBday(leagueDateLabel(fecha)) + ':',
+          scoreBox,
+          next
+        ], leagueButton(LEAGUE_SITE_URL + (toLeague ? 'liga.html' : 'ranking.html#desafios'), toLeague ? 'Ver la liga' : 'Revisar resultado', true)));
+    });
+
+    return { ok: true, challenge: mirror, pending: !byCommission };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 // ── Avisos automáticos (trigger diario) ───────────────────────────────────

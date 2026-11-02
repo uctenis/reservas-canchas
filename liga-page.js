@@ -238,6 +238,9 @@
       const opensIn = L.daysBetween(v.today, r.window.start);
       const closesIn = L.daysBetween(v.today, p.deadline);
       const canSchedule = ['por_agendar', 'proximo'].includes(p.state) && r.window.start <= L.addDays(v.today, 10);
+      const resultButton = (label, ghost) => canRecordResult(p, v.today)
+        ? `<button class="lg-btn ${ghost ? 'ghost' : ''}" type="button" data-action="record-result" data-gender="${esc(gender)}" data-round="${r.numero}" data-a="${esc(entrant.key)}" data-b="${esc(rival.key)}">${label}</button>`
+        : '';
       let detail = '';
       let action = '';
       if (p.state === 'por_agendar' || p.state === 'proximo') {
@@ -248,15 +251,16 @@
               <button class="lg-btn" type="button" data-action="propose" data-rival="${esc(rival.key)}">${sentToRival ? 'Cambiar mi propuesta' : '📅 Proponer horarios'}</button>
               <a class="lg-btn ghost" href="${scheduleLink(rival)}">Reservar directo</a>
             </div>
-            <p class="lg-hint">Propón hasta 3 horarios con cancha libre y ${esc(rival.nombre.split(' ')[0])} elige uno con un clic desde su correo.</p>`
+            <p class="lg-hint">Propón hasta 3 horarios con cancha libre y ${esc(rival.nombre.split(' ')[0])} elige uno con un clic desde su correo.</p>
+            ${resultButton('🎾 Ya jugamos: anotar resultado', true) ? `<p class="lg-hint">¿Lo coordinaron por fuera y ya jugaron? ${resultButton('🎾 Ya jugamos: anotar resultado', true)}</p>` : ''}`
           : `<span class="lg-muted">Podrás agendarlo desde el ${fmtLong(L.addDays(r.window.start, -10))}.</span>`;
       } else if (p.state === 'invitado') {
         const mine = p.invitedBy && p.invitedBy.key === entrant.key;
         detail = `${mine ? `Esperando que ${esc(rival.nombre)} acepte` : `${esc(rival.nombre)} te invitó`} para el ${fmtLong(p.date)}${p.slot ? ` a las ${esc(p.slot)}` : ''}.`;
-        action = `<a class="lg-btn ${mine ? 'ghost' : ''}" href="ranking.html">${mine ? 'Ver invitación' : 'Responder invitación'}</a>`;
+        action = `<div class="lg-inline lg-next-actions"><a class="lg-btn ${mine ? 'ghost' : ''}" href="ranking.html">${mine ? 'Ver invitación' : 'Responder invitación'}</a>${resultButton('🎾 Ya jugamos: anotar resultado', true)}</div>`;
       } else if (p.state === 'agendado') {
         detail = `Juegan el ${fmtLong(p.date)}${p.slot ? ` a las ${esc(p.slot)}` : ''}${p.cancha ? ` · ${esc(p.cancha)}` : ''}. Al terminar, registra el resultado.`;
-        action = `<a class="lg-btn" href="ranking.html">Registrar resultado</a>`;
+        action = resultButton('🎾 Anotar resultado') || `<a class="lg-btn" href="ranking.html">Registrar resultado</a>`;
       } else if (p.state === 'por_confirmar') {
         detail = 'Hay un resultado registrado esperando confirmación (se confirma solo a las 48 horas).';
         action = `<a class="lg-btn ghost" href="ranking.html">Revisar resultado</a>`;
@@ -418,7 +422,7 @@
       document.body.appendChild(dlg);
       dlg.addEventListener('click', onDialogClick);
       dlg.addEventListener('input', event => { if (event.target.id === 'lgProposeNote') propose.note = event.target.value; });
-      dlg.addEventListener('close', () => { propose.ctx = null; dlg.onconfirm = null; });
+      dlg.addEventListener('close', () => { propose.ctx = null; result.ctx = null; dlg.onconfirm = null; dlg.oninput = null; });
     }
     return dlg;
   }
@@ -563,6 +567,167 @@
       propose.slots = {};
       if (propose.day) loadDay(propose.day);
     }
+  }
+
+  // ── Anotar un resultado sin haber agendado en línea ───────────────────
+  // Hay socios a los que la tecnología les cuesta: coordinan por teléfono,
+  // juegan y después uno de los dos (o la comisión) anota el marcador.
+  function canRecordResult(p, today, asAdmin) {
+    if (!p || p.match && ['completado', 'wo_retador', 'wo_retado', 'resultado_pendiente'].includes(p.match.status)) return false;
+    if (p.retiro || p.fueraDePlazo || today < p.window.start) return false;
+    if (['por_agendar', 'invitado', 'agendado'].includes(p.state)) return true;
+    // Fecha vencida sin resultado: solo la comisión puede anotarlo tarde.
+    return Boolean(asAdmin && p.state === 'wo_doble');
+  }
+
+  const result = { ctx: null };
+
+  function openResult(ctx) {
+    result.ctx = ctx;
+    const { a, b, round } = ctx;
+    const today = L.todayIso();
+    const dlg = dialog();
+    const row = (entrant, side) => `
+      <tr><th scope="row">${avatar(entrant, 'sm')}<span>${esc(entrant.nombre)}</span></th>
+        ${[0, 1, 2].map(i => `<td><input type="number" inputmode="numeric" min="0" max="20" data-set="${i}" data-side="${side}" aria-label="${esc(entrant.nombre)} · set ${i + 1}"></td>`).join('')}</tr>`;
+    dlg.innerHTML = `
+      <div class="lg-dialog-inner lg-result">
+        <div class="lg-dialog-head">
+          <div><span class="lg-eyebrow">Fecha ${round.numero} · Campeonato de Liga</span><h3>Anotar resultado</h3></div>
+          <button class="lg-dialog-x" type="button" data-confirm="no" aria-label="Cerrar">×</button>
+        </div>
+        <p class="lg-dialog-intro">Escribe los games de cada set. Si hubo 3er set, se juega a súper tie-break (a 10): anota esos puntos, por ejemplo 10-7.</p>
+        <table class="lg-score-table">
+          <thead><tr><th></th><th>Set 1</th><th>Set 2</th><th>Set 3</th></tr></thead>
+          <tbody>${row(a, 'a')}${row(b, 'b')}</tbody>
+        </table>
+        <label class="lg-result-date">Día en que jugaron
+          <input type="date" id="lgResultDate" value="${esc(today)}" min="${esc(round.window.start)}" max="${esc(today)}">
+        </label>
+        <p class="lg-result-summary" id="lgResultSummary" aria-live="polite">Anota el marcador para ver el ganador.</p>
+        <p class="lg-muted">${ctx.byCommission
+          ? 'Lo anotas como comisión: queda confirmado de inmediato y ambos jugadores reciben un correo.'
+          : `${esc(ctx.rival.nombre.split(' ')[0])} recibe un correo y tiene 48 horas para confirmarlo o reclamarlo; si no responde, se confirma solo.`}</p>
+        <div class="lg-dialog-foot">
+          <button type="button" class="lg-btn ghost" data-confirm="no">Cancelar</button>
+          <button type="button" class="lg-btn" data-confirm="yes" id="lgResultSave" disabled>Guardar resultado</button>
+        </div>
+      </div>`;
+    dlg.oninput = updateResultSummary;
+    dlg.onconfirm = async event => {
+      const btn = event.target.closest('[data-confirm]');
+      if (!btn || state.busy) return;
+      if (btn.dataset.confirm === 'no') { dlg.close(); return; }
+      await saveResult(btn);
+    };
+    if (!dlg.open) dlg.showModal();
+    const first = dlg.querySelector('input[data-set="0"][data-side="a"]');
+    if (first) first.focus();
+  }
+
+  // Sets con algún número escrito, como [{a, b}] (vacío = incompleto).
+  function readResultSets() {
+    const dlg = dialog();
+    const sets = [];
+    for (let i = 0; i < 3; i++) {
+      const a = dlg.querySelector(`input[data-set="${i}"][data-side="a"]`).value;
+      const b = dlg.querySelector(`input[data-set="${i}"][data-side="b"]`).value;
+      if (a === '' && b === '') continue;
+      sets.push({ a: a === '' ? NaN : Number(a), b: b === '' ? NaN : Number(b) });
+    }
+    return sets;
+  }
+
+  // Misma regla que validateLeagueSets() del backend.
+  function checkResultSets(sets) {
+    if (sets.length < 2) return { ok: false, msg: 'Anota al menos 2 sets.' };
+    let winsA = 0, winsB = 0;
+    for (let i = 0; i < sets.length; i++) {
+      const { a, b } = sets[i];
+      if (!Number.isInteger(a) || !Number.isInteger(b) || a < 0 || b < 0) return { ok: false, msg: `Completa el set ${i + 1}.` };
+      const hi = Math.max(a, b), lo = Math.min(a, b);
+      const regular = (hi === 6 && lo <= 4) || (hi === 7 && (lo === 5 || lo === 6));
+      const superTiebreak = i === 2 && hi >= 10 && hi - lo >= 2 && (hi === 10 || hi - lo === 2);
+      if (!regular && !superTiebreak) return { ok: false, msg: `El set ${i + 1} (${a}-${b}) no es un marcador válido.` };
+      if (winsA === 2 || winsB === 2) return { ok: false, msg: 'El partido ya estaba definido en 2 sets: borra el 3er set.' };
+      if (a > b) winsA++; else winsB++;
+    }
+    if (winsA < 2 && winsB < 2) return { ok: false, msg: 'Están 1 set a 1: falta el 3er set.' };
+    return { ok: true, winner: winsA > winsB ? 'a' : 'b' };
+  }
+
+  function updateResultSummary() {
+    const ctx = result.ctx;
+    if (!ctx) return;
+    const sets = readResultSets();
+    const check = sets.length ? checkResultSets(sets) : { ok: false, msg: 'Anota el marcador para ver el ganador.' };
+    const summary = document.getElementById('lgResultSummary');
+    const save = document.getElementById('lgResultSave');
+    if (check.ok) {
+      const winner = check.winner === 'a' ? ctx.a : ctx.b;
+      const score = sets.map(set => check.winner === 'a' ? `${set.a}-${set.b}` : `${set.b}-${set.a}`).join(', ');
+      summary.innerHTML = `🏆 Gana <strong>${esc(winner.nombre)}</strong> · ${esc(score)}`;
+      summary.className = 'lg-result-summary ok';
+    } else {
+      summary.textContent = check.msg;
+      summary.className = 'lg-result-summary';
+    }
+    save.disabled = !check.ok;
+  }
+
+  async function saveResult(btn) {
+    const ctx = result.ctx;
+    const sets = readResultSets();
+    const check = checkResultSets(sets);
+    if (!ctx || !check.ok) return toast(check.msg || 'Revisa el marcador.', 'bad');
+    const fecha = document.getElementById('lgResultDate').value;
+    if (!fecha || fecha > L.todayIso()) return toast('Indica el día en que jugaron.', 'bad');
+    if (fecha > ctx.deadline && !confirm(`El plazo de esta fecha era hasta el ${fmtLong(ctx.deadline)}. Según las bases, un partido jugado fuera de plazo no suma puntos. ¿Anotarlo igual?`)) return;
+    const ref = entrant => ({ id: entrant.id, nombre: entrant.nombre, email: entrant.email });
+    state.busy = true;
+    btn.disabled = true;
+    btn.textContent = 'Guardando…';
+    try {
+      const data = await api('league_record_result', {
+        playerA: ref(ctx.a), playerB: ref(ctx.b), sets, fecha,
+        genero: ctx.gender, temporada: season.id, temporadaInicio: season.inicio, ligaFecha: ctx.round.numero
+      });
+      const challenge = data.challenge;
+      if (challenge) {
+        state.matches = [...state.matches.filter(m => m.id !== challenge.id), challenge];
+        if (DB.isCloudConfigured() && DB.saveChallengeCloud) DB.saveChallengeCloud(challenge).catch(() => {});
+      }
+      const dlg = dialog();
+      if (dlg.open) dlg.close();
+      toast(data.pending
+        ? `¡Resultado anotado! ${ctx.rival.nombre.split(' ')[0]} tiene 48 horas para confirmarlo.`
+        : 'Resultado registrado y confirmado. Ya suma en la tabla.');
+    } catch (err) {
+      toast(err.message, 'bad');
+      btn.disabled = false;
+      btn.textContent = 'Guardar resultado';
+    } finally {
+      state.busy = false;
+      render();
+    }
+  }
+
+  function resultContext(button) {
+    const gender = button.dataset.gender || state.gender;
+    const v = view(gender);
+    const round = v.rounds[Number(button.dataset.round) - 1];
+    const p = round && round.partidos.find(item =>
+      (item.a.key === button.dataset.a && item.b.key === button.dataset.b) ||
+      (item.a.key === button.dataset.b && item.b.key === button.dataset.a));
+    if (!p) return null;
+    const meEntrant = state.me ? L.findEntrant(v, state.me) : null;
+    const mine = Boolean(meEntrant && (meEntrant.key === p.a.key || meEntrant.key === p.b.key));
+    const byCommission = state.isAdmin && !mine;
+    if (!canRecordResult(p, v.today, byCommission)) return null;
+    // El jugador que anota va primero; la comisión respeta el orden del fixture.
+    const a = mine && meEntrant.key === p.b.key ? p.b : p.a;
+    const b = a === p.a ? p.b : p.a;
+    return { a, b, rival: mine ? b : a, round, deadline: p.deadline, gender, byCommission };
   }
 
   // ── Elegir una opción (aceptar) ───────────────────────────────────────
@@ -844,6 +1009,9 @@
       if (p.state === 'wo_doble') foot = p.fueraDePlazo ? 'Se jugó fuera de plazo: no suma (bases §9)' : p.retiro ? 'Ambos retirados' : 'No se jugó dentro del plazo: 0 pts para ambos';
       if (p.state === 'wo' && p.retiro) foot = 'Rival retirado de la liga';
       if (p.exception) foot = `${foot ? `${foot} · ` : ''}Plazo extendido al ${fmt(p.deadline)}`;
+      if (state.isAdmin && canRecordResult(p, v.today, true)) {
+        foot = `${foot ? `${foot} · ` : ''}<button class="lg-link" type="button" data-action="record-result" data-gender="${esc(v.gender)}" data-round="${round.numero}" data-a="${esc(p.a.key)}" data-b="${esc(p.b.key)}">Anotar resultado</button>`;
+      }
       return `
         <article class="lg-match ${p.state}">
           <header>${chip(p.state)}${p.date && final ? `<small>${fmt(p.date)}</small>` : ''}</header>
@@ -1010,7 +1178,7 @@
           <span class="lg-inline"><input type="date" value="${esc(p.exception || L.addDays(L.todayIso(), 7))}" data-exception-date="${esc(p.a.id)}|${esc(p.b.id)}" aria-label="Nuevo plazo">
           <button class="lg-link" type="button" data-action="admin-exception" data-a="${esc(p.a.id)}" data-b="${esc(p.b.id)}">${p.exception ? 'Cambiar plazo' : 'Extender plazo'}</button></span>
         </li>`).join('')}</ul>` : '<p class="lg-muted">No hay partidos vencidos sin jugar.</p>'}
-      <p class="lg-legend">Los resultados, W.O. y correcciones de marcador se registran como cualquier partido desde el panel del Ranking.</p>`;
+      <p class="lg-legend">Para anotar el resultado de un partido que no se agendó en línea, usa «Anotar resultado» en la pestaña Fixture: queda confirmado de inmediato. Los W.O. y las correcciones de marcador se hacen desde el panel del Ranking.</p>`;
   }
 
   // ── Pintado general ───────────────────────────────────────────────────
@@ -1085,6 +1253,12 @@
       const ctx = pairingWith({ key: button.dataset.rival, email: button.dataset.rivalEmail });
       if (ctx) openPropose(ctx);
       else toast('Ya no tienes un partido pendiente con ese rival.', 'bad');
+      return;
+    }
+    if (action === 'record-result') {
+      const ctx = resultContext(button);
+      if (ctx) openResult(ctx);
+      else toast('Ese partido ya tiene un resultado o todavía no se puede anotar.', 'bad');
       return;
     }
     if (action === 'accept-proposal' || action === 'counter-proposal') {

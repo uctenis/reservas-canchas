@@ -366,3 +366,17 @@ button.lg-option:hover small, button.lg-option:hover span { color:#0a1712; }
   .lg-wa { display:flex; justify-content:center; text-align:center; }
 }
 @media (prefers-reduced-motion: reduce) { .lg-dialog[open], .lg-loading { animation:none; } button.lg-option { transition:none; } }
+
+/* Anotar resultado (partido coordinado fuera de la página) */
+.lg-score-table { width:100%; border-collapse:separate; border-spacing:6px; }
+.lg-score-table thead th { font-size:.72rem; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:var(--text-secondary, #9fb0a6); text-align:center; }
+.lg-score-table tbody th { text-align:left; font-weight:700; }
+.lg-score-table tbody th > span:last-child { display:inline-block; vertical-align:middle; margin-left:8px; max-width:9.5em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.lg-score-table input { width:100%; min-width:44px; height:48px; border-radius:10px; border:1px solid var(--line-strong, rgba(255,255,255,.18)); background:rgba(255,255,255,.05); color:#fff; font:inherit; font-size:1.3rem; font-weight:900; text-align:center; -moz-appearance:textfield; }
+.lg-score-table input::-webkit-outer-spin-button, .lg-score-table input::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
+.lg-score-table input:focus { outline:2px solid var(--lg-amber, #f59e0b); outline-offset:1px; }
+.lg-result-date { display:flex; flex-direction:column; gap:6px; font-size:.85rem; font-weight:700; }
+.lg-result-date input { height:44px; padding:0 12px; border-radius:10px; border:1px solid var(--line-strong, rgba(255,255,255,.18)); background:rgba(255,255,255,.05); color:#fff; font:inherit; color-scheme:dark; }
+.lg-result-summary { margin:0; padding:12px 14px; border-radius:12px; background:rgba(255,255,255,.05); font-size:.92rem; }
+.lg-result-summary.ok { background:var(--lg-amber-soft, rgba(245,158,11,.12)); border:1px solid var(--lg-amber-line, rgba(245,158,11,.32)); }
+@media (max-width: 420px) { .lg-score-table tbody th > span:last-child { max-width:6em; } .lg-score-table input { min-width:38px; } }
