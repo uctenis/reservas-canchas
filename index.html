@@ -113,6 +113,34 @@
     @keyframes launch-pulse { 0%,100% { box-shadow:0 0 0 0 rgba(239,68,68,.55); } 50% { box-shadow:0 0 0 5px rgba(239,68,68,0); } }
     @media (max-width: 900px) { .actions-hero-grid { grid-template-columns:1fr 1fr; } .hero-card:first-child { grid-column:1 / -1; } }
     @media (max-width: 600px) { .actions-hero-grid { grid-template-columns:1fr; } .hero-card:first-child { grid-column:auto; } .club-sport-launch { align-items:flex-start; flex-direction:column; } .club-sport-launch a { width:100%; text-align:center; } }
+    /* Fecha de la liga en juego: tu partido, próximos partidos y avance */
+    .home-league-round { margin:-6px 0 22px; padding:16px 18px; border:1px solid rgba(245,158,11,.3); border-radius:14px; background:linear-gradient(160deg, rgba(120,53,15,.28), rgba(7,18,14,.6)); }
+    .hlr-head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:10px; }
+    .hlr-head h2 { margin:0; font-size:1rem; color:#fde68a; }
+    .hlr-chip { font-size:.72rem; font-weight:900; padding:4px 10px; border-radius:999px; background:rgba(245,158,11,.16); color:#fbbf24; white-space:nowrap; }
+    .hlr-chip.urgent { background:rgba(239,68,68,.18); color:#fca5a5; }
+    .hlr-progress { height:8px; border-radius:999px; background:rgba(255,255,255,.08); overflow:hidden; }
+    .hlr-progress span { display:block; height:100%; background:linear-gradient(90deg,#f59e0b,#c6d300); border-radius:inherit; }
+    .hlr-progress-text { margin:6px 0 14px; font-size:.78rem; color:var(--text-secondary); }
+    .hlr-progress-text strong { color:var(--text-primary); }
+    .hlr-grid { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:14px; }
+    .hlr-box { padding:13px 14px; border-radius:12px; background:rgba(4,11,8,.45); border:1px solid var(--line); min-width:0; }
+    .hlr-box.mine { border-color:rgba(245,158,11,.45); }
+    .hlr-kicker { font-size:.66rem; font-weight:900; letter-spacing:.1em; text-transform:uppercase; color:#fbbf24; margin-bottom:6px; }
+    .hlr-box p { margin:0 0 10px; font-size:.86rem; line-height:1.5; color:var(--text-secondary); }
+    .hlr-box p strong { color:var(--text-primary); }
+    .hlr-actions { display:flex; gap:8px; flex-wrap:wrap; }
+    .hlr-btn { display:inline-block; padding:8px 13px; border-radius:8px; font-size:.78rem; font-weight:900; text-decoration:none; background:#f59e0b; color:#0a1712; }
+    .hlr-btn.ghost { background:transparent; color:#fde68a; border:1px solid rgba(245,158,11,.5); }
+    .hlr-list { list-style:none; margin:0; padding:0; display:grid; gap:7px; }
+    .hlr-list li { display:flex; gap:10px; align-items:baseline; font-size:.82rem; color:var(--text-primary); min-width:0; }
+    .hlr-when { flex-shrink:0; min-width:92px; font-weight:800; color:#fbbf24; font-size:.76rem; }
+    .hlr-who { min-width:0; overflow-wrap:anywhere; }
+    .hlr-who small { display:block; color:var(--text-muted); font-size:.72rem; }
+    .hlr-empty { font-size:.82rem; color:var(--text-secondary); margin:0; }
+    .hlr-nudge { margin:12px 0 0; font-size:.8rem; color:var(--text-secondary); }
+    .hlr-nudge strong { color:#fde68a; }
+    @media (max-width: 700px) { .hlr-grid { grid-template-columns:1fr; } .hlr-btn { flex:1 1 auto; text-align:center; } }
 
     /* ── Dashboard Layout (70/30 Split) ── */
     .dashboard-layout {
@@ -1353,6 +1381,9 @@
       <a href="liga.html">Conocer la liga</a>
     </div>
 
+    <!-- ── FECHA DE LA LIGA EN JUEGO (la llena renderHomeLeagueRound) ── -->
+    <section class="home-league-round" id="homeLeagueRound" hidden aria-live="polite"></section>
+
     <!-- ── ACTIONS HERO GRID (Reservar Cancha + Escalerilla + Liga) ── -->
     <div class="actions-hero-grid">
       <section class="home-tournament-spotlight" id="homeTournamentSpotlight" aria-live="polite">
@@ -2075,6 +2106,152 @@ function renderClubSportLaunchBanner() {
   }
 }
 
+// ── Fecha de la liga en juego ──────────────────────────────────────────
+// Bajo el aviso de la liga: el partido del socio con su siguiente paso,
+// los próximos partidos agendados del club y cuánto falta para cerrar la
+// fecha, para empujar a agendar y jugar a tiempo.
+function homeLeagueDayLabel(iso, today) {
+  if (!iso) return '';
+  if (iso === today) return 'Hoy';
+  if (UCTennisLeague.daysBetween(today, iso) === 1) return 'Mañana';
+  const [y, m, d] = iso.split('-').map(Number);
+  const date = new Date(y, m - 1, d);
+  const days = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+  const months = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+  return `${days[date.getDay()]} ${d} ${months[m - 1]}`;
+}
+
+function homeLeagueSlot(slot) {
+  return /^\d{1,2}:\d{2}$/.test(String(slot || '')) ? slot : '';
+}
+
+function homeLeagueMineHtml(views, today, session) {
+  const L = UCTennisLeague;
+  if (!session) {
+    return `<div class="hlr-box mine"><div class="hlr-kicker">Tu partido</div>
+      <p>Ingresa con tu cuenta del club para ver a tu rival de esta fecha y agendar con un clic.</p>
+      <div class="hlr-actions"><button type="button" class="hlr-btn" data-open-home-auth>Iniciar sesión</button></div></div>`;
+  }
+  let found = null;
+  views.forEach(view => {
+    if (found) return;
+    const entrant = L.findEntrant(view, { id: session.id, email: session.email });
+    if (!entrant || entrant.retirado) return;
+    const items = L.getPlayerFixture(view, entrant).filter(item => item.round.open);
+    if (!items.length) return;
+    // Primero lo que falta por hacer; si ya cumplió, lo último jugado.
+    const pending = items.find(item => item.partido && !['jugado', 'wo', 'wo_doble'].includes(item.partido.state));
+    found = { entrant, item: pending || items[items.length - 1] };
+  });
+  if (!found) return '';
+
+  const { entrant, item } = found;
+  const kicker = `<div class="hlr-kicker">Tu partido · Fecha ${item.round.numero}</div>`;
+  if (item.libre || !item.partido) {
+    return `<div class="hlr-box mine">${kicker}<p>Esta fecha <strong>descansas</strong>. Aprovecha de entrenar: la próxima vuelves a la cancha.</p>
+      <div class="hlr-actions"><a class="hlr-btn ghost" href="reservas.html">Reservar cancha para entrenar</a></div></div>`;
+  }
+  const p = item.partido;
+  const rival = item.rival;
+  const rivalName = `<strong>${escapeHTML(rival.nombre)}</strong>`;
+  const proposeUrl = `liga.html?proponer=${encodeURIComponent(rival.id || rival.email)}`;
+  const resultUrl = rival.email ? `liga.html?anotar=${encodeURIComponent(rival.email)}` : 'liga.html#fixture';
+  const resultBtn = `<a class="hlr-btn ghost" href="${resultUrl}">🎾 Ya jugamos: anotar resultado</a>`;
+  // En medio de una frase: "hoy a las 18:00", "mañana", "Sáb 7 nov".
+  const when = [homeLeagueDayLabel(p.date, today).replace(/^(Hoy|Mañana)$/, s => s.toLowerCase()), homeLeagueSlot(p.slot) && `a las ${homeLeagueSlot(p.slot)}`].filter(Boolean).join(' ');
+  const where = p.cancha ? ` en ${escapeHTML(p.cancha)}` : '';
+  const deadline = formatDateShort(p.deadline);
+
+  let body = '', actions = '';
+  if (p.state === 'por_agendar' || p.state === 'proximo') {
+    body = `Te toca contra ${rivalName} y aún no tienen día. Plazo: <strong>${deadline}</strong>. Propón 3 horarios con cancha libre y tu rival elige uno con un clic.`;
+    actions = `<a class="hlr-btn" href="${proposeUrl}">📅 Proponer horarios</a>${resultBtn}`;
+  } else if (p.state === 'invitado') {
+    const iInvited = p.invitedBy && p.invitedBy.key === entrant.key;
+    body = iInvited
+      ? `Invitaste a ${rivalName}${when ? ` para el <strong>${escapeHTML(when)}</strong>` : ''} y aún no responde. ¡Escríbele para confirmarlo!`
+      : `${rivalName} te invitó a jugar${when ? ` el <strong>${escapeHTML(when)}</strong>` : ''}. ¡Respóndele para dejarlo agendado!`;
+    actions = `<a class="hlr-btn" href="ranking.html#desafios">${iInvited ? 'Ver mi invitación' : 'Responder invitación'}</a>${resultBtn}`;
+  } else if (p.state === 'agendado') {
+    // Ya jugado: un día anterior o, si es hoy, pasada la hora y media del bloque.
+    const slot = homeLeagueSlot(p.slot);
+    const now = new Date();
+    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+    const slotEnd = slot ? Number(slot.split(':')[0]) * 60 + Number(slot.split(':')[1]) + 90 : 24 * 60;
+    const played = p.date && (p.date < today || (p.date === today && nowMinutes >= slotEnd));
+    body = `${p.date === today && !played ? '¡Hoy juegas! ' : ''}Tu partido contra ${rivalName} es ${when ? `<strong>${escapeHTML(when)}</strong>` : 'pronto'}${where}. ${played ? '¿Cómo les fue? Anótalo apenas terminen.' : 'Lleva pelotas y ¡éxito!'}`;
+    actions = played ? `<a class="hlr-btn" href="${resultUrl}">🎾 Anotar resultado</a>` : `<a class="hlr-btn ghost" href="liga.html">Ver mi liga</a>`;
+  } else if (p.state === 'por_confirmar') {
+    body = `Ya está anotado tu partido contra ${rivalName}. Falta la confirmación (se confirma solo en 48 h).`;
+    actions = `<a class="hlr-btn ghost" href="ranking.html#desafios">Revisar resultado</a>`;
+  } else if (p.state === 'jugado' || p.state === 'wo') {
+    const won = p.winner && p.winner.key === entrant.key;
+    body = `✅ Ya jugaste esta fecha contra ${rivalName}: ${won ? '<strong>ganaste</strong>' : `ganó ${escapeHTML(p.winner ? p.winner.nombre : '')}`}${p.winnerScore ? ` (${escapeHTML(p.winnerScore)}${p.inconcluso ? ', inconcluso' : ''})` : ''}. ${won ? '¡Sumaste 3 puntos!' : 'Sumaste 1 punto: la próxima es tuya.'}`;
+    actions = `<a class="hlr-btn ghost" href="liga.html">Ver la tabla</a>`;
+  } else {
+    body = `Tu partido contra ${rivalName} quedó sin jugar.`;
+    actions = `<a class="hlr-btn ghost" href="liga.html">Ver la liga</a>`;
+  }
+  return `<div class="hlr-box mine">${kicker}<p>${body}</p><div class="hlr-actions">${actions}</div></div>`;
+}
+
+function renderHomeLeagueRound(players, challenges) {
+  const wrap = document.getElementById('homeLeagueRound');
+  if (!wrap || typeof UCTennisLeague === 'undefined') return;
+  const L = UCTennisLeague;
+  const season = L.getSeason();
+  const today = L.todayIso();
+  const views = ['M', 'F'].map(gender => L.buildSeasonView(players, challenges, { season, gender, today }));
+  const open = views.flatMap(view => view.openRounds.map(round => ({ view, round })));
+  if (!open.length) { wrap.hidden = true; return; }
+
+  const labels = { M: 'Varones', F: 'Damas' };
+  const partidos = open.flatMap(({ view, round }) => round.partidos.map(p => ({ p, round, gender: view.gender })));
+  const played = partidos.filter(({ p }) => ['jugado', 'wo', 'por_confirmar'].includes(p.state)).length;
+  const unscheduled = partidos.filter(({ p }) => p.state === 'por_agendar').length;
+  const pct = partidos.length ? Math.round((played / partidos.length) * 100) : 0;
+
+  // La fecha que cierra antes manda en el encabezado (en el día de cambio
+  // conviven la que termina y la que empieza).
+  const lead = open.map(item => item.round).sort((a, b) => a.window.end.localeCompare(b.window.end))[0];
+  const numbers = Array.from(new Set(open.map(item => item.round.numero))).sort((a, b) => a - b);
+  const daysLeft = L.daysBetween(today, lead.window.end);
+  const chip = daysLeft <= 0 ? 'Cierra hoy' : daysLeft === 1 ? 'Queda 1 día' : `Quedan ${daysLeft} días`;
+
+  const upcoming = partidos
+    .filter(({ p }) => (p.state === 'agendado' || p.state === 'invitado') && p.date && p.date >= today)
+    .sort((x, y) => x.p.date.localeCompare(y.p.date) || homeLeagueSlot(x.p.slot).localeCompare(homeLeagueSlot(y.p.slot)))
+    .slice(0, 6);
+  const upcomingHtml = upcoming.length
+    ? `<ul class="hlr-list">${upcoming.map(({ p, round, gender }) => {
+        const when = [homeLeagueDayLabel(p.date, today), homeLeagueSlot(p.slot)].filter(Boolean).join(' · ');
+        const meta = [p.cancha, `${labels[gender]} F${round.numero}`, p.state === 'invitado' ? 'por confirmar' : ''].filter(Boolean).join(' · ');
+        return `<li><span class="hlr-when">${escapeHTML(when)}</span><span class="hlr-who">${escapeHTML(p.a.nombre)} vs ${escapeHTML(p.b.nombre)}<small>${escapeHTML(meta)}</small></span></li>`;
+      }).join('')}</ul>`
+    : '<p class="hlr-empty">Aún no hay partidos agendados para los próximos días. ¡Sé el primero en reservar cancha para tu partido!</p>';
+
+  let nudge;
+  if (unscheduled === 0 && played === partidos.length) nudge = '🎉 <strong>¡Ya se jugaron todos los partidos de esta fecha!</strong> Revisa cómo quedó la tabla.';
+  else if (unscheduled === 0) nudge = 'Todos los partidos de esta fecha ya tienen día. <strong>¡A jugar y anotar el resultado!</strong>';
+  else nudge = `<strong>${unscheduled} ${unscheduled === 1 ? 'partido aún no tiene' : 'partidos aún no tienen'} día.</strong> Proponer horarios toma un minuto: tu rival elige con un clic y la cancha se reserva sola.`
+    + (daysLeft <= 2 ? ' <strong>Ojo: si no se juega a tiempo es W.O. doble y nadie suma.</strong>' : '');
+
+  const mine = homeLeagueMineHtml(views, today, DB.getSession());
+  wrap.innerHTML = `
+    <div class="hlr-head">
+      <h2>🎾 Fecha ${numbers.join(' y ')} en juego · plazo ${escapeHTML(formatDateShort(lead.window.end))}</h2>
+      <span class="hlr-chip ${daysLeft <= 2 ? 'urgent' : ''}">${chip}</span>
+    </div>
+    <div class="hlr-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><span style="width:${pct}%"></span></div>
+    <p class="hlr-progress-text"><strong>${played} de ${partidos.length}</strong> partidos jugados (${pct}%)</p>
+    <div class="hlr-grid" style="${mine ? '' : 'grid-template-columns:1fr;'}">
+      ${mine}
+      <div class="hlr-box"><div class="hlr-kicker">Próximos partidos</div>${upcomingHtml}</div>
+    </div>
+    <p class="hlr-nudge">${nudge}</p>`;
+  wrap.hidden = false;
+}
+
 function openHomeAuthModal() {
   const modal = document.getElementById('homeAuthModal');
   if (!modal) return;
@@ -2451,6 +2628,7 @@ async function loadLiveData() {
     // 2.5. Campeonato de Liga: quién lidera cada categoría, apenas hay
     // resultados en la temporada.
     if (typeof UCTennisLeague !== 'undefined') {
+      try { renderHomeLeagueRound(playersList, challenges); } catch (e) { console.warn('Fecha de la liga en la portada:', e); }
       const season = UCTennisLeague.getSeason();
       const views = ['M', 'F'].map(gender => UCTennisLeague.buildSeasonView(playersList, challenges, { season, gender }));
       // Con grupos hay un líder por grupo.
