@@ -1820,7 +1820,10 @@ function challengeFromRow(row) {
     retadoNombre: text(row[5]),
     retadoEmail: text(row[6]),
     genero: text(row[7]),
-    fecha: text(row[8]),
+    // Sheets suele convertir la fecha en un objeto Date; con text() quedaba
+    // "Sun Nov 01 2026 …", que la liga no reconoce y daba el partido por
+    // no jugado en los avisos automáticos.
+    fecha: formatSheetDate(row[8]),
     cancha: text(row[9]),
     status: text(row[10]) || 'pendiente',
     marcador: text(row[11]) || null,
