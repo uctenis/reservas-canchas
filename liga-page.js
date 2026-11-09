@@ -1114,6 +1114,9 @@
       if (state.isAdmin && canAdminSchedule(p, v.today)) {
         foot = `${foot ? `${foot} · ` : ''}<button class="lg-link" type="button" data-action="admin-schedule" data-gender="${esc(v.gender)}" data-round="${round.numero}" data-a="${esc(p.a.key)}" data-b="${esc(p.b.key)}">${p.state === 'agendado' || p.state === 'invitado' ? 'Reagendar' : 'Agendar'}</button>`;
       }
+      if (state.isAdmin && (p.state === 'agendado' || p.state === 'invitado') && p.match && p.match.bookingId && p.date >= v.today) {
+        foot = `${foot ? `${foot} · ` : ''}<button class="lg-link danger" type="button" data-action="admin-cancel-booking" data-booking="${esc(p.match.bookingId)}" data-match="${esc(p.match.id)}" data-label="${esc(`${p.a.nombre} vs ${p.b.nombre} · ${fmt(p.date)}${p.slot ? ` ${p.slot}` : ''}`)}">Cancelar hora</button>`;
+      }
       if (state.isAdmin && canRecordResult(p, v.today, true)) {
         foot = `${foot ? `${foot} · ` : ''}<button class="lg-link" type="button" data-action="record-result" data-gender="${esc(v.gender)}" data-round="${round.numero}" data-a="${esc(p.a.key)}" data-b="${esc(p.b.key)}">Anotar resultado</button>`;
       }
@@ -1370,6 +1373,25 @@
       const ctx = adminScheduleContext(button);
       if (ctx) openPropose(ctx);
       else toast('Ese partido ya tiene resultado o su plazo venció.', 'bad');
+      return;
+    }
+    if (action === 'admin-cancel-booking' && state.isAdmin) {
+      const motivo = prompt(`¿Cancelar la hora de ${button.dataset.label}?\n\nSe libera la cancha, el partido vuelve a quedar por agendar y ambos jugadores reciben un correo. Motivo (opcional):`, '');
+      if (motivo === null || state.busy) return;
+      state.busy = true;
+      button.disabled = true;
+      try {
+        const data = await api('admin_cancel_booking', { bookingId: button.dataset.booking, motivo: motivo.trim() });
+        const id = (data.challenge && data.challenge.id) || button.dataset.match;
+        state.matches = state.matches.map(m => m.id === id ? { ...m, status: 'eliminado' } : m);
+        if (DB.invalidateSlotsCache) DB.invalidateSlotsCache();
+        toast('Hora cancelada. El partido quedó por agendar y los jugadores fueron avisados.');
+      } catch (err) {
+        toast(err.message, 'bad');
+      } finally {
+        state.busy = false;
+        render();
+      }
       return;
     }
     if (action === 'accept-proposal' || action === 'counter-proposal') {

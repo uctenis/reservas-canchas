@@ -10,7 +10,7 @@
   <meta property="og:image" content="https://uctenis.github.io/reservas-canchas/logo_uctenis_v03.png">
   <link rel="icon" href="logo_uctenis_v03.png" type="image/png">
   <link rel="stylesheet" href="style.css?v=20260813_v1">
-  <link rel="stylesheet" href="ranking.css?v=20261026_estado">
+  <link rel="stylesheet" href="ranking.css?v=20261109_cancelar">
   <link rel="stylesheet" href="datepicker.css?v=20260908_v3">
   <script>
     // Quien llega desde liga.html (?liga=1) solo quiere el modal de desafio de
@@ -8401,7 +8401,14 @@ function renderAdminBookingsWeekGrid(days) {
         const courtShort = escapeHTML((b.courtName || '').replace('Cancha ', ''));
         const nombre = b.nombre || 'Jugador/a';
         const detail = [b.courtName, slot, nombre, b.userTypeLabel, b.email].filter(Boolean).join(' · ');
+        // Solo las reservas de la plataforma (con id) y que no hayan pasado
+        // se pueden cancelar desde aquí.
+        const cancellable = b.id && day.date >= todayStr && b.userTypeLabel !== 'Campeonato UCTenis';
+        const cancelBtn = cancellable
+          ? `<button type="button" class="booking-chip-cancel" title="Cancelar esta hora" aria-label="Cancelar la hora de ${escapeHTML(nombre)}" onclick="adminCancelBookingChip(this)" data-id="${escapeHTML(b.id)}" data-label="${escapeHTML(`${b.courtName} · ${formatShortDayMonth(day.date)} ${slot} · ${nombre}`)}">✕</button>`
+          : '';
         return `<div class="booking-chip ${badge.cls}" title="${escapeHTML(detail)}">
+            ${cancelBtn}
             <span class="booking-chip-court">${courtShort}</span>
             <span class="booking-chip-name">${escapeHTML(nombre)}</span>
             <span class="booking-chip-type">${badge.label}</span>
@@ -8448,6 +8455,32 @@ function renderAdminBookingsSummary(days, courts, total, todayStr, dayLabel) {
       ${tile.hint ? `<span class="admin-bookings-stat-hint">${escapeHTML(tile.hint)}</span>` : ''}
     </div>`).join('');
 }
+
+// El admin libera cualquier hora tomada (reserva, desafío, amistoso o liga).
+// El backend avisa por correo a los jugadores y, si era un partido, lo deja
+// sin agendar para que coordinen otra hora.
+window.adminCancelBookingChip = async function(button) {
+  const label = button.dataset.label || 'esta hora';
+  const motivo = prompt(`¿Cancelar ${label}?\n\nLos jugadores recibirán un correo. Motivo (opcional):`, '');
+  if (motivo === null) return;
+  button.disabled = true;
+  try {
+    const idToken = await DB.getIdTokenOrReauth();
+    if (!idToken) throw new Error(DB.lastAuthError || 'Tu sesión venció. Vuelve a ingresar.');
+    const res = await fetch(window.CONFIG.API_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'admin_cancel_booking', bookingId: button.dataset.id, motivo: motivo.trim(), idToken })
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.msg || 'No se pudo cancelar.');
+    if (DB.invalidateSlotsCache) DB.invalidateSlotsCache();
+    showAdminBookingsAlert(`✅ Hora cancelada${data.notified ? ` y ${data.notified === 1 ? 'jugador avisado' : `${data.notified} jugadores avisados`} por correo` : ''}.`, 'success');
+    loadAdminBookingsForDate();
+  } catch (e) {
+    button.disabled = false;
+    showAdminBookingsAlert(`⚠️ ${e.message}`, 'error');
+  }
+};
 
 // Cada carga tarda varios segundos (el backend hace 7 llamadas seguidas a
 // Calendar, una por día). Si el admin navega rápido entre semanas, una

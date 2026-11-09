@@ -189,6 +189,7 @@ function handleRequest(data) {
       case "league_get_proposal":    response = leagueGetProposal(data); break;
       case "league_accept_proposal": response = leagueAcceptProposal(data); break;
       case "league_admin_schedule":  response = leagueAdminSchedule(data); break;
+      case "admin_cancel_booking":   response = adminCancelBooking(data); break;
       case "league_record_result":   response = leagueRecordResult(data); break;
       case "save_schedule_config":   response = saveScheduleConfig(data); break;
       case "get_schedule_config":    response = getScheduleConfigPublic(data.idToken); break;
@@ -6288,6 +6289,109 @@ function leagueAdminSchedule(data) {
     });
 
     return { ok: true, challenge: mirror, calendarPending: booking.status !== 'confirmed' };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * Un administrador cancela cualquier hora tomada (reserva normal, desafío,
+ * amistoso o partido de liga). La comisión de la liga puede cancelar solo
+ * horas de partidos de liga. Se libera la cancha, se borra la cita de
+ * Calendar, el partido asociado (si lo hay) queda sin agendar y se avisa
+ * por correo a los jugadores.
+ * data: { idToken, bookingId, motivo }
+ */
+function adminCancelBooking(data) {
+  const adminEmail = verifyGoogleIdToken(data && data.idToken);
+  if (!adminEmail) return { ok: false, msg: 'Tu sesión de Google venció. Vuelve a ingresar.' };
+  const bookingId = text(data.bookingId);
+  if (!bookingId) return { ok: false, msg: 'Falta la reserva a cancelar.' };
+  const motivo = text(data.motivo).substring(0, 200);
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  try {
+    const stored = getBookingDocument(bookingId, data.idToken);
+    if (!stored.ok) return { ok: false, msg: stored.msg || 'No se pudo leer la reserva.' };
+    if (!stored.booking) return { ok: false, msg: 'La reserva ya no existe.' };
+    const booking = stored.booking;
+    if (!isActiveBookingStatus(booking.status)) return { ok: false, msg: 'Esa reserva ya estaba cancelada.' };
+
+    // Partido asociado a la reserva (desafío, amistoso o liga).
+    const sheet = getChallengesSheet();
+    const values = sheet.getDataRange().getValues();
+    let linked = null;
+    for (let i = 1; i < values.length; i++) {
+      const c = challengeFromRow(values[i]);
+      if (!c.id) continue;
+      if ((booking.challengeId && c.id === text(booking.challengeId)) || (c.bookingId && c.bookingId === bookingId)) {
+        linked = { rowNumber: i + 1, challenge: c };
+        if (['pendiente', 'aceptado'].indexOf(c.status) >= 0) break;
+      }
+    }
+    const isLeague = text(booking.matchType) === 'liga' || Boolean(linked && text(linked.challenge.tipo) === 'liga');
+    if (!isAdminRequest(data) && !(isLeague && isLeagueAdminRequest(data.idToken))) {
+      return { ok: false, msg: 'No tienes permiso para cancelar esta reserva.' };
+    }
+    if (booking.tournamentId) {
+      return { ok: false, msg: 'Es un partido de campeonato: reprográmalo o elimínalo desde el panel de Campeonatos.' };
+    }
+
+    const now = new Date().toISOString();
+    booking.status = 'cancelled';
+    booking.cancelledAt = now;
+    booking.cancelledBy = adminEmail;
+    booking.cancelReason = motivo;
+    booking.updatedAt = now;
+    booking.calendarCleanupPending = Boolean(booking.calendarEventId);
+    const cancelled = saveBookingDocument(booking, data.idToken);
+    if (!cancelled.ok) return { ok: false, msg: 'No se pudo liberar la reserva. ' + cancelled.msg };
+    try {
+      const event = findCalendarEventForBooking(booking);
+      if (event) event.deleteEvent();
+      booking.calendarCleanupPending = false;
+      saveBookingDocument(booking, data.idToken);
+    } catch (e) {
+      // Queda calendarCleanupPending: el trigger de sincronización lo borra.
+      console.warn('adminCancelBooking: no se pudo borrar la cita de Calendar:', e.message);
+    }
+
+    // El partido vuelve a quedar sin agendar: en la liga el cruce aparece
+    // otra vez «por agendar» y los jugadores pueden coordinar otra hora.
+    let challenge = null;
+    if (linked && ['pendiente', 'aceptado'].indexOf(linked.challenge.status) >= 0) {
+      challenge = linked.challenge;
+      setChallengeRowPatch(sheet, linked.rowNumber, { status: 'eliminado', actualizado: now });
+      challenge.status = 'eliminado';
+      challenge.actualizado = now;
+      updateChallengeInFirebase(challenge.id, { status: 'eliminado', actualizado: now });
+    }
+
+    // Aviso a los afectados.
+    const when = leagueOptionLabel({ date: booking.date, slot: booking.slot, courtId: booking.courtId });
+    const recipients = [];
+    [booking.email].concat(Array.isArray(booking.guestEmails) ? booking.guestEmails : [])
+      .concat(challenge ? [challenge.retadorEmail, challenge.retadoEmail] : [])
+      .forEach(function(email) {
+        const e = text(email).toLowerCase();
+        if (e && /@/.test(e) && recipients.indexOf(e) < 0) recipients.push(e);
+      });
+    const what = challenge
+      ? (isLeague ? 'tu partido de liga ' : 'tu partido ') + escapeHtmlBday(challenge.retadorNombre) + ' vs ' + escapeHtmlBday(challenge.retadoNombre)
+      : 'tu reserva de cancha';
+    recipients.forEach(function(email) {
+      sendLeagueMail(email, '❌ UCTenis: se canceló ' + (challenge ? 'tu partido' : 'tu reserva') + ' del ' + when,
+        leagueEmailHtml('Hora cancelada por la administración', '', [
+          'La administración del club canceló ' + what + ':',
+          '<span style="display:block;padding:14px;border-radius:12px;background:#fee2e2;color:#7f1d1d;font-size:17px;font-weight:bold;text-align:center;">' + escapeHtmlBday(when) + '</span>',
+          motivo ? 'Motivo: <strong>' + escapeHtmlBday(motivo) + '</strong>' : '',
+          isLeague ? 'Coordinen otra hora dentro del plazo de la fecha.' : 'Puedes reservar otro horario en la página de reservas.'
+        ].filter(Boolean), leagueButton(LEAGUE_SITE_URL + (isLeague ? 'liga.html' : 'reservas.html'), isLeague ? 'Ver la liga' : 'Reservar otra hora', true),
+        'Administración · UCTenis Club'));
+    });
+
+    return { ok: true, booking: publicBooking(booking), challenge: challenge ? publicChallenge(challenge) : null, notified: recipients.length };
   } finally {
     lock.releaseLock();
   }

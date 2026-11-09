@@ -2776,7 +2776,11 @@ tr.drag-over-bottom {
 .admin-bookings-stat-value { display:block; margin-top:4px; font-size:1.35rem; font-weight:800; line-height:1.15; color:var(--text-primary); }
 .admin-bookings-stat.is-accent .admin-bookings-stat-value { color:var(--accent-tennis); }
 .admin-bookings-stat-hint { display:block; margin-top:2px; font-size:.7rem; color:var(--text-secondary); }
-.booking-chip { padding:5px 7px; border-radius:8px; font-size:.68rem; line-height:1.25; background:rgba(74,222,128,.12); border:1px solid rgba(74,222,128,.35); }
+.booking-chip { position:relative; padding:5px 7px; border-radius:8px; font-size:.68rem; line-height:1.25; background:rgba(74,222,128,.12); border:1px solid rgba(74,222,128,.35); }
+.booking-chip-cancel { position:absolute; top:3px; right:3px; width:20px; height:20px; display:grid; place-items:center; padding:0; border:0; border-radius:6px; background:rgba(239,68,68,.16); color:#fca5a5; font-size:.7rem; line-height:1; cursor:pointer; }
+.booking-chip-cancel:hover, .booking-chip-cancel:focus-visible { background:rgba(239,68,68,.4); color:#fff; }
+.booking-chip-cancel:disabled { opacity:.4; cursor:wait; }
+.booking-chip:has(.booking-chip-cancel) .booking-chip-court, .booking-chip:has(.booking-chip-cancel) .booking-chip-name { padding-right:22px; }
 .booking-chip.is-reserva { background:rgba(74,222,128,.12); border-color:rgba(74,222,128,.35); }
 .booking-chip.is-ranking { background:rgba(96,165,250,.14); border-color:rgba(96,165,250,.4); }
 .booking-chip.is-amistoso { background:rgba(192,132,252,.14); border-color:rgba(192,132,252,.4); }
