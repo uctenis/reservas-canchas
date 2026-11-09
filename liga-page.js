@@ -1084,6 +1084,39 @@
   }
 
   // ── Fixture ───────────────────────────────────────────────────────────
+  // Botón de acción compacto (tarjetas del fixture y panel de la comisión).
+  function actBtn(action, icon, label, data = {}, tone = '') {
+    const attrs = Object.entries(data).map(([k, val]) => ` data-${k}="${esc(val)}"`).join('');
+    return `<button class="lg-act ${tone}" type="button" data-action="${action}"${attrs}><span aria-hidden="true">${icon}</span>${esc(label)}</button>`;
+  }
+
+  // Resultado por confirmar: quién lo anotó, hace cuánto y a quién le falta.
+  function hoursSince(iso) {
+    const t = Date.parse(iso || '');
+    return Number.isFinite(t) ? Math.max(0, Math.floor((Date.now() - t) / 3600000)) : null;
+  }
+  function agoLabel(hours) {
+    if (hours === null) return '';
+    if (hours < 1) return 'hace un rato';
+    if (hours < 24) return `hace ${hours} h`;
+    const d = Math.floor(hours / 24);
+    return `hace ${d === 1 ? '1 día' : `${d} días`}`;
+  }
+  function pendingRival(p) {
+    if (!p.reportedBy) return null;
+    return p.reportedBy.key === p.a.key ? p.b : p.a;
+  }
+  function pendingLine(p) {
+    if (p.disputed) return 'Resultado reclamado: resuélvelo desde el panel del Ranking';
+    const who = p.reportedBy ? `Anotó ${esc(p.reportedBy.nombre.split(' ')[0])}` : 'Resultado anotado';
+    const ago = agoLabel(hoursSince(p.reportedAt));
+    const rival = pendingRival(p);
+    return `${who}${ago ? ` ${ago}` : ''}${rival ? ` · falta que confirme ${esc(rival.nombre.split(' ')[0])}` : ' · falta confirmar'}`;
+  }
+  function pendingLabel(p) {
+    return `${p.a.nombre} vs ${p.b.nombre}`;
+  }
+
   function renderFixture(v) {
     if (v.entrants.length < 2) return emptyCategory(v);
     if (!state.round || state.round > v.rounds.length) state.round = v.currentRound ? v.currentRound.numero : 1;
@@ -1101,34 +1134,44 @@
 
     const card = p => {
       const final = p.state === 'jugado' || p.state === 'wo';
+      const pending = p.state === 'por_confirmar' && p.setsBy;
       const sideHtml = (entrant, isWinner) => {
-        const sets = p.state === 'jugado' ? (p.setsBy[entrant.key] || []) : [];
-        return `<div class="lg-side ${final ? (isWinner ? 'won' : 'lost') : ''} ${entrant.key === meKey ? 'is-me' : ''}">
-          ${avatar(entrant, 'sm')}<span class="lg-side-name">${esc(entrant.nombre)}${isWinner && final ? ' <i aria-label="ganador">✓</i>' : ''}</span>
+        const sets = p.state === 'jugado' || pending ? (p.setsBy[entrant.key] || []) : [];
+        const won = final ? isWinner : pending && p.winner && p.winner.key === entrant.key;
+        return `<div class="lg-side ${final ? (isWinner ? 'won' : 'lost') : ''} ${pending ? 'pending' : ''} ${entrant.key === meKey ? 'is-me' : ''}">
+          ${avatar(entrant, 'sm')}<span class="lg-side-name">${esc(entrant.nombre)}${won ? ' <i aria-label="ganador">✓</i>' : ''}</span>
           <span class="lg-sets">${p.state === 'wo' ? (isWinner ? '<b>W.O.</b>' : '') : sets.map(n => `<b>${n}</b>`).join('')}</span>
         </div>`;
       };
-      let foot = '';
-      if (p.state === 'agendado' || p.state === 'invitado') foot = `📅 ${fmt(p.date)}${p.slot ? ` · ${esc(p.slot)}` : ''}${p.cancha ? ` · ${esc(p.cancha)}` : ''}`;
-      if (p.state === 'wo_doble') foot = p.fueraDePlazo ? 'Se jugó fuera de plazo: no suma (bases §9)' : p.retiro ? 'Ambos retirados' : 'No se jugó dentro del plazo: 0 pts para ambos';
-      if (p.state === 'wo' && p.retiro) foot = 'Rival retirado de la liga';
-      if (p.state === 'jugado' && p.inconcluso) foot = 'Inconcluso: se tomó hasta donde llegó';
-      if (p.exception) foot = `${foot ? `${foot} · ` : ''}Plazo extendido al ${fmt(p.deadline)}`;
-      if (state.isAdmin && canAdminSchedule(p, v.today)) {
-        foot = `${foot ? `${foot} · ` : ''}<button class="lg-link" type="button" data-action="admin-schedule" data-gender="${esc(v.gender)}" data-round="${round.numero}" data-a="${esc(p.a.key)}" data-b="${esc(p.b.key)}">${p.state === 'agendado' || p.state === 'invitado' ? 'Reagendar' : 'Agendar'}</button>`;
+      const info = [];
+      if (p.state === 'agendado' || p.state === 'invitado') info.push(`📅 ${fmt(p.date)}${p.slot ? ` · ${esc(p.slot)}` : ''}${p.cancha ? ` · ${esc(p.cancha)}` : ''}`);
+      if (p.state === 'wo_doble') info.push(p.fueraDePlazo ? 'Se jugó fuera de plazo: no suma (bases §9)' : p.retiro ? 'Ambos retirados' : 'No se jugó dentro del plazo: 0 pts para ambos');
+      if (p.state === 'wo' && p.retiro) info.push('Rival retirado de la liga');
+      if (p.state === 'jugado' && p.inconcluso) info.push('Inconcluso: se tomó hasta donde llegó');
+      if (p.state === 'por_confirmar') info.push(pendingLine(p));
+      if (p.exception) info.push(`Plazo extendido al ${fmt(p.deadline)}`);
+
+      const actions = [];
+      if (state.isAdmin && p.state === 'por_confirmar' && p.match && p.match.id && !p.disputed) {
+        actions.push(actBtn('admin-remind-result', '✉️', 'Pedir confirmación', { match: p.match.id, label: pendingLabel(p) }));
+        actions.push(actBtn('admin-confirm-result', '✓', 'Confirmar', { match: p.match.id, label: pendingLabel(p) }, 'ok'));
       }
-      if (state.isAdmin && (p.state === 'agendado' || p.state === 'invitado') && p.match && p.match.bookingId && p.date >= v.today) {
-        foot = `${foot ? `${foot} · ` : ''}<button class="lg-link danger" type="button" data-action="admin-cancel-booking" data-booking="${esc(p.match.bookingId)}" data-match="${esc(p.match.id)}" data-label="${esc(`${p.a.nombre} vs ${p.b.nombre} · ${fmt(p.date)}${p.slot ? ` ${p.slot}` : ''}`)}">Cancelar hora</button>`;
+      if (state.isAdmin && canAdminSchedule(p, v.today)) {
+        actions.push(actBtn('admin-schedule', '📅', p.state === 'agendado' || p.state === 'invitado' ? 'Reagendar' : 'Agendar', { gender: v.gender, round: round.numero, a: p.a.key, b: p.b.key }));
       }
       if (state.isAdmin && canRecordResult(p, v.today, true)) {
-        foot = `${foot ? `${foot} · ` : ''}<button class="lg-link" type="button" data-action="record-result" data-gender="${esc(v.gender)}" data-round="${round.numero}" data-a="${esc(p.a.key)}" data-b="${esc(p.b.key)}">Anotar resultado</button>`;
+        actions.push(actBtn('record-result', '🎾', 'Anotar resultado', { gender: v.gender, round: round.numero, a: p.a.key, b: p.b.key }));
+      }
+      if (state.isAdmin && (p.state === 'agendado' || p.state === 'invitado') && p.match && p.match.bookingId && p.date >= v.today) {
+        actions.push(actBtn('admin-cancel-booking', '✕', 'Cancelar hora', { booking: p.match.bookingId, match: p.match.id, label: `${p.a.nombre} vs ${p.b.nombre} · ${fmt(p.date)}${p.slot ? ` ${p.slot}` : ''}` }, 'danger'));
       }
       return `
         <article class="lg-match ${p.state}">
-          <header>${chip(p.state)}${p.date && final ? `<small>${fmt(p.date)}</small>` : ''}</header>
+          <header>${chip(p.state, p.disputed ? 'Reclamado' : '')}${p.date && (final || pending) ? `<small>${fmt(p.date)}</small>` : ''}</header>
           ${sideHtml(p.a, final && p.winner.key === p.a.key)}
           ${sideHtml(p.b, final && p.winner.key === p.b.key)}
-          ${foot ? `<footer>${foot}</footer>` : ''}
+          ${info.length ? `<footer>${info.join(' · ')}</footer>` : ''}
+          ${actions.length ? `<div class="lg-match-actions">${actions.join('')}</div>` : ''}
         </article>`;
     };
     const byes = list => list.length ? `<p class="lg-bye">Libre esta fecha: <strong>${list.map(e => esc(e.nombre)).join(', ')}</strong></p>` : '';
@@ -1232,6 +1275,9 @@
     // Sin cambios respecto de lo guardado: no hace falta la vista previa.
     const sameAsCurrent = v.grouped && preview.length === v.groups.length &&
       preview.every(g => g.entrants.every(e => e.grupo === g.numero));
+    const pendingResults = v.rounds.flatMap(r => r.partidos.map(p => ({ r, p })))
+      .filter(({ p }) => p.state === 'por_confirmar')
+      .sort((x, y) => String(x.p.reportedAt).localeCompare(String(y.p.reportedAt)));
     const expired = v.rounds.flatMap(r => r.partidos.map(p => ({ r, p })))
       .filter(({ p }) => (p.state === 'wo_doble' && !p.retiro) || p.exception);
 
@@ -1283,6 +1329,25 @@
               ? `<button class="lg-link" type="button" data-action="admin-rejoin" data-id="${esc(e.id)}">Reincorporar</button>`
               : `<button class="lg-link danger" type="button" data-action="admin-withdraw" data-id="${esc(e.id)}">Retirar</button>`}
         </li>`).join('') || '<li class="lg-muted">Sin inscritos.</li>'}</ul>
+      <h4 class="lg-sub">Resultados por confirmar (${pendingResults.length})</h4>
+      ${pendingResults.length ? `<ul class="lg-pending">${pendingResults.map(({ r, p }) => {
+        const h = hoursSince(p.reportedAt);
+        const late = h !== null && h >= 24;
+        const score = p.winner && p.setsBy ? `${esc(p.winner.nombre.split(' ')[0])} ${esc((p.setsBy[p.winner.key] || []).map((n, i) => `${n}-${(p.setsBy[(p.winner.key === p.a.key ? p.b : p.a).key] || [])[i] ?? ''}`).join(', '))}` : esc((p.match && p.match.marcador) || '');
+        return `<li class="${p.disputed ? 'is-disputed' : late ? 'is-late' : ''}">
+          <span class="lg-num">F${r.numero}</span>
+          <div class="lg-pending-body">
+            <strong>${esc(p.a.nombre)} vs ${esc(p.b.nombre)}</strong>
+            <span class="lg-pending-score">🏆 ${score}</span>
+            <small>${pendingLine(p)}${late && !p.disputed ? ' · <b>demorado</b>' : ''}</small>
+          </div>
+          ${p.disputed || !p.match ? '' : `<div class="lg-pending-actions">
+            ${actBtn('admin-remind-result', '✉️', 'Pedir confirmación', { match: p.match.id, label: pendingLabel(p) })}
+            ${actBtn('admin-confirm-result', '✓', 'Confirmar', { match: p.match.id, label: pendingLabel(p) }, 'ok')}
+          </div>`}
+        </li>`;
+      }).join('')}</ul>
+      <p class="lg-legend">Se confirman solos a las 48 h. A las 24 h sin respuesta el rival recibe un recordatorio automático; «Pedir confirmación» le manda otro correo al tiro.</p>` : '<p class="lg-muted">No hay resultados esperando confirmación.</p>'}
       <h4 class="lg-sub">Plazos vencidos y excepciones (bases §9)</h4>
       ${expired.length ? `<ul class="lg-admin-list">${expired.map(({ r, p }) => `
         <li><span class="lg-num">F${r.numero}</span><span>${esc(p.a.nombre)} vs ${esc(p.b.nombre)} ${p.exception ? `<em>· plazo hasta ${esc(fmt(p.deadline))}</em>` : p.fueraDePlazo ? '<em>· resultado fuera de plazo</em>' : ''}</span>
@@ -1389,6 +1454,34 @@
         state.matches = state.matches.map(m => m.id === id ? { ...m, status: 'eliminado' } : m);
         if (DB.invalidateSlotsCache) DB.invalidateSlotsCache();
         toast('Hora cancelada. El partido quedó por agendar y los jugadores fueron avisados.');
+      } catch (err) {
+        toast(err.message, 'bad');
+      } finally {
+        state.busy = false;
+        render();
+      }
+      return;
+    }
+    if ((action === 'admin-remind-result' || action === 'admin-confirm-result') && state.isAdmin) {
+      const remind = action === 'admin-remind-result';
+      if (!remind && !confirm(`¿Confirmar el resultado de ${button.dataset.label} como comisión?
+
+Queda firme y suma en la tabla, sin esperar al rival.`)) return;
+      if (state.busy) return;
+      state.busy = true;
+      button.disabled = true;
+      try {
+        if (remind) {
+          const data = await api('league_remind_result', { id: button.dataset.match });
+          toast(`Listo: le pedimos a ${data.to ? data.to.split(' ')[0] : 'su rival'} que confirme el resultado.`);
+        } else {
+          const data = await api('confirm_challenge_result', { id: button.dataset.match, confirmadoPor: myEmail() });
+          const saved = data.challenge || {};
+          state.matches = state.matches.map(m => m.id === button.dataset.match
+            ? { ...m, status: 'completado', fechaConfirmacion: saved.fechaConfirmacion || new Date().toISOString(), confirmadoPor: saved.confirmadoPor || myEmail() }
+            : m);
+          toast('Resultado confirmado. Ya suma en la tabla.');
+        }
       } catch (err) {
         toast(err.message, 'bad');
       } finally {

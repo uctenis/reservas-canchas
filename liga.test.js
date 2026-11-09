@@ -86,6 +86,19 @@ assert.equal(row(p1.a.key).gamesFor, 11); // 6 + 4 + 1 por el tie break
 assert.equal(row(p2.a.key).pts, 3);
 assert.equal(row(p2.b.key).pts, 0);
 assert.equal(row(p2.b.key).woPerdidos, 1);
+// Resultado anotado por un jugador y sin confirmar: se ve el marcador
+// propuesto, quién lo anotó y no suma todavía.
+{
+  const pend = [mk(p1, { id: 'pp', status: 'resultado_pendiente', ganadorId: p1.b.id, marcador: '3-6, 4-6', resultadoIngresadoPorEmail: p1.b.email, fechaResultado: '2026-11-05T12:00:00Z' })];
+  const vp = L.buildSeasonView(four, pend, { season, gender: 'M', today: '2026-11-06' });
+  const pp = vp.rounds[0].partidos[0];
+  assert.equal(pp.state, 'por_confirmar');
+  assert.equal(pp.winner.key, p1.b.key);
+  assert.equal(pp.reportedBy.key, p1.b.key);
+  assert.deepEqual(pp.setsBy[p1.a.key], [3, 4]);
+  assert.equal(pp.disputed, false);
+  assert.equal(vp.standings.find(r => r.key === p1.b.key).pts, 0);
+}
 // Fecha 2 sin jugar y vencida al 21 de noviembre: W.O. doble.
 view = L.buildSeasonView(four, results, { season, gender: 'M', today: '2026-11-21' });
 assert.equal(view.rounds[1].partidos.every(p => p.state === 'wo_doble'), true);

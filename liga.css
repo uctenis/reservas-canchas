@@ -155,6 +155,33 @@
 .lg-sets b { min-width:22px; text-align:center; font-family:var(--font-display); font-weight:900; font-variant-numeric:tabular-nums; }
 .lg-match footer { color:var(--text-muted); font-size:.76rem; border-top:1px solid var(--line); padding-top:8px; margin-top:2px; }
 .lg-bye { color:var(--text-secondary); font-size:.86rem; margin:14px 0 0; }
+.lg-side.pending .lg-sets b { color:var(--lg-info); }
+.lg-match.por_confirmar { border-color:rgba(125,211,252,.3); }
+
+/* Botones de acción (tarjetas del fixture y panel de la comisión) */
+.lg-match-actions { display:flex; flex-wrap:wrap; gap:6px; padding-top:8px; border-top:1px solid var(--line); }
+.lg-match footer + .lg-match-actions { border-top:0; padding-top:2px; }
+.lg-act { display:inline-flex; align-items:center; gap:6px; padding:7px 12px; border-radius:999px; border:1px solid var(--lg-amber-line); background:var(--lg-amber-soft); color:var(--lg-amber-hi); font:inherit; font-size:.78rem; font-weight:800; line-height:1; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s, color .15s, transform .15s var(--ease-out); }
+.lg-act span { font-size:.85em; line-height:1; }
+.lg-act:hover { background:var(--lg-amber); border-color:var(--lg-amber); color:#0a1712; transform:translateY(-1px); }
+.lg-act:active { transform:translateY(0); }
+.lg-act:focus-visible { outline:2px solid var(--lg-amber-hi); outline-offset:2px; }
+.lg-act:disabled { opacity:.5; cursor:progress; transform:none; }
+.lg-act.ok { border-color:rgba(74,222,128,.35); background:rgba(74,222,128,.1); color:var(--lg-win); }
+.lg-act.ok:hover { background:var(--lg-win); border-color:var(--lg-win); color:#0a1712; }
+.lg-act.danger { border-color:rgba(248,113,113,.3); background:transparent; color:var(--lg-loss); }
+.lg-act.danger:hover { background:rgba(248,113,113,.14); border-color:var(--lg-loss); color:#fecaca; }
+
+/* Resultados por confirmar (panel de la comisión) */
+.lg-pending { list-style:none; margin:0; padding:0; display:grid; gap:8px; }
+.lg-pending li { display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding:12px 14px; border-radius:14px; border:1px solid rgba(125,211,252,.25); background:rgba(125,211,252,.05); }
+.lg-pending li.is-late { border-color:var(--lg-amber-line); background:var(--lg-amber-soft); }
+.lg-pending li.is-disputed { border-color:rgba(248,113,113,.3); background:rgba(248,113,113,.06); }
+.lg-pending-body { flex:1 1 220px; display:flex; flex-direction:column; gap:2px; min-width:0; }
+.lg-pending-score { font-family:var(--font-display); font-weight:900; font-variant-numeric:tabular-nums; color:#fff; }
+.lg-pending-body small { color:var(--text-muted); font-size:.76rem; }
+.lg-pending li.is-late small b { color:var(--lg-amber-hi); }
+.lg-pending-actions { display:flex; gap:6px; flex-wrap:wrap; }
 
 /* ── Inscritos ── */
 .lg-summary { display:grid; grid-template-columns:repeat(auto-fit, minmax(120px,1fr)); gap:10px; margin-bottom:16px; }

@@ -332,6 +332,24 @@
     return dates.length ? dates[dates.length - 1] : '';
   }
 
+  // Resultado anotado que espera confirmación del rival: marcador propuesto,
+  // quién lo anotó y cuándo (para mostrarlo y que la comisión lo siga).
+  function pendingResult(match, sides) {
+    const sets = parseScore(match.marcador);
+    const winnerSide = winnerSideOf(match);
+    const reporterEmail = String(match.resultadoIngresadoPorEmail || '').trim().toLowerCase();
+    const reportedBy = !reporterEmail ? null
+      : sides.retador.email === reporterEmail ? sides.retador
+        : sides.retado.email === reporterEmail ? sides.retado : null;
+    return {
+      setsBy: { [sides.retador.key]: sets.map(set => set[0]), [sides.retado.key]: sets.map(set => set[1]) },
+      winner: winnerSide ? sides[winnerSide] : null,
+      reportedBy,
+      reportedAt: String(match.fechaResultado || match.actualizado || ''),
+      disputed: match.resultadoReclamado === true || match.resultadoReclamado === 'true'
+    };
+  }
+
   // Determina en qué quedó un cruce del fixture.
   function resolvePairing(a, b, window, seasonMatches, today) {
     const exception = exceptionFor(a, b);
@@ -384,7 +402,7 @@
     }
 
     if (match && match.status === 'resultado_pendiente') {
-      return { ...base, state: 'por_confirmar', date: matchPlayDate(match) };
+      return { ...base, state: 'por_confirmar', date: matchPlayDate(match), ...pendingResult(match, sides) };
     }
     if (today > deadline) {
       // Bases §8: si no se juega dentro del plazo, W.O. para ambos.

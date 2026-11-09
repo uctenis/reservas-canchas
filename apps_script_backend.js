@@ -191,6 +191,7 @@ function handleRequest(data) {
       case "league_admin_schedule":  response = leagueAdminSchedule(data); break;
       case "admin_cancel_booking":   response = adminCancelBooking(data); break;
       case "league_record_result":   response = leagueRecordResult(data); break;
+      case "league_remind_result":   response = leagueRemindResult(data); break;
       case "save_schedule_config":   response = saveScheduleConfig(data); break;
       case "get_schedule_config":    response = getScheduleConfigPublic(data.idToken); break;
       case "get_tournaments":        response = getTournaments(data); break;
@@ -1046,7 +1047,9 @@ function authorizeChallengeParticipant(data, challenge) {
   if (!verifiedEmail) return { ok: false, msg: 'Tu sesión de Google venció.' };
   if (verifiedEmail === text(challenge.retadorEmail).toLowerCase() ||
       verifiedEmail === text(challenge.retadoEmail).toLowerCase() ||
-      isAdminRequest(data)) {
+      isAdminRequest(data) ||
+      // La comisión de la liga puede confirmar resultados de partidos de liga.
+      (text(challenge.tipo) === 'liga' && isLeagueAdminRequest(data && data.idToken))) {
     return { ok: true, email: verifiedEmail };
   }
   return { ok: false, msg: 'No perteneces a este partido.' };
@@ -6666,7 +6669,58 @@ function sendLeagueResultReminders() {
       if (ok) sent++;
     });
   }
+  sent += sendLeagueConfirmReminders(values);
   return { ok: true, sent: sent };
+}
+
+/** Correo al jugador que debe confirmar un resultado de liga anotado por su
+ * rival. `byCommission` cambia el tono (lo pide la comisión a mano). */
+function sendLeagueConfirmReminder(c, byCommission) {
+  const reporter = text(c.resultadoIngresadoPorEmail).toLowerCase();
+  const reporterIsRetador = reporter && reporter === text(c.retadorEmail).toLowerCase();
+  const target = reporterIsRetador
+    ? { email: c.retadoEmail, nombre: c.retadoNombre, rival: c.retadorNombre }
+    : { email: c.retadorEmail, nombre: c.retadorNombre, rival: c.retadoNombre };
+  if (!target.email) return { ok: false, msg: 'El jugador que debe confirmar no tiene correo registrado.' };
+  const ageH = Math.max(0, Math.floor((Date.now() - new Date(c.fechaResultado || c.actualizado).getTime()) / 3600000));
+  const leftH = Math.max(0, 48 - ageH);
+  const winnerName = text(c.ganadorId) && (text(c.ganadorId) === text(c.retadorId) || text(c.ganadorId).toLowerCase() === text(c.retadorEmail).toLowerCase()) ? c.retadorNombre : c.retadoNombre;
+  const ok = sendLeagueMail(target.email, '🎾 Liga: confirma el resultado vs ' + target.rival,
+    leagueEmailHtml('Confirma tu resultado', 'Hola <strong>' + escapeHtmlBday(text(target.nombre).split(' ')[0]) + '</strong>,', [
+      (byCommission ? 'La comisión organizadora te recuerda que ' : '') + '<strong>' + escapeHtmlBday(target.rival) + '</strong> anotó el resultado de su partido de liga' + (c.fecha ? ' jugado el ' + escapeHtmlBday(leagueDateLabel(text(c.fecha))) : '') + ' y falta tu confirmación:',
+      '<span style="display:block;padding:14px;border-radius:12px;background:#fef3c7;color:#78350f;font-size:17px;font-weight:bold;text-align:center;">🏆 ' + escapeHtmlBday(winnerName) + ' · ' + escapeHtmlBday(text(c.marcador)) + '</span>',
+      'Si está bien, confírmalo con el botón de abajo (Ranking › Mis desafíos). Si <strong>no</strong> es correcto, reclámalo ahí mismo.' + (leftH > 0 ? ' Si no respondes, se confirma solo en unas ' + leftH + ' horas.' : '')
+    ], leagueButton(LEAGUE_SITE_URL + 'ranking.html#desafios', 'Revisar y confirmar', true)));
+  return ok ? { ok: true, to: target.nombre } : { ok: false, msg: 'No se pudo enviar el correo.' };
+}
+
+/** Comisión: pide al rival que confirme un resultado de liga pendiente.
+ * data: { idToken, id } */
+function leagueRemindResult(data) {
+  if (!isLeagueAdminRequest(data && data.idToken)) return { ok: false, msg: 'Solo la comisión organizadora puede pedir confirmaciones.' };
+  const found = findChallengeRow(text(data.id));
+  if (!found) return { ok: false, msg: 'Partido no encontrado.' };
+  const c = challengeFromRow(found.sheet.getRange(found.rowNumber, 1, 1, 30).getValues()[0]);
+  if (text(c.tipo) !== 'liga') return { ok: false, msg: 'No es un partido de liga.' };
+  if (c.status !== 'resultado_pendiente') return { ok: false, msg: 'Ese resultado ya no está esperando confirmación.' };
+  if (isChallengeResultDisputed(c)) return { ok: false, msg: 'El resultado está reclamado: resuélvelo desde el panel del Ranking.' };
+  return sendLeagueConfirmReminder(c, true);
+}
+
+/** Resultados de liga sin confirmar a las 24 h: un recordatorio automático
+ * al rival (corre dentro de sendLeagueResultReminders). */
+function sendLeagueConfirmReminders(values) {
+  const nowMs = Date.now();
+  let sent = 0;
+  for (let i = 1; i < values.length; i++) {
+    const c = challengeFromRow(values[i]);
+    if (!c.id || text(c.tipo) !== 'liga' || c.status !== 'resultado_pendiente' || isChallengeResultDisputed(c)) continue;
+    const ageMs = nowMs - new Date(c.fechaResultado || c.actualizado).getTime();
+    if (!(ageMs >= 24 * 3600000 && ageMs < CHALLENGE_RESULT_CONFIRM_MS)) continue;
+    if (!leagueOnce('liga_confirmar_' + c.id)) continue;
+    if (sendLeagueConfirmReminder(c, false).ok) sent++;
+  }
+  return sent;
 }
 
 /** Ejecutar UNA vez desde el editor: instala el trigger de
@@ -7199,6 +7253,24 @@ function sendLeagueRoundMail(kind, me, rival, round, p, proposal, rivalDoc) {
     return dates.length ? dates[dates.length - 1] : '';
   }
 
+  // Resultado anotado que espera confirmación del rival: marcador propuesto,
+  // quién lo anotó y cuándo (para mostrarlo y que la comisión lo siga).
+  function pendingResult(match, sides) {
+    const sets = parseScore(match.marcador);
+    const winnerSide = winnerSideOf(match);
+    const reporterEmail = String(match.resultadoIngresadoPorEmail || '').trim().toLowerCase();
+    const reportedBy = !reporterEmail ? null
+      : sides.retador.email === reporterEmail ? sides.retador
+        : sides.retado.email === reporterEmail ? sides.retado : null;
+    return {
+      setsBy: { [sides.retador.key]: sets.map(set => set[0]), [sides.retado.key]: sets.map(set => set[1]) },
+      winner: winnerSide ? sides[winnerSide] : null,
+      reportedBy,
+      reportedAt: String(match.fechaResultado || match.actualizado || ''),
+      disputed: match.resultadoReclamado === true || match.resultadoReclamado === 'true'
+    };
+  }
+
   // Determina en qué quedó un cruce del fixture.
   function resolvePairing(a, b, window, seasonMatches, today) {
     const exception = exceptionFor(a, b);
@@ -7251,7 +7323,7 @@ function sendLeagueRoundMail(kind, me, rival, round, p, proposal, rivalDoc) {
     }
 
     if (match && match.status === 'resultado_pendiente') {
-      return { ...base, state: 'por_confirmar', date: matchPlayDate(match) };
+      return { ...base, state: 'por_confirmar', date: matchPlayDate(match), ...pendingResult(match, sides) };
     }
     if (today > deadline) {
       // Bases §8: si no se juega dentro del plazo, W.O. para ambos.
