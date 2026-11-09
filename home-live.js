@@ -9,7 +9,7 @@
   'use strict';
 
   var DAYS_SHORT = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
-  var MIN_ADVANCE_MS = 4 * 60 * 60 * 1000; // misma regla que reservas: 4 horas de anticipación
+  var MIN_ADVANCE_MS = 3 * 60 * 60 * 1000; // misma regla que reservas: 3 horas de anticipación
   var WEATHER_ICONS = { 0: '☀️', 1: '🌤️', 2: '⛅', 3: '☁️', 45: '🌫️', 48: '🌫️', 51: '🌦️', 53: '🌦️', 55: '🌦️', 61: '🌧️', 63: '🌧️', 65: '🌧️', 80: '🌧️', 81: '🌧️', 82: '⛈️', 95: '⛈️' };
 
   function $(id) { return document.getElementById(id); }

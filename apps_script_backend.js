@@ -2468,10 +2468,10 @@ function getScheduleConfigPublic(idToken) {
 }
 
 // Horas mínimas antes del inicio de un bloque para poder reservarlo (0 = hasta
-// que empiece). Configurable desde el panel de admin; por defecto 4.
+// que empiece). Configurable desde el panel de admin; por defecto 3.
 function parseMinLeadHours(value) {
   var n = Number(value);
-  if (value === '' || value === null || value === undefined || !isFinite(n) || n < 0) return 4;
+  if (value === '' || value === null || value === undefined || !isFinite(n) || n < 0) return 3;
   return Math.min(n, 72);
 }
 

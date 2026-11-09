@@ -75,7 +75,7 @@ const DEFAULT_COURT_SLOTS = {
 const DEFAULT_MAX_ADVANCE_DAYS = { admin: 7, socio: 7, funcionario: 2 };
 const DEFAULT_MAX_BOOKINGS_PER_DAY = 1;
 // Horas mínimas antes del inicio de un bloque para poder reservarlo
-const DEFAULT_MIN_LEAD_HOURS = 4;
+const DEFAULT_MIN_LEAD_HOURS = 3;
 // Franjas fijas de "Clases UCTenis" (día 0=Dom…6=Sáb, bloque de inicio, canchas)
 const DEFAULT_CLASS_BLOCKS = [
   { day: 2, slot: '18:00', courts: ['cjp1', 'cjp2'] },
