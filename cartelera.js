@@ -211,15 +211,8 @@
       '&details=' + encodeURIComponent(item.type.label.replace(/^\S+\s/, '') + '. ¡Ven a alentar! ' + SITE);
   }
 
-  function shareText(item) {
-    var live = Date.now() >= item.when.at;
-    return '🎾 ' + (live ? '¡Se está jugando ahora!' : dayLabel(item.when) + ':') + ' ' + shortName(item.a.name) + ' vs ' + shortName(item.b.name) +
-      (item.court ? ' en ' + item.court : '') + ' (' + item.type.label.replace(/^\S+\s/, '') + '). ¡Ven a alentar! ' + SITE;
-  }
-
   // ── Pintado ─────────────────────────────────────────────────────────────
   function featureMatch(item, isLive) {
-    var key = esc(item.c.id);
     var timer = isLive
       ? '<div class="ct-live-now"><span class="ct-pulse"></span><div><strong>Se está jugando</strong><small data-ct-since="' + item.when.at + '">' + relativePast(item.when.at).replace('hace', 'empezó hace') + '</small></div></div>'
       : '<div class="ct-countdown" data-ct-countdown="' + item.when.at + '" aria-label="Cuenta regresiva">' +
@@ -238,7 +231,6 @@
       '<p class="ct-where">📅 ' + esc(dayLabel(item.when)) + (item.court ? ' &nbsp;·&nbsp; 📍 ' + esc(item.court) : '') + '</p>' +
       '<div class="ct-actions">' +
         (isLive ? '' : '<a class="ct-btn" href="' + esc(calendarUrl(item)) + '" target="_blank" rel="noopener">＋ Agendar para ir a ver</a>') +
-        '<button class="ct-btn ghost" type="button" data-ct-share="' + key + '">Invitar a alentar</button>' +
         '<a class="ct-link" href="' + item.type.link + '">Ver detalle →</a>' +
       '</div>' +
     '</article>';
@@ -329,7 +321,6 @@
           rail('Últimos resultados', 'Desliza →', results.map(miniResult), 'ctResults') +
         '</div>' +
       '</div>';
-    bindShare(data);
     tick();
     startRails();
   }
@@ -339,19 +330,6 @@
       : upcomingCount ? '<span class="ct-count-pill">' + upcomingCount + (upcomingCount === 1 ? ' partido agendado' : ' partidos agendados') + '</span>' : '';
     return '<div class="ct-head"><div><span class="ct-kicker"><i class="ct-dot"></i>Cartelera del club</span>' +
       '<h2>Se juega en UCTenis</h2><p>Partidos confirmados y resultados al día. ¡Date una vuelta y alienta!</p></div>' + status + '</div>';
-  }
-
-  function bindShare(data) {
-    var all = data.live.concat(data.upcoming);
-    document.querySelectorAll('[data-ct-share]').forEach(function (button) {
-      button.addEventListener('click', function () {
-        var item = all.find(function (i) { return String(i.c.id) === button.dataset.ctShare; });
-        if (!item) return;
-        var text = shareText(item);
-        if (navigator.share) navigator.share({ text: text }).catch(function () {});
-        else window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank', 'noopener');
-      });
-    });
   }
 
   // Cuenta regresiva y etiquetas "en X min" en vivo; al llegar a cero se
