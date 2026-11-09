@@ -5710,13 +5710,37 @@ function adminScheduleTournamentMatch(data) {
       booking.syncError = error.message;
       saveBookingDocument(booking, data.idToken);
     }
+    const previous = match.date && match.slot && (match.date !== dateStr || match.slot !== slot || match.courtId !== courtId)
+      ? leagueOptionLabel({ date: match.date, slot: match.slot, courtId: match.courtId || courtId }) : '';
+    const unchanged = match.date === dateStr && match.slot === slot && match.courtId === courtId;
     match.date = dateStr; match.slot = slot; match.courtId = courtId; match.bookingId = booking.id;
     match.status = match.status === 'completed' ? 'completed' : 'scheduled';
     tournament.status = tournament.status === 'finished' ? 'finished' : 'in_progress';
     tournament.updatedAt = new Date().toISOString();
     const saved = writeTournament(tournament, data.idToken);
     if (!saved.ok) return saved;
-    return { ok: true, tournament: saved.tournament, calendarPending: booking.status !== 'confirmed' };
+
+    // Correo de confirmación con la hora a cada jugador (si se volvió a
+    // guardar la misma hora, no se repite el aviso).
+    const emails = { sent: [], failed: [], skipped: [] };
+    if (!unchanged) {
+      const when = leagueOptionLabel({ date: dateStr, slot: slot, courtId: courtId });
+      [{ me: match.player1, rival: match.player2 }, { me: match.player2, rival: match.player1 }].forEach(function(p) {
+        const to = text(p.me.email).toLowerCase();
+        if (!to) { emails.skipped.push(text(p.me.name)); return; }
+        const ok = sendLeagueMail(to,
+          (previous ? '🔁 ' + tournament.name + ': cambió la hora de tu partido vs ' : '📅 ' + tournament.name + ': tu partido vs ') + text(p.rival.name) + ' · ' + when,
+          leagueEmailHtml(previous ? 'Cambió la hora de tu partido' : 'Tu partido quedó agendado', 'Hola <strong>' + escapeHtmlBday(text(p.me.name).split(' ')[0]) + '</strong>,', [
+            'Tu partido de <strong>' + escapeHtmlBday(match.roundName || 'campeonato') + '</strong> contra <strong>' + escapeHtmlBday(p.rival.name) + '</strong> quedó agendado y la cancha reservada:',
+            '<span style="display:block;padding:14px;border-radius:12px;background:#fef3c7;color:#78350f;font-size:17px;font-weight:bold;text-align:center;">📅 ' + escapeHtmlBday(when) + '</span>',
+            previous ? 'La hora anterior (<s>' + escapeHtmlBday(previous) + '</s>) quedó liberada.' : '',
+            'También te llega la invitación de Google Calendar. Si no puedes a esa hora, avísale a la organización cuanto antes.'
+          ].filter(Boolean), leagueButton(LEAGUE_SITE_URL + 'campeonato.html?id=' + encodeURIComponent(tournament.id), 'Ver el campeonato', true),
+          'Organización · ' + escapeHtmlBday(tournament.organizer || 'UCTenis Club'), tournament.name));
+        (ok ? emails.sent : emails.failed).push(to);
+      });
+    }
+    return { ok: true, tournament: saved.tournament, calendarPending: booking.status !== 'confirmed', emails: emails };
   } finally {
     lock.releaseLock();
   }
@@ -5936,12 +5960,12 @@ function leaguePlayerPhone(email) {
 }
 
 /** Carcasa común de los correos de la liga (ámbar, como la página). */
-function leagueEmailHtml(headline, greeting, paragraphs, buttonsHtml, footnote) {
+function leagueEmailHtml(headline, greeting, paragraphs, buttonsHtml, footnote, kicker) {
   return [
     '<div style="background:#f4f1e8;padding:22px 10px;font-family:Arial,Helvetica,sans-serif;">',
     '<div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 6px 24px rgba(10,23,18,.12);">',
     '<div style="background:linear-gradient(135deg,#78350f,#0a1712);padding:26px 24px;text-align:center;">',
-    '<p style="color:#fbbf24;margin:0;font-size:12px;font-weight:bold;letter-spacing:1.6px;text-transform:uppercase;">Campeonato de Liga UCTenis</p>',
+    '<p style="color:#fbbf24;margin:0;font-size:12px;font-weight:bold;letter-spacing:1.6px;text-transform:uppercase;">' + escapeHtmlBday(kicker || 'Campeonato de Liga UCTenis') + '</p>',
     '<h1 style="color:#ffffff;margin:10px 0 0;font-size:22px;line-height:1.3;">' + headline + '</h1>',
     '</div>',
     '<div style="padding:24px 26px 10px;">',
@@ -6278,17 +6302,38 @@ function leagueAdminSchedule(data) {
       agendadoPor: adminEmail
     });
 
+    // Correo de confirmación con la hora a cada jugador (y copia a quien
+    // agendó). Si se cambió la hora de un partido ya agendado, se dice cuál
+    // era la anterior para que nadie llegue al horario viejo.
     const when = leagueOptionLabel({ date: dateStr, slot: slot, courtId: courtId });
+    const old = existing && existing.challenge;
+    const previous = old && old.fecha && old.slot && (old.fecha !== dateStr || old.slot !== slot || old.courtId !== courtId)
+      ? leagueOptionLabel({ date: old.fecha, slot: old.slot, courtId: old.courtId || courtId }) : '';
+    const whenBox = '<span style="display:block;padding:14px;border-radius:12px;background:#fef3c7;color:#78350f;font-size:17px;font-weight:bold;text-align:center;">📅 ' + escapeHtmlBday(when) + '</span>';
+    const emails = { sent: [], failed: [] };
     [{ me: A, rival: B }, { me: B, rival: A }].forEach(function(p) {
-      sendLeagueMail(p.me.email, '📅 Liga: la comisión agendó tu partido vs ' + p.rival.nombre + ' · ' + when,
-        leagueEmailHtml('Tu partido quedó agendado', 'Hola <strong>' + escapeHtmlBday(text(p.me.nombre).split(' ')[0]) + '</strong>,', [
-          'La comisión organizadora agendó tu partido' + (fechaNum ? ' de la <strong>Fecha ' + fechaNum + '</strong>' : '') + ' contra <strong>' + escapeHtmlBday(p.rival.nombre) + '</strong> y la cancha ya está reservada:',
-          '<span style="display:block;padding:14px;border-radius:12px;background:#fef3c7;color:#78350f;font-size:17px;font-weight:bold;text-align:center;">📅 ' + escapeHtmlBday(when) + '</span>',
-          'Si no puedes a esa hora, avísale a la comisión cuanto antes. Al terminar, anoten el resultado en la página de la liga.'
-        ], leagueButton(LEAGUE_SITE_URL + 'liga.html', 'Ver mi liga', true)));
+      const ok = sendLeagueMail(p.me.email,
+        (previous ? '🔁 Liga: cambió la hora de tu partido vs ' : '📅 Liga: partido confirmado vs ') + p.rival.nombre + ' · ' + when,
+        leagueEmailHtml(previous ? 'Cambió la hora de tu partido' : 'Tu partido quedó agendado', 'Hola <strong>' + escapeHtmlBday(text(p.me.nombre).split(' ')[0]) + '</strong>,', [
+          'La comisión organizadora ' + (previous ? 'reagendó' : 'agendó') + ' tu partido' + (fechaNum ? ' de la <strong>Fecha ' + fechaNum + '</strong>' : '') + ' contra <strong>' + escapeHtmlBday(p.rival.nombre) + '</strong>. La cancha ya está reservada y el partido queda <strong>confirmado</strong>:',
+          whenBox,
+          previous ? 'La hora anterior (<s>' + escapeHtmlBday(previous) + '</s>) quedó liberada.' : '',
+          'También te llega la invitación de Google Calendar y un recordatorio el día antes. Si no puedes a esa hora, avísale a la comisión cuanto antes. Al terminar, anoten el resultado en la página de la liga.'
+        ].filter(Boolean), leagueButton(LEAGUE_SITE_URL + 'liga.html', 'Ver mi liga', true)));
+      (ok ? emails.sent : emails.failed).push(p.me.email);
     });
+    if (adminEmail && adminEmail !== A.email && adminEmail !== B.email) {
+      sendLeagueMail(adminEmail, '✅ Agendaste ' + A.nombre + ' vs ' + B.nombre + ' · ' + when,
+        leagueEmailHtml('Partido agendado', '', [
+          'Quedó agendado el partido de liga <strong>' + escapeHtmlBday(A.nombre) + ' vs ' + escapeHtmlBday(B.nombre) + '</strong>' + (fechaNum ? ' (Fecha ' + fechaNum + ')' : '') + ':',
+          whenBox,
+          emails.failed.length
+            ? '⚠️ No se pudo enviar el correo a: ' + escapeHtmlBday(emails.failed.join(', ')) + '. Avísales por otra vía.'
+            : 'Ambos jugadores recibieron el correo de confirmación con la hora.'
+        ], leagueButton(LEAGUE_SITE_URL + 'liga.html', 'Ver el fixture', true)));
+    }
 
-    return { ok: true, challenge: mirror, calendarPending: booking.status !== 'confirmed' };
+    return { ok: true, challenge: mirror, calendarPending: booking.status !== 'confirmed', emails: emails, rescheduled: Boolean(previous) };
   } finally {
     lock.releaseLock();
   }
@@ -6388,7 +6433,7 @@ function adminCancelBooking(data) {
           motivo ? 'Motivo: <strong>' + escapeHtmlBday(motivo) + '</strong>' : '',
           isLeague ? 'Coordinen otra hora dentro del plazo de la fecha.' : 'Puedes reservar otro horario en la página de reservas.'
         ].filter(Boolean), leagueButton(LEAGUE_SITE_URL + (isLeague ? 'liga.html' : 'reservas.html'), isLeague ? 'Ver la liga' : 'Reservar otra hora', true),
-        'Administración · UCTenis Club'));
+        'Administración · UCTenis Club', isLeague ? '' : 'UCTenis Club'));
     });
 
     return { ok: true, booking: publicBooking(booking), challenge: challenge ? publicChallenge(challenge) : null, notified: recipients.length };

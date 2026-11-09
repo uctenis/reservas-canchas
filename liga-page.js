@@ -624,7 +624,10 @@
       }
       state.busy = false;
       dialog().close();
-      toast(`Partido agendado: ${optionLabel(option)}. Ambos jugadores recibieron un correo.`);
+      const failed = (data.emails && data.emails.failed) || [];
+      toast(failed.length
+        ? `Partido agendado: ${optionLabel(option)}, pero no se pudo enviar el correo a ${failed.join(', ')}. Avísales por otra vía.`
+        : `Partido ${data.rescheduled ? 'reagendado' : 'agendado'}: ${optionLabel(option)}. Ambos jugadores recibieron el correo con la hora.`, failed.length ? 'bad' : undefined);
       render();
     } catch (err) {
       state.busy = false;

@@ -440,7 +440,11 @@
         if (!date || !slot || !courtId) throw new Error('Selecciona fecha, hora y cancha.');
         const data=await api('admin_schedule_match',{id:state.current.id,matchId:row.dataset.matchId,date,slot,courtId});
         applyTournamentUpdate(data.tournament);
-        notice(data.calendarPending ? 'Cancha bloqueada; Calendar quedo en cola de sincronizacion.' : 'Partido programado y cancha bloqueada.');
+        const mail = data.emails || {};
+        const mailNote = (mail.failed || []).length ? ` No se pudo enviar el correo a ${mail.failed.join(', ')}: avísales por otra vía.`
+          : (mail.skipped || []).length ? ` Sin correo registrado: ${mail.skipped.join(', ')}; avísales por otra vía.`
+          : (mail.sent || []).length ? ' Ambos jugadores recibieron el correo con la hora.' : '';
+        notice((data.calendarPending ? 'Cancha bloqueada; Calendar quedo en cola de sincronizacion.' : 'Partido programado y cancha bloqueada.') + mailNote, Boolean((mail.failed || []).length));
       }
       if (event.target.closest('.save-result')) {
         const sets=[0,1,2].map(i=>({a:row.querySelector(`[data-score="${i}-a"]`).value,b:row.querySelector(`[data-score="${i}-b"]`).value})).filter(s=>s.a!==''&&s.b!=='');
