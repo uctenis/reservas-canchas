@@ -326,6 +326,17 @@ let newsListeners = [];
 let staffListeners = [];
 let cachedPlayers = [];
 let cachedChallenges = [];
+// Consultas en curso: si varias partes de la página piden lo mismo a la vez
+// (portada, cumpleaños, cartelera...) comparten una sola lectura a Firestore.
+let playersInflight = null;
+let challengesInflight = null;
+let newsInflight = null;
+// Copia local de jugadores para pintar al instante en la próxima visita.
+const PLAYERS_CACHE_KEY = 'uctenis_players_cache';
+const PLAYERS_CACHE_MAX_MS = 7 * 24 * 60 * 60 * 1000;
+function savePlayersLocal(list) {
+  try { localStorage.setItem(PLAYERS_CACHE_KEY, JSON.stringify({ ts: Date.now(), list })); } catch (e) {}
+}
 let cachedNews = [];
 let cachedStaff = [];
 
@@ -935,10 +946,26 @@ const DB = {
       return cachedPlayers;
     }
     if (!this.isCloudConfigured()) throw new Error('Firestore no está disponible.');
-    // Si no hay caché, hacer fetch manual
-    const snapshot = await firebaseDb.collection(FIREBASE_COLLECTIONS.players).get();
-    cachedPlayers = snapshot.docs.map(doc => withLowercaseEmail({ id: doc.id, ...doc.data() }));
-    return cachedPlayers;
+    if (playersInflight) return playersInflight;
+    playersInflight = firebaseDb.collection(FIREBASE_COLLECTIONS.players).get()
+      .then(snapshot => {
+        cachedPlayers = snapshot.docs.map(doc => withLowercaseEmail({ id: doc.id, ...doc.data() }));
+        savePlayersLocal(cachedPlayers);
+        return cachedPlayers;
+      })
+      .finally(() => { playersInflight = null; });
+    return playersInflight;
+  },
+
+  /** Última copia local de jugadores (puede estar desactualizada). Sirve
+   * para pintar al instante mientras llega el dato real. */
+  peekPlayersCache() {
+    if (cachedPlayers.length > 0) return cachedPlayers;
+    try {
+      const saved = JSON.parse(localStorage.getItem(PLAYERS_CACHE_KEY) || 'null');
+      if (saved && Array.isArray(saved.list) && Date.now() - saved.ts < PLAYERS_CACHE_MAX_MS) return saved.list;
+    } catch (e) {}
+    return null;
   },
 
   /** Lee la caché de jugadores del listener en tiempo real sin disparar una
@@ -967,6 +994,7 @@ const DB = {
             id: doc.id,
             ...doc.data()
           }));
+          savePlayersLocal(cachedPlayers);
           this.dispatchEvent('players-updated', { count: cachedPlayers.length });
           console.log(`✅ ${cachedPlayers.length} jugadores actualizados en tiempo real`);
         },
@@ -1488,12 +1516,16 @@ const DB = {
       return cachedChallenges;
     }
     if (!this.isCloudConfigured()) throw new Error('Firestore no está disponible.');
-    // Si no hay caché, hacer fetch manual
-    const snapshot = await firebaseDb.collection(FIREBASE_COLLECTIONS.challenges).get();
-    cachedChallenges = snapshot.docs
-      .map(doc => normalizeChallengeRecord({ id: doc.id, ...doc.data() }))
-      .sort((a, b) => (a.fecha || '').localeCompare(b.fecha || '') || (b.creado || '').localeCompare(a.creado || ''));
-    return cachedChallenges;
+    if (challengesInflight) return challengesInflight;
+    challengesInflight = firebaseDb.collection(FIREBASE_COLLECTIONS.challenges).get()
+      .then(snapshot => {
+        cachedChallenges = snapshot.docs
+          .map(doc => normalizeChallengeRecord({ id: doc.id, ...doc.data() }))
+          .sort((a, b) => (a.fecha || '').localeCompare(b.fecha || '') || (b.creado || '').localeCompare(a.creado || ''));
+        return cachedChallenges;
+      })
+      .finally(() => { challengesInflight = null; });
+    return challengesInflight;
   },
 
   // ✅ NUEVO: Inicializar listener de desafíos en tiempo real
@@ -1567,12 +1599,16 @@ const DB = {
       return cachedNews;
     }
     if (!this.isCloudConfigured()) throw new Error('Firestore no está disponible.');
-    // Si no hay caché, hacer fetch manual
-    const snapshot = await firebaseDb.collection(FIREBASE_COLLECTIONS.news).get();
-    cachedNews = snapshot.docs
-      .map(doc => ({ id: doc.id, ...doc.data() }))
-      .sort((a, b) => (b.date || b.creado || '').localeCompare(a.date || a.creado || ''));
-    return cachedNews;
+    if (newsInflight) return newsInflight;
+    newsInflight = firebaseDb.collection(FIREBASE_COLLECTIONS.news).get()
+      .then(snapshot => {
+        cachedNews = snapshot.docs
+          .map(doc => ({ id: doc.id, ...doc.data() }))
+          .sort((a, b) => (b.date || b.creado || '').localeCompare(a.date || a.creado || ''));
+        return cachedNews;
+      })
+      .finally(() => { newsInflight = null; });
+    return newsInflight;
   },
 
   // ✅ NUEVO: Inicializar listener de noticias en tiempo real

@@ -1598,10 +1598,10 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
 
-<script src="db.js?v=20261109_3h"></script>
+<script src="db.js?v=20261109_fluida"></script>
 <script src="liga.js?v=20261109_pendientes"></script>
 <script src="script.js?v=20260602_v2"></script>
-<script src="home-live.js?v=20261109_3h"></script>
+<script src="home-live.js?v=20261109_fluida"></script>
 <script src="cartelera.js?v=20261109_sinalentar"></script>
 <script src="cumple.js?v=20261026_t1"></script>
 <script>
@@ -2450,10 +2450,21 @@ function homeMergeChallengeSources(sources) {
   return Array.from(byId.values());
 }
 
-async function loadLiveData() {
+async function loadLiveData(opts) {
+  // cacheOnly: pinta al instante con la copia local (sin red); luego la
+  // llamada normal la reemplaza con el dato fresco.
+  const cacheOnly = Boolean(opts && opts.cacheOnly);
+  const cloud = !cacheOnly && DB.isCloudConfigured();
+  // Jugadores y novedades se piden en paralelo con los desafíos.
+  const playersPromise = cloud ? DB.getPlayersCloud() : Promise.resolve(DB.peekPlayersCache() || []);
+  const newsPromise = cloud ? DB.getNewsCloud() : Promise.resolve(DB.getNews());
+  playersPromise.catch(() => {});
+  newsPromise.catch(() => {});
   let challenges = [];
   
-  if (DB.isCloudConfigured()) {
+  if (cacheOnly) {
+    challenges = DB.getChallenges();
+  } else if (DB.isCloudConfigured()) {
     try {
       const cloudChallenges = await DB.getChallengesCloud();
       DB.saveChallenges(cloudChallenges);
@@ -2500,9 +2511,9 @@ async function loadLiveData() {
   let birthdaysCard = null;
   let customNews = [];
 
-  if (DB.isCloudConfigured()) {
+  if (cacheOnly || DB.isCloudConfigured()) {
     try {
-      playersList = await DB.getPlayersCloud();
+      playersList = await playersPromise;
       playersList.forEach(p => {
         if (p.nombre) playersMap[p.nombre.toLowerCase().trim()] = p;
         if (p.id) playersMap[p.id.toLowerCase().trim()] = p;
@@ -2539,8 +2550,8 @@ async function loadLiveData() {
     }
 
     try {
-      customNews = await DB.getNewsCloud();
-      DB.saveNews(customNews);
+      customNews = await newsPromise;
+      if (!cacheOnly) DB.saveNews(customNews);
     } catch (e) {
       console.warn("Error cargando novedades de Firebase:", e);
       customNews = DB.getNews();
@@ -3357,6 +3368,7 @@ window.closeFloatingAlert = closeFloatingAlert;
 (function() {
   let _liveDataTimer = null;
   const _origLoadLiveData = loadLiveData;
+  window.loadLiveDataNow = opts => _origLoadLiveData(opts).catch(e => console.warn('Portada:', e));
   window.loadLiveData = function() {
     clearTimeout(_liveDataTimer);
     _liveDataTimer = setTimeout(() => _origLoadLiveData(), 500);
@@ -3398,8 +3410,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (event.target.id === 'homeAuthModal') closeHomeAuthModal();
     if (event.target.id === 'pendingChallengeModal') closePendingChallengeModal();
   });
-  // Load live challenges after a short delay to allow Firebase to initialize
-  setTimeout(() => loadLiveData(), 800);
+  // Firebase ya quedó listo al cargar db.js: se pinta altiro con la copia
+  // local (si hay) y en paralelo se piden los datos frescos.
+  if (DB.getChallenges().length) loadLiveDataNow({ cacheOnly: true });
+  loadLiveDataNow();
 
   // Re-evaluar sesión/banner de perfil al volver por bfcache o al cambiar
   // la sesión en otra pestaña, para que el banner se oculte solo sin recargar.

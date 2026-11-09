@@ -1,4 +1,4 @@
-const CACHE_NAME = 'tenis-uct-cache-v28';
+const CACHE_NAME = 'tenis-uct-cache-v29';
 const urlsToCache = [
   './',
   'index.html',
@@ -33,9 +33,42 @@ self.addEventListener('activate', event => {
   return self.clients.claim();
 });
 
-// Network-first: siempre busca en red, cache solo como fallback
+// Estrategia:
+// - Solo se intercepta lo propio (GET del mismo sitio); Firestore, el backend
+//   y las fuentes externas van directo a la red sin pasar por aquí.
+// - Archivos versionados (?v=...) e imágenes: se sirven al instante desde la
+//   caché y se refrescan por detrás. Al cambiar la versión cambia la URL, así
+//   que nunca queda un JS/CSS viejo pegado.
+// - Páginas y lo demás: red primero (siempre lo último) y caché si no hay red.
+const IMAGE_RE = /\.(png|jpe?g|webp|gif|svg|ico)$/i;
+
 self.addEventListener('fetch', event => {
+  const req = event.request;
+  if (req.method !== 'GET') return;
+  const url = new URL(req.url);
+  if (url.origin !== self.location.origin) return;
+
+  if (url.searchParams.has('v') || IMAGE_RE.test(url.pathname)) {
+    event.respondWith(caches.open(CACHE_NAME).then(cache =>
+      cache.match(req).then(cached => {
+        const network = fetch(req).then(res => {
+          if (res && res.ok) cache.put(req, res.clone());
+          return res;
+        }).catch(() => cached || Response.error());
+        if (cached) { event.waitUntil(network); return cached; }
+        return network;
+      })
+    ));
+    return;
+  }
+
   event.respondWith(
-    fetch(event.request).catch(() => caches.match(event.request, { ignoreSearch: true }))
+    fetch(req).then(res => {
+      if (res && res.ok && (req.mode === 'navigate' || url.pathname.endsWith('.html'))) {
+        const copy = res.clone();
+        caches.open(CACHE_NAME).then(cache => cache.put(req, copy)).catch(() => {});
+      }
+      return res;
+    }).catch(() => caches.match(req, { ignoreSearch: true }))
   );
 });

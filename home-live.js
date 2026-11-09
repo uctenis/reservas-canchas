@@ -36,10 +36,19 @@
     var now = new Date();
     var minTime = now.getTime() + MIN_ADVANCE_MS;
 
-    for (var offset = 0; offset < 5; offset++) {
-      var day = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset);
-      if (day.getDay() === 0) continue; // el club no abre los domingos
-      var data = await DB.getSlotsAPI(isoLocal(day));
+    // Hoy y el siguiente día hábil se piden en paralelo (cada consulta al
+    // backend tarda ~1-2 s); los demás solo si hacen falta.
+    var days = [];
+    for (var o = 0; o < 5; o++) {
+      var d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + o);
+      if (d.getDay() !== 0) days.push({ offset: o, day: d }); // el club no abre los domingos
+    }
+    var requests = days.slice(0, 2).map(function (item) { return DB.getSlotsAPI(isoLocal(item.day)); });
+
+    for (var i = 0; i < days.length; i++) {
+      var offset = days[i].offset;
+      var day = days[i].day;
+      var data = await (requests[i] || DB.getSlotsAPI(isoLocal(day)));
       if (!data || !data.ok || !data.courts) throw new Error('sin disponibilidad');
 
       var best = null;
