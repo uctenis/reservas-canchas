@@ -1477,9 +1477,20 @@ Queda firme y suma en la tabla, sin esperar al rival.`)) return;
         } else {
           const data = await api('confirm_challenge_result', { id: button.dataset.match, confirmadoPor: myEmail() });
           const saved = data.challenge || {};
-          state.matches = state.matches.map(m => m.id === button.dataset.match
-            ? { ...m, status: 'completado', fechaConfirmacion: saved.fechaConfirmacion || new Date().toISOString(), confirmadoPor: saved.confirmadoPor || myEmail() }
-            : m);
+          const patch = {
+            status: 'completado',
+            fechaConfirmacion: saved.fechaConfirmacion || new Date().toISOString(),
+            confirmadoPor: saved.confirmadoPor || myEmail()
+          };
+          if (saved.rankingAplicado) patch.rankingAplicado = saved.rankingAplicado;
+          // La página lee de Firestore: se guarda ahí también para que el
+          // listener en vivo no lo devuelva a «por confirmar» (igual que el
+          // ranking al confirmar un desafío).
+          if (DB.isCloudConfigured()) {
+            try { await DB.updateChallengeCloud(button.dataset.match, patch); }
+            catch (e) { console.warn('No se pudo guardar la confirmación en Firestore:', e); }
+          }
+          state.matches = state.matches.map(m => m.id === button.dataset.match ? { ...m, ...patch } : m);
           toast('Resultado confirmado. Ya suma en la tabla.');
         }
       } catch (err) {
