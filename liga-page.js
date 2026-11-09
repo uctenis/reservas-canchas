@@ -456,7 +456,10 @@
     renderPropose();
     try {
       const data = await DB.getSlotsAPI(date);
-      const minStart = Date.now() + 4 * 3600000;
+      // Jugadores: la misma anticipación mínima de las reservas; la comisión
+      // puede agendar cualquier horario que aún no empiece.
+      const leadHours = propose.ctx && propose.ctx.admin ? 0 : window.parseMinLeadHours(undefined);
+      const minStart = Date.now() + leadHours * 3600000;
       const courts = {};
       Object.entries((data && data.ok && data.courts) || {}).forEach(([courtId, list]) => {
         if (!Array.isArray(list)) return;
@@ -491,10 +494,12 @@
     dlg.innerHTML = `
       <div class="lg-dialog-inner">
         <div class="lg-dialog-head">
-          <div><span class="lg-eyebrow">Fecha ${ctx.round.numero} · plazo ${esc(fmtLong(ctx.deadline))}</span><h3>Propón horarios a ${esc(first)}</h3></div>
+          <div><span class="lg-eyebrow">Fecha ${ctx.round.numero} · plazo ${esc(fmtLong(ctx.deadline))}</span><h3>${ctx.admin ? `Agendar ${esc(ctx.a.nombre)} vs ${esc(ctx.b.nombre)}` : `Propón horarios a ${esc(first)}`}</h3></div>
           <button type="button" class="lg-dialog-x" data-dlg="close" aria-label="Cerrar">×</button>
         </div>
-        <p class="lg-muted lg-dialog-intro">Elige hasta 3 horarios con cancha libre. ${esc(first)} recibe un correo y elige uno con un clic: la cancha se reserva sola.</p>
+        <p class="lg-muted lg-dialog-intro">${ctx.admin
+          ? 'Elige un horario con cancha libre. Se reserva la cancha, el partido queda confirmado y ambos jugadores reciben un correo y la invitación de Google Calendar.'
+          : `Elige hasta 3 horarios con cancha libre. ${esc(first)} recibe un correo y elige uno con un clic: la cancha se reserva sola.`}</p>
         <div class="lg-days" role="tablist" aria-label="Días">${dates.map(d => {
           const count = propose.picked.filter(o => o.date === d).length;
           const parts = optionParts({ date: d, slot: '', courtId: '' });
@@ -503,18 +508,20 @@
         }).join('')}</div>
         <div class="lg-slots">${grid}</div>
         <div class="lg-tray">
-          <span class="lg-eyebrow">Tu propuesta (${propose.picked.length}/3)</span>
+          <span class="lg-eyebrow">${ctx.admin ? 'Horario elegido' : `Tu propuesta (${propose.picked.length}/3)`}</span>
           ${propose.picked.length ? `<div class="lg-options">${propose.picked.map((o, i) => {
             const parts = optionParts(o);
             return `<div class="lg-option is-static"><span>${esc(parts.day)}</span><b>${esc(parts.slot)}</b><small>${esc(parts.court)}</small><button type="button" class="lg-option-x" data-dlg="unpick" data-i="${i}" aria-label="Quitar">×</button></div>`;
-          }).join('')}</div>` : '<p class="lg-muted">Toca un horario para agregarlo. Mientras más opciones, más fácil que le acomode.</p>'}
-          <label class="lg-note-field">Mensaje para ${esc(first)} (opcional)
+          }).join('')}</div>` : `<p class="lg-muted">${ctx.admin ? 'Toca un horario para elegirlo.' : 'Toca un horario para agregarlo. Mientras más opciones, más fácil que le acomode.'}</p>`}
+          ${ctx.admin ? '' : `<label class="lg-note-field">Mensaje para ${esc(first)} (opcional)
             <input id="lgProposeNote" maxlength="200" value="${esc(propose.note)}" placeholder="Ej: prefiero en la tarde">
-          </label>
+          </label>`}
         </div>
         <div class="lg-dialog-foot">
           <button type="button" class="lg-btn ghost" data-dlg="close">Cancelar</button>
-          <button type="button" class="lg-btn" data-dlg="send" ${propose.picked.length && !state.busy ? '' : 'disabled'}>${state.busy ? 'Enviando…' : `Enviar propuesta${propose.picked.length ? ` (${propose.picked.length})` : ''}`}</button>
+          <button type="button" class="lg-btn" data-dlg="send" ${propose.picked.length && !state.busy ? '' : 'disabled'}>${ctx.admin
+            ? (state.busy ? 'Reservando cancha…' : 'Agendar partido')
+            : (state.busy ? 'Enviando…' : `Enviar propuesta${propose.picked.length ? ` (${propose.picked.length})` : ''}`)}</button>
         </div>
       </div>`;
   }
@@ -534,13 +541,14 @@
       const option = { date: propose.day, courtId: btn.dataset.court, slot: btn.dataset.slot };
       const at = propose.picked.findIndex(o => o.date === option.date && o.slot === option.slot && o.courtId === option.courtId);
       if (at >= 0) propose.picked.splice(at, 1);
+      else if (propose.ctx && propose.ctx.admin) propose.picked = [option];
       else if (propose.picked.some(o => o.date === option.date && o.slot === option.slot)) toast('Ya elegiste ese mismo horario en otra cancha.', 'bad');
       else if (propose.picked.length >= 3) toast('Máximo 3 horarios. Quita uno para cambiarlo.', 'bad');
       else propose.picked.push(option);
       renderPropose();
       return;
     }
-    if (kind === 'send') await sendProposal();
+    if (kind === 'send') await (propose.ctx && propose.ctx.admin ? sendAdminSchedule() : sendProposal());
   }
 
   async function sendProposal() {
@@ -578,6 +586,54 @@
     if (['por_agendar', 'invitado', 'agendado'].includes(p.state)) return true;
     // Fecha vencida sin resultado: solo la comisión puede anotarlo tarde.
     return Boolean(asAdmin && p.state === 'wo_doble');
+  }
+
+  // ── La comisión agenda un partido directamente ───────────────────────
+  // Sin esperar a que los jugadores se pongan de acuerdo: cualquier partido
+  // sin resultado cuyo plazo no haya vencido (también para reagendarlo).
+  function canAdminSchedule(p, today) {
+    if (!p || p.retiro || p.a.retirado || p.b.retirado || today > p.deadline) return false;
+    return ['proximo', 'por_agendar', 'invitado', 'agendado'].includes(p.state);
+  }
+
+  function adminScheduleContext(button) {
+    const gender = button.dataset.gender || state.gender;
+    const v = view(gender);
+    const round = v.rounds[Number(button.dataset.round) - 1];
+    const p = round && round.partidos.find(item => item.a.key === button.dataset.a && item.b.key === button.dataset.b);
+    if (!p || !canAdminSchedule(p, v.today)) return null;
+    return { a: p.a, b: p.b, rival: p.b, round, deadline: p.deadline, gender, admin: true };
+  }
+
+  async function sendAdminSchedule() {
+    const ctx = propose.ctx;
+    const option = propose.picked[0];
+    if (!ctx || !option || state.busy) return;
+    state.busy = true;
+    renderPropose();
+    const ref = entrant => ({ id: entrant.id, nombre: entrant.nombre, email: entrant.email });
+    try {
+      const data = await api('league_admin_schedule', {
+        playerA: ref(ctx.a), playerB: ref(ctx.b), date: option.date, slot: option.slot, courtId: option.courtId,
+        genero: ctx.gender, temporada: season.id, ligaFecha: ctx.round.numero
+      });
+      const challenge = data.challenge;
+      if (challenge) {
+        state.matches = [...state.matches.filter(m => m.id !== challenge.id), challenge];
+        if (DB.isCloudConfigured() && DB.saveChallengeCloud) DB.saveChallengeCloud(challenge).catch(() => {});
+      }
+      state.busy = false;
+      dialog().close();
+      toast(`Partido agendado: ${optionLabel(option)}. Ambos jugadores recibieron un correo.`);
+      render();
+    } catch (err) {
+      state.busy = false;
+      toast(err.message, 'bad');
+      // Si el horario se ocupó, se vuelve a consultar ese día.
+      propose.slots = {};
+      propose.picked = [];
+      if (propose.day) loadDay(propose.day);
+    }
   }
 
   const result = { ctx: null };
@@ -1055,6 +1111,9 @@
       if (p.state === 'wo' && p.retiro) foot = 'Rival retirado de la liga';
       if (p.state === 'jugado' && p.inconcluso) foot = 'Inconcluso: se tomó hasta donde llegó';
       if (p.exception) foot = `${foot ? `${foot} · ` : ''}Plazo extendido al ${fmt(p.deadline)}`;
+      if (state.isAdmin && canAdminSchedule(p, v.today)) {
+        foot = `${foot ? `${foot} · ` : ''}<button class="lg-link" type="button" data-action="admin-schedule" data-gender="${esc(v.gender)}" data-round="${round.numero}" data-a="${esc(p.a.key)}" data-b="${esc(p.b.key)}">${p.state === 'agendado' || p.state === 'invitado' ? 'Reagendar' : 'Agendar'}</button>`;
+      }
       if (state.isAdmin && canRecordResult(p, v.today, true)) {
         foot = `${foot ? `${foot} · ` : ''}<button class="lg-link" type="button" data-action="record-result" data-gender="${esc(v.gender)}" data-round="${round.numero}" data-a="${esc(p.a.key)}" data-b="${esc(p.b.key)}">Anotar resultado</button>`;
       }
@@ -1224,7 +1283,7 @@
           <span class="lg-inline"><input type="date" value="${esc(p.exception || L.addDays(L.todayIso(), 7))}" data-exception-date="${esc(p.a.id)}|${esc(p.b.id)}" aria-label="Nuevo plazo">
           <button class="lg-link" type="button" data-action="admin-exception" data-a="${esc(p.a.id)}" data-b="${esc(p.b.id)}">${p.exception ? 'Cambiar plazo' : 'Extender plazo'}</button></span>
         </li>`).join('')}</ul>` : '<p class="lg-muted">No hay partidos vencidos sin jugar.</p>'}
-      <p class="lg-legend">Para anotar el resultado de un partido que no se agendó en línea, usa «Anotar resultado» en la pestaña Fixture: queda confirmado de inmediato. Los W.O. y las correcciones de marcador se hacen desde el panel del Ranking.</p>`;
+      <p class="lg-legend">Para agendar un partido sin esperar a que los jugadores se pongan de acuerdo, usa «Agendar» en la pestaña Fixture: se reserva la cancha, el partido queda confirmado y ambos reciben un correo. Para anotar el resultado de un partido que no se agendó en línea, usa «Anotar resultado» en la pestaña Fixture: queda confirmado de inmediato. Los W.O. y las correcciones de marcador se hacen desde el panel del Ranking.</p>`;
   }
 
   // ── Pintado general ───────────────────────────────────────────────────
@@ -1305,6 +1364,12 @@
       const ctx = resultContext(button);
       if (ctx) openResult(ctx);
       else toast('Ese partido ya tiene un resultado o todavía no se puede anotar.', 'bad');
+      return;
+    }
+    if (action === 'admin-schedule' && state.isAdmin) {
+      const ctx = adminScheduleContext(button);
+      if (ctx) openPropose(ctx);
+      else toast('Ese partido ya tiene resultado o su plazo venció.', 'bad');
       return;
     }
     if (action === 'accept-proposal' || action === 'counter-proposal') {

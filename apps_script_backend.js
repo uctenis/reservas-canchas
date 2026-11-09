@@ -188,6 +188,7 @@ function handleRequest(data) {
       case "league_my_proposals":    response = leagueMyProposals(data); break;
       case "league_get_proposal":    response = leagueGetProposal(data); break;
       case "league_accept_proposal": response = leagueAcceptProposal(data); break;
+      case "league_admin_schedule":  response = leagueAdminSchedule(data); break;
       case "league_record_result":   response = leagueRecordResult(data); break;
       case "save_schedule_config":   response = saveScheduleConfig(data); break;
       case "get_schedule_config":    response = getScheduleConfigPublic(data.idToken); break;
@@ -6155,6 +6156,141 @@ function leagueAcceptProposal(data) {
   });
 
   return { ok: true, challenge: mirror, calendar: invite };
+}
+
+/**
+ * La comisión agenda directamente un partido de liga entre dos socios, sin
+ * esperar a que se pongan de acuerdo en la página: reserva la cancha, deja
+ * el partido aceptado, invita a ambos en Calendar y les avisa por correo.
+ * Si ya había una invitación o un partido agendado entre ellos, se
+ * reprograma ese mismo (y se libera la cancha anterior).
+ * data: { idToken, playerA: {id, nombre, email}, playerB, date, slot,
+ *         courtId, genero, temporada, ligaFecha }
+ */
+function leagueAdminSchedule(data) {
+  if (!isLeagueAdminRequest(data && data.idToken)) return { ok: false, msg: 'Solo la comisión organizadora puede agendar partidos de otros.' };
+  const adminEmail = verifyGoogleIdToken(data.idToken);
+  const ref = function(p) { return { id: text(p && p.id), nombre: text(p && p.nombre), email: text(p && p.email).toLowerCase() }; };
+  const A = ref(data.playerA), B = ref(data.playerB);
+  if (!A.email || !B.email || isSamePlayerReference(A, B)) return { ok: false, msg: 'Jugadores no válidos.' };
+  const dateStr = text(data.date), slot = text(data.slot), courtId = text(data.courtId);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr) || !/^\d{1,2}:\d{2}$/.test(slot) || !CONFIG.CALENDARS[courtId]) {
+    return { ok: false, msg: 'Fecha, hora o cancha no válida.' };
+  }
+  if (makeLocalDate(dateStr, slot).getTime() <= Date.now()) return { ok: false, msg: 'Ese horario ya pasó.' };
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  try {
+    const free = getAvailableSlots(dateStr, data.idToken, courtId);
+    if (!free.ok || !Array.isArray(free.courts[courtId]) || free.courts[courtId].indexOf(slot) < 0) {
+      return { ok: false, msg: 'Ese horario ya no está libre. Elige otro.', slotTaken: true };
+    }
+    const bookingId = bookingDocumentId(courtId, dateStr, slot);
+    const current = getBookingDocument(bookingId, data.idToken);
+    if (!current.ok) return { ok: false, msg: current.msg || 'No se pudo comprobar la reserva.' };
+    if (current.booking && isActiveBookingStatus(current.booking.status)) {
+      return { ok: false, msg: 'Ese horario acaba de ser reservado. Elige otro.', slotTaken: true };
+    }
+
+    // Invitación o partido agendado que ya existía entre ambos.
+    const sheet = getChallengesSheet();
+    const values = sheet.getDataRange().getValues();
+    let existing = null;
+    for (let i = 1; i < values.length; i++) {
+      const c = challengeFromRow(values[i]);
+      if (!c.id || text(c.tipo) !== 'liga' || ['pendiente', 'aceptado'].indexOf(c.status) < 0) continue;
+      const involves = (challengePlayerMatchesRole(c, 'retador', A) && challengePlayerMatchesRole(c, 'retado', B)) ||
+        (challengePlayerMatchesRole(c, 'retador', B) && challengePlayerMatchesRole(c, 'retado', A));
+      if (involves) { existing = { rowNumber: i + 1, challenge: c }; break; }
+    }
+
+    const now = new Date().toISOString();
+    const courtName = getCourtName(courtId);
+    const booking = {
+      id: bookingId, courtId: courtId, date: dateStr, slot: slot,
+      userId: A.id, email: A.email, emailLower: A.email,
+      name: A.nombre + ' vs ' + B.nombre, userType: 'socio', userTypeLabel: 'Liga UCTenis (agendado por la comisión)',
+      status: 'pending_calendar', calendarEventId: '', syncAttempts: 0,
+      lastSyncAttemptAt: '', lastSuccessfulSyncAt: '', syncAlertedAt: '',
+      guestEmails: [A.email, B.email], matchType: 'liga',
+      matchTitle: '[' + courtName + '] Partido de liga UCTenis: ' + A.nombre + ' vs ' + B.nombre,
+      createdAt: now, updatedAt: now, createdBy: adminEmail
+    };
+    const reserved = saveBookingDocument(booking, data.idToken);
+    if (!reserved.ok) return { ok: false, msg: 'No se pudo reservar la cancha. ' + reserved.msg };
+    try {
+      const event = createBookingCalendarEvent(booking);
+      booking.calendarEventId = event.getId();
+      booking.status = 'confirmed';
+      booking.calendarSyncedAt = new Date().toISOString();
+      booking.lastSuccessfulSyncAt = booking.calendarSyncedAt;
+    } catch (e) {
+      booking.status = 'calendar_retry';
+      booking.syncError = e.message;
+    }
+
+    let challenge;
+    const patch = { fecha: dateStr, slot: slot, courtId: courtId, cancha: courtName, bookingId: bookingId, status: 'aceptado', actualizado: now };
+    if (existing) {
+      const old = existing.challenge;
+      if (old.bookingId && old.bookingId !== bookingId) {
+        try { releaseChallengeBooking(old.bookingId, old.courtId); } catch (e) { console.warn('Liberar cancha anterior del partido de liga:', e.message); }
+      }
+      setChallengeRowPatch(sheet, existing.rowNumber, { status: 'aceptado', actualizado: now });
+      sheet.getRange(existing.rowNumber, 9, 1, 2).setValues([[dateStr, courtName]]);
+      sheet.getRange(existing.rowNumber, 16, 1, 2).setValues([[slot, courtId]]);
+      sheet.getRange(existing.rowNumber, 19).setValue(bookingId);
+      challenge = Object.assign({}, old, patch);
+    } else {
+      challenge = normalizeChallengeCompletion(Object.assign({
+        id: 'chal-' + Date.now(),
+        retadorId: A.id, retadorNombre: A.nombre, retadorEmail: A.email,
+        retadoId: B.id, retadoNombre: B.nombre, retadoEmail: B.email,
+        genero: text(data.genero), marcador: '', ganadorId: '', creado: now,
+        eventId: '', tipo: 'liga', fechaResultado: '', resultadoIngresadoPor: '', resultadoIngresadoPorEmail: '',
+        fechaConfirmacion: '', confirmadoPor: '', resultadoReclamado: false, reclamoResultado: '',
+        fechaReclamo: '', reclamadoPor: '', rankingAplicado: ''
+      }, patch));
+      sheet.appendRow(challengeToRow(challenge));
+    }
+    booking.challengeId = challenge.id;
+    booking.updatedAt = new Date().toISOString();
+    saveBookingDocument(booking, data.idToken);
+
+    // Las propuestas de horario pendientes entre ambos quedan sin efecto.
+    try {
+      listPendingLeagueProposals(A.email).forEach(function(p) {
+        if ((p.fromEmail === A.email && p.toEmail === B.email) || (p.fromEmail === B.email && p.toEmail === A.email)) {
+          p.status = 'reemplazada';
+          p.respondedAt = now;
+          saveLeagueProposal(p);
+        }
+      });
+    } catch (e) { console.warn('No se pudieron cerrar las propuestas pendientes:', e.message); }
+
+    const fechaNum = Number(data.ligaFecha) || 0;
+    const mirror = mirrorLeagueChallenge(challenge, {
+      courtLabel: courtName,
+      ligaTemporada: text(data.temporada),
+      ligaFecha: fechaNum,
+      agendadoPor: adminEmail
+    });
+
+    const when = leagueOptionLabel({ date: dateStr, slot: slot, courtId: courtId });
+    [{ me: A, rival: B }, { me: B, rival: A }].forEach(function(p) {
+      sendLeagueMail(p.me.email, '📅 Liga: la comisión agendó tu partido vs ' + p.rival.nombre + ' · ' + when,
+        leagueEmailHtml('Tu partido quedó agendado', 'Hola <strong>' + escapeHtmlBday(text(p.me.nombre).split(' ')[0]) + '</strong>,', [
+          'La comisión organizadora agendó tu partido' + (fechaNum ? ' de la <strong>Fecha ' + fechaNum + '</strong>' : '') + ' contra <strong>' + escapeHtmlBday(p.rival.nombre) + '</strong> y la cancha ya está reservada:',
+          '<span style="display:block;padding:14px;border-radius:12px;background:#fef3c7;color:#78350f;font-size:17px;font-weight:bold;text-align:center;">📅 ' + escapeHtmlBday(when) + '</span>',
+          'Si no puedes a esa hora, avísale a la comisión cuanto antes. Al terminar, anoten el resultado en la página de la liga.'
+        ], leagueButton(LEAGUE_SITE_URL + 'liga.html', 'Ver mi liga', true)));
+    });
+
+    return { ok: true, challenge: mirror, calendarPending: booking.status !== 'confirmed' };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 /** Espejo en Firestore de un partido de liga (lo que leen la página de la
