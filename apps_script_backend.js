@@ -1835,7 +1835,7 @@ function challengeFromRow(row) {
     ganadorId: text(row[12]) || null,
     creado: text(row[13]),
     actualizado: text(row[14]),
-    slot: text(row[15]) || '',
+    slot: formatSheetSlot(row[15]),
     courtId: text(row[16]) || '',
     eventId: text(row[17]) || '',
     bookingId: text(row[18]) || '',
@@ -4036,6 +4036,20 @@ function numberOrBlank(value) {
   if (value === null || value === undefined || value === '') return '';
   const n = Number(value);
   return Number.isFinite(n) ? n : '';
+}
+
+/** Hora del partido como 'HH:mm'. Sheets convierte '19:30' en una hora
+ * (Date del 30-12-1899) y con text() quedaba "Sat Dec 30 1899 19:47:15 GMT-0442":
+ * la web y challengeMatchTimeHasPassed() no podían leer la hora. */
+function formatSheetSlot(value) {
+  if (Object.prototype.toString.call(value) === '[object Date]' && !isNaN(value)) {
+    if (!formatSheetSlot._tz) {
+      try { formatSheetSlot._tz = SpreadsheetApp.openById(CONFIG.SHEET_MIEMBROS_ID).getSpreadsheetTimeZone(); }
+      catch (e) { formatSheetSlot._tz = Session.getScriptTimeZone(); }
+    }
+    return Utilities.formatDate(value, formatSheetSlot._tz, 'HH:mm');
+  }
+  return text(value);
 }
 
 function formatSheetDate(value) {

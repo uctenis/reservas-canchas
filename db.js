@@ -1575,9 +1575,46 @@ const DB = {
     return data;
   },
 
-  async updateChallengeCloud(id, patch) {
+  /** Aplica `patch` sobre la versión ACTUAL del desafío en Firestore (no
+   * sobre la copia local, que puede estar vieja: antes, un navegador con la
+   * caché atrasada reescribía el documento completo y borraba un resultado
+   * recién ingresado por el rival). Con `options.expectStatus` solo escribe
+   * si el estado en Firestore sigue siendo uno de esos; si no, devuelve el
+   * documento tal cual está, sin tocarlo. */
+  async updateChallengeCloud(id, patch, options = {}) {
+    if (!this.isCloudConfigured()) throw new Error('Firestore no está disponible.');
+    await this.authReady().catch(() => {});
     const current = this.getChallenges().find(challenge => challenge.id === id) || {};
-    return this.saveChallengeCloud({ ...current, ...patch, id });
+    const ref = firebaseDb.collection(FIREBASE_COLLECTIONS.challenges).doc(id);
+    const expect = Array.isArray(options.expectStatus) ? options.expectStatus : null;
+    try {
+      return await firebaseDb.runTransaction(async tx => {
+        const snap = await tx.get(ref);
+        const server = snap.exists ? snap.data() : null;
+        const base = server ? { ...current, ...server } : current;
+        if (expect && (!server || !expect.includes(server.status) ||
+            (options.requireNoResult && hasRecordedChallengeResult(server)))) {
+          return normalizeChallengeRecord({ ...base, id });
+        }
+        const now = new Date().toISOString();
+        const data = cleanFirestoreData(normalizeChallengeRecord({
+          ...base,
+          ...patch,
+          id,
+          status: patch.status || base.status || 'pendiente',
+          creado: base.creado || now,
+          actualizado: patch.actualizado || now
+        }));
+        tx.set(ref, data, { merge: true });
+        return data;
+      });
+    } catch (error) {
+      // Sin conexión la transacción falla; una escritura simple queda en cola.
+      // Con condición de estado no se arriesga a pisar datos más nuevos.
+      if (expect) throw error;
+      console.warn('Transacción de desafío falló; se guarda directo.', error);
+      return this.saveChallengeCloud({ ...current, ...patch, id });
+    }
   },
 
   async deleteChallengeCloud(id) {

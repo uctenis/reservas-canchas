@@ -897,7 +897,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-<script src="db.js?v=20261109_fluida"></script>
+<script src="db.js?v=20261110_resultados"></script>
 <script src="liga.js?v=20261109_pendientes"></script>
 <script src="datepicker.js?v=20260908_v3"></script>
 
@@ -1630,45 +1630,33 @@ function challengeTimestamp(value) {
   return Number.isFinite(time) ? time : 0;
 }
 
+// Días que un desafío aceptado sigue abierto, después de la fecha del
+// partido, para que los jugadores ingresen el resultado.
+const CHALLENGE_RESULT_GRACE_DAYS = 7;
+
+/** Fecha yyyy-MM-dd en la hora local (Chile), no en UTC: con toISOString()
+ * después de las 21:00 ya era "mañana". */
+function rankingLocalIsoDate(date = new Date()) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 /**
- * Returns true if the challenge's scheduled fecha + slot has already passed.
- * Uses slot time only if valid tennis hour (06:00–22:00); corrupt slots are ignored.
- * Always expires if fecha is strictly before today.
+ * Indica si un desafío aceptado, sin resultado, ya cerró su plazo para
+ * ingresar el resultado: CHALLENGE_RESULT_GRACE_DAYS días después de la fecha
+ * del partido. Antes vencía 1,5 h después de la hora agendada, así que quien
+ * anotaba el marcador al llegar a casa se encontraba el desafío «vencido» y
+ * la página no le guardaba el resultado.
  */
 function rankingIsChallengeExpiredByDateTime(challenge) {
   if (!challenge) return false;
-  const fecha = challenge.fecha || '';
-  if (!fecha) return false;
-  const datePart = String(fecha).split('T')[0];
+  const datePart = String(challenge.fecha || '').split('T')[0];
   if (!/^\d{4}-\d{2}-\d{2}$/.test(datePart)) return false;
-  try {
-    const todayIso = new Date().toISOString().split('T')[0];
-    // Date before today → always expired
-    if (datePart < todayIso) return true;
-    // Date after today → not expired
-    if (datePart > todayIso) return false;
-    // Today → check slot if valid
-    const slot = challenge.slot || '';
-    if (slot) {
-      const timeMatch = String(slot).match(/(\d{1,2}):(\d{2})/);
-      if (timeMatch) {
-        const h = parseInt(timeMatch[1], 10);
-        const m = parseInt(timeMatch[2], 10);
-        // Only trust slots in valid tennis range (06:00–22:00)
-        if (h >= 6 && h <= 22) {
-          let endH = h + 1;
-          let endM = m + 30;
-          if (endM >= 60) { endH++; endM -= 60; }
-          const endTime = new Date(`${datePart}T${String(endH).padStart(2,'0')}:${String(endM).padStart(2,'0')}:00`);
-          return endTime.getTime() < Date.now();
-        }
-      }
-    }
-    // No valid slot: expire at end of day
-    return new Date(datePart + 'T23:59:59').getTime() < Date.now();
-  } catch(e) {
-    return false;
-  }
+  const [y, m, d] = datePart.split('-').map(Number);
+  const closesAt = new Date(y, m - 1, d + CHALLENGE_RESULT_GRACE_DAYS + 1);
+  return Date.now() >= closesAt.getTime();
 }
 
 function isChallengeActiveStatus(status) {
@@ -1830,10 +1818,12 @@ async function syncChallengeAutomation() {
     if (before.status === 'resultado_pendiente' && challenge.status === 'completado') {
       await completeChallengeResult(challenge.id, { automatic: true, challengeOverride: challenge });
     } else if (challenge.status === 'vencido') {
+      // Solo si en Firestore sigue sin resultado: otro navegador con la caché
+      // vieja no debe pisar un marcador recién ingresado.
       await persistChallengePatch(challenge.id, {
         status: 'vencido',
         actualizado: challenge.actualizado || new Date().toISOString()
-      });
+      }, { expectStatus: ['pendiente', 'aceptado'], requireNoResult: true });
     }
   }
 }
@@ -2378,9 +2368,11 @@ function renderMyProfile() {
     c.status === 'pendiente' && isUserRetadoInChallenge(session, c)
   );
 
-  const todayIso = new Date().toISOString().split('T')[0];
+  const todayIso = rankingLocalIsoDate();
+  // Partidos ya jugados que esperan el marcador (y todavía se puede ingresar).
   const expiredChallenges = DB.getChallenges().filter(c =>
-    (c.status === 'vencido' || (c.status === 'aceptado' && c.fecha < todayIso)) &&
+    c.status === 'aceptado' && c.fecha && c.fecha < todayIso &&
+    !rankingIsChallengeExpiredByDateTime(c) &&
     isUserInChallenge(session, c)
   );
 
@@ -2396,8 +2388,8 @@ function renderMyProfile() {
   if (expiredChallenges.length > 0) {
     alertsHtml += `
       <div class="pending-challenge-alert" style="background: rgba(251, 191, 36, 0.15); border: 1px solid rgba(251, 191, 36, 0.4); border-radius: 8px; padding: 12px; margin-bottom: 14px; display: flex; flex-direction: column; gap: 8px; align-items: stretch;">
-        <span style="color: #fde047; font-size: 0.88rem; font-weight: 800; text-align: center;">⚠️ Tienes ${expiredChallenges.length} desafío${expiredChallenges.length > 1 ? 's' : ''} vencido${expiredChallenges.length > 1 ? 's' : ''} sin resultado!</span>
-        <button class="btn-alert-link" style="background: var(--warning); color: #06110c; border: none; border-radius: 6px; padding: 6px 12px; font-family: var(--font-sans); font-weight: 900; font-size: 0.8rem; cursor: pointer; text-align: center; transition: transform 0.18s ease;" onclick="scrollToMyChallenges()">Ver mis desafíos</button>
+        <span style="color: #fde047; font-size: 0.88rem; font-weight: 800; text-align: center;">⚠️ Tienes ${expiredChallenges.length} partido${expiredChallenges.length > 1 ? 's' : ''} sin resultado: ingrésalo en Mis desafíos.</span>
+        <button class="btn-alert-link" style="background: var(--warning); color: #06110c; border: none; border-radius: 6px; padding: 6px 12px; font-family: var(--font-sans); font-weight: 900; font-size: 0.8rem; cursor: pointer; text-align: center; transition: transform 0.18s ease;" onclick="scrollToMyChallenges()">Ingresar resultado</button>
       </div>
     `;
   }
@@ -2588,7 +2580,7 @@ function challengeCard(challenge, users, session, compact) {
     (isAdmin || (involved && !isSessionResultSubmitter(session, challenge)));
   const status = statusLabel(challenge.status);
 
-  const todayIso = new Date().toISOString().split('T')[0];
+  const todayIso = rankingLocalIsoDate();
   const needsScoreBadge = challenge.fecha < todayIso && challenge.status === 'aceptado';
   const expiredBadge = needsScoreBadge ? `<span class="badge-expired" style="background:rgba(251,191,36,0.12); border:1px solid rgba(251,191,36,0.3); color:#fbbf24; padding:2px 6px; border-radius:4px; font-size:0.72rem; font-weight:900; text-transform:uppercase;">Sin resultado</span>` : '';
   const friendlyBadge = challenge.tipo === 'amistoso' ? `<span class="badge-friendly" style="background:rgba(99,102,241,0.15); border:1px solid rgba(99,102,241,0.3); color:#a5b4fc; padding:2px 6px; border-radius:4px; font-size:0.72rem; font-weight:900; text-transform:uppercase; margin-left:6px;">Amistoso</span>` : '';
@@ -2757,7 +2749,7 @@ function handleChallengeAction(event) {
   }
 }
 
-async function persistChallengePatch(id, patch) {
+async function persistChallengePatch(id, patch, cloudOptions = {}) {
   const current = DB.getChallenges().find(c => c.id === id) || {};
   const local = rankingNormalizeChallenge({
     ...current,
@@ -2769,9 +2761,14 @@ async function persistChallengePatch(id, patch) {
 
   if (DB.isCloudConfigured()) {
     try {
-      const updated = await DB.updateChallengeCloud(id, patch);
-      upsertLocalChallenge(rankingMergeChallengeRecords(local, updated));
-      return rankingMergeChallengeRecords(local, updated);
+      const updated = await DB.updateChallengeCloud(id, patch, cloudOptions);
+      // Con condición (expectStatus) Firestore manda: si no se aplicó, la
+      // copia local no debe quedar con el patch.
+      const merged = cloudOptions.expectStatus
+        ? rankingNormalizeChallenge(updated)
+        : rankingMergeChallengeRecords(local, updated);
+      upsertLocalChallenge(merged);
+      return merged;
     } catch (error) {
       console.warn('No se pudo actualizar el desafío en Firebase.', error);
     }
@@ -4346,7 +4343,7 @@ function openScoreModal(challengeId) {
 
     document.getElementById('scorePlayers').textContent = 'Registrar Partido Amistoso Directo';
 
-    document.getElementById('scoreDate').value = new Date().toISOString().split('T')[0];
+    document.getElementById('scoreDate').value = rankingLocalIsoDate();
     document.getElementById('scoreCourt').value = 'cec1';
 
     // Clear scores
@@ -4868,28 +4865,48 @@ async function submitScore(event) {
       ...(registradoPor ? { registradoPor } : {})
     };
 
-    // Optimistic UI updates
-    upsertLocalChallenge(payload);
+    const friendlyButton = document.getElementById('btnSubmitScore');
+    const friendlyLabel = friendlyButton ? friendlyButton.textContent : '';
+    if (friendlyButton) {
+      friendlyButton.disabled = true;
+      friendlyButton.textContent = 'Guardando...';
+    }
+
+    // 1. Firestore (fuente de verdad): se espera antes de cerrar el modal; si
+    // falla, el partido desaparecería en la próxima sincronización.
+    let savedFriendly = !DB.isCloudConfigured();
+    let friendlyError = null;
+    if (DB.isCloudConfigured()) {
+      try {
+        await DB.authReady().catch(() => {});
+        const created = await withTimeout(DB.saveChallengeCloud(payload), 20000, 'Guardar el partido');
+        upsertLocalChallenge(created);
+        savedFriendly = true;
+      } catch (cloudError) {
+        friendlyError = cloudError;
+        console.warn('No se pudo guardar el amistoso en Firebase:', cloudError);
+      }
+    } else {
+      upsertLocalChallenge(payload);
+    }
+
+    if (friendlyButton) {
+      friendlyButton.disabled = false;
+      friendlyButton.textContent = friendlyLabel;
+    }
+    if (!savedFriendly) {
+      error.textContent = 'No se pudo guardar el partido. ' + ((friendlyError && (friendlyError.code === 'permission-denied'
+        ? 'Tu sesión de Google no tiene permiso: cierra sesión, vuelve a ingresar e inténtalo otra vez.'
+        : friendlyError.message)) || 'Revisa tu conexión a internet.');
+      return;
+    }
+
     closeModal('scoreModal');
     refreshLocalRankingIfNeeded();
     renderAll();
 
-    // Background sync
+    // 2. Sheets en segundo plano (planilla y correos).
     (async () => {
-      let saved = false;
-
-      // 1. Firebase
-      if (DB.isCloudConfigured()) {
-        try {
-          const created = await DB.saveChallengeCloud(payload);
-          upsertLocalChallenge(created);
-          saved = true;
-        } catch (cloudError) {
-          console.warn('No se pudo guardar el amistoso en Firebase:', cloudError);
-        }
-      }
-
-      // 2. Sheets
       if (window.CONFIG?.API_URL) {
         try {
           const idToken = await DB.getIdTokenOrReauth();
@@ -4904,30 +4921,24 @@ async function submitScore(event) {
             })
           });
           const data = await res.json().catch(() => null);
-          if (data && data.ok) {
-            if (data.challenge) {
-              upsertLocalChallenge({ ...payload, ...data.challenge });
-            }
-            saved = true;
-          }
+          if (!data || !data.ok) console.warn('Google Sheets no registró el amistoso:', data && data.msg);
         } catch (sheetErr) {
           console.warn('No se pudo registrar el amistoso en Google Sheets:', sheetErr);
         }
       }
-
-      if (saved) {
-        await refreshRankingPage().catch(() => {});
-      }
+      await refreshRankingPage().catch(() => {});
     })();
     return;
   }
 
-  // Normal path: registrar resultado y esperar confirmación del rival
+  // Normal path: registrar resultado y esperar confirmación del rival.
+  // El id se guarda aquí: rankingState.currentChallengeId cambia si el usuario
+  // abre otro modal mientras se sincroniza en segundo plano.
+  const challengeId = rankingState.currentChallengeId;
   const ganadorId = scoreResult.winnerId || '';
   const session = DB.getSession() || {};
   const now = new Date().toISOString();
-  const resultPendingChallenge = rankingNormalizeChallenge({
-    ...challenge,
+  const resultFields = {
     status: 'resultado_pendiente',
     marcador,
     ganadorId,
@@ -4937,89 +4948,117 @@ async function submitScore(event) {
     resultadoIngresadoPorEmail: session.email || '',
     resultadoIngresadoPorNombre: session.nombre || '',
     resultadoReclamado: false,
-    reclamoResultado: '',
+    reclamoResultado: ''
+  };
+  const resultPendingChallenge = rankingNormalizeChallenge({
+    ...challenge,
+    ...resultFields,
     actualizado: now
   });
 
-  // Optimistic UI Update: guardar score sin mover la escalerilla.
-  upsertLocalChallenge(resultPendingChallenge);
-  closeModal('scoreModal');
-  renderAll();
+  const submitButton = document.getElementById('btnSubmitScore');
+  const submitLabel = submitButton ? submitButton.textContent : '';
+  if (submitButton) {
+    submitButton.disabled = true;
+    submitButton.textContent = 'Guardando...';
+  }
 
-  // Background Sync
-  (async () => {
-    let savedInCloud = false;
+  // Firestore es la fuente de verdad: si ahí no queda guardado, el resultado
+  // desaparece en la próxima sincronización. Por eso se espera esta escritura
+  // antes de cerrar el modal y, si falla, se avisa en vez de fingir éxito.
+  let savedInCloud = !DB.isCloudConfigured();
+  let cloudError = null;
+  if (DB.isCloudConfigured()) {
+    try {
+      const updated = await withTimeout(
+        DB.updateChallengeCloud(challengeId, resultFields),
+        20000,
+        'Guardar el resultado'
+      );
+      upsertLocalChallenge(rankingMergeChallengeRecords(resultPendingChallenge, updated));
+      savedInCloud = true;
+    } catch (err) {
+      cloudError = err;
+      console.warn('No se pudo guardar el resultado en Firebase.', err);
+    }
+  }
 
-    // 1. Intentar registrar en Firebase
-    if (DB.isCloudConfigured()) {
-      try {
-        const updated = await DB.updateChallengeCloud(rankingState.currentChallengeId, {
-          status: 'resultado_pendiente',
+  // Google Sheets vía Apps Script: respaldo, correo al rival y planilla.
+  const sendToSheet = async () => {
+    if (!window.CONFIG?.API_URL) return { ok: false, msg: '' };
+    try {
+      const idToken = await DB.getIdTokenOrReauth();
+      if (!idToken) throw new Error(DB.lastAuthError || 'Tu sesión venció.');
+      const res = await fetch(window.CONFIG.API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          action: 'submit_challenge_result',
+          id: challengeId,
           marcador,
           ganadorId,
           tipo: matchType,
           fechaResultado: now,
-          resultadoIngresadoPor: session.id || session.email || '',
-          resultadoIngresadoPorEmail: session.email || '',
-          resultadoIngresadoPorNombre: session.nombre || '',
-          resultadoReclamado: false,
-          reclamoResultado: ''
-        });
-        upsertLocalChallenge(rankingMergeChallengeRecords(resultPendingChallenge, updated));
-        
-        savedInCloud = true;
-      } catch (cloudError) {
-        console.warn('No se pudo guardar el resultado en Firebase.', cloudError);
-      }
+          resultadoIngresadoPor: resultFields.resultadoIngresadoPor,
+          resultadoIngresadoPorEmail: resultFields.resultadoIngresadoPorEmail,
+          resultadoIngresadoPorNombre: resultFields.resultadoIngresadoPorNombre,
+          idToken
+        })
+      });
+      const data = await res.json().catch(() => null);
+      if (data && data.ok) return { ok: true, challenge: data.challenge || {} };
+      const msg = (data && data.msg) || 'El servidor no respondió.';
+      console.warn('Google Sheets no registró el resultado:', msg);
+      return { ok: false, msg };
+    } catch (sheetErr) {
+      console.warn('No se pudo registrar el resultado en Google Sheets:', sheetErr);
+      return { ok: false, msg: sheetErr.message || String(sheetErr) };
     }
+  };
 
-    // 2. Intentar registrar en Google Sheets via Apps Script (también notifica e invalida reservas/ranking)
-    if (window.CONFIG?.API_URL) {
-      try {
-        const idToken = await DB.getIdTokenOrReauth();
-        if (!idToken) throw new Error(DB.lastAuthError || 'Tu sesión venció.');
-        const res = await fetch(window.CONFIG.API_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify({
-            action: 'submit_challenge_result',
-            id: rankingState.currentChallengeId,
-            marcador,
-            ganadorId,
-            tipo: matchType,
-            fechaResultado: now,
-            resultadoIngresadoPor: session.id || session.email || '',
-            resultadoIngresadoPorEmail: session.email || '',
-            resultadoIngresadoPorNombre: session.nombre || '',
-            idToken
-          })
-        });
-        const data = await res.json().catch(() => null);
-        if (data && data.ok) {
-          console.log('Resultado registrado exitosamente en Google Sheets.');
-          if (data.challenge) {
-            const sheetChallenge = rankingMergeChallengeRecords(resultPendingChallenge, data.challenge);
-            upsertLocalChallenge(sheetChallenge);
-            if (DB.isCloudConfigured()) {
-              DB.saveChallengeCloud(sheetChallenge).catch(err => {
-                console.warn('No se pudo reflejar el resultado de Sheets en Firebase:', err);
-              });
-            }
-          }
-          savedInCloud = true;
-        }
-      } catch (sheetErr) {
-        console.warn('No se pudo registrar el resultado en Google Sheets:', sheetErr);
-      }
+  const restoreButton = () => {
+    if (submitButton) {
+      submitButton.disabled = false;
+      submitButton.textContent = submitLabel;
     }
+  };
 
-    if (savedInCloud) {
-      await refreshRankingPage().catch(() => {});
-    } else {
-      DB.submitResult(rankingState.currentChallengeId, marcador, ganadorId, matchType);
-      renderAll();
+  if (savedInCloud) {
+    if (!DB.isCloudConfigured()) upsertLocalChallenge(resultPendingChallenge);
+    restoreButton();
+    closeModal('scoreModal');
+    renderAll();
+    sendToSheet().finally(() => refreshRankingPage().catch(() => {}));
+    return;
+  }
+
+  // Firestore falló: se intenta por la planilla y, si responde, se reintenta
+  // Firestore con ese registro.
+  const sheet = await sendToSheet();
+  if (sheet.ok) {
+    const sheetChallenge = rankingMergeChallengeRecords(resultPendingChallenge, sheet.challenge);
+    try {
+      const saved = await DB.saveChallengeCloud(sheetChallenge);
+      upsertLocalChallenge(rankingMergeChallengeRecords(sheetChallenge, saved));
+      savedInCloud = true;
+    } catch (err) {
+      cloudError = err;
+      console.warn('No se pudo reflejar el resultado de Sheets en Firebase:', err);
     }
-  })();
+  }
+  restoreButton();
+
+  if (!savedInCloud) {
+    const reason = (cloudError && (cloudError.code === 'permission-denied'
+      ? 'Tu sesión de Google no tiene permiso: cierra sesión, vuelve a ingresar e inténtalo otra vez.'
+      : cloudError.message)) || sheet.msg || 'Revisa tu conexión a internet.';
+    error.textContent = 'No se pudo guardar el resultado. ' + reason;
+    return;
+  }
+
+  closeModal('scoreModal');
+  renderAll();
+  refreshRankingPage().catch(() => {});
 }
 
 async function applyChallengeResultToCloudRanking(challenge) {
