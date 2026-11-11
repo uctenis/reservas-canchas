@@ -1137,10 +1137,12 @@
       const pending = p.state === 'por_confirmar' && p.setsBy;
       const sideHtml = (entrant, isWinner) => {
         const sets = p.state === 'jugado' || pending ? (p.setsBy[entrant.key] || []) : [];
+        const rival = entrant.key === p.a.key ? p.b : p.a;
+        const rivalSets = sets.length ? (p.setsBy[rival.key] || []) : [];
         const won = final ? isWinner : pending && p.winner && p.winner.key === entrant.key;
         return `<div class="lg-side ${final ? (isWinner ? 'won' : 'lost') : ''} ${pending ? 'pending' : ''} ${entrant.key === meKey ? 'is-me' : ''}">
           ${avatar(entrant, 'sm')}<span class="lg-side-name">${esc(entrant.nombre)}${won ? ' <i aria-label="ganador">✓</i>' : ''}</span>
-          <span class="lg-sets">${p.state === 'wo' ? (isWinner ? '<b>W.O.</b>' : '') : sets.map(n => `<b>${n}</b>`).join('')}</span>
+          <span class="lg-sets">${p.state === 'wo' ? (isWinner ? '<b>W.O.</b>' : '') : sets.map((n, i) => `<b${Number(n) > Number(rivalSets[i]) ? ' class="w"' : ''}>${n}</b>`).join('')}</span>
         </div>`;
       };
       const info = [];

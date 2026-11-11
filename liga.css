@@ -139,20 +139,22 @@
 .lg-round-head h3 { margin:0; font-family:var(--font-display); font-size:1.4rem; font-weight:900; }
 .lg-round-head span { color:var(--text-secondary); font-size:.85rem; }
 .lg-round-count { padding:4px 10px; border-radius:999px; background:rgba(255,255,255,.05); font-weight:800; }
-.lg-matches { display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:12px; }
+.lg-matches { display:grid; grid-template-columns:repeat(auto-fill, minmax(min(280px, 100%), 1fr)); gap:12px; }
 .lg-match { border:1px solid var(--line); border-radius:var(--radius-md, 16px); background:rgba(4,11,8,.35); padding:12px; display:flex; flex-direction:column; gap:6px; }
 .lg-match header { display:flex; justify-content:space-between; align-items:center; margin-bottom:2px; }
 .lg-match header small { color:var(--text-muted); font-size:.74rem; }
 .lg-match.por_agendar { border-color:var(--lg-amber-line); }
 .lg-match.wo_doble { opacity:.72; }
-.lg-side { display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:10px; padding:6px 4px; border-radius:10px; }
+.lg-side { display:grid; grid-template-columns:auto minmax(0,1fr) auto; align-items:center; gap:10px; padding:6px 4px; border-radius:10px; }
 .lg-side-name { font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .lg-side-name i { color:var(--lg-win); font-style:normal; }
 .lg-side.lost { opacity:.62; }
 .lg-side.won .lg-side-name { color:#fff; font-weight:900; }
 .lg-side.is-me { background:rgba(198,211,0,.07); }
 .lg-sets { display:flex; gap:4px; }
-.lg-sets b { min-width:22px; text-align:center; font-family:var(--font-display); font-weight:900; font-variant-numeric:tabular-nums; }
+.lg-sets b { display:inline-grid; place-items:center; min-width:26px; height:28px; padding:0 4px; border-radius:7px; background:rgba(255,255,255,.05); color:var(--text-secondary); font-family:var(--font-display); font-size:.98rem; font-weight:900; font-variant-numeric:tabular-nums; }
+.lg-sets b.w { background:rgba(245,158,11,.16); color:var(--lg-amber-hi); }
+.lg-side.won .lg-sets b.w { background:var(--lg-amber); color:#0a1712; }
 .lg-match footer { color:var(--text-muted); font-size:.76rem; border-top:1px solid var(--line); padding-top:8px; margin-top:2px; }
 .lg-bye { color:var(--text-secondary); font-size:.86rem; margin:14px 0 0; }
 .lg-side.pending .lg-sets b { color:var(--lg-info); }
@@ -188,7 +190,7 @@
 .lg-summary div { padding:12px; border-radius:14px; background:rgba(255,255,255,.04); border:1px solid var(--line); }
 .lg-summary strong { display:block; font-family:var(--font-display); font-size:1.5rem; font-weight:900; color:#fff; }
 .lg-summary span { color:var(--text-muted); font-size:.7rem; font-weight:800; text-transform:uppercase; letter-spacing:.08em; }
-.lg-entrants { display:grid; grid-template-columns:repeat(auto-fill, minmax(230px, 1fr)); gap:10px; list-style:none; margin:0; padding:0; }
+.lg-entrants { display:grid; grid-template-columns:repeat(auto-fill, minmax(min(230px, 100%), 1fr)); gap:10px; list-style:none; margin:0; padding:0; }
 .lg-entrants li { display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:14px; border:1px solid var(--line); background:rgba(255,255,255,.03); }
 .lg-entrants li > span:last-child { display:flex; flex-direction:column; min-width:0; }
 .lg-entrants strong { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -200,7 +202,7 @@
 .lg-flow { display:grid; grid-template-columns:repeat(6, minmax(0,1fr)); gap:8px; margin-bottom:18px; counter-reset:step; }
 .lg-flow div { display:flex; flex-direction:column; gap:6px; padding:12px; border-radius:14px; background:var(--lg-amber-soft); border:1px solid var(--lg-amber-line); font-size:.8rem; color:#fde68a; }
 .lg-flow b { width:24px; height:24px; display:grid; place-items:center; border-radius:50%; background:var(--lg-amber); color:#0a1712; font-size:.76rem; }
-.lg-rules { display:grid; grid-template-columns:repeat(auto-fill, minmax(240px, 1fr)); gap:12px; }
+.lg-rules { display:grid; grid-template-columns:repeat(auto-fill, minmax(min(240px, 100%), 1fr)); gap:12px; }
 .lg-rules article { padding:16px; border-radius:var(--radius-md, 16px); border:1px solid var(--line); background:rgba(255,255,255,.03); }
 .lg-rules h4 { margin:0 0 8px; color:var(--lg-amber-hi); font-size:.78rem; letter-spacing:.1em; text-transform:uppercase; }
 .lg-rules p { margin:0; color:var(--text-secondary); font-size:.88rem; line-height:1.55; }
@@ -208,7 +210,7 @@
 .lg-points div { flex:1; text-align:center; padding:8px 4px; border-radius:10px; background:rgba(0,0,0,.2); }
 .lg-points strong { display:block; font-family:var(--font-display); font-size:1.6rem; font-weight:900; color:#fff; }
 .lg-points span { color:var(--text-muted); font-size:.68rem; font-weight:800; text-transform:uppercase; }
-.lg-calendar { display:grid; grid-template-columns:repeat(auto-fill, minmax(230px, 1fr)); gap:8px; list-style:none; padding:0; margin:0; }
+.lg-calendar { display:grid; grid-template-columns:repeat(auto-fill, minmax(min(230px, 100%), 1fr)); gap:8px; list-style:none; padding:0; margin:0; }
 .lg-calendar li { display:flex; align-items:center; gap:10px; padding:9px 12px; border-radius:12px; border:1px solid var(--line); font-size:.86rem; color:var(--text-secondary); }
 .lg-calendar b { color:var(--lg-amber-hi); min-width:26px; }
 .lg-calendar em { margin-left:auto; font-style:normal; font-size:.68rem; color:var(--text-muted); text-transform:uppercase; }
@@ -219,7 +221,7 @@
 .lg-admin { border-color:rgba(125,211,252,.25); }
 .lg-admin-head { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; }
 .lg-admin-head h2 { margin:0; font-size:1.05rem; }
-.lg-admin-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:12px; margin-top:14px; }
+.lg-admin-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(min(280px, 100%), 1fr)); gap:12px; margin-top:14px; }
 .lg-admin-grid article { padding:14px; border-radius:14px; border:1px solid var(--line); background:rgba(255,255,255,.03); }
 .lg-admin-grid h4 { margin:0 0 8px; font-size:.88rem; }
 .lg-inline { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
@@ -264,6 +266,38 @@
   .lg-hide-xs { display:none; }
   .lg-flow { grid-template-columns:repeat(2, minmax(0,1fr)); }
   .lg-matches { grid-template-columns:1fr; }
+}
+/* style.css (≤768px) convierte toda tabla en tarjetas: las de la liga siguen siendo tabla */
+@media (max-width: 768px) {
+  .lg-table thead, .lg-score-table thead { display:table-header-group; }
+  .lg-table tr, .lg-score-table tr { display:table-row; padding:0; margin:0; background:none; border:0; border-radius:0; }
+  .lg-table td { padding:10px 6px; border-bottom:1px solid var(--line); border-radius:0; font-size:inherit; font-weight:inherit; }
+  .lg-score-table td { padding:0; border:0; width:auto; font-size:inherit; }
+  .lg-table td:first-child { width:30px; font-size:inherit; }
+  .lg-table td:nth-child(2) { flex:none; font-size:inherit; font-weight:inherit; }
+  .lg-table td:last-child { width:auto; }
+  .lg-table tr.is-me td { background:rgba(198,211,0,.07) !important; }
+  .lg-table tr.lg-cut td { padding:0; border-bottom:0; }
+}
+/* Móvil: la tabla de posiciones cabe entera, sin scroll lateral; el nombre se recorta */
+@media (max-width: 600px) {
+  .lg-panel { padding:14px 12px; }
+  .lg-table-wrap { margin:0 -4px; }
+  .lg-table th, .lg-table td { padding:9px 3px; }
+  .lg-table th { font-size:.62rem; letter-spacing:.04em; }
+  .lg-table td:nth-child(2) { width:100%; max-width:0; }
+  .lg-table td:nth-child(n+4) { color:var(--text-secondary); font-size:.84rem; min-width:26px; }
+  .lg-table td.lg-pos { width:24px; font-size:.86rem; }
+  .lg-table td.lg-pts { font-size:1.05rem; min-width:30px; color:#fff; }
+  .lg-player { gap:8px; min-width:0; }
+  .lg-player strong { font-size:.88rem; }
+  .lg-player small { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:.68rem; }
+  .lg-table .lg-avatar-sm { width:26px; height:26px; font-size:.6rem; }
+  .lg-match { padding:10px; }
+  .lg-side { gap:8px; padding:5px 2px; }
+  .lg-side-name { font-size:.9rem; }
+  .lg-sets b { min-width:24px; height:26px; font-size:.92rem; }
+  .lg-match-actions .lg-act { flex:1 1 auto; justify-content:center; }
 }
 @media (prefers-reduced-motion: reduce) { .lg-round.open::after { animation:none; } .lg-btn, .lg-meter span { transition:none; } }
 
