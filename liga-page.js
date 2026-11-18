@@ -143,7 +143,19 @@
       <div class="lg-status-big"><strong>${Math.max(0, daysLeft)}</strong><span>${daysLeft === 0 ? 'último día de la fecha' : `${daysLeft === 1 ? 'día' : 'días'} para cerrar la fecha`}</span></div>
       <div class="lg-status-sub">${round ? `Del ${fmtLong(round.window.start)} al ${fmtLong(round.window.end)}` : ''}</div>
       <div class="lg-meter" aria-label="Avance de la temporada"><span style="width:${v.progress.pct}%"></span></div>
-      <div class="lg-status-sub">${v.progress.resueltos} de ${v.progress.total} partidos resueltos · ${v.progress.pct}%</div>`;
+      <div class="lg-status-sub">${v.progress.resueltos} de ${v.progress.total} partidos resueltos · ${v.progress.pct}%</div>
+      ${postponementNotice(v)}`;
+  }
+
+  function postponementLabel(item) {
+    const days = Math.abs(item.dias);
+    return `${item.dias > 0 ? 'Se postergó' : 'Se adelantó'} ${days === 1 ? '1 día' : `${days} días`} desde la Fecha ${item.desde}${item.motivo ? ` (${item.motivo})` : ''}`;
+  }
+
+  // La postergación más reciente, para que nadie se pierda el cambio.
+  function postponementNotice(v) {
+    const last = (v.postergaciones || [])[v.postergaciones.length - 1];
+    return last ? `<div class="lg-status-sub lg-status-notice">⛈️ ${esc(postponementLabel(last))}: el calendario ya está actualizado.</div>` : '';
   }
 
   // ── Mi liga ───────────────────────────────────────────────────────────
@@ -237,14 +249,15 @@
       const rival = next.rival;
       const opensIn = L.daysBetween(v.today, r.window.start);
       const closesIn = L.daysBetween(v.today, p.deadline);
-      const canSchedule = ['por_agendar', 'proximo'].includes(p.state) && r.window.start <= L.addDays(v.today, 10);
+      // Se puede adelantar cualquier partido de una fecha futura.
+      const canSchedule = ['por_agendar', 'proximo'].includes(p.state);
       const resultButton = (label, ghost) => canRecordResult(p, v.today)
         ? `<button class="lg-btn ${ghost ? 'ghost' : ''}" type="button" data-action="record-result" data-gender="${esc(gender)}" data-round="${r.numero}" data-a="${esc(entrant.key)}" data-b="${esc(rival.key)}">${label}</button>`
         : '';
       let detail = '';
       let action = '';
       if (p.state === 'por_agendar' || p.state === 'proximo') {
-        detail = p.state === 'proximo' ? `La fecha abre el ${fmtLong(r.window.start)}${opensIn > 0 ? ` (en ${daysLabel(opensIn)})` : ''}.` : `Tienes ${daysLabel(closesIn + 1)} para jugarlo (hasta el ${fmtLong(p.deadline)}).`;
+        detail = p.state === 'proximo' ? `La fecha abre el ${fmtLong(r.window.start)}${opensIn > 0 ? ` (en ${daysLabel(opensIn)})` : ''}. Si se ponen de acuerdo, pueden adelantarlo.` : `Tienes ${daysLabel(closesIn + 1)} para jugarlo (hasta el ${fmtLong(p.deadline)}).`;
         const sentToRival = state.proposals.some(pr => pr.fromEmail === myEmail() && pr.toEmail === rival.email);
         action = canSchedule
           ? `<div class="lg-inline lg-next-actions">
@@ -429,7 +442,8 @@
 
   function proposeDates(ctx) {
     const today = L.todayIso();
-    const from = ctx.round.window.start > today ? ctx.round.window.start : today;
+    // Desde hoy aunque la fecha aún no abra: el partido se puede adelantar.
+    const from = today;
     const limit = L.addDays(today, 21);
     const to = ctx.deadline < limit ? ctx.deadline : limit;
     const dates = [];
@@ -582,8 +596,9 @@
   // juegan y después uno de los dos (o la comisión) anota el marcador.
   function canRecordResult(p, today, asAdmin) {
     if (!p || p.match && ['completado', 'wo_retador', 'wo_retado', 'resultado_pendiente'].includes(p.match.status)) return false;
-    if (p.retiro || p.fueraDePlazo || today < p.window.start) return false;
-    if (['por_agendar', 'invitado', 'agendado'].includes(p.state)) return true;
+    if (p.retiro || p.fueraDePlazo) return false;
+    // Incluye las fechas que aún no abren: un partido se puede adelantar.
+    if (['proximo', 'por_agendar', 'invitado', 'agendado'].includes(p.state)) return true;
     // Fecha vencida sin resultado: solo la comisión puede anotarlo tarde.
     return Boolean(asAdmin && p.state === 'wo_doble');
   }
@@ -665,7 +680,7 @@
           <tbody>${row(a, 'a')}${row(b, 'b')}</tbody>
         </table>
         <label class="lg-result-date">Día en que jugaron
-          <input type="date" id="lgResultDate" value="${esc(today)}" min="${esc(round.window.start)}" max="${esc(today)}">
+          <input type="date" id="lgResultDate" value="${esc(today)}" min="${esc(season.inicio)}" max="${esc(today)}">
         </label>
         <p class="lg-result-summary" id="lgResultSummary" aria-live="polite">Anota el marcador para ver el ganador.</p>
         <p class="lg-muted">${ctx.byCommission
@@ -986,7 +1001,7 @@
     const spread = averages.length > 1 ? Math.max(...averages) - Math.min(...averages) : null;
     const cards = groups.map((g, i) => {
       const seeds = g.entrants.slice().sort((a, b) => (a.ranking || Infinity) - (b.ranking || Infinity) || a.numero - b.numero);
-      const last = g.fechas ? L.getRoundWindow(season, g.fechas) : null;
+      const last = g.fechas ? L.getRoundWindow(season, g.fechas, L.getPostponements(state.players, season)) : null;
       const avg = averageRanking(g.entrants);
       return `
         <section class="lg-group" style="--gc:${groupColor(g.numero)};--i:${i}">
@@ -1154,6 +1169,14 @@
       if (p.exception) info.push(`Plazo extendido al ${fmt(p.deadline)}`);
 
       const actions = [];
+      const mine = Boolean(meKey && (p.a.key === meKey || p.b.key === meKey));
+      if (mine && !state.isAdmin && ['proximo', 'por_agendar'].includes(p.state) && v.today <= p.deadline) {
+        const rival = p.a.key === meKey ? p.b : p.a;
+        actions.push(actBtn('propose', '📅', p.state === 'proximo' ? 'Adelantar' : 'Proponer horarios', { rival: rival.key }));
+      }
+      if (mine && !state.isAdmin && canRecordResult(p, v.today)) {
+        actions.push(actBtn('record-result', '🎾', 'Anotar resultado', { gender: v.gender, round: round.numero, a: p.a.key, b: p.b.key }));
+      }
       if (state.isAdmin && p.state === 'por_confirmar' && p.match && p.match.id && !p.disputed) {
         actions.push(actBtn('admin-remind-result', '✉️', 'Pedir confirmación', { match: p.match.id, label: pendingLabel(p) }));
         actions.push(actBtn('admin-confirm-result', '✓', 'Confirmar', { match: p.match.id, label: pendingLabel(p) }, 'ok'));
@@ -1232,7 +1255,7 @@
   // ── Bases ─────────────────────────────────────────────────────────────
   function renderRules(v) {
     const p = season.puntos;
-    const windows = Array.from({ length: Math.max(season.ventanas.length, v.rounds.length) }, (_, i) => L.getRoundWindow(season, i + 1));
+    const windows = Array.from({ length: Math.max(season.ventanas.length, v.rounds.length) }, (_, i) => L.getRoundWindow(season, i + 1, v.postergaciones));
     return `
       <div class="lg-flow" aria-label="Cómo se juega una fecha">
         ${['Revisa tu rival de la fecha', 'Agenda día, hora y cancha', 'Tu rival acepta', 'Jueguen dentro de los 10 días', 'Registra el resultado', 'Tu rival lo confirma y suman los puntos']
@@ -1350,6 +1373,8 @@
         </li>`;
       }).join('')}</ul>
       <p class="lg-legend">Se confirman solos a las 48 h. A las 24 h sin respuesta el rival recibe un recordatorio automático; «Pedir confirmación» le manda otro correo al tiro.</p>` : '<p class="lg-muted">No hay resultados esperando confirmación.</p>'}
+      <h4 class="lg-sub">Postergar fechas (lluvia u otra causa)</h4>
+      ${postponeForm(v)}
       <h4 class="lg-sub">Plazos vencidos y excepciones (bases §9)</h4>
       ${expired.length ? `<ul class="lg-admin-list">${expired.map(({ r, p }) => `
         <li><span class="lg-num">F${r.numero}</span><span>${esc(p.a.nombre)} vs ${esc(p.b.nombre)} ${p.exception ? `<em>· plazo hasta ${esc(fmt(p.deadline))}</em>` : p.fueraDePlazo ? '<em>· resultado fuera de plazo</em>' : ''}</span>
@@ -1357,6 +1382,37 @@
           <button class="lg-link" type="button" data-action="admin-exception" data-a="${esc(p.a.id)}" data-b="${esc(p.b.id)}">${p.exception ? 'Cambiar plazo' : 'Extender plazo'}</button></span>
         </li>`).join('')}</ul>` : '<p class="lg-muted">No hay partidos vencidos sin jugar.</p>'}
       <p class="lg-legend">Para agendar un partido sin esperar a que los jugadores se pongan de acuerdo, usa «Agendar» en la pestaña Fixture: se reserva la cancha, el partido queda confirmado y ambos reciben un correo. Para anotar el resultado de un partido que no se agendó en línea, usa «Anotar resultado» en la pestaña Fixture: queda confirmado de inmediato. Los W.O. y las correcciones de marcador se hacen desde el panel del Ranking.</p>`;
+  }
+
+  // ── Postergar el calendario ───────────────────────────────────────────
+  // Corre la fecha elegida y todas las siguientes, en ambas categorías.
+  function postponeForm(v) {
+    const rounds = v.rounds.filter(r => v.today <= r.window.end);
+    const list = v.postergaciones || [];
+    return `
+      <p class="lg-muted">La fecha elegida y todas las que vienen se corren los mismos días, en Damas y Varones. Si la fecha ya empezó, conserva su inicio y solo se alarga su plazo. Los partidos ya jugados o agendados no cambian. Todos los inscritos reciben un correo con el nuevo calendario.</p>
+      ${rounds.length ? `<div class="lg-inline lg-postpone">
+        <select id="lgPostponeRound" aria-label="Fecha a postergar">${rounds.map(r => `<option value="${r.numero}">Fecha ${r.numero} · ${esc(fmtRange(r.window))}</option>`).join('')}</select>
+        <select id="lgPostponeDays" aria-label="Días">${[3, 7, 10, 14].map(d => `<option value="${d}" ${d === 7 ? 'selected' : ''}>${d} días</option>`).join('')}</select>
+        <input type="text" id="lgPostponeReason" maxlength="60" placeholder="Motivo (ej. lluvia)" aria-label="Motivo">
+        <button class="lg-btn sm" type="button" data-action="admin-postpone">Postergar</button>
+      </div>` : '<p class="lg-muted">No quedan fechas por jugar.</p>'}
+      ${list.length ? `<ul class="lg-admin-list">${list.map(item => `
+        <li><span class="lg-num">F${item.desde}</span><span>${esc(postponementLabel(item))}${item.en ? ` <em>· decidido el ${esc(fmt(item.en))}</em>` : ''}</span>
+          <button class="lg-link danger" type="button" data-action="admin-postpone-undo" data-id="${esc(item.id)}">Deshacer</button></li>`).join('')}</ul>` : ''}`;
+  }
+
+  async function savePostponements(list, okMessage, notice) {
+    const entrants = L.getEntrants(state.players, season);
+    if (!entrants.length) return toast('No hay inscritos en la liga.', 'bad');
+    const at = new Date().toISOString();
+    const patches = entrants.map(e => [e.id, { postergaciones: list, postergacionesAt: at }]);
+    await saveMany(patches, okMessage, 'La postergación quedó a medias; vuelve a intentarlo.', () => {
+      if (!notice) return;
+      api('league_notify_postponement', notice)
+        .then(data => toast(`${okMessage} Se avisó por correo a ${data.sent} jugador${data.sent === 1 ? '' : 'es'}.`))
+        .catch(err => toast(`${okMessage} No se pudo mandar el correo: ${err.message}`, 'bad'));
+    });
   }
 
   // ── Pintado general ───────────────────────────────────────────────────
@@ -1541,6 +1597,26 @@ Queda firme y suma en la tabla, sin esperar al rival.`)) return;
       const player = playerById(button.dataset.id);
       if (!player) return;
       return saveEnrollment(player.id, { inscrito: true, retirado: false, retiradoEn: '' }, `${player.nombre} vuelve a la liga.`);
+    }
+    if (action === 'admin-postpone') {
+      const v = view();
+      const desde = Number(document.getElementById('lgPostponeRound').value);
+      const dias = Number(document.getElementById('lgPostponeDays').value);
+      const motivo = document.getElementById('lgPostponeReason').value.trim().slice(0, 60);
+      if (!desde || !dias) return toast('Elige la fecha y los días.', 'bad');
+      const item = { id: `post_${Date.now().toString(36)}`, desde, dias, en: L.todayIso(), motivo };
+      const list = [...(v.postergaciones || []), item];
+      const before = L.getRoundWindow(season, desde, v.postergaciones);
+      const after = L.getRoundWindow(season, desde, list);
+      if (!confirm(`¿Postergar ${dias} días desde la Fecha ${desde}${motivo ? ` (${motivo})` : ''}?\n\nFecha ${desde}: del ${fmtLong(after.start)} al ${fmtLong(after.end)} (antes hasta el ${fmtLong(before.end)}). Todas las fechas siguientes se corren ${dias} días, en Damas y Varones, y se avisa por correo a todos los inscritos.`)) return;
+      return savePostponements(list, `Listo: desde la Fecha ${desde} el calendario se corrió ${dias} días.`,
+        { desde, dias, motivo, temporada: season.id });
+    }
+    if (action === 'admin-postpone-undo') {
+      const v = view();
+      const item = (v.postergaciones || []).find(p => p.id === button.dataset.id);
+      if (!item || !confirm(`¿Deshacer «${postponementLabel(item)}»? El calendario vuelve a como estaba. No se manda correo: avisa tú a los jugadores si ya lo sabían.`)) return;
+      return savePostponements(v.postergaciones.filter(p => p.id !== item.id), 'Postergación deshecha.');
     }
     if (action === 'admin-exception') {
       const a = playerById(button.dataset.a);

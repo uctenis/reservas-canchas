@@ -1597,7 +1597,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
 
 <script src="db.js?v=20261110_resultados"></script>
-<script src="liga.js?v=20261109_pendientes"></script>
+<script src="liga.js?v=20261118_postergar"></script>
 <script src="script.js?v=20260602_v2"></script>
 <script src="home-live.js?v=20261109_fluida"></script>
 <script src="cartelera.js?v=20261109_sinalentar"></script>
@@ -2074,7 +2074,7 @@ function renderIndexUserBar() {
   renderProfileBanner();
 }
 
-function renderClubSportLaunchBanner() {
+function renderClubSportLaunchBanner(players) {
   if (typeof UCTennisLeague === 'undefined') return;
   const wrap = document.getElementById('clubSportLaunch');
   const title = document.getElementById('clubSportLaunchTitle');
@@ -2082,9 +2082,12 @@ function renderClubSportLaunchBanner() {
   if (!wrap || !title || !text) return;
   const season = UCTennisLeague.getSeason();
   const today = UCTennisLeague.todayIso();
-  const lastWindow = season.ventanas[season.ventanas.length - 1];
-  const roundIndex = season.ventanas.findIndex(([start, end]) => today >= start && today <= end);
-  wrap.classList.toggle('is-launch-week', today >= season.inicio && today <= season.ventanas[0][1]);
+  // Ventanas con las postergaciones de la comisión (vienen en las fichas).
+  const shifts = UCTennisLeague.getPostponements(players || (DB.getCachedPlayersSnapshot && DB.getCachedPlayersSnapshot()) || [], season);
+  const windows = season.ventanas.map((_, i) => UCTennisLeague.getRoundWindow(season, i + 1, shifts));
+  const lastWindow = [windows[windows.length - 1].start, windows[windows.length - 1].end];
+  const roundIndex = windows.findIndex(w => today >= w.start && today <= w.end);
+  wrap.classList.toggle('is-launch-week', today >= season.inicio && today <= windows[0].end);
   if (today <= season.cierreInscripcion) {
     title.textContent = `🎾 Inscripciones abiertas: ${season.nombre}`;
     text.textContent = `Gratis para socios al día. Inscríbete hasta el ${formatDateShort(season.cierreInscripcion)}; la 1ª fecha parte el ${formatDateShort(season.inicio)}.`;
@@ -2092,7 +2095,7 @@ function renderClubSportLaunchBanner() {
     title.textContent = `🎾 El ${season.nombre} parte el ${formatDateShort(season.inicio)}`;
     text.textContent = 'Revisa tu rival de la 1ª fecha y agenda tu partido.';
   } else if (roundIndex >= 0) {
-    const [, end] = season.ventanas[roundIndex];
+    const end = windows[roundIndex].end;
     title.textContent = `🎾 Campeonato de Liga · Fecha ${roundIndex + 1} en juego`;
     text.textContent = `Los partidos de esta fecha se juegan hasta el ${formatDateShort(end)}. Revisa tu rival y agenda.`;
   } else if (today > lastWindow[1]) {
@@ -2200,6 +2203,7 @@ function renderHomeLeagueRound(players, challenges) {
   const season = L.getSeason();
   const today = L.todayIso();
   const views = ['M', 'F'].map(gender => L.buildSeasonView(players, challenges, { season, gender, today }));
+  renderClubSportLaunchBanner(players);
   const open = views.flatMap(view => view.openRounds.map(round => ({ view, round })));
   if (!open.length) { wrap.hidden = true; return; }
 

@@ -443,3 +443,5 @@ button.lg-option:hover small, button.lg-option:hover span { color:#0a1712; }
 @media (max-width: 420px) { .lg-score-table tbody th > span:last-child { max-width:6em; } .lg-score-table input { min-width:38px; } }
 .lg-result-unfinished { display:flex; gap:10px; align-items:flex-start; padding:12px 14px; border-radius:12px; border:1px solid var(--line-strong, rgba(255,255,255,.18)); background:rgba(255,255,255,.04); font-size:.86rem; line-height:1.45; cursor:pointer; }
 .lg-result-unfinished input { flex:0 0 auto; width:22px; height:22px; margin:1px 0 0; accent-color:var(--lg-amber, #f59e0b); }
+.lg-status-notice { margin-top:6px; padding:8px 10px; border-radius:10px; background:var(--lg-amber-soft, rgba(245,158,11,.12)); color:var(--lg-amber-hi, #fbbf24); font-weight:700; }
+.lg-postpone input[type="text"] { min-width:0; flex:1 1 140px; }

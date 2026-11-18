@@ -191,6 +191,7 @@ function handleRequest(data) {
       case "league_admin_schedule":  response = leagueAdminSchedule(data); break;
       case "admin_cancel_booking":   response = adminCancelBooking(data); break;
       case "league_record_result":   response = leagueRecordResult(data); break;
+      case "league_notify_postponement": response = leagueNotifyPostponement(data); break;
       case "league_remind_result":   response = leagueRemindResult(data); break;
       case "save_schedule_config":   response = saveScheduleConfig(data); break;
       case "get_schedule_config":    response = getScheduleConfigPublic(data.idToken); break;
@@ -6647,6 +6648,37 @@ function leagueRecordResult(data) {
   }
 }
 
+/**
+ * La comisión corrió el calendario (lluvia u otra causa): se avisa a todos
+ * los inscritos con el nuevo plazo de la fecha postergada. La postergación
+ * ya quedó guardada en las fichas (liga-page.js); esto solo manda el correo.
+ * data: { idToken, desde (n° de fecha), dias, motivo }
+ */
+function leagueNotifyPostponement(data) {
+  if (!isLeagueAdminRequest(data && data.idToken)) return { ok: false, msg: 'Solo la comisión puede avisar una postergación.' };
+  const L = typeof UCTennisLeague !== 'undefined' ? UCTennisLeague : null;
+  if (!L) return { ok: false, msg: 'Falta liga.js en el backend.' };
+  const desde = Number(data.desde), dias = Number(data.dias);
+  if (!desde || !dias) return { ok: false, msg: 'Datos de la postergación no válidos.' };
+  const season = L.getSeason();
+  const players = leagueAllPlayers();
+  const postponed = L.getRoundWindow(season, desde, L.getPostponements(players, season));
+  const next = L.getRoundWindow(season, desde + 1, L.getPostponements(players, season));
+  const motivo = text(data.motivo);
+  let sent = 0;
+  L.getEntrants(players, season).forEach(function(entrant) {
+    if (!entrant.email || entrant.retirado || /@uctenis\.local$/.test(entrant.email)) return;
+    const ok = sendLeagueMail(entrant.email, '⛈️ Liga: se corre el calendario desde la Fecha ' + desde,
+      leagueEmailHtml('Cambio de calendario', 'Hola <strong>' + escapeHtmlBday(text(entrant.nombre).split(' ')[0]) + '</strong>,', [
+        'La comisión organizadora ' + (dias > 0 ? 'postergó' : 'adelantó') + ' <strong>' + Math.abs(dias) + ' días</strong> la <strong>Fecha ' + desde + '</strong> y todas las siguientes' + (motivo ? ' (' + escapeHtmlBday(motivo) + ')' : '') + '.',
+        '<span style="display:block;padding:14px;border-radius:12px;background:#fef3c7;color:#78350f;font-size:16px;font-weight:bold;text-align:center;">📅 Fecha ' + desde + ': del ' + leagueDateLabel(postponed.start) + ' al ' + leagueDateLabel(postponed.end) + '<br>Fecha ' + (desde + 1) + ': del ' + leagueDateLabel(next.start) + ' al ' + leagueDateLabel(next.end) + '</span>',
+        'Los partidos que ya jugaron o ya tienen día y cancha no cambian. Si tu partido estaba pendiente, ahora tienes más tiempo para jugarlo.'
+      ], leagueButton(LEAGUE_SITE_URL + 'liga.html#fixture', 'Ver el calendario', true)));
+    if (ok) sent++;
+  });
+  return { ok: true, sent: sent };
+}
+
 // ── Recordatorio para anotar el resultado ────────────────────────────────
 
 const LEAGUE_RESULT_REMINDER_HOURS = 3;
@@ -7022,9 +7054,47 @@ function sendLeagueRoundMail(kind, me, rival, round, p, proposal, rivalDoc) {
     return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0)).toISOString().slice(0, 10);
   }
 
-  // Ventana de la fecha `round` (1-indexada). Más allá de las oficiales
-  // sigue el patrón de las bases: 1–10, 10–20 y 20–fin de mes.
-  function getRoundWindow(season, round) {
+  // Postergaciones del calendario que decidió la comisión (p. ej. por
+  // lluvia): [{ id, desde (n° de fecha), dias, en (día en que se decidió),
+  // motivo }]. Se guardan iguales en la inscripción de cada inscrito, así
+  // viajan con las fichas que ya leen todas las páginas; manda la copia
+  // guardada más recientemente (así también se puede deshacer).
+  function getPostponements(players, season = getSeason()) {
+    let latest = null;
+    (Array.isArray(players) ? players : []).forEach(player => {
+      const enrollment = player && player[season.field];
+      if (!enrollment || !Array.isArray(enrollment.postergaciones)) return;
+      const at = String(enrollment.postergacionesAt || '');
+      if (!latest || at > latest.at) latest = { at, list: enrollment.postergaciones };
+    });
+    return (latest ? latest.list : [])
+      .map(item => ({
+        id: String(item && item.id || ''),
+        desde: Number(item && item.desde),
+        dias: Number(item && item.dias),
+        en: isoDate(item && item.en),
+        motivo: String(item && item.motivo || '')
+      }))
+      .filter(item => Number.isInteger(item.desde) && item.desde > 0 && Number.isInteger(item.dias) && item.dias !== 0)
+      .sort((a, b) => a.en.localeCompare(b.en) || a.desde - b.desde);
+  }
+
+  // Ventana de la fecha `round` (1-indexada) con las postergaciones
+  // aplicadas: la fecha postergada y todas las siguientes se corren los
+  // mismos días. Si la fecha postergada ya había empezado cuando se decidió,
+  // conserva su inicio y solo se alarga su plazo.
+  function getRoundWindow(season, round, postponements = []) {
+    return (postponements || []).reduce((window, item) => {
+      if (round > item.desde) return { start: addDays(window.start, item.dias), end: addDays(window.end, item.dias) };
+      if (round < item.desde) return window;
+      const started = item.en && window.start <= item.en;
+      return { start: started ? window.start : addDays(window.start, item.dias), end: addDays(window.end, item.dias) };
+    }, baseRoundWindow(season, round));
+  }
+
+  // Ventana original de las bases. Más allá de las oficiales sigue el
+  // patrón: 1–10, 10–20 y 20–fin de mes.
+  function baseRoundWindow(season, round) {
     const official = season.ventanas[round - 1];
     if (official) return { start: official[0], end: official[1] };
     let [, end] = season.ventanas[season.ventanas.length - 1];
@@ -7405,14 +7475,14 @@ function sendLeagueRoundMail(kind, me, rival, round, p, proposal, rivalDoc) {
   }
 
   // Fixture y tabla de un grupo (o de toda la categoría si no hay grupos).
-  function playGroup(entrants, season, seasonMatches, today) {
+  function playGroup(entrants, season, seasonMatches, today, postponements) {
     const points = season.puntos;
     const rows = new Map(entrants.map(entrant => [entrant.key, emptyRow(entrant)]));
     const headToHead = new Map();
 
     const rounds = buildRoundRobin(entrants).map((round, index) => {
       const number = index + 1;
-      const window = getRoundWindow(season, number);
+      const window = getRoundWindow(season, number, postponements);
       const partidos = round.pairs.map(([a, b]) => ({ ...resolvePairing(a, b, window, seasonMatches, today), grupo: a.grupo }));
       partidos.forEach(partido => {
         const rowA = rows.get(partido.a.key);
@@ -7468,6 +7538,7 @@ function sendLeagueRoundMail(kind, me, rival, round, p, proposal, rivalDoc) {
     const today = options.today || todayIso();
     const entrants = getEntrants(players, season, gender);
     const seasonMatches = (Array.isArray(matches) ? matches : []).filter(match => isSeasonMatch(match, season));
+    const postergaciones = getPostponements(players, season);
 
     // Con grupos, quien no tiene grupo asignado (p. ej. inscrito después de
     // armarlos) queda fuera del fixture hasta que la comisión lo ubique.
@@ -7478,7 +7549,7 @@ function sendLeagueRoundMail(kind, me, rival, round, p, proposal, rivalDoc) {
       : [entrants];
     const quotas = grouped ? mastersByGroup(entrants.length, members.map(list => list.length)) : [mastersSize(entrants.length)];
     const groups = members.map((list, index) => {
-      const played = playGroup(list, season, seasonMatches, today);
+      const played = playGroup(list, season, seasonMatches, today, postergaciones);
       played.standings.forEach(row => { row.maestros = row.pos <= quotas[index]; });
       return { numero: grouped ? groupIds[index] : 0, entrants: list, maestros: quotas[index], ...played };
     });
@@ -7491,7 +7562,7 @@ function sendLeagueRoundMail(kind, me, rival, round, p, proposal, rivalDoc) {
     const totalRounds = Math.max(0, ...groups.map(group => group.rounds.length));
     const rounds = Array.from({ length: totalRounds }, (_, index) => {
       const number = index + 1;
-      const window = getRoundWindow(season, number);
+      const window = getRoundWindow(season, number, postergaciones);
       const parts = groups.map(group => group.rounds[index]).filter(Boolean);
       const partidos = parts.flatMap(part => part.partidos);
       const libres = parts.map(part => part.libre).filter(Boolean);
@@ -7516,7 +7587,7 @@ function sendLeagueRoundMail(kind, me, rival, round, p, proposal, rivalDoc) {
       groups, grouped,
       sinGrupo: grouped ? allEntrants.filter(entrant => !entrant.grupo) : [],
       maestros: mastersCount,
-      currentRound, openRounds,
+      currentRound, openRounds, postergaciones,
       progress: { total: totalPartidos, resueltos, pct: totalPartidos ? Math.round((resueltos / totalPartidos) * 100) : 0 },
       drawDone: allEntrants.length > 0 && allEntrants.every(entrant => entrant.sorteado)
     };
@@ -7720,7 +7791,7 @@ function sendLeagueRoundMail(kind, me, rival, round, p, proposal, rivalDoc) {
   return {
     // Temporadas
     SEASONS, PAIRING_STATES,
-    getSeason, todayIso, addDays, daysBetween, getRoundWindow, normalizeGender,
+    getSeason, todayIso, addDays, daysBetween, getRoundWindow, getPostponements, normalizeGender,
     playerKey, pairKey, getEnrollment, isEnrolled, entrantGender, getEntrants, buildRoundRobin,
     rankingPosition, assignGroups, mastersByGroup, groupOf,
     isSeasonMatch, scoreStats, isUnfinishedMatch, mastersSize, buildSeasonView, findEntrant,

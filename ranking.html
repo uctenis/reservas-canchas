@@ -898,7 +898,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
 <script src="db.js?v=20261110_resultados"></script>
-<script src="liga.js?v=20261109_pendientes"></script>
+<script src="liga.js?v=20261118_postergar"></script>
 <script src="datepicker.js?v=20260908_v3"></script>
 
 <script>
@@ -6747,8 +6747,9 @@ function getLeagueSchedulingOptions(sessionPlayer, editId = '') {
   const view = UCTennisLeague.buildSeasonView(raw, DB.getChallenges().filter(c => c.id !== editId), { season, gender });
   const entrant = UCTennisLeague.findEntrant(view, sessionPlayer);
   if (!entrant) return { season, view, entrant: null, options: [] };
-  // Fechas en curso y la siguiente (para adelantar), no todo el calendario.
-  const horizon = UCTennisLeague.addDays(view.today, 10);
+  // Fechas en curso y las que vienen (se pueden adelantar), hasta donde
+  // alcanza la anticipación de reserva de la liga.
+  const horizon = UCTennisLeague.addDays(view.today, 21);
   const options = UCTennisLeague.getSchedulablePairings(view, entrant)
     .filter(item => item.round.window.start <= horizon)
     .map(item => ({
