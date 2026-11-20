@@ -8,7 +8,7 @@
 // fecha libre) y, detrás, un ábaco de fichas: cada partido suma 3 fichas al
 // ganador y 1 al perdedor (0 por no presentarse). Las luces del ábaco marcan
 // a los que hoy clasifican al Torneo de Maestros.
-import { writeFileSync } from "node:fs";
+import { existsSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as k from "../../.agents/skills/anatomy/kit/iso-kit.mjs";
@@ -337,7 +337,7 @@ function puck(x, y, who, glow) {
 
 // Estado: fecha mostrada f (0 = antes de empezar) y reloj de la animación.
 let f = 0, t = 99, frame = 0, last = 0, visible = false, touring = !still.matches, idle = 0, hold = 0;
-const T_MOVE = 1.1, T_BARS = 0.4, T_DROP = 1.2;
+const T_MOVE = 0.8, T_BARS = 0.25, T_DROP = 0.85;
 const T_END = T_MOVE + T_BARS + T_DROP;
 
 function ptsBefore(fecha) { return fecha > 1 ? M.rounds[fecha - 2].pts : M.names.map(() => 0); }
@@ -434,7 +434,7 @@ function tick(now) {
   if (t < T_END) t = still.matches ? T_END : t + dt;
   else if (touring) {
     hold += dt;
-    const wait = f === M.totalFechas ? 5.5 : f === 0 ? 1.2 : 2.2;
+    const wait = f === M.totalFechas ? 4.5 : f === 0 ? 1 : 1.6;
     if (hold > wait) { hold = 0; advance(); }
   }
   draw();
@@ -456,24 +456,31 @@ stage.addEventListener("keydown", (e) => {
   if (e.key === "Home") { e.preventDefault(); stopGuide(); touring = false; f = 0; t = 99; draw(); }
 });
 
-// ── Explicación guiada: voz (Web Speech API) + subtítulos ──────────────
-// Todas las frases se encolan con el clic (iOS solo deja hablar tras un
-// gesto); cada una mueve la figura cuando empieza a sonar. Sin voz en el
-// dispositivo, o con la voz apagada, corre igual con subtítulos y tiempos.
+// ── Explicación guiada: audio grabado + subtítulos ─────────────────────
+// Si existen los audios de cada frase (figuras/liga/audio/), se reproducen
+// en orden y cada uno mueve la figura al empezar. Sin audios, usa la voz del
+// navegador; sin voz (o con la voz apagada), corre solo con subtítulos.
 const CUES = ${JSON.stringify(narration(M))};
 const subs = document.querySelector("[data-subs]");
 const button = document.querySelector("[data-narrate]");
 const optVoice = document.querySelector("[data-opt=voz]");
 const optSubs = document.querySelector("[data-opt=subs]");
 const synth = "speechSynthesis" in window ? window.speechSynthesis : null;
+const HAS_AUDIO = CUES.every((c) => c.audio);
+const player = HAS_AUDIO ? new Audio() : null;
+if (player) { player.preload = "auto"; player.src = CUES[0].audio; }
 let guide = null;
 const LABEL = button.textContent;
+const STEP = 1.15; // segundos entre fechas cuando una frase recorre varias
 function pickVoice() {
   const voices = synth ? synth.getVoices() : [];
   const es = voices.filter((v) => /^es([-_]|$)/i.test(v.lang));
-  for (const pref of ["es-CL", "es-419", "es-US", "es-MX", "es-AR", "es-ES"]) {
-    const hit = es.find((v) => v.lang.replace("_", "-").toLowerCase() === pref.toLowerCase());
-    if (hit) return hit;
+  const natural = es.filter((v) => /natural|neural|online|premium|enhanced|google/i.test(v.name));
+  for (const list of [natural, es]) {
+    for (const pref of ["es-CL", "es-419", "es-US", "es-MX", "es-AR", "es-ES"]) {
+      const hit = list.find((v) => v.lang.replace("_", "-").toLowerCase() === pref.toLowerCase());
+      if (hit) return hit;
+    }
   }
   return es[0] || null;
 }
@@ -489,31 +496,46 @@ function showFecha(n) {
 function cue(i) {
   if (!guide) return;
   guide.i = i;
-  showFecha(CUES[i].fecha);
+  clearInterval(guide.stepper);
+  const steps = CUES[i].fechas;
+  let k = 0;
+  showFecha(steps[0]);
+  if (steps.length > 1) guide.stepper = setInterval(() => { k += 1; if (k < steps.length) showFecha(steps[k]); else clearInterval(guide.stepper); }, STEP * 1000);
   showSubs(CUES[i].text);
 }
-const duration = (text) => Math.max(3200, text.split(/\\s+/).length * 400 + 1200);
+const duration = (c) => Math.max(2600, c.text.split(/\\s+/).length * 330 + 700, c.fechas.length * STEP * 1000 + 600);
 function timed(i) {
   if (!guide) return;
   cue(i);
-  guide.timer = setTimeout(() => (i + 1 < CUES.length ? timed(i + 1) : endGuide()), duration(CUES[i].text));
+  guide.timer = setTimeout(() => (i + 1 < CUES.length ? timed(i + 1) : endGuide()), duration(CUES[i]));
+}
+function playAudio(i, token) {
+  if (!guide || guide.token !== token) return;
+  player.onplaying = () => { if (guide && guide.token === token && guide.i !== i) cue(i); };
+  player.onended = () => { if (guide && guide.token === token) (i + 1 < CUES.length ? playAudio(i + 1, token) : endGuide()); };
+  player.onerror = () => { if (guide && guide.token === token) timed(i); };
+  if (!player.src.endsWith(CUES[i].audio)) player.src = CUES[i].audio;
+  player.currentTime = 0;
+  player.play().catch(() => { if (guide && guide.token === token) timed(i); });
 }
 function startGuide() {
   stopGuide();
   touring = false; clearTimeout(idle);
   f = 0; t = 99; draw();
   const token = {};
-  guide = { i: -1, token, timer: 0 };
+  guide = { i: -1, token, timer: 0, stepper: 0 };
   button.textContent = "■ Detener";
   button.setAttribute("aria-pressed", "true");
-  if (!synth || !optVoice.checked) { timed(0); return; }
+  if (!optVoice.checked) { timed(0); return; }
+  if (player) { playAudio(0, token); return; }
+  if (!synth) { timed(0); return; }
   const voice = pickVoice();
   synth.cancel();
   CUES.forEach((c, i) => {
     const u = new SpeechSynthesisUtterance(c.text);
     u.lang = voice ? voice.lang : "es-CL";
     if (voice) u.voice = voice;
-    u.rate = 1;
+    u.rate = 1.1;
     u.onstart = () => { if (guide && guide.token === token) cue(i); };
     u.onend = () => { if (i === CUES.length - 1 && guide && guide.token === token) endGuide(); };
     u.onerror = (e) => {
@@ -525,20 +547,24 @@ function startGuide() {
   // Si a los 2,5 s no empezó a hablar, no hay voz usable: solo subtítulos.
   guide.timer = setTimeout(() => { if (guide && guide.token === token && guide.i < 0) { synth.cancel(); timed(0); } }, 2500);
 }
+function silence() {
+  if (player) { player.onplaying = player.onended = player.onerror = null; player.pause(); }
+  if (synth) synth.cancel();
+}
 function endGuide() {
   if (!guide) return;
-  clearTimeout(guide.timer);
+  clearTimeout(guide.timer); clearInterval(guide.stepper);
   guide = null;
   button.textContent = LABEL;
   button.setAttribute("aria-pressed", "false");
-  setTimeout(() => { if (!guide) showSubs(""); }, 2500);
+  setTimeout(() => { if (!guide) showSubs(""); }, 2200);
   idle = setTimeout(() => { touring = !still.matches; hold = 0; run(); }, 8000);
 }
 function stopGuide() {
   if (!guide) return;
-  clearTimeout(guide.timer);
+  clearTimeout(guide.timer); clearInterval(guide.stepper);
   guide = null;
-  if (synth) synth.cancel();
+  silence();
   showSubs("");
   button.textContent = LABEL;
   button.setAttribute("aria-pressed", "false");
@@ -547,55 +573,33 @@ button.addEventListener("click", () => (guide ? stopGuide() : startGuide()));
 optSubs.addEventListener("change", () => { subs.hidden = !subs.textContent || !optSubs.checked; });
 optVoice.addEventListener("change", () => {
   // Apagar la voz a mitad sigue con subtítulos desde la misma frase.
-  if (guide && !optVoice.checked && synth) { const i = Math.max(0, guide.i); clearTimeout(guide.timer); guide.token = {}; synth.cancel(); timed(i); }
+  if (guide && !optVoice.checked) { const i = Math.max(0, guide.i); clearTimeout(guide.timer); guide.token = {}; silence(); timed(i); }
 });
-addEventListener("pagehide", () => synth && synth.cancel());
+addEventListener("pagehide", silence);
 draw();
 `;
 
-// Guion de la explicación guiada. Cada frase dice qué fecha muestra la figura
-// mientras suena; nombres y puntos salen del mismo modelo que la anima.
+// Guion corto (≈25 s) de la explicación guiada. `fechas` son las fechas que
+// recorre la figura mientras suena la frase. Si existe audio/cue-N.mp3 (voz
+// grabada), la figura lo reproduce; si no, usa la voz del navegador.
 function narration(model) {
-  const name = (i) => model.names[i];
-  const list = (xs) => xs.slice(0, -1).join(", ") + " y " + xs[xs.length - 1];
-  const numero = ["cero", "uno", "dos", "tres", "cuatro", "cinco", "seis", "siete", "ocho", "nueve"];
-  const n = model.names.length;
-  const first = model.rounds[0];
+  const last = model.totalFechas;
+  const wo = model.rounds.find((r) => r.matches.some((m) => m.kind === "wo_doble"));
+  const woF = wo ? wo.fecha : last - 1;
+  const middle = [];
+  for (let n = 2; n < woF; n++) middle.push(n);
   const cues = [
-    { fecha: 0, text: `Así funciona la liga de tenis del club. Cada ficha numerada es un jugador inscrito. En este ejemplo son ${numero[n] || n}.` },
-    { fecha: 1, text: "Fecha uno. Cada jugador enfrenta a quien tiene al otro lado de la red, y tienen unos diez días para agendar y jugar su partido." },
-    { fecha: 1, text: `Como son impares, hay un asiento vacío. Quien queda frente a él, aquí ${name(first.bye)}, tiene fecha libre.` },
-    { fecha: 1, text: "Los puntos caen al ábaco: tres por ganar y uno por perder. Perder igual suma, así que siempre conviene jugar." },
-    { fecha: 2, text: "En cada fecha el jugador uno se queda fijo y los demás avanzan un asiento. Así, al final, todos se enfrentan una sola vez." },
-    { fecha: 3, text: `Las luces del ábaco marcan a los ${numero[model.masters]} que hoy clasificarían al Torneo de Maestros.` },
+    { fechas: [0], text: "¿Cómo funciona la liga? Te lo explico en veinte segundos." },
+    { fechas: [1], text: "Cada fecha juegas contra quien tienes al frente, y tienen diez días para jugar." },
+    { fechas: [1], text: "¿Ganas? Tres puntos. ¿Pierdes? Igual sumas uno. ¡Siempre conviene jugar!" },
+    { fechas: middle, text: "Fecha a fecha cambias de rival, hasta enfrentar a todos." },
+    { fechas: [woF], text: "Si no juegan a tiempo, es W.O. doble: nadie suma." },
+    { fechas: [last], text: `Al final, los ${["", "", "", "", "cuatro", "", "seis", "", "ocho"][model.masters] || model.masters} mejores van al Torneo de Maestros. ¡Nos vemos en la cancha!` },
   ];
-  model.rounds.forEach((round) => {
-    for (const m of round.matches) {
-      if (m.kind === "wo") {
-        const loser = m.winner === m.a ? m.b : m.a;
-        cues.push({ fecha: round.fecha, text: `Fecha ${numero[round.fecha]}. ${name(loser)} no se presentó: ${name(m.winner)} gana por W.O. y suma tres. Quien no se presenta suma cero.` });
-      }
-      if (m.kind === "wo_doble") {
-        cues.push({ fecha: round.fecha, text: `Fecha ${numero[round.fecha]}. ${name(m.a)} y ${name(m.b)} no jugaron dentro del plazo: es W.O. doble y ninguno suma. Una fecha vencida no se recupera.` });
-      }
-    }
+  return cues.map((c, i) => {
+    const file = `audio/cue-${i + 1}.mp3`;
+    return existsSync(join(HERE, file)) ? { ...c, audio: file } : c;
   });
-  const last = model.rounds[model.rounds.length - 1];
-  const [o0, o1, o2] = last.order;
-  const top = last.order.slice(0, model.masters).map(name);
-  if (last.pts[o0] === last.pts[o1] && last.pts[o2] !== last.pts[o0]) {
-    cues.push({ fecha: last.fecha, text: `Última fecha. ${name(o0)} y ${name(o1)} terminan empatados con ${last.pts[o0]} puntos. Cuando empatan dos, manda el partido entre ellos, y ${name(o0)} queda primero.` });
-  } else {
-    cues.push({ fecha: last.fecha, text: `Última fecha. ${name(o0)} termina primero con ${last.pts[o0]} puntos.` });
-  }
-  cues.push({ fecha: last.fecha, text: `${list(top)} clasifican al Torneo de Maestros. Con ocho o más inscritos clasifican seis, y con doce o más, ocho. ¡Nos vemos en la cancha!` });
-  // Ninguna fecha se salta: las que no tienen comentario dicen quién lidera.
-  model.rounds.forEach((round) => {
-    if (cues.some((c) => c.fecha === round.fecha)) return;
-    const lead = round.order[0];
-    cues.push({ fecha: round.fecha, text: `Fecha ${numero[round.fecha]}. Lidera ${name(lead)} con ${round.pts[lead]} puntos.` });
-  });
-  return cues.sort((a, b) => a.fecha - b.fecha);
 }
 
 const NARR_CSS = `<style>
