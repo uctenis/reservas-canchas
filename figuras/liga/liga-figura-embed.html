@@ -1016,7 +1016,7 @@ stage.addEventListener("keydown", (e) => {
 // Si existen los audios de cada frase (figuras/liga/audio/), se reproducen
 // en orden y cada uno mueve la figura al empezar. Sin audios, usa la voz del
 // navegador; sin voz (o con la voz apagada), corre solo con subtítulos.
-const CUES = [{"fechas":[0],"text":"¿Cómo funciona la liga? Te lo explico en veinte segundos."},{"fechas":[1],"text":"Cada fecha juegas contra quien tienes al frente, y tienen diez días para jugar."},{"fechas":[1],"text":"¿Ganas? Tres puntos. ¿Pierdes? Igual sumas uno. ¡Siempre conviene jugar!"},{"fechas":[2,3,4,5],"text":"Fecha a fecha cambias de rival, hasta enfrentar a todos."},{"fechas":[6],"text":"Si no juegan a tiempo, es W.O. doble: nadie suma."},{"fechas":[7],"text":"Al final, los cuatro mejores van al Torneo de Maestros. ¡Nos vemos en la cancha!"}];
+const CUES = [{"fechas":[0],"text":"¿Cómo funciona la liga? Te lo explico en veinte segundos.","audio":"audio/cue-1.mp3"},{"fechas":[1],"text":"Cada fecha juegas contra quien tienes al frente, y tienen diez días para jugar.","audio":"audio/cue-2.mp3"},{"fechas":[1],"text":"¿Ganas? Tres puntos. ¿Pierdes? Igual sumas uno. ¡Siempre conviene jugar!","audio":"audio/cue-3.mp3"},{"fechas":[2,3,4,5],"text":"Fecha a fecha cambias de rival, hasta enfrentar a todos.","audio":"audio/cue-4.mp3"},{"fechas":[6],"text":"Si no juegan a tiempo, pierden los dos por W.O.: nadie suma.","audio":"audio/cue-5.mp3"},{"fechas":[7],"text":"Al final, los cuatro mejores van al Torneo de Maestros. ¡Nos vemos en la cancha!","audio":"audio/cue-6.mp3"}];
 const subs = document.querySelector("[data-subs]");
 const button = document.querySelector("[data-narrate]");
 const optVoice = document.querySelector("[data-opt=voz]");
@@ -1056,7 +1056,9 @@ function cue(i) {
   const steps = CUES[i].fechas;
   let k = 0;
   showFecha(steps[0]);
-  if (steps.length > 1) guide.stepper = setInterval(() => { k += 1; if (k < steps.length) showFecha(steps[k]); else clearInterval(guide.stepper); }, STEP * 1000);
+  // Con audio, las fechas se reparten en lo que dura la frase.
+  const step = guide.dur > 0 ? Math.min(STEP, (guide.dur - 0.2) / steps.length) : STEP;
+  if (steps.length > 1) guide.stepper = setInterval(() => { k += 1; if (k < steps.length) showFecha(steps[k]); else clearInterval(guide.stepper); }, step * 1000);
   showSubs(CUES[i].text);
 }
 const duration = (c) => Math.max(2600, c.text.split(/\s+/).length * 330 + 700, c.fechas.length * STEP * 1000 + 600);
@@ -1067,7 +1069,7 @@ function timed(i) {
 }
 function playAudio(i, token) {
   if (!guide || guide.token !== token) return;
-  player.onplaying = () => { if (guide && guide.token === token && guide.i !== i) cue(i); };
+  player.onplaying = () => { if (guide && guide.token === token && guide.i !== i) { guide.dur = isFinite(player.duration) ? player.duration : 0; cue(i); } };
   player.onended = () => { if (guide && guide.token === token) (i + 1 < CUES.length ? playAudio(i + 1, token) : endGuide()); };
   player.onerror = () => { if (guide && guide.token === token) timed(i); };
   if (!player.src.endsWith(CUES[i].audio)) player.src = CUES[i].audio;
@@ -1079,7 +1081,7 @@ function startGuide() {
   touring = false; clearTimeout(idle);
   f = 0; t = 99; draw();
   const token = {};
-  guide = { i: -1, token, timer: 0, stepper: 0 };
+  guide = { i: -1, token, timer: 0, stepper: 0, dur: 0 };
   button.textContent = "■ Detener";
   button.setAttribute("aria-pressed", "true");
   if (!optVoice.checked) { timed(0); return; }

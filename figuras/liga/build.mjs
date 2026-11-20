@@ -8,12 +8,13 @@
 // fecha libre) y, detrás, un ábaco de fichas: cada partido suma 3 fichas al
 // ganador y 1 al perdedor (0 por no presentarse). Las luces del ábaco marcan
 // a los que hoy clasifican al Torneo de Maestros.
-import { existsSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as k from "../../.agents/skills/anatomy/kit/iso-kit.mjs";
 import { kitScript } from "../../.agents/skills/anatomy/scripts/inline-kit.mjs";
 import { buildModel } from "./model.mjs";
+import { narration as script } from "./narration.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const theme = process.argv.includes("--light") ? "light" : "dark";
@@ -460,7 +461,7 @@ stage.addEventListener("keydown", (e) => {
 // Si existen los audios de cada frase (figuras/liga/audio/), se reproducen
 // en orden y cada uno mueve la figura al empezar. Sin audios, usa la voz del
 // navegador; sin voz (o con la voz apagada), corre solo con subtítulos.
-const CUES = ${JSON.stringify(narration(M))};
+const CUES = ${JSON.stringify(script(M).map(({ voz, ...c }) => c))};
 const subs = document.querySelector("[data-subs]");
 const button = document.querySelector("[data-narrate]");
 const optVoice = document.querySelector("[data-opt=voz]");
@@ -500,7 +501,9 @@ function cue(i) {
   const steps = CUES[i].fechas;
   let k = 0;
   showFecha(steps[0]);
-  if (steps.length > 1) guide.stepper = setInterval(() => { k += 1; if (k < steps.length) showFecha(steps[k]); else clearInterval(guide.stepper); }, STEP * 1000);
+  // Con audio, las fechas se reparten en lo que dura la frase.
+  const step = guide.dur > 0 ? Math.min(STEP, (guide.dur - 0.2) / steps.length) : STEP;
+  if (steps.length > 1) guide.stepper = setInterval(() => { k += 1; if (k < steps.length) showFecha(steps[k]); else clearInterval(guide.stepper); }, step * 1000);
   showSubs(CUES[i].text);
 }
 const duration = (c) => Math.max(2600, c.text.split(/\\s+/).length * 330 + 700, c.fechas.length * STEP * 1000 + 600);
@@ -511,7 +514,7 @@ function timed(i) {
 }
 function playAudio(i, token) {
   if (!guide || guide.token !== token) return;
-  player.onplaying = () => { if (guide && guide.token === token && guide.i !== i) cue(i); };
+  player.onplaying = () => { if (guide && guide.token === token && guide.i !== i) { guide.dur = isFinite(player.duration) ? player.duration : 0; cue(i); } };
   player.onended = () => { if (guide && guide.token === token) (i + 1 < CUES.length ? playAudio(i + 1, token) : endGuide()); };
   player.onerror = () => { if (guide && guide.token === token) timed(i); };
   if (!player.src.endsWith(CUES[i].audio)) player.src = CUES[i].audio;
@@ -523,7 +526,7 @@ function startGuide() {
   touring = false; clearTimeout(idle);
   f = 0; t = 99; draw();
   const token = {};
-  guide = { i: -1, token, timer: 0, stepper: 0 };
+  guide = { i: -1, token, timer: 0, stepper: 0, dur: 0 };
   button.textContent = "■ Detener";
   button.setAttribute("aria-pressed", "true");
   if (!optVoice.checked) { timed(0); return; }
@@ -579,28 +582,6 @@ addEventListener("pagehide", silence);
 draw();
 `;
 
-// Guion corto (≈25 s) de la explicación guiada. `fechas` son las fechas que
-// recorre la figura mientras suena la frase. Si existe audio/cue-N.mp3 (voz
-// grabada), la figura lo reproduce; si no, usa la voz del navegador.
-function narration(model) {
-  const last = model.totalFechas;
-  const wo = model.rounds.find((r) => r.matches.some((m) => m.kind === "wo_doble"));
-  const woF = wo ? wo.fecha : last - 1;
-  const middle = [];
-  for (let n = 2; n < woF; n++) middle.push(n);
-  const cues = [
-    { fechas: [0], text: "¿Cómo funciona la liga? Te lo explico en veinte segundos." },
-    { fechas: [1], text: "Cada fecha juegas contra quien tienes al frente, y tienen diez días para jugar." },
-    { fechas: [1], text: "¿Ganas? Tres puntos. ¿Pierdes? Igual sumas uno. ¡Siempre conviene jugar!" },
-    { fechas: middle, text: "Fecha a fecha cambias de rival, hasta enfrentar a todos." },
-    { fechas: [woF], text: "Si no juegan a tiempo, es W.O. doble: nadie suma." },
-    { fechas: [last], text: `Al final, los ${["", "", "", "", "cuatro", "", "seis", "", "ocho"][model.masters] || model.masters} mejores van al Torneo de Maestros. ¡Nos vemos en la cancha!` },
-  ];
-  return cues.map((c, i) => {
-    const file = `audio/cue-${i + 1}.mp3`;
-    return existsSync(join(HERE, file)) ? { ...c, audio: file } : c;
-  });
-}
 
 const NARR_CSS = `<style>
 .lg-subs{position:absolute;left:50%;bottom:44px;transform:translateX(-50%);width:max-content;max-width:calc(100% - 32px);padding:7px 14px;border-radius:8px;background:rgba(0,0,0,.8);color:#fff;font:500 15px/1.45 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;text-align:center;pointer-events:none;box-shadow:0 4px 18px rgba(0,0,0,.35)}
