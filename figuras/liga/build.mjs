@@ -24,23 +24,28 @@ const WIDTH = 640;
 const HEIGHT = 430;
 
 // ── Mundo ────────────────────────────────────────────────────────────────
-const PLATE = { x: -204, y: -108, w: 336, d: 194, r: 8 };
+const PLATE = { x: -206, y: -108, w: 344, d: 194, r: 8 };
 const PLATE_H = 10;
 const FOOT_H = 5;
 
 // Mesa-cancha con el carrusel.
-const TABLE = { x: -192, y: -38, w: 226, d: 100, r: 6 };
+const TABLE = { x: -194, y: -38, w: 250, d: 100, r: 6 };
 const TABLE_H = 8;
 const CY = 12;                 // eje del carrusel (y)
-const R = 28;                  // radio de las curvas del riel
-const A = [-112, -66, -20];     // x de los asientos en las filas
+const R = 28;                  // radio de la curva del riel (y distancia a la red)
+// Cuatro canchas lado a lado: en cada una se juega un partido de la fecha.
+const C = [-164, -110, -56, -2];   // x del centro de cada cancha
+const COURT_W = 40, COURT_L = 88;  // dobles, en proporción a una cancha real
 const Y_FAR = CY - R, Y_NEAR = CY + R;
 const SLOTS = [
-  [A[0] - R - 34, CY],         // 0: asiento fijo
-  [A[0], Y_FAR], [A[1], Y_FAR], [A[2], Y_FAR],    // 1–3: fila del fondo
-  [A[2], Y_NEAR], [A[1], Y_NEAR], [A[0], Y_NEAR], // 4–6: fila del frente
-  [A[0] - R, CY],              // 7: vértice izquierdo
+  [C[0], Y_FAR],                                  // 0: asiento fijo
+  [C[1], Y_FAR], [C[2], Y_FAR], [C[3], Y_FAR],    // 1–3: fondo
+  [C[3], Y_NEAR], [C[2], Y_NEAR], [C[1], Y_NEAR], // 4–6: frente
+  [C[0], Y_NEAR],                                 // 7: frente de la cancha 1
 ];
+// Curva del riel que vuelve del asiento 7 al 1 pasando entre las canchas 1 y 2.
+const BEZ = [[C[0], Y_NEAR], [C[0] + 30, Y_NEAR], [C[1] - 30, Y_FAR], [C[1], Y_FAR]];
+const bez = (u) => { const v = 1 - u; return [0, 1].map((k) => v * v * v * BEZ[0][k] + 3 * v * v * u * BEZ[1][k] + 3 * v * u * u * BEZ[2][k] + u * u * u * BEZ[3][k]); };
 const NET_Z = TABLE_H;
 const NET_H = 6;
 const PUCK_Z = TABLE_H + 2;
@@ -59,7 +64,7 @@ const RAIL_Z = CHIP_Z + M.maxPts * CHIP_H + 5;
 const LAMP_Y = RACK.y + RACK.d - 4.5;
 
 // Contador de fechas con manivela.
-const BOX = { x: 56, y: -8, w: 56, d: 22, r: 2.5 };
+const BOX = { x: 66, y: -8, w: 56, d: 22, r: 2.5 };
 const BOX_H = 18;
 const CRANK = [BOX.x + BOX.w - 11, BOX.y + 10];
 
@@ -94,7 +99,7 @@ function plate() {
   out.push(L(ticks.minor, { tone: "lo" }), L(ticks.major, { tone: "mid" }));
   out.push(D([at([strip.x + 2.5, strip.y + 3.5, 0.6]), at([strip.x + strip.w - 2.5, strip.y + 3.5, 0.6])], { size: 0.45 }));
   // Placa con el nombre, al costado derecho.
-  const tag = { x: 66, y: 46, w: 46, d: 24, r: 1.5 };
+  const tag = { x: 76, y: 46, w: 46, d: 24, r: 1.5 };
   out.push(S(k.slabOf(tag, 0, 0.8, P, 3, 0.3), { tone: "lo" }));
   out.push(k.faceTextSvg(k.topMatrix([tag.x + 5, tag.y + 9], 0.8, P, "x"), "LIGA 2026", { size: 4.4, tone: "mid" }));
   for (const y of [tag.y + 13.5, tag.y + 16.5, tag.y + 19.5]) {
@@ -104,36 +109,53 @@ function plate() {
   return out.join("");
 }
 
-// ── Mesa-cancha ──────────────────────────────────────────────────────────
-function stadium(inset, z) {
-  // Contorno del riel: dos rectas y dos semicírculos alrededor de (A0,CY) y (A2,CY).
+// ── Mesa con cuatro canchas ──────────────────────────────────────────────
+function trackPts() {
   const pts = [];
-  const r = R + inset;
-  for (let i = 0; i <= 24; i++) { const t = -Math.PI / 2 + (Math.PI * i) / 24; pts.push([A[2] + Math.cos(t) * r, CY + Math.sin(t) * r]); }
-  for (let i = 0; i <= 24; i++) { const t = Math.PI / 2 + (Math.PI * i) / 24; pts.push([A[0] + Math.cos(t) * r, CY + Math.sin(t) * r]); }
-  return k.onTop(pts, z, P, true);
+  const line = (p, q, n) => { for (let i = 0; i < n; i++) pts.push([p[0] + (q[0] - p[0]) * i / n, p[1] + (q[1] - p[1]) * i / n]); };
+  line(SLOTS[1], SLOTS[3], 20);
+  for (let i = 0; i < 24; i++) { const t = -Math.PI / 2 + Math.PI * i / 24; pts.push([C[3] + Math.cos(t) * R, CY + Math.sin(t) * R]); }
+  line(SLOTS[4], SLOTS[7], 30);
+  for (let i = 0; i < 20; i++) pts.push(bez(i / 20));
+  return pts;
 }
-
+function offsetLoop(pts, d) {
+  const n = pts.length;
+  return pts.map((p, i) => {
+    const a = pts[(i - 1 + n) % n], b = pts[(i + 1) % n];
+    const tx = b[0] - a[0], ty = b[1] - a[1], l = Math.hypot(tx, ty) || 1;
+    return [p[0] - ty / l * d, p[1] + tx / l * d];
+  });
+}
+const courtLine = (d) => `<path class="lg-court-line" d="${d}"/>`;
+function court(cx) {
+  const h = COURT_W / 2, l = COURT_L / 2, single = h - 5, service = 23.7;
+  const plan = { x: cx - h, y: CY - l, w: COURT_W, d: COURT_L, r: 0.2 };
+  const out = [`<path class="lg-court" d="${k.planOutline({ x: cx - h - 3, y: CY - l - 4, w: COURT_W + 6, d: COURT_L + 8, r: 1 }, TABLE_H, P, 2)}"/>`];
+  const lines = [k.planOutline(plan, TABLE_H, P, 1)];
+  for (const x of [cx - single, cx + single]) lines.push(k.lineOnTop([x, CY - l], [x, CY + l], TABLE_H, P));
+  for (const y of [CY - service, CY + service]) lines.push(k.lineOnTop([cx - single, y], [cx + single, y], TABLE_H, P));
+  lines.push(k.lineOnTop([cx, CY - service], [cx, CY + service], TABLE_H, P));
+  lines.push(k.lineOnTop([cx, CY - l], [cx, CY - l + 2], TABLE_H, P), k.lineOnTop([cx, CY + l], [cx, CY + l - 2], TABLE_H, P));
+  out.push(courtLine(lines.join("")));
+  return out.join("");
+}
 function table() {
   const out = [`<path class="iso-halo" d="${k.haloOf(TABLE, 0, TABLE_H, P)}" style="filter:blur(3px)"/>`];
   out.push(S(k.slabOf(TABLE, 0, TABLE_H, P, 6, 1), { tone: "mid" }));
+  out.push(`<path class="lg-court-out" d="${k.planOutline(k.insetPlan(TABLE, 2), TABLE_H, P, 6)}"/>`);
+  out.push(L(k.planOutline(k.insetPlan(TABLE, 2), TABLE_H, P, 6), { tone: "lo" }));
   out.push(D(k.corners(TABLE, 5).map(([x, y]) => at([x, y, TABLE_H])), { size: 0.45 }));
-  // Líneas de cancha bajo el carrusel (dobles y singles, red al centro).
-  const court = { x: A[0] - R - 50, y: CY - 44, w: A[2] - A[0] + 2 * R + 60, d: 88, r: 0.5 };
-  out.push(L(k.planOutline(court, TABLE_H, P, 1), { tone: "faint" }));
-  out.push(L(k.lineOnTop([court.x, court.y + 8], [court.x + court.w, court.y + 8], TABLE_H, P), { tone: "faint" }));
-  out.push(L(k.lineOnTop([court.x, court.y + court.d - 8], [court.x + court.w, court.y + court.d - 8], TABLE_H, P), { tone: "faint" }));
-  // Riel del carrusel: ranura doble.
-  out.push(L(stadium(-3.2, TABLE_H), { tone: "lo" }), L(stadium(3.2, TABLE_H), { tone: "lo" }));
-  // Asientos: aro grabado en cada parada y número de asiento.
-  out.push(L(SLOTS.map(([x, y]) => k.ring(x, y, 11.6, TABLE_H, P, 28)).join(""), { tone: "faint" }));
-  // Asiento fijo: pedestal propio, unido al riel por un puente.
+  C.forEach((cx) => out.push(court(cx)));
+  // Riel del carrusel: ranura doble que recorre los asientos 1→7.
+  const loop = trackPts();
+  out.push(L(k.onTop(offsetLoop(loop, -3), TABLE_H, P, true) + k.onTop(offsetLoop(loop, 3), TABLE_H, P, true), { tone: "faint" }));
+  // Asiento fijo: placa propia (no está en el riel).
   const [fx, fy] = SLOTS[0];
-  out.push(S(k.slabOf({ x: fx, y: fy - 3, w: SLOTS[7][0] - fx - 12, d: 6, r: 1 }, TABLE_H, 0.6, P, 2), { tone: "lo", crease: "none" }));
-  out.push(S(k.cylinder(fx, fy, 11, TABLE_H, 1.2, P, 32, 0.3), { tone: "mid" }));
-  out.push(D([at([fx - 9.4, fy, TABLE_H + 1.2]), at([fx + 9.4, fy, TABLE_H + 1.2])], { size: 0.4 }));
+  out.push(S(k.cylinder(fx, fy, 11.6, TABLE_H, 0.8, P, 32, 0.3), { tone: "mid" }));
+  out.push(D([at([fx - 10, fy, TABLE_H + 0.8]), at([fx + 10, fy, TABLE_H + 0.8])], { size: 0.4 }));
   // Motor del carrusel (a la derecha), con su eje.
-  const pod = { x: A[2] + R + 5, y: CY - 9, w: 12, d: 18, r: 2 };
+  const pod = { x: C[3] + R + 6, y: CY - 9, w: 12, d: 18, r: 2 };
   out.push(S(k.slabOf(pod, TABLE_H, 9, P, 3, 0.5), { tone: "mid" }));
   out.push(L(k.planOutline(k.insetPlan(pod, 2), TABLE_H + 9, P, 3), { tone: "faint" }));
   out.push(S(k.cylinder(pod.x + 6, CY, 2.4, TABLE_H + 9, 2, P, 20), { tone: "mid" }));
@@ -141,31 +163,20 @@ function table() {
   return out.join("");
 }
 
-// Red larga (entre filas) y red corta (asiento fijo ↔ vértice).
-function netLong() {
-  const x0 = A[0] - 8, x1 = A[2] + 8;
+// Una red por cancha: postes fuera de las líneas de dobles, malla y faja blanca.
+function nets() {
   const out = [];
-  for (const x of [x0, x1]) out.push(S(k.cylinder(x, CY, 1.3, NET_Z, NET_H + 1.5, P, 14), { tone: "mid" }));
-  const mesh = { x: x0 + 1.3, y: CY - 0.5, w: x1 - x0 - 2.6, d: 1, r: 0.2 };
-  out.push(S(k.slabOf(mesh, NET_Z + 0.8, NET_H - 0.8, P, 1), { tone: "lo", crease: "none" }));
-  const lines = [];
-  for (let x = mesh.x + 3; x < mesh.x + mesh.w - 1; x += 3) lines.push(k.segment([x, CY + 0.5, NET_Z + 0.8], [x, CY + 0.5, NET_Z + NET_H - 1.2], P));
-  out.push(L(lines.join(""), { tone: "faint" }));
-  out.push(S(k.slabOf({ x: mesh.x, y: CY - 0.7, w: mesh.w, d: 1.4, r: 0.3 }, NET_Z + NET_H - 1.2, 1.2, P, 1), { tone: "hi", crease: "none" }));
-  return out.join("");
-}
-function netShort() {
-  const x = (SLOTS[0][0] + SLOTS[7][0]) / 2;
-  const y0 = CY - 13, y1 = CY + 13;
-  const out = [];
-  out.push(S(k.cylinder(x, y0, 1.3, NET_Z, NET_H + 1.5, P, 14), { tone: "mid" }));
-  const mesh = { x: x - 0.5, y: y0 + 1.3, w: 1, d: y1 - y0 - 2.6, r: 0.2 };
-  out.push(S(k.slabOf(mesh, NET_Z + 0.8, NET_H - 0.8, P, 1), { tone: "lo", crease: "none" }));
-  const lines = [];
-  for (let y = mesh.y + 3; y < mesh.y + mesh.d - 1; y += 3) lines.push(k.segment([x + 0.5, y, NET_Z + 0.8], [x + 0.5, y, NET_Z + NET_H - 1.2], P));
-  out.push(L(lines.join(""), { tone: "faint" }));
-  out.push(S(k.slabOf({ x: x - 0.7, y: mesh.y, w: 1.4, d: mesh.d, r: 0.3 }, NET_Z + NET_H - 1.2, 1.2, P, 1), { tone: "hi", crease: "none" }));
-  out.push(S(k.cylinder(x, y1, 1.3, NET_Z, NET_H + 1.5, P, 14), { tone: "mid" }));
+  for (const cx of C) {
+    const x0 = cx - COURT_W / 2 - 2, x1 = cx + COURT_W / 2 + 2;
+    out.push(S(k.cylinder(x0, CY, 1.2, NET_Z, NET_H + 1.2, P, 14), { tone: "mid" }));
+    const mesh = { x: x0 + 1.2, y: CY - 0.5, w: x1 - x0 - 2.4, d: 1, r: 0.2 };
+    out.push(S(k.slabOf(mesh, NET_Z + 0.6, NET_H - 0.6, P, 1), { tone: "lo", crease: "none" }));
+    const lines = [];
+    for (let x = mesh.x + 2.5; x < mesh.x + mesh.w - 1; x += 2.5) lines.push(k.segment([x, CY + 0.5, NET_Z + 0.6], [x, CY + 0.5, NET_Z + NET_H - 1.1], P));
+    out.push(L(lines.join(""), { tone: "faint" }));
+    out.push(S(k.slabOf({ x: mesh.x, y: CY - 0.7, w: mesh.w, d: 1.4, r: 0.3 }, NET_Z + NET_H - 1.1, 1.1, P, 1), { tone: "hi", crease: "none" }));
+    out.push(S(k.cylinder(x1, CY, 1.2, NET_Z, NET_H + 1.2, P, 14), { tone: "mid" }));
+  }
   return out.join("");
 }
 
@@ -248,7 +259,7 @@ function crankArm(turn) {
 
 // Cable del contador al motor del carrusel.
 function cable() {
-  const y = CY + 4, pod = A[2] + R + 17;
+  const y = CY + 4, pod = C[3] + R + 18;
   const from = at([BOX.x, BOX.y + 11, 5]);
   const to = at([pod, y, TABLE_H + 4]);
   const via = [at([BOX.x - 8, BOX.y + 11, 0.6]), at([TABLE.x + TABLE.w + 8, y, 0.6]), at([TABLE.x + TABLE.w + 0.2, y, 0.6]), at([TABLE.x + TABLE.w + 0.2, y, TABLE_H]), at([pod + 4, y, TABLE_H])];
@@ -270,10 +281,8 @@ const svg = k.figureSvg({
     cable(),
     counter(),
     table(),
-    `<g data-part="seat0"></g>`,
-    netShort(),
     `<g data-part="far"></g>`,
-    netLong(),
+    nets(),
     `<g data-part="near"></g>`,
     `<g data-part="bars"></g>`,
   ],
@@ -284,7 +293,8 @@ const live = `
 const P = ${JSON.stringify(P)};
 const M = ${JSON.stringify(M)};
 const SLOTS = ${JSON.stringify(SLOTS)};
-const A = ${JSON.stringify(A)}, R = ${R}, CY = ${CY};
+const C = ${JSON.stringify(C)}, R = ${R}, CY = ${CY}, BEZ = ${JSON.stringify(BEZ)};
+const bez = ${bez.toString()};
 const COL_X = ${JSON.stringify(COL_X)}, COL_Y = ${COL_Y}, CHIP_Z = ${CHIP_Z}, CHIP_H = ${CHIP_H}, CHIP_R = ${CHIP_R}, RAIL_Z = ${RAIL_Z};
 const RACK_H = ${RACK_H}, SOCKET_H = ${SOCKET_H}, LAMP_Y = ${LAMP_Y}, TABLE_H = ${TABLE_H}, PUCK_Z = ${PUCK_Z}, PUCK_H = ${PUCK_H};
 const BOX = ${JSON.stringify(BOX)}, BOX_H = ${BOX_H}, CRANK = ${JSON.stringify(CRANK)};
@@ -303,7 +313,7 @@ function counterText(fecha) {
 const stage = document.querySelector(".iso-stage");
 const svg = stage.querySelector("svg");
 const $ = (sel) => svg.querySelector(sel);
-const G = { seat0: $('[data-part="seat0"]'), far: $('[data-part="far"]'), near: $('[data-part="near"]'), bars: $('[data-part="bars"]'), counter: $('[data-part="counter"]'), crank: $('[data-part="crank"]') };
+const G = { far: $('[data-part="far"]'), near: $('[data-part="near"]'), bars: $('[data-part="bars"]'), counter: $('[data-part="counter"]'), crank: $('[data-part="crank"]') };
 const cols = COL_X.map((_, i) => $('[data-col="' + i + '"]'));
 const lamps = COL_X.map((_, i) => $('[data-lamp="' + i + '"]'));
 const readout = document.querySelector("[data-readout]");
@@ -316,10 +326,30 @@ const clamp01 = (t) => Math.min(1, Math.max(0, t));
 function along(s, u) {
   const arc = (cx, a0, a1) => { const t = a0 + (a1 - a0) * u; return [cx + Math.cos(t) * R, CY + Math.sin(t) * R]; };
   const lerp = (p, q) => [p[0] + (q[0] - p[0]) * u, p[1] + (q[1] - p[1]) * u];
-  if (s === 3) return arc(A[2], -Math.PI / 2, Math.PI / 2);
-  if (s === 6) return arc(A[0], Math.PI / 2, Math.PI);
-  if (s === 7) return arc(A[0], Math.PI, 1.5 * Math.PI);
+  if (s === 3) return arc(C[3], -Math.PI / 2, Math.PI / 2);
+  if (s === 7) return bez(u);
   return lerp(SLOTS[s], SLOTS[s + 1]);
+}
+
+// Peloteo: la pelota cruza la red tres veces entre los dos jugadores, con
+// su sombra en la cancha. u va de 0 a 1 durante el peloteo.
+function rally(sa, sb, u, offset) {
+  const p = SLOTS[sa], q = SLOTS[sb];
+  const dy = q[1] - p[1], sign = Math.sign(dy) || 1;
+  const from = [p[0] + 4, p[1] + sign * 9], to = [q[0] - 4, q[1] - sign * 9];
+  const phase = Math.min(2.999, Math.max(0, u * 3));
+  const seg = Math.floor(phase), w = phase - seg;
+  const [a, c] = seg % 2 ? [to, from] : [from, to];
+  const x = a[0] + (c[0] - a[0]) * w, y = a[1] + (c[1] - a[1]) * w;
+  const z = PUCK_Z + PUCK_H + 3 + 16 * Math.sin(Math.PI * w);
+  const r = 3.6 * P.scale;
+  const [sx, sy] = at([x, y, TABLE_H]);
+  const [bx, by] = at([x, y, z]);
+  const fade = Math.min(1, u * 8, (1 - u) * 8);
+  return '<g style="opacity:' + fade.toFixed(2) + '"><ellipse class="lg-ball-shadow" cx="' + sx.toFixed(1) + '" cy="' + sy.toFixed(1) + '" rx="' + (r * 0.95).toFixed(1) + '" ry="' + (r * 0.5).toFixed(1) + '"/>' +
+    '<circle class="lg-ball" cx="' + bx.toFixed(1) + '" cy="' + by.toFixed(1) + '" r="' + r.toFixed(1) + '"/>' +
+    '<path class="lg-ball-seam" d="M' + (bx - r * 0.75).toFixed(1) + ' ' + (by - r * 0.62).toFixed(1) + 'Q' + (bx - r * 0.1).toFixed(1) + ' ' + by.toFixed(1) + ' ' + (bx - r * 0.75).toFixed(1) + ' ' + (by + r * 0.62).toFixed(1) +
+    'M' + (bx + r * 0.75).toFixed(1) + ' ' + (by - r * 0.62).toFixed(1) + 'Q' + (bx + r * 0.1).toFixed(1) + ' ' + by.toFixed(1) + ' ' + (bx + r * 0.75).toFixed(1) + ' ' + (by + r * 0.62).toFixed(1) + '"/></g>';
 }
 
 // Ficha de jugador (o asiento vacío) en la mesa.
@@ -338,7 +368,7 @@ function puck(x, y, who, glow) {
 
 // Estado: fecha mostrada f (0 = antes de empezar) y reloj de la animación.
 let f = 0, t = 99, frame = 0, last = 0, visible = false, touring = !still.matches, idle = 0, hold = 0;
-const T_MOVE = 0.8, T_BARS = 0.25, T_DROP = 0.85;
+const T_MOVE = 0.8, T_BARS = 1.2, T_DROP = 0.85; // T_BARS: peloteo
 const T_END = T_MOVE + T_BARS + T_DROP;
 
 function ptsBefore(fecha) { return fecha > 1 ? M.rounds[fecha - 2].pts : M.names.map(() => 0); }
@@ -354,17 +384,15 @@ function draw() {
 
   // Carrusel.
   const far = [], near = [];
-  let seat0 = "";
   for (let s = 0; s < N; s++) {
     const who = ring[s];
-    if (s === 0) { seat0 = puck(SLOTS[0][0], SLOTS[0][1], who, false); continue; }
     let p = SLOTS[s];
-    if (prevRing && move < 1) p = along(s === 1 ? 7 : s - 1, move);
+    if (s > 0 && prevRing && move < 1) p = along(s === 1 ? 7 : s - 1, move);
     const item = { p, svg: puck(p[0], p[1], who, false), d: depthOf([p[0], p[1], 0], P) };
     (p[1] < CY ? far : near).push(item);
   }
   const html = (list) => list.sort((a, b) => a.d - b.d).map((i) => i.svg).join("");
-  G.seat0.innerHTML = seat0; G.far.innerHTML = html(far); G.near.innerHTML = html(near);
+  G.far.innerHTML = html(far); G.near.innerHTML = html(near);
 
   // Barras de cada cruce, por encima de la red.
   let b = "";
@@ -378,7 +406,10 @@ function draw() {
       const mid = [(a[0] + c[0]) / 2, (a[1] + c[1]) / 2, z + 7];
       return '<g style="opacity:' + bars.toFixed(2) + '">' + wireSvg(at(a), at(c), { via: [at(mid)], size: 1.1, ...style }) + "</g>";
     };
-    for (const m of round.matches) b += bar(m.slots[0], m.slots[1], { tone: m.kind === "wo_doble" ? "mid" : "lit", dashed: m.kind !== "jugado" });
+    for (const m of round.matches) {
+      if (m.kind !== "jugado") { b += bar(m.slots[0], m.slots[1], { tone: m.kind === "wo_doble" ? "mid" : "lit", dashed: true }); continue; }
+      if (bars < 1) b += rally(m.slots[0], m.slots[1], (t - T_MOVE) / T_BARS, m.slots[0] * 0.13);
+    }
     const byeSlot = round.ring.indexOf(round.bye);
     if (byeSlot >= 0) b += bar(byeSlot, N - 1 - byeSlot, { tone: "lo", dotted: true, ends: "from" });
   }
@@ -584,6 +615,12 @@ draw();
 
 
 const NARR_CSS = `<style>
+body.iso{--court:#1d3a30;--court-out:#14241d;--court-line:#c4d6cc;--ball:#d8e63c;--ball-seam:#f6fae2}
+body.iso[data-theme="light"]{--court:#78a888;--court-out:#a8c8b2;--court-line:#ffffff;--ball:#cfe02a;--ball-seam:#ffffff}
+.lg-court{fill:var(--court)}.lg-court-out{fill:var(--court-out)}
+.lg-court-line{fill:none;stroke:var(--court-line);stroke-width:.8;stroke-linecap:round}
+.lg-ball{fill:var(--ball);stroke:rgba(0,0,0,.35);stroke-width:.5}.lg-ball-seam{fill:none;stroke:var(--ball-seam);stroke-width:.7;stroke-linecap:round}
+.lg-ball-shadow{fill:#000;opacity:.3}
 .lg-subs{position:absolute;left:50%;bottom:44px;transform:translateX(-50%);width:max-content;max-width:calc(100% - 32px);padding:7px 14px;border-radius:8px;background:rgba(0,0,0,.8);color:#fff;font:500 15px/1.45 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;text-align:center;pointer-events:none;box-shadow:0 4px 18px rgba(0,0,0,.35)}
 .lg-subs[hidden]{display:none}
 .lg-narr{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;margin-top:12px;color:var(--anatomy-text);font-size:13px}
@@ -602,7 +639,7 @@ const body = k.plateHtml({
   hint: "Toca o → para avanzar la fecha",
   readout: `7 jugadores · ${M.totalFechas} fechas · ${M.masters} al Maestros`,
   keys: [
-    { mark: "raised", label: "Cada ficha numerada es un jugador; juega con quien tiene al otro lado de la red" },
+    { mark: "raised", label: "Cada ficha numerada es un jugador; cada partido de la fecha se juega en su cancha, contra quien está al otro lado de la red" },
     { mark: "lit", label: "Puntos de la fecha: 3 al ganador, 1 al perdedor, 0 si no se presenta" },
   ],
   caption:
@@ -620,6 +657,7 @@ body.iso{--anatomy-page:transparent;--anatomy-card:#0b1914;--anatomy-paper:#0b19
 --anatomy-hi:#cfdcd5;--anatomy-mid:#5d7669;--anatomy-lo:#33473d;--anatomy-faint:#1f3129;--anatomy-lit:#d4e31a;
 --anatomy-halo:#020604;--anatomy-dot:#e2ebe6;background:transparent}
 body.iso .iso-page{width:100%;max-width:760px;margin:0 auto}
+body.iso{--court:#1f5c46;--court-out:#123a2d;--court-line:#e6f1ea}
 body.iso .iso-plate{border-radius:16px;box-shadow:0 0 0 1px rgba(255,255,255,.08)}
 body.iso .iso-stage:focus:not(:focus-visible){outline:none}
 body.iso .lg-narr button{background:#c6d300;border-color:#c6d300;color:#0a1712}
