@@ -449,14 +449,167 @@ function go(step) {
   draw(); run();
 }
 new IntersectionObserver((e) => { visible = e[e.length - 1].isIntersecting; if (visible) run(); }, { rootMargin: "120px 0px" }).observe(stage);
-stage.addEventListener("click", () => go(1));
+stage.addEventListener("click", () => { stopGuide(); go(1); });
 stage.addEventListener("keydown", (e) => {
-  if (e.key === "ArrowRight" || e.key === " " || e.key === "Enter") { e.preventDefault(); go(1); }
-  if (e.key === "ArrowLeft") { e.preventDefault(); go(-1); }
-  if (e.key === "Home") { e.preventDefault(); touring = false; f = 0; t = 99; draw(); }
+  if (e.key === "ArrowRight" || e.key === " " || e.key === "Enter") { e.preventDefault(); stopGuide(); go(1); }
+  if (e.key === "ArrowLeft") { e.preventDefault(); stopGuide(); go(-1); }
+  if (e.key === "Home") { e.preventDefault(); stopGuide(); touring = false; f = 0; t = 99; draw(); }
 });
+
+// ── Explicación guiada: voz (Web Speech API) + subtítulos ──────────────
+// Todas las frases se encolan con el clic (iOS solo deja hablar tras un
+// gesto); cada una mueve la figura cuando empieza a sonar. Sin voz en el
+// dispositivo, o con la voz apagada, corre igual con subtítulos y tiempos.
+const CUES = ${JSON.stringify(narration(M))};
+const subs = document.querySelector("[data-subs]");
+const button = document.querySelector("[data-narrate]");
+const optVoice = document.querySelector("[data-opt=voz]");
+const optSubs = document.querySelector("[data-opt=subs]");
+const synth = "speechSynthesis" in window ? window.speechSynthesis : null;
+let guide = null;
+const LABEL = button.textContent;
+function pickVoice() {
+  const voices = synth ? synth.getVoices() : [];
+  const es = voices.filter((v) => /^es([-_]|$)/i.test(v.lang));
+  for (const pref of ["es-CL", "es-419", "es-US", "es-MX", "es-AR", "es-ES"]) {
+    const hit = es.find((v) => v.lang.replace("_", "-").toLowerCase() === pref.toLowerCase());
+    if (hit) return hit;
+  }
+  return es[0] || null;
+}
+if (synth) { synth.getVoices(); synth.addEventListener?.("voiceschanged", () => synth.getVoices()); }
+function showSubs(text) {
+  subs.textContent = text;
+  subs.hidden = !text || !optSubs.checked;
+}
+function showFecha(n) {
+  if (n === f) return;
+  f = n; t = n ? 0 : 99; hold = 0; draw(); run();
+}
+function cue(i) {
+  if (!guide) return;
+  guide.i = i;
+  showFecha(CUES[i].fecha);
+  showSubs(CUES[i].text);
+}
+const duration = (text) => Math.max(3200, text.split(/\\s+/).length * 400 + 1200);
+function timed(i) {
+  if (!guide) return;
+  cue(i);
+  guide.timer = setTimeout(() => (i + 1 < CUES.length ? timed(i + 1) : endGuide()), duration(CUES[i].text));
+}
+function startGuide() {
+  stopGuide();
+  touring = false; clearTimeout(idle);
+  f = 0; t = 99; draw();
+  const token = {};
+  guide = { i: -1, token, timer: 0 };
+  button.textContent = "■ Detener";
+  button.setAttribute("aria-pressed", "true");
+  if (!synth || !optVoice.checked) { timed(0); return; }
+  const voice = pickVoice();
+  synth.cancel();
+  CUES.forEach((c, i) => {
+    const u = new SpeechSynthesisUtterance(c.text);
+    u.lang = voice ? voice.lang : "es-CL";
+    if (voice) u.voice = voice;
+    u.rate = 1;
+    u.onstart = () => { if (guide && guide.token === token) cue(i); };
+    u.onend = () => { if (i === CUES.length - 1 && guide && guide.token === token) endGuide(); };
+    u.onerror = (e) => {
+      if (!guide || guide.token !== token || e.error === "interrupted" || e.error === "canceled") return;
+      synth.cancel(); timed(Math.max(0, i));
+    };
+    synth.speak(u);
+  });
+  // Si a los 2,5 s no empezó a hablar, no hay voz usable: solo subtítulos.
+  guide.timer = setTimeout(() => { if (guide && guide.token === token && guide.i < 0) { synth.cancel(); timed(0); } }, 2500);
+}
+function endGuide() {
+  if (!guide) return;
+  clearTimeout(guide.timer);
+  guide = null;
+  button.textContent = LABEL;
+  button.setAttribute("aria-pressed", "false");
+  setTimeout(() => { if (!guide) showSubs(""); }, 2500);
+  idle = setTimeout(() => { touring = !still.matches; hold = 0; run(); }, 8000);
+}
+function stopGuide() {
+  if (!guide) return;
+  clearTimeout(guide.timer);
+  guide = null;
+  if (synth) synth.cancel();
+  showSubs("");
+  button.textContent = LABEL;
+  button.setAttribute("aria-pressed", "false");
+}
+button.addEventListener("click", () => (guide ? stopGuide() : startGuide()));
+optSubs.addEventListener("change", () => { subs.hidden = !subs.textContent || !optSubs.checked; });
+optVoice.addEventListener("change", () => {
+  // Apagar la voz a mitad sigue con subtítulos desde la misma frase.
+  if (guide && !optVoice.checked && synth) { const i = Math.max(0, guide.i); clearTimeout(guide.timer); guide.token = {}; synth.cancel(); timed(i); }
+});
+addEventListener("pagehide", () => synth && synth.cancel());
 draw();
 `;
+
+// Guion de la explicación guiada. Cada frase dice qué fecha muestra la figura
+// mientras suena; nombres y puntos salen del mismo modelo que la anima.
+function narration(model) {
+  const name = (i) => model.names[i];
+  const list = (xs) => xs.slice(0, -1).join(", ") + " y " + xs[xs.length - 1];
+  const numero = ["cero", "uno", "dos", "tres", "cuatro", "cinco", "seis", "siete", "ocho", "nueve"];
+  const n = model.names.length;
+  const first = model.rounds[0];
+  const cues = [
+    { fecha: 0, text: `Así funciona la liga de tenis del club. Cada ficha numerada es un jugador inscrito. En este ejemplo son ${numero[n] || n}.` },
+    { fecha: 1, text: "Fecha uno. Cada jugador enfrenta a quien tiene al otro lado de la red, y tienen unos diez días para agendar y jugar su partido." },
+    { fecha: 1, text: `Como son impares, hay un asiento vacío. Quien queda frente a él, aquí ${name(first.bye)}, tiene fecha libre.` },
+    { fecha: 1, text: "Los puntos caen al ábaco: tres por ganar y uno por perder. Perder igual suma, así que siempre conviene jugar." },
+    { fecha: 2, text: "En cada fecha el jugador uno se queda fijo y los demás avanzan un asiento. Así, al final, todos se enfrentan una sola vez." },
+    { fecha: 3, text: `Las luces del ábaco marcan a los ${numero[model.masters]} que hoy clasificarían al Torneo de Maestros.` },
+  ];
+  model.rounds.forEach((round) => {
+    for (const m of round.matches) {
+      if (m.kind === "wo") {
+        const loser = m.winner === m.a ? m.b : m.a;
+        cues.push({ fecha: round.fecha, text: `Fecha ${numero[round.fecha]}. ${name(loser)} no se presentó: ${name(m.winner)} gana por W.O. y suma tres. Quien no se presenta suma cero.` });
+      }
+      if (m.kind === "wo_doble") {
+        cues.push({ fecha: round.fecha, text: `Fecha ${numero[round.fecha]}. ${name(m.a)} y ${name(m.b)} no jugaron dentro del plazo: es W.O. doble y ninguno suma. Una fecha vencida no se recupera.` });
+      }
+    }
+  });
+  const last = model.rounds[model.rounds.length - 1];
+  const [o0, o1, o2] = last.order;
+  const top = last.order.slice(0, model.masters).map(name);
+  if (last.pts[o0] === last.pts[o1] && last.pts[o2] !== last.pts[o0]) {
+    cues.push({ fecha: last.fecha, text: `Última fecha. ${name(o0)} y ${name(o1)} terminan empatados con ${last.pts[o0]} puntos. Cuando empatan dos, manda el partido entre ellos, y ${name(o0)} queda primero.` });
+  } else {
+    cues.push({ fecha: last.fecha, text: `Última fecha. ${name(o0)} termina primero con ${last.pts[o0]} puntos.` });
+  }
+  cues.push({ fecha: last.fecha, text: `${list(top)} clasifican al Torneo de Maestros. Con ocho o más inscritos clasifican seis, y con doce o más, ocho. ¡Nos vemos en la cancha!` });
+  // Ninguna fecha se salta: las que no tienen comentario dicen quién lidera.
+  model.rounds.forEach((round) => {
+    if (cues.some((c) => c.fecha === round.fecha)) return;
+    const lead = round.order[0];
+    cues.push({ fecha: round.fecha, text: `Fecha ${numero[round.fecha]}. Lidera ${name(lead)} con ${round.pts[lead]} puntos.` });
+  });
+  return cues.sort((a, b) => a.fecha - b.fecha);
+}
+
+const NARR_CSS = `<style>
+.lg-subs{position:absolute;left:50%;bottom:44px;transform:translateX(-50%);width:max-content;max-width:calc(100% - 32px);padding:7px 14px;border-radius:8px;background:rgba(0,0,0,.8);color:#fff;font:500 15px/1.45 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;text-align:center;pointer-events:none;box-shadow:0 4px 18px rgba(0,0,0,.35)}
+.lg-subs[hidden]{display:none}
+.lg-narr{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;margin-top:12px;color:var(--anatomy-text);font-size:13px}
+.lg-narr button{font:inherit;font-weight:700;padding:9px 16px;border-radius:999px;border:1px solid var(--anatomy-mid);background:var(--anatomy-card);color:var(--anatomy-strong);cursor:pointer}
+.lg-narr button:hover{border-color:var(--anatomy-hi)}
+.lg-narr button[aria-pressed="true"]{border-color:var(--anatomy-lit)}
+.lg-narr label{display:inline-flex;align-items:center;gap:6px;cursor:pointer}
+.lg-narr input{accent-color:var(--anatomy-lit);width:16px;height:16px;margin:0}
+@media (max-width:520px){.lg-subs{bottom:40px;font-size:14px;max-width:calc(100% - 16px)}}
+</style>`;
+const NARR_CONTROLS = `<div class="lg-narr" role="group" aria-label="Explicación guiada"><button type="button" data-narrate aria-pressed="false">▶ Escuchar la explicación</button><label><input type="checkbox" data-opt="voz" checked> Voz</label><label><input type="checkbox" data-opt="subs" checked> Subtítulos</label></div>`;
 
 const body = k.plateHtml({
   fig: "Fig 1",
@@ -469,8 +622,8 @@ const body = k.plateHtml({
   ],
   caption:
     `Un ejemplo con 7 jugadores del club. En cada fecha (unos 10 días) el jugador 1 se queda en su lugar y los demás avanzan un asiento por el carrusel; como son impares, hay un asiento vacío y quien queda frente a él tiene fecha libre. En ${M.totalFechas} fechas todos juegan contra todos una vez. Si un partido no se juega dentro del plazo es W.O. doble y nadie suma. El ábaco ordena por puntos (si dos empatan, manda el partido entre ellos) y las luces marcan a los ${M.masters} que van al Torneo de Maestros (6 desde 8 jugadores, 8 desde 12). Nombres y resultados inventados; el fixture y las reglas son los de la liga.`,
-  body: `<div class="iso-stage" tabindex="0" role="slider" aria-label="Máquina de la liga: flechas para avanzar o retroceder fechas" aria-valuemin="0" aria-valuemax="${M.totalFechas}" aria-valuenow="0">${svg}</div>`,
-});
+  body: `<div class="iso-stage" tabindex="0" role="slider" aria-label="Máquina de la liga: flechas para avanzar o retroceder fechas" aria-valuemin="0" aria-valuemax="${M.totalFechas}" aria-valuenow="0">${svg}</div><div class="lg-subs" data-subs aria-live="polite" hidden></div>`,
+}).replace("<figcaption", NARR_CONTROLS + "<figcaption");
 
 // --embed: versión para el iframe de liga.html, con la paleta del sitio
 // (verde cancha nocturna, acento amarillo pelota) y altura informada al padre.
@@ -484,15 +637,19 @@ body.iso{--anatomy-page:transparent;--anatomy-card:#0b1914;--anatomy-paper:#0b19
 body.iso .iso-page{width:100%;max-width:760px;margin:0 auto}
 body.iso .iso-plate{border-radius:16px;box-shadow:0 0 0 1px rgba(255,255,255,.08)}
 body.iso .iso-stage:focus:not(:focus-visible){outline:none}
+body.iso .lg-narr button{background:#c6d300;border-color:#c6d300;color:#0a1712}
+body.iso .lg-narr button[aria-pressed="true"]{background:transparent;color:#e2f03a}
 @media (max-width:520px){body.iso .iso-plate{padding:44px 10px}body.iso .iso-plate-corner[data-corner="title"]{display:none}}
 </style>`;
 const EMBED_JS = `
 const report = () => parent.postMessage({ type: "uct-figura", height: Math.ceil(document.documentElement.getBoundingClientRect().height) }, "*");
 new ResizeObserver(report).observe(document.documentElement);
 addEventListener("load", report);
+// liga.html avisa cuando oculta la figura (cambio de pestaña): se calla.
+addEventListener("message", (e) => { if (e.source === parent && e.data && e.data.type === "uct-figura-stop") stopGuide(); });
 `;
 const file = embed ? "liga-figura-embed.html" : theme === "light" ? "liga-figura-light.html" : "liga-figura.html";
 let html = k.pageHtml({ title: "Cómo funciona la liga", theme: embed ? "dark" : theme, body, script: kitScript() + live + (embed ? EMBED_JS : "") }).replace('<html lang="en">', '<html lang="es">');
-if (embed) html = html.replace("</head>", EMBED_CSS + "</head>");
+html = html.replace("</head>", NARR_CSS + (embed ? EMBED_CSS : "") + "</head>");
 writeFileSync(join(HERE, file), html);
 console.log("wrote", file);

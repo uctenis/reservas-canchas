@@ -1446,7 +1446,10 @@
     const box = document.getElementById('lgFigure');
     const frame = document.getElementById('lgFigureFrame');
     if (!box || !frame) return;
-    box.hidden = state.tab !== 'bases';
+    const hide = state.tab !== 'bases';
+    // Al salir de Bases, la explicación guiada deja de hablar.
+    if (hide && !box.hidden && frame.contentWindow) frame.contentWindow.postMessage({ type: 'uct-figura-stop' }, '*');
+    box.hidden = hide;
     if (!box.hidden && !frame.src) frame.src = frame.dataset.src;
   }
   window.addEventListener('message', event => {
