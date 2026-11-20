@@ -1437,7 +1437,27 @@
           : renderStandings(v);
     renderAdmin(v);
     renderLegacy();
+    renderFigure();
   }
+
+  // Figura "¿Cómo funciona la liga?": solo en Bases; el iframe se carga la
+  // primera vez que se muestra y después se conserva.
+  function renderFigure() {
+    const box = document.getElementById('lgFigure');
+    const frame = document.getElementById('lgFigureFrame');
+    if (!box || !frame) return;
+    const hide = state.tab !== 'bases';
+    // Al salir de Bases, la explicación guiada deja de hablar.
+    if (hide && !box.hidden && frame.contentWindow) frame.contentWindow.postMessage({ type: 'uct-figura-stop' }, '*');
+    box.hidden = hide;
+    if (!box.hidden && !frame.src) frame.src = frame.dataset.src;
+  }
+  window.addEventListener('message', event => {
+    const frame = document.getElementById('lgFigureFrame');
+    if (!frame || event.source !== frame.contentWindow) return;
+    const data = event.data;
+    if (data && data.type === 'uct-figura' && Number(data.height) > 0) frame.style.height = `${Math.min(Number(data.height), 2000)}px`;
+  });
 
   function renderLegacy() {
     const box = document.getElementById('lgLegacy');
