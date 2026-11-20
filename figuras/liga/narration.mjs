@@ -2,7 +2,8 @@
 // - `text`: subtítulo. `voz`: lo que se pronuncia, si difiere (W.O.).
 // - `fechas`: fechas que recorre la figura mientras suena la frase.
 // - `audio`: audio grabado de la frase, si existe (lo genera generar-voz.mjs).
-import { existsSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -30,6 +31,9 @@ export function narration(model) {
   ];
   return cues.map((c, i) => {
     const audio = `audio/cue-${i + 1}.mp3`;
-    return existsSync(join(HERE, audio)) ? { ...c, audio } : c;
+    if (!existsSync(join(HERE, audio))) return c;
+    // La versión cambia con el contenido, para que nadie oiga un audio viejo en caché.
+    const v = createHash("sha1").update(readFileSync(join(HERE, audio))).digest("hex").slice(0, 8);
+    return { ...c, audio: `${audio}?v=${v}` };
   });
 }
