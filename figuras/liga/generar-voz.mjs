@@ -12,7 +12,7 @@ import { buildModel } from "./model.mjs";
 import { narration } from "./narration.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const [piper, voice, speed = "0.92"] = process.argv.slice(2);
+const [piper, voice, speed = "0.88"] = process.argv.slice(2);
 if (!piper || !voice) { console.error("uso: node generar-voz.mjs <piper> <voz.onnx> [velocidad]"); process.exit(1); }
 const out = join(HERE, "audio");
 mkdirSync(out, { recursive: true });
