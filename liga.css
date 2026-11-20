@@ -445,3 +445,10 @@ button.lg-option:hover small, button.lg-option:hover span { color:#0a1712; }
 .lg-result-unfinished input { flex:0 0 auto; width:22px; height:22px; margin:1px 0 0; accent-color:var(--lg-amber, #f59e0b); }
 .lg-status-notice { margin-top:6px; padding:8px 10px; border-radius:10px; background:var(--lg-amber-soft, rgba(245,158,11,.12)); color:var(--lg-amber-hi, #fbbf24); font-weight:700; }
 .lg-postpone input[type="text"] { min-width:0; flex:1 1 140px; }
+
+/* Figura interactiva "¿Cómo funciona la liga?" (pestaña Bases) */
+.lg-figure-head { margin-bottom:14px; }
+.lg-figure-head h3 { margin:4px 0 6px; font-size:1.15rem; }
+.lg-figure-head p { margin:0; color:var(--text-secondary); max-width:62ch; }
+.lg-figure-frame { display:block; width:100%; height:640px; border:0; background:transparent; color-scheme:dark; }
+@media (max-width:520px) { .lg-figure-frame { height:520px; } }

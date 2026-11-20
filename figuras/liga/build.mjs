@@ -409,7 +409,7 @@ function draw() {
   G.crank.innerHTML = crankArm((f - 1 + move) * 0.25);
 
   // Lectura.
-  let text = "Inscritos: 7 · Fechas: " + M.totalFechas + " · " + M.masters + " al Maestros";
+  let text = "7 jugadores · " + M.totalFechas + " fechas · " + M.masters + " al Maestros";
   if (round) {
     const name = (i) => M.names[i];
     if (drop >= 1) {
@@ -461,17 +461,38 @@ draw();
 const body = k.plateHtml({
   fig: "Fig 1",
   title: "Cómo funciona la liga",
-  hint: "Clic o → para la siguiente fecha",
-  readout: `Inscritos: 7 · Fechas: ${M.totalFechas} · ${M.masters} al Maestros`,
+  hint: "Toca o → para avanzar la fecha",
+  readout: `7 jugadores · ${M.totalFechas} fechas · ${M.masters} al Maestros`,
   keys: [
-    { mark: "lit", label: "Fichas que suma cada fecha: 3 al ganador, 1 al perdedor, 0 si no se presenta" },
-    { mark: "raised", label: "Carrusel: el asiento 1 queda fijo y los demás avanzan uno por fecha" },
+    { mark: "raised", label: "Cada ficha numerada es un jugador; juega con quien tiene al otro lado de la red" },
+    { mark: "lit", label: "Puntos de la fecha: 3 al ganador, 1 al perdedor, 0 si no se presenta" },
   ],
   caption:
-    `Todos contra todos por fechas de unos 10 días. Con 7 inscritos se agrega un asiento vacío: cada fecha alguien queda libre y en ${M.totalFechas} fechas todos se enfrentan una vez. Cada uno juega con quien tiene al otro lado de la red; un partido no jugado en plazo es W.O. doble (0 y 0). La tabla ordena por puntos y, si empatan dos, manda el partido entre ellos. Al final, los ${M.masters} primeros (6 desde 8 inscritos, 8 desde 12) van al Torneo de Maestros. Resultados de ejemplo; reglas y fixture salen de liga.js.`,
+    `Un ejemplo con 7 jugadores del club. En cada fecha (unos 10 días) el jugador 1 se queda en su lugar y los demás avanzan un asiento por el carrusel; como son impares, hay un asiento vacío y quien queda frente a él tiene fecha libre. En ${M.totalFechas} fechas todos juegan contra todos una vez. Si un partido no se juega dentro del plazo es W.O. doble y nadie suma. El ábaco ordena por puntos (si dos empatan, manda el partido entre ellos) y las luces marcan a los ${M.masters} que van al Torneo de Maestros (6 desde 8 jugadores, 8 desde 12). Nombres y resultados inventados; el fixture y las reglas son los de la liga.`,
   body: `<div class="iso-stage" tabindex="0" role="slider" aria-label="Máquina de la liga: flechas para avanzar o retroceder fechas" aria-valuemin="0" aria-valuemax="${M.totalFechas}" aria-valuenow="0">${svg}</div>`,
 });
 
-const file = theme === "light" ? "liga-figura-light.html" : "liga-figura.html";
-writeFileSync(join(HERE, file), k.pageHtml({ title: "Cómo funciona la liga", theme, body, script: kitScript() + live }).replace('<html lang="en">', '<html lang="es">'));
+// --embed: versión para el iframe de liga.html, con la paleta del sitio
+// (verde cancha nocturna, acento amarillo pelota) y altura informada al padre.
+const embed = process.argv.includes("--embed");
+const EMBED_CSS = `<style>
+body.iso{--anatomy-page:transparent;--anatomy-card:#0b1914;--anatomy-paper:#0b1914;--anatomy-face:#10221b;--anatomy-top:#11241c;
+--anatomy-shade-0:#08130f;--anatomy-shade-1:#0a1813;--anatomy-shade-2:#0c1c16;--anatomy-shade-3:#0e2019;
+--anatomy-lit-top:#26300c;--anatomy-lit-shade:#1c240a;--anatomy-text:#9bb0a6;--anatomy-strong:#f4f8f5;--anatomy-muted:#6c8479;
+--anatomy-hi:#cfdcd5;--anatomy-mid:#5d7669;--anatomy-lo:#33473d;--anatomy-faint:#1f3129;--anatomy-lit:#d4e31a;
+--anatomy-halo:#020604;--anatomy-dot:#e2ebe6;background:transparent}
+body.iso .iso-page{width:100%;max-width:760px;margin:0 auto}
+body.iso .iso-plate{border-radius:16px;box-shadow:0 0 0 1px rgba(255,255,255,.08)}
+body.iso .iso-stage:focus:not(:focus-visible){outline:none}
+@media (max-width:520px){body.iso .iso-plate{padding:44px 10px}body.iso .iso-plate-corner[data-corner="title"]{display:none}}
+</style>`;
+const EMBED_JS = `
+const report = () => parent.postMessage({ type: "uct-figura", height: Math.ceil(document.documentElement.getBoundingClientRect().height) }, "*");
+new ResizeObserver(report).observe(document.documentElement);
+addEventListener("load", report);
+`;
+const file = embed ? "liga-figura-embed.html" : theme === "light" ? "liga-figura-light.html" : "liga-figura.html";
+let html = k.pageHtml({ title: "Cómo funciona la liga", theme: embed ? "dark" : theme, body, script: kitScript() + live + (embed ? EMBED_JS : "") }).replace('<html lang="en">', '<html lang="es">');
+if (embed) html = html.replace("</head>", EMBED_CSS + "</head>");
+writeFileSync(join(HERE, file), html);
 console.log("wrote", file);
