@@ -251,7 +251,7 @@
       const closesIn = L.daysBetween(v.today, p.deadline);
       // Se puede adelantar cualquier partido de una fecha futura.
       const canSchedule = ['por_agendar', 'proximo'].includes(p.state);
-      const resultButton = (label, ghost) => canRecordResult(p, v.today)
+      const resultButton = (label, ghost) => canRecordResult(p)
         ? `<button class="lg-btn ${ghost ? 'ghost' : ''}" type="button" data-action="record-result" data-gender="${esc(gender)}" data-round="${r.numero}" data-a="${esc(entrant.key)}" data-b="${esc(rival.key)}">${label}</button>`
         : '';
       let detail = '';
@@ -313,7 +313,10 @@
             result = `${won ? 'G' : 'P'} ${p.state === 'wo' ? 'W.O.' : esc(won ? p.winnerScore : reverseScore(p.winnerScore))}${p.inconcluso ? ' (inc.)' : ''}`;
           } else if (p.state === 'wo_doble') { tone = 'void'; result = 'W.O. doble'; }
           else result = STATE_CHIP[p.state][0];
-          return `<li class="${tone} ${next && next.round === r ? 'is-next' : ''}"><span>F${r.numero}</span><b>${esc(item.rival.nombre)}</b><em>${result}</em></li>`;
+          const report = p.state === 'wo_doble' && canRecordResult(p)
+            ? `<button class="lg-link" type="button" data-action="record-result" data-gender="${esc(gender)}" data-round="${r.numero}" data-a="${esc(entrant.key)}" data-b="${esc(item.rival.key)}">Anotar resultado</button>`
+            : '';
+          return `<li class="${report ? '' : tone} ${next && next.round === r ? 'is-next' : ''}"><span>F${r.numero}</span><b>${esc(item.rival.nombre)}</b><em>${result}</em>${report}</li>`;
         }).join('')}
       </ol>` : '';
 
@@ -594,13 +597,11 @@
   // ── Anotar un resultado sin haber agendado en línea ───────────────────
   // Hay socios a los que la tecnología les cuesta: coordinan por teléfono,
   // juegan y después uno de los dos (o la comisión) anota el marcador.
-  function canRecordResult(p, today, asAdmin) {
+  function canRecordResult(p) {
     if (!p || p.match && ['completado', 'wo_retador', 'wo_retado', 'resultado_pendiente'].includes(p.match.status)) return false;
     if (p.retiro || p.fueraDePlazo) return false;
     // Incluye las fechas que aún no abren: un partido se puede adelantar.
-    if (['proximo', 'por_agendar', 'invitado', 'agendado'].includes(p.state)) return true;
-    // Fecha vencida sin resultado: solo la comisión puede anotarlo tarde.
-    return Boolean(asAdmin && p.state === 'wo_doble');
+    return ['proximo', 'por_agendar', 'invitado', 'agendado', 'wo_doble'].includes(p.state);
   }
 
   // ── La comisión agenda un partido directamente ───────────────────────
@@ -680,8 +681,9 @@
           <tbody>${row(a, 'a')}${row(b, 'b')}</tbody>
         </table>
         <label class="lg-result-date">Día en que jugaron
-          <input type="date" id="lgResultDate" value="${esc(today)}" min="${esc(season.inicio)}" max="${esc(today)}">
+          <input type="date" id="lgResultDate" value="${ctx.expired ? '' : esc(today)}" min="${esc(season.inicio)}" max="${esc(today)}" required>
         </label>
+        ${ctx.expired ? `<p class="lg-muted">Indica el día real del partido. El plazo de este cruce era el ${esc(fmtLong(ctx.deadline))}. Si jugaron después, el marcador queda registrado y suma puntos si la comisión amplía el plazo.</p>` : ''}
         <p class="lg-result-summary" id="lgResultSummary" aria-live="polite">Anota el marcador para ver el ganador.</p>
         <p class="lg-muted">${ctx.byCommission
           ? 'Lo anotas como comisión: queda confirmado de inmediato y ambos jugadores reciben un correo.'
@@ -771,7 +773,7 @@
       summary.textContent = check.msg;
       summary.className = 'lg-result-summary';
     }
-    save.disabled = !check.ok;
+    save.disabled = !check.ok || !document.getElementById('lgResultDate').value;
   }
 
   async function saveResult(btn) {
@@ -781,8 +783,9 @@
     const check = checkResultSets(sets, inconcluso);
     if (!ctx || !check.ok) return toast(check.msg || 'Revisa el marcador.', 'bad');
     const fecha = document.getElementById('lgResultDate').value;
-    if (!fecha || fecha > L.todayIso()) return toast('Indica el día en que jugaron.', 'bad');
-    if (fecha > ctx.deadline && !confirm(`El plazo de esta fecha era hasta el ${fmtLong(ctx.deadline)}. Según las bases, un partido jugado fuera de plazo no suma puntos. ¿Anotarlo igual?`)) return;
+    if (!fecha || fecha < season.inicio || fecha > L.todayIso()) return toast('Indica el día en que jugaron.', 'bad');
+    const late = fecha > ctx.deadline;
+    if (late && !confirm(`El plazo de este cruce era el ${fmtLong(ctx.deadline)}. El marcador se guardará. Los puntos quedan sujetos a una prórroga de la comisión. ¿Anotarlo igual?`)) return;
     const ref = entrant => ({ id: entrant.id, nombre: entrant.nombre, email: entrant.email });
     state.busy = true;
     btn.disabled = true;
@@ -801,7 +804,7 @@
       if (dlg.open) dlg.close();
       toast(data.pending
         ? `¡Resultado anotado! ${ctx.rival.nombre.split(' ')[0]} tiene 48 horas para confirmarlo.`
-        : 'Resultado registrado y confirmado. Ya suma en la tabla.');
+        : late ? 'Resultado confirmado. Los puntos quedan sujetos a una prórroga.' : 'Resultado registrado y confirmado. Ya suma en la tabla.');
     } catch (err) {
       toast(err.message, 'bad');
       btn.disabled = false;
@@ -823,11 +826,11 @@
     const meEntrant = state.me ? L.findEntrant(v, state.me) : null;
     const mine = Boolean(meEntrant && (meEntrant.key === p.a.key || meEntrant.key === p.b.key));
     const byCommission = state.isAdmin && !mine;
-    if (!canRecordResult(p, v.today, byCommission)) return null;
+    if ((!mine && !byCommission) || !canRecordResult(p)) return null;
     // El jugador que anota va primero; la comisión respeta el orden del fixture.
     const a = mine && meEntrant.key === p.b.key ? p.b : p.a;
     const b = a === p.a ? p.b : p.a;
-    return { a, b, rival: mine ? b : a, round, deadline: p.deadline, gender, byCommission };
+    return { a, b, rival: mine ? b : a, round, deadline: p.deadline, gender, byCommission, expired: p.state === 'wo_doble' };
   }
 
   // Mi partido sin resultado contra el rival de ese correo.
@@ -838,7 +841,7 @@
     const me = L.findEntrant(v, state.me);
     if (!me) return null;
     const item = L.getPlayerFixture(v, me).find(it => it.partido && it.rival && it.rival.email === rivalEmail &&
-      canRecordResult(it.partido, v.today));
+      canRecordResult(it.partido));
     return item ? resultContext({ dataset: { gender, round: String(item.round.numero), a: me.key, b: item.rival.key } }) : null;
   }
 
@@ -1162,7 +1165,7 @@
       };
       const info = [];
       if (p.state === 'agendado' || p.state === 'invitado') info.push(`📅 ${fmt(p.date)}${p.slot ? ` · ${esc(p.slot)}` : ''}${p.cancha ? ` · ${esc(p.cancha)}` : ''}`);
-      if (p.state === 'wo_doble') info.push(p.fueraDePlazo ? 'Se jugó fuera de plazo: no suma (bases §9)' : p.retiro ? 'Ambos retirados' : 'No se jugó dentro del plazo: 0 pts para ambos');
+      if (p.state === 'wo_doble') info.push(p.fueraDePlazo ? 'Se jugó fuera de plazo: no suma (bases §9)' : p.retiro ? 'Ambos retirados' : 'Plazo vencido sin resultado registrado: 0 pts para ambos');
       if (p.state === 'wo' && p.retiro) info.push('Rival retirado de la liga');
       if (p.state === 'jugado' && p.inconcluso) info.push('Inconcluso: se tomó hasta donde llegó');
       if (p.state === 'por_confirmar') info.push(pendingLine(p));
@@ -1174,7 +1177,7 @@
         const rival = p.a.key === meKey ? p.b : p.a;
         actions.push(actBtn('propose', '📅', p.state === 'proximo' ? 'Adelantar' : 'Proponer horarios', { rival: rival.key }));
       }
-      if (mine && !state.isAdmin && canRecordResult(p, v.today)) {
+      if ((mine || state.isAdmin) && canRecordResult(p)) {
         actions.push(actBtn('record-result', '🎾', 'Anotar resultado', { gender: v.gender, round: round.numero, a: p.a.key, b: p.b.key }));
       }
       if (state.isAdmin && p.state === 'por_confirmar' && p.match && p.match.id && !p.disputed) {
@@ -1184,9 +1187,7 @@
       if (state.isAdmin && canAdminSchedule(p, v.today)) {
         actions.push(actBtn('admin-schedule', '📅', p.state === 'agendado' || p.state === 'invitado' ? 'Reagendar' : 'Agendar', { gender: v.gender, round: round.numero, a: p.a.key, b: p.b.key }));
       }
-      if (state.isAdmin && canRecordResult(p, v.today, true)) {
-        actions.push(actBtn('record-result', '🎾', 'Anotar resultado', { gender: v.gender, round: round.numero, a: p.a.key, b: p.b.key }));
-      }
+
       if (state.isAdmin && (p.state === 'agendado' || p.state === 'invitado') && p.match && p.match.bookingId && p.date >= v.today) {
         actions.push(actBtn('admin-cancel-booking', '✕', 'Cancelar hora', { booking: p.match.bookingId, match: p.match.id, label: `${p.a.nombre} vs ${p.b.nombre} · ${fmt(p.date)}${p.slot ? ` ${p.slot}` : ''}` }, 'danger'));
       }
