@@ -1,0 +1,564 @@
+{
+ "name": "Temuco",
+ "title": "Campus San Francisco UCT, Temuco",
+ "region": "La Araucanía",
+ "place": "Campus San Francisco · Manuel Montt × Av. Alemania",
+ "flag": "<svg aria-hidden='true' viewBox='0 0 30 20'><rect width='30' height='20' fill='#d52b1e'/><rect width='30' height='10' fill='#ffffff'/><rect width='10' height='10' fill='#0039a6'/><path d='M5 2.2l1.1 3.3h3.4l-2.8 2 1.1 3.3-2.8-2.1-2.8 2.1 1.1-3.3-2.8-2h3.4z' fill='#ffffff'/></svg>",
+ "timezone": "America/Santiago",
+ "level": 3.4,
+ "styles": {
+  "default": {
+   "facade": "office",
+   "wall": [
+    "#ece6da",
+    "#e4dccd",
+    "#f1ece2"
+   ],
+   "roof": "flat",
+   "flatRoof": "#c9c3b8",
+   "levels": 3,
+   "floor": 3.4,
+   "parapet": 0.7,
+   "bay": 3.2,
+   "glass": [
+    "#6a7c86",
+    "#5d6f7a"
+   ],
+   "trim": "#b9533f",
+   "shop": "none"
+  },
+  "rules": [
+   {
+    "if": {
+     "type": "roof"
+    },
+    "set": {
+     "facade": "plain",
+     "levels": 1,
+     "floor": 2.8,
+     "wall": [
+      "#d9d3c7"
+     ]
+    }
+   },
+   {
+    "if": {
+     "type": "house"
+    },
+    "set": {
+     "facade": "house",
+     "levels": 1,
+     "floor": 3,
+     "roof": "gabled",
+     "pitch": 30,
+     "roofColour": [
+      "#6e7478",
+      "#8c4a3c"
+     ],
+     "wall": [
+      "#efe6d3",
+      "#e6dcc6"
+     ],
+     "trim": "#fbf7ee"
+    }
+   },
+   {
+    "if": {
+     "minLevels": 8
+    },
+    "set": {
+     "facade": "apartment",
+     "balcony": "some",
+     "wall": [
+      "#e9e3d6",
+      "#d8d2c6"
+     ],
+     "trim": "#9aa0a3"
+    }
+   },
+   {
+    "if": {
+     "name": "Aula Magna"
+    },
+    "set": {
+     "facade": "civic",
+     "levels": 2,
+     "floor": 5,
+     "wall": [
+      "#ede7db"
+     ],
+     "trim": "#b9533f",
+     "bay": 4.5
+    }
+   },
+   {
+    "if": {
+     "name": "Casino"
+    },
+    "set": {
+     "facade": "glass",
+     "levels": 2,
+     "wall": [
+      "#e8e1d4"
+     ]
+    }
+   },
+   {
+    "if": {
+     "maxArea": 120
+    },
+    "set": {
+     "facade": "plain",
+     "levels": 1,
+     "floor": 3
+    }
+   }
+  ]
+ },
+ "buildings": {
+  "w90759345": {
+   "levels": 4
+  },
+  "w90759366": {
+   "levels": 4
+  },
+  "w90759262": {
+   "levels": 4
+  },
+  "w692689435": {
+   "levels": 3
+  },
+  "w90759299": {
+   "levels": 3
+  }
+ },
+ "palette": {
+  "ground": "#e9e0cb",
+  "road": "#a9a5a6",
+  "pavement": "#dcd5c6",
+  "walk": "#d8d0c0",
+  "grass": "#a9d27a",
+  "slab": "#d5c8b0",
+  "marking": "#f6f3ea",
+  "kerb": "#d6cfc0",
+  "paving": "#c4bbad"
+ },
+ "paving": {
+  "style": "tiles",
+  "size": 0.5,
+  "colour": "#c4bbad"
+ },
+ "lamp": {
+  "colour": "#4f5558",
+  "height": 6,
+  "head": "#eef0ea",
+  "auto": true
+ },
+ "shops": {
+  "signs": [
+   "CAFÉ",
+   "FOTOCOPIAS",
+   "LIBRERÍA"
+  ],
+  "font": "sans-serif",
+  "fascias": [
+   "#2e5b8a",
+   "#9b3d32"
+  ],
+  "awnings": [
+   "#9b3d32"
+  ]
+ },
+ "trees": {
+  "default": {
+   "style": 3,
+   "colours": [
+    "#7fb168",
+    "#9cc673"
+   ],
+   "height": 10,
+   "autumn": "#d99a3e",
+   "spring": "#b5dc7a",
+   "vary": 0.35
+  },
+  "rules": [
+   {
+    "match": "Sequoia",
+    "style": 5,
+    "evergreen": true,
+    "colours": [
+     "#4f8550",
+     "#5e9257"
+    ],
+    "height": 30
+   },
+   {
+    "match": "Tilia",
+    "style": 3,
+    "colours": [
+     "#8dbb6b",
+     "#a6cd78"
+    ],
+    "autumn": "#e2bd4c",
+    "height": 14
+   }
+  ],
+  "extra": [
+   [
+    -95,
+    92,
+    30,
+    "Sequoiadendron giganteum"
+   ],
+   [
+    -78,
+    104,
+    28,
+    "Sequoiadendron giganteum"
+   ],
+   [
+    -104,
+    74,
+    13,
+    "Tilia"
+   ],
+   [
+    -62,
+    92,
+    13,
+    "Tilia"
+   ]
+  ]
+ },
+ "people": {
+  "clothes": [
+   "#2f3a4a",
+   "#4a4f57",
+   "#7d8a96",
+   "#9b3d32",
+   "#e7e1d4",
+   "#5c6b52",
+   "#c9a35a"
+  ],
+  "pants": [
+   "#2d3a55",
+   "#3a3f46",
+   "#5b6370",
+   "#2b2b2e"
+  ],
+  "umbrellas": [
+   "#2f3a4a",
+   "#9b3d32",
+   "#e7e1d4",
+   "#2e5b8a"
+  ],
+  "bikes": [
+   "#2f3a4a",
+   "#9b3d32",
+   "#e7e1d4"
+  ]
+ },
+ "vehicles": {
+  "kinds": [
+   "hatch",
+   "sedan",
+   "small",
+   "mpv",
+   "hatch"
+  ],
+  "colours": [
+   "#e9e9e6",
+   "#b7bbbf",
+   "#2c2f35",
+   "#8c9196",
+   "#9b3d32",
+   "#2e4d6e"
+  ],
+  "plate": "#f4f4f0",
+  "taxi": {
+   "share": 0.25,
+   "colours": [
+    "#26272c"
+   ],
+   "kind": "sedan",
+   "sign": "#f1d04b"
+  }
+ },
+ "seasonLabel": "Estación",
+ "seasons": [
+  {
+   "id": "spring",
+   "label": "Primavera",
+   "leaves": "spring",
+   "crowd": 1.1,
+   "note": {
+    "text": "El parque de la casa Thiers tiene dos secuoyas gigantes, tilos y flores ornamentales.",
+    "source": "Wikipedia · Museo Regional de la Araucanía",
+    "url": "https://es.wikipedia.org/wiki/Museo_Regional_de_la_Araucan%C3%ADa"
+   }
+  },
+  {
+   "id": "summer",
+   "label": "Verano",
+   "leaves": "summer",
+   "crowd": 0.6,
+   "haze": true,
+   "note": {
+    "text": "Diciembre, enero, febrero y marzo son los meses más templados en Temuco.",
+    "source": "Adonde y Cuando",
+    "url": "https://www.adonde-y-cuando.es/when/america-sur/chile/temuco/"
+   }
+  },
+  {
+   "id": "autumn",
+   "label": "Otoño",
+   "leaves": "autumn",
+   "crowd": 1.2,
+   "note": {
+    "text": "En otoño las especies caducifolias de Temuco dejan caer sus hojas para invernar.",
+    "source": "Árboles de Temuco (Romero y Hauenstein)",
+    "url": "https://core.ac.uk/download/75990686.pdf"
+   }
+  },
+  {
+   "id": "winter",
+   "label": "Invierno",
+   "leaves": "bare",
+   "wet": true,
+   "wx": "rain",
+   "umbrellas": true,
+   "coats": true,
+   "crowd": 0.9,
+   "grass": "#9fc874",
+   "note": {
+    "text": "Junio, julio y agosto son los meses más lluviosos en Temuco.",
+    "source": "Adonde y Cuando",
+    "url": "https://www.adonde-y-cuando.es/when/america-sur/chile/temuco/"
+   }
+  }
+ ],
+ "occasionLabel": "Fechas especiales",
+ "occasions": [
+  {
+   "id": "tripantu",
+   "label": "Wiñol Tripantu",
+   "leaves": "bare",
+   "coats": true,
+   "crowd": 1.5,
+   "icon": "winter",
+   "grass": "#9fc874",
+   "decor": {
+    "flags": [
+     "#2a5aa8",
+     "#3f8a4a",
+     "#f2c94c",
+     "#c23b2e",
+     "#f6f3ea"
+    ]
+   },
+   "note": {
+    "text": "La UCT conmemora el Wiñol Tripantu, Año Nuevo mapuche, como parte de su compromiso intercultural.",
+    "source": "El Mostrador",
+    "url": "https://www.elmostrador.cl/cultura/2025/06/19/conmemoracion-de-winon-antu-en-temuco/"
+   }
+  },
+  {
+   "id": "patrias",
+   "label": "Fiestas Patrias",
+   "leaves": "spring",
+   "crowd": 1.3,
+   "icon": "spring",
+   "dress": {
+    "colours": [
+     "#d52b1e",
+     "#ffffff",
+     "#0039a6"
+    ],
+    "share": 0.3
+   },
+   "decor": {
+    "flags": [
+     "#d52b1e",
+     "#ffffff",
+     "#0039a6"
+    ],
+    "bunting": [
+     "#d52b1e",
+     "#ffffff",
+     "#0039a6"
+    ]
+   },
+   "note": {
+    "text": "El 18 y 19 de septiembre es obligatorio izar la bandera chilena en edificios públicos y privados.",
+    "source": "La Tercera",
+    "url": "https://www.latercera.com/servicios/noticia/cuando-es-obligatorio-instalar-la-bandera-chilena-y-cual-es-la-multa-por-no-tenerla/"
+   }
+  }
+ ],
+ "months": [
+  "summer",
+  "summer",
+  "autumn",
+  "autumn",
+  "autumn",
+  "winter",
+  "winter",
+  "winter",
+  "spring",
+  "spring",
+  "spring",
+  "summer"
+ ],
+ "isoLabel": "Vista general",
+ "views": [
+  {
+   "id": "museo",
+   "label": "Museo Regional",
+   "camera": {
+    "yaw": 150,
+    "pitch": 30,
+    "zoom": 4.5,
+    "x": -88,
+    "y": 55,
+    "z": 3
+   }
+  },
+  {
+   "id": "campus",
+   "label": "Patio del campus",
+   "camera": {
+    "yaw": -30,
+    "pitch": 34,
+    "zoom": 2.6,
+    "x": 20,
+    "y": 0,
+    "z": 4
+   }
+  },
+  {
+   "id": "tenis",
+   "label": "Canchas de tenis",
+   "camera": {
+    "yaw": -60,
+    "pitch": 40,
+    "zoom": 5,
+    "x": 101,
+    "y": -6,
+    "z": 0
+   }
+  }
+ ],
+ "legend": [
+  {
+   "name": "Museo Regional de la Araucanía",
+   "source": "Monumento Histórico · 1924",
+   "count": "",
+   "icon": "landmark",
+   "camera": {
+    "yaw": 150,
+    "pitch": 30,
+    "zoom": 4.5,
+    "x": -88,
+    "y": 55,
+    "z": 3
+   }
+  },
+  {
+   "name": "Edificios del campus UCT",
+   "source": "OpenStreetMap",
+   "count": "9",
+   "icon": "buildings",
+   "camera": {
+    "yaw": -30,
+    "pitch": 34,
+    "zoom": 2.6,
+    "x": 20,
+    "y": 0,
+    "z": 4
+   }
+  },
+  {
+   "name": "Canchas de tenis",
+   "source": "OpenStreetMap",
+   "count": "2",
+   "icon": "landmark",
+   "camera": {
+    "yaw": -60,
+    "pitch": 40,
+    "zoom": 5,
+    "x": 101,
+    "y": -6,
+    "z": 0
+   }
+  },
+  {
+   "name": "Árboles",
+   "source": "OpenStreetMap + parque Thiers",
+   "count": "59",
+   "icon": "trees",
+   "camera": {
+    "yaw": 20,
+    "pitch": 28,
+    "zoom": 3.4,
+    "x": -80,
+    "y": 85,
+    "z": 4
+   }
+  }
+ ],
+ "notes": [
+  {
+   "title": "Campus San Francisco",
+   "text": "Campus de la Universidad Católica de Temuco en Manuel Montt 56. Reúne facultades de Ciencias Sociales, Ciencias Jurídicas, Ciencias de la Salud y la biblioteca central. Las alturas y los colores de sus edificios no están en el mapa y son ilustrativos.",
+   "links": [
+    {
+     "label": "Wikipedia",
+     "url": "https://es.wikipedia.org/wiki/Universidad_Cat%C3%B3lica_de_Temuco"
+    },
+    {
+     "label": "Extensión UCT",
+     "url": "https://extension.uct.cl/recinto/campus-san-francisco/"
+    }
+   ]
+  },
+  {
+   "title": "Casa Thiers",
+   "text": "Casona de 1924 de dos pisos, diseñada por Carlos Caballero, sede del Museo Regional de la Araucanía y Monumento Histórico desde 1996. Sus tejas de arcilla se cambiaron por planchas metálicas en los años 70. La terraza de cuatro columnas y la escalinata se dibujan a partir de la descripción del decreto; su posición, el color de muros y la pendiente del techo son interpretados.",
+   "links": [
+    {
+     "label": "Portal de Patrimonio",
+     "url": "https://patrimonio.bienes.cl/patrimonio/museo-regional-de-la-araucania/"
+    },
+    {
+     "label": "Diario Oficial (2024)",
+     "url": "https://www.diariooficial.interior.gob.cl/publicaciones/2024/08/28/43936/01/2535649.pdf"
+    },
+    {
+     "label": "Museo Regional",
+     "url": "https://www.museoregionalaraucania.gob.cl/colecciones/casa-thiers-de-temuco"
+    }
+   ]
+  },
+  {
+   "title": "Rewe y canchas",
+   "text": "El rewe y las dos canchas de tenis están en OpenStreetMap. La talla del rewe, sus ramas y el color de las canchas son ilustrativos; las líneas siguen las medidas reglamentarias.",
+   "links": [
+    {
+     "label": "OpenStreetMap",
+     "url": "https://www.openstreetmap.org/#map=18/-38.7379/-72.6021"
+    }
+   ]
+  },
+  {
+   "title": "Lo ilustrativo",
+   "text": "Las secuoyas y tilos del parque Thiers tienen posición ilustrativa. Vehículos, personas, faroles, trayectos y fachadas siguen un estilo genérico de Temuco, no fotografías de cada edificio.",
+   "links": [
+    {
+     "label": "Árboles de Temuco",
+     "url": "https://core.ac.uk/download/75990686.pdf"
+    }
+   ]
+  }
+ ],
+ "credits": []
+}

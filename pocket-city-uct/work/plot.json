@@ -1,0 +1,18 @@
+{
+ "lat": -38.737887,
+ "lon": -72.602129,
+ "rotation": -12,
+ "size": 240.0,
+ "asked": {
+  "lat": -38.737887,
+  "lon": -72.602129
+ },
+ "moved_m": 0.0,
+ "famous_inside": [
+  "Museo Regional de la Araucanía"
+ ],
+ "famous_cut": [],
+ "keep_missing": [],
+ "place": "",
+ "osm_base": "2026-07-15T15:22:01Z"
+}
