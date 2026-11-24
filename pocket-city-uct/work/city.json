@@ -117,19 +117,114 @@
  },
  "buildings": {
   "w90759345": {
-   "levels": 4
+   "levels": 3,
+   "facade": "office",
+   "wall": [
+    "#e6e5e1"
+   ],
+   "bay": 1.7,
+   "frame": "#a8743f",
+   "trim": "#a8743f",
+   "glass": [
+    "#5d6f7a"
+   ]
   },
   "w90759366": {
-   "levels": 4
+   "levels": 3,
+   "facade": "office",
+   "wall": [
+    "#e6e5e1"
+   ],
+   "bay": 1.7,
+   "frame": "#a8743f",
+   "trim": "#a8743f",
+   "glass": [
+    "#5d6f7a"
+   ]
+  },
+  "w90759264": {
+   "levels": 3,
+   "facade": "office",
+   "wall": [
+    "#e6e5e1"
+   ],
+   "bay": 1.7,
+   "frame": "#a8743f",
+   "trim": "#a8743f"
+  },
+  "w90759406": {
+   "levels": 3,
+   "facade": "glass",
+   "wall": [
+    "#9aa0a6"
+   ],
+   "glass": [
+    "#5b6b75",
+    "#667780"
+   ]
+  },
+  "w692687053": {
+   "levels": 2,
+   "facade": "house",
+   "roof": "hipped",
+   "pitch": 26,
+   "wall": [
+    "#efd27a"
+   ],
+   "roofColour": [
+    "#6e7378"
+   ],
+   "trim": "#fbf7ee",
+   "floor": 3.2
   },
   "w90759262": {
-   "levels": 4
+   "levels": 5,
+   "facade": "office",
+   "wall": [
+    "#f1f0ec"
+   ],
+   "trim": "#cfd3d6",
+   "bay": 3.4
   },
   "w692689435": {
-   "levels": 3
+   "levels": 4,
+   "facade": "office",
+   "wall": [
+    "#f1f0ec"
+   ],
+   "trim": "#cfd3d6",
+   "bay": 3.4
   },
-  "w90759299": {
-   "levels": 3
+  "w90759313": {
+   "levels": 2,
+   "facade": "glass",
+   "wall": [
+    "#f1f0ec"
+   ],
+   "floor": 4
+  },
+  "w90759297": {
+   "levels": 2,
+   "facade": "office",
+   "wall": [
+    "#f1f0ec"
+   ],
+   "trim": "#8a5a3c",
+   "floor": 3.4
+  },
+  "w90759386": {
+   "levels": 2,
+   "facade": "office",
+   "wall": [
+    "#f1f0ec"
+   ],
+   "floor": 3.4
+  },
+  "w1057088950": {
+   "levels": 1
+  },
+  "w1057088951": {
+   "levels": 1
   }
  },
  "palette": {
@@ -201,6 +296,90 @@
     ],
     "autumn": "#e2bd4c",
     "height": 14
+   },
+   {
+    "match": "Conifer",
+    "style": 5,
+    "evergreen": true,
+    "colours": [
+     "#4f8550",
+     "#5e9257"
+    ],
+    "height": 14
+   },
+   {
+    "match": "Phoenix",
+    "style": 2,
+    "evergreen": true,
+    "colours": [
+     "#6f9f55",
+     "#86b062"
+    ],
+    "height": 9
+   },
+   {
+    "match": "Acacia",
+    "style": 3,
+    "evergreen": true,
+    "colours": [
+     "#5f8f55"
+    ],
+    "height": 12
+   },
+   {
+    "match": "Platanus",
+    "style": 2,
+    "colours": [
+     "#8dbb6b",
+     "#a6cd78"
+    ],
+    "autumn": "#d9a447",
+    "height": 18
+   },
+   {
+    "match": "Acer",
+    "style": 3,
+    "colours": [
+     "#8dbb6b"
+    ],
+    "autumn": "#e08a3c",
+    "height": 13
+   },
+   {
+    "match": "Campus tree",
+    "vary": 0.3,
+    "mix": [
+     {
+      "style": 3,
+      "colours": [
+       "#7fb168",
+       "#9cc673"
+      ],
+      "height": 10,
+      "autumn": "#d99a3e",
+      "share": 5
+     },
+     {
+      "style": 5,
+      "evergreen": true,
+      "colours": [
+       "#4f8550",
+       "#5e9257"
+      ],
+      "height": 13,
+      "share": 3
+     },
+     {
+      "style": 3,
+      "colours": [
+       "#8fbc6c"
+      ],
+      "height": 6,
+      "blossom": "#f2b8c9",
+      "autumn": "#d4774f",
+      "share": 1
+     }
+    ]
    }
   ],
   "extra": [
@@ -289,13 +468,14 @@
   {
    "id": "spring",
    "label": "Primavera",
-   "leaves": "spring",
+   "leaves": "blossom",
    "crowd": 1.1,
    "note": {
     "text": "El parque de la casa Thiers tiene dos secuoyas gigantes, tilos y flores ornamentales.",
     "source": "Wikipedia · Museo Regional de la Araucanía",
     "url": "https://es.wikipedia.org/wiki/Museo_Regional_de_la_Araucan%C3%ADa"
-   }
+   },
+   "wx": "fluff"
   },
   {
    "id": "summer",
@@ -412,43 +592,85 @@
  "isoLabel": "Vista general",
  "views": [
   {
+   "id": "acceso",
+   "label": "Acceso Av. Alemania",
+   "camera": {
+    "yaw": 160,
+    "pitch": 30,
+    "zoom": 3,
+    "x": 5,
+    "y": 70,
+    "z": 3
+   }
+  },
+  {
+   "id": "patio",
+   "label": "Patio central",
+   "camera": {
+    "yaw": -30,
+    "pitch": 34,
+    "zoom": 4,
+    "x": -12,
+    "y": -5,
+    "z": 2
+   }
+  },
+  {
    "id": "museo",
    "label": "Museo Regional",
    "camera": {
     "yaw": 150,
     "pitch": 30,
     "zoom": 4.5,
-    "x": -88,
-    "y": 55,
+    "x": -109,
+    "y": 50,
     "z": 3
-   }
-  },
-  {
-   "id": "campus",
-   "label": "Patio del campus",
-   "camera": {
-    "yaw": -30,
-    "pitch": 34,
-    "zoom": 2.6,
-    "x": 20,
-    "y": 0,
-    "z": 4
-   }
-  },
-  {
-   "id": "tenis",
-   "label": "Canchas de tenis",
-   "camera": {
-    "yaw": -60,
-    "pitch": 40,
-    "zoom": 5,
-    "x": 101,
-    "y": -6,
-    "z": 0
    }
   }
  ],
  "legend": [
+  {
+   "name": "Aula Magna y Biblioteca",
+   "source": "OSM · ilustración DGDC",
+   "count": "",
+   "icon": "landmark",
+   "camera": {
+    "yaw": 160,
+    "pitch": 30,
+    "zoom": 4.5,
+    "x": -15,
+    "y": 47,
+    "z": 5
+   }
+  },
+  {
+   "name": "Pabellón de madera",
+   "source": "OSM · ilustración DGDC",
+   "count": "",
+   "icon": "landmark",
+   "camera": {
+    "yaw": 200,
+    "pitch": 30,
+    "zoom": 5,
+    "x": -60,
+    "y": 39,
+    "z": 5
+   }
+  },
+  {
+   "name": "Patio central",
+   "source": "Ilustración DGDC",
+   "count": "",
+   "icon": "landmark",
+   "camera": {
+    "yaw": -30,
+    "pitch": 34,
+    "zoom": 4,
+    "x": -12,
+    "y": -5,
+    "z": 2
+   }
+  },
   {
    "name": "Museo Regional de la Araucanía",
    "source": "Monumento Histórico · 1924",
@@ -458,50 +680,22 @@
     "yaw": 150,
     "pitch": 30,
     "zoom": 4.5,
-    "x": -88,
-    "y": 55,
+    "x": -109,
+    "y": 50,
     "z": 3
    }
   },
   {
-   "name": "Edificios del campus UCT",
-   "source": "OpenStreetMap",
-   "count": "9",
-   "icon": "buildings",
-   "camera": {
-    "yaw": -30,
-    "pitch": 34,
-    "zoom": 2.6,
-    "x": 20,
-    "y": 0,
-    "z": 4
-   }
-  },
-  {
-   "name": "Canchas de tenis",
-   "source": "OpenStreetMap",
-   "count": "2",
-   "icon": "landmark",
-   "camera": {
-    "yaw": -60,
-    "pitch": 40,
-    "zoom": 5,
-    "x": 101,
-    "y": -6,
-    "z": 0
-   }
-  },
-  {
    "name": "Árboles",
-   "source": "OpenStreetMap + parque Thiers",
-   "count": "59",
+   "source": "OSM + ilustración DGDC",
+   "count": "191",
    "icon": "trees",
    "camera": {
     "yaw": 20,
     "pitch": 28,
-    "zoom": 3.4,
-    "x": -80,
-    "y": 85,
+    "zoom": 2.6,
+    "x": -30,
+    "y": 60,
     "z": 4
    }
   }
@@ -509,15 +703,25 @@
  "notes": [
   {
    "title": "Campus San Francisco",
-   "text": "Campus de la Universidad Católica de Temuco en Manuel Montt 56. Reúne facultades de Ciencias Sociales, Ciencias Jurídicas, Ciencias de la Salud y la biblioteca central. Las alturas y los colores de sus edificios no están en el mapa y son ilustrativos.",
+   "text": "Campus de la UCT en Manuel Montt 56, entre Av. Alemania y Pasaje El Bosque. La disposición de jardines, árboles, cruz, anfiteatro, banderas, el pabellón de madera, el techo en diente de sierra del Aula Magna y la casa amarilla sigue la ilustración del campus del proyecto DGDC; huellas de los edificios desde OpenStreetMap. Pisos y colores son ilustrativos. Las canchas de tenis vecinas pertenecen al colegio contiguo, no al campus.",
    "links": [
     {
      "label": "Wikipedia",
      "url": "https://es.wikipedia.org/wiki/Universidad_Cat%C3%B3lica_de_Temuco"
     },
     {
-     "label": "Extensión UCT",
-     "url": "https://extension.uct.cl/recinto/campus-san-francisco/"
+     "label": "Proyecto DGDC",
+     "url": "https://github.com/uctenis/dgdc"
+    }
+   ]
+  },
+  {
+   "title": "Códigos DGDC",
+   "text": "Edificio A = CSF16, B = CSF14, C = CSF12 (Edificio Teresa Durán), K = CSF17; la biblioteca es CSF02. Los edificios CSF14 a CSF16 tienen estructura de madera laminada en pilares y vigas (presupuesto DGDC 2026).",
+   "links": [
+    {
+     "label": "Proyecto DGDC",
+     "url": "https://github.com/uctenis/dgdc"
     }
    ]
   },
@@ -536,16 +740,6 @@
     {
      "label": "Museo Regional",
      "url": "https://www.museoregionalaraucania.gob.cl/colecciones/casa-thiers-de-temuco"
-    }
-   ]
-  },
-  {
-   "title": "Rewe y canchas",
-   "text": "El rewe y las dos canchas de tenis están en OpenStreetMap. La talla del rewe, sus ramas y el color de las canchas son ilustrativos; las líneas siguen las medidas reglamentarias.",
-   "links": [
-    {
-     "label": "OpenStreetMap",
-     "url": "https://www.openstreetmap.org/#map=18/-38.7379/-72.6021"
     }
    ]
   },

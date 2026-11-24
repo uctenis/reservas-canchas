@@ -10,4 +10,8 @@
 - Wiñol Tripantu UCT: https://www.elmostrador.cl/cultura/2025/06/19/conmemoracion-de-winon-antu-en-temuco/
 - Bandera 18-19 sept: https://www.latercera.com/servicios/noticia/cuando-es-obligatorio-instalar-la-bandera-chilena-y-cual-es-la-multa-por-no-tenerla/
 
-Ilustrativo: alturas y colores de edificios UCT, color y posición de la terraza del museo, superficie de las canchas, talla del rewe, posición de secuoyas y tilos, vehículos y personas.
+- Ilustración del campus (DGDC): uctenis/dgdc src/assets/campus/csf.webp — jardines, árboles, cruz, anfiteatro, banderas, pabellón de madera, Aula Magna en diente de sierra, casa amarilla.
+- Códigos antiguos de edificios y madera laminada CSF14–16: uctenis/dgdc src/data/codigosAntiguosEdificios.ts y presupuesto2026Data.json
+- Las canchas de tenis vecinas son del colegio contiguo (indicado por el usuario), no del campus.
+
+Ilustrativo: pisos y colores de edificios UCT, color y posición de la terraza del museo, talla del rewe, posición de árboles, jardines, cruz, anfiteatro y banderas, vehículos y personas.
