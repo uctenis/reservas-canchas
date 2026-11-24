@@ -117,7 +117,7 @@
  },
  "buildings": {
   "w90759345": {
-   "levels": 3,
+   "levels": 4,
    "facade": "office",
    "wall": [
     "#e6e5e1"
@@ -130,7 +130,7 @@
    ]
   },
   "w90759366": {
-   "levels": 3,
+   "levels": 4,
    "facade": "office",
    "wall": [
     "#e6e5e1"
@@ -143,7 +143,7 @@
    ]
   },
   "w90759264": {
-   "levels": 3,
+   "levels": 4,
    "facade": "office",
    "wall": [
     "#e6e5e1"
@@ -153,7 +153,7 @@
    "trim": "#a8743f"
   },
   "w90759406": {
-   "levels": 3,
+   "levels": 4,
    "facade": "glass",
    "wall": [
     "#9aa0a6"
@@ -196,12 +196,12 @@
    "bay": 3.4
   },
   "w90759313": {
-   "levels": 2,
+   "levels": 1,
    "facade": "glass",
    "wall": [
     "#f1f0ec"
    ],
-   "floor": 4
+   "floor": 4.2
   },
   "w90759297": {
    "levels": 2,
@@ -703,7 +703,7 @@
  "notes": [
   {
    "title": "Campus San Francisco",
-   "text": "Campus de la UCT en Manuel Montt 56, entre Av. Alemania y Pasaje El Bosque. La disposición de jardines, árboles, cruz, anfiteatro, banderas, el pabellón de madera, el techo en diente de sierra del Aula Magna y la casa amarilla sigue la ilustración del campus del proyecto DGDC; huellas de los edificios desde OpenStreetMap. Pisos y colores son ilustrativos. Las canchas de tenis vecinas pertenecen al colegio contiguo, no al campus.",
+   "text": "Campus de la UCT en Manuel Montt 56, entre Av. Alemania y Pasaje El Bosque. La disposición de jardines, árboles, cruz, anfiteatro, banderas, el pabellón de madera, el techo en diente de sierra del Aula Magna y la casa amarilla sigue la ilustración del campus del proyecto DGDC; huellas de los edificios desde OpenStreetMap. Pisos indicados por la DGDC: A y B 4, Biblioteca y Aula Magna 3, C 5, Escuela de Derecho 4, Facultad CJEA 4, pabellón de madera 4, Edificio K 2, Casino Central 1. Los colores son ilustrativos. Las canchas de tenis vecinas pertenecen al colegio contiguo, no al campus.",
    "links": [
     {
      "label": "Wikipedia",
