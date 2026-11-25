@@ -4,7 +4,7 @@
   const state = { tournaments:[], current:null, participants:[], clubPlayers:[] };
   const $ = id => document.getElementById(id);
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const courtNames = {cec1:'CEC Cancha 1',cec2:'CEC Cancha 2',cjp1:'CJP Cancha 1',cjp2:'CJP Cancha 2'};
+  const courtNames = {cec1:'CEC Cancha 1',cec2:'CEC Cancha 2',cjp1:'CJP Cancha 1',cjp2:'CJP Cancha 2',otro:'Otro lugar (fuera del club)'};
   const slots = ['09:00','10:30','12:00','13:30','15:00','16:30','18:00','19:30','20:00','21:00'];
   const statusLabels = {draft:'Borrador',registration:'Inscripciones abiertas',draw:'Cuadro generado',in_progress:'En juego',finished:'Finalizado',archived:'Archivado'};
 
@@ -221,7 +221,8 @@
     const currentSlot = slotSelect.value;
     const match = findMatchById(row.dataset.matchId);
     const isOwnSlot = s => match && match.date === dateVal && match.courtId === courtId && match.slot === s;
-    const free = (availability?.ok && courtId) ? (availability.courts?.[courtId] || []) : null;
+    const isElsewhere = courtId === 'otro';
+    const free = (!isElsewhere && availability?.ok && courtId) ? (availability.courts?.[courtId] || []) : null;
     slotSelect.innerHTML = '<option value="">Hora</option>' + slots.map(s => {
       const busy = free && free.indexOf(s) < 0 && !isOwnSlot(s);
       return `<option value="${s}" ${busy ? 'disabled' : ''}>${s}${busy ? ' (ocupado)' : ''}</option>`;
@@ -235,7 +236,7 @@
     const currentCourt = courtSelect.value;
     const match = findMatchById(row.dataset.matchId);
     Array.from(courtSelect.options).forEach(opt => {
-      if (!opt.value) return;
+      if (!opt.value || opt.value === 'otro') return;
       const free = availability?.ok ? (availability.courts?.[opt.value] || []) : null;
       const isOwnCourt = match && match.courtId === opt.value && match.date === dateSelect.value;
       const empty = Array.isArray(free) && !free.length && !isOwnCourt;

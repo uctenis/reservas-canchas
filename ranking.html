@@ -6797,25 +6797,29 @@ function formatLeagueDay(iso) {
   return isNaN(date) ? iso : date.toLocaleDateString('es-CL', { day: 'numeric', month: 'short', timeZone: 'UTC' });
 }
 
-// Bases §7–9: el partido se juega dentro del plazo de su fecha (se puede
-// adelantar desde el inicio de la liga, nunca atrasar).
+// El partido tiene una ventana de referencia por fecha, pero se puede
+// adelantar desde el inicio de la liga o jugar y anotar fuera de plazo por
+// condiciones climáticas.
 function applyLeagueDateLimits() {
   const option = document.getElementById('chal_retado').selectedOptions[0];
   const input = document.getElementById('chal_fecha');
   if (!option || !option.dataset.deadline) return;
   const season = UCTennisLeague.getSeason(option.dataset.season);
   const min = [todayISO(), season ? season.inicio : ''].sort().pop();
+  const max = UCTennisLeague.addDays(todayISO(), 21);
   input.setAttribute('min', min);
-  input.setAttribute('max', option.dataset.deadline);
-  if (!input.value || input.value < min || input.value > option.dataset.deadline) input.value = min;
-  document.getElementById('challengeError').textContent = `Fecha ${option.dataset.round}: el partido debe jugarse a más tardar el ${formatLeagueDay(option.dataset.deadline)}.`;
+  input.setAttribute('max', max);
+  if (!input.value || input.value < min || input.value > max) input.value = min;
+  const expired = todayISO() > option.dataset.deadline;
+  document.getElementById('challengeError').textContent = expired
+    ? `Fecha ${option.dataset.round} (plazo original ${formatLeagueDay(option.dataset.deadline)}): puedes agendarlo fuera de plazo.`
+    : `Fecha ${option.dataset.round}: plazo sugerido hasta el ${formatLeagueDay(option.dataset.deadline)}.`;
 }
 
 function getLeagueDateError(option, fecha) {
   if (!option || !option.dataset.deadline) return 'Selecciona tu rival de la fecha.';
   const season = UCTennisLeague.getSeason(option.dataset.season);
   if (season && fecha < season.inicio) return `La liga parte el ${formatLeagueDay(season.inicio)}.`;
-  if (fecha > option.dataset.deadline) return `La Fecha ${option.dataset.round} vence el ${formatLeagueDay(option.dataset.deadline)}: elige un día dentro del plazo.`;
   return '';
 }
 

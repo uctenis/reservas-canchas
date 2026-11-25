@@ -8,7 +8,7 @@
     return new Intl.DateTimeFormat('es-CL', { day:'numeric', month:'short', year:'numeric' }).format(new Date(parts[0], parts[1] - 1, parts[2]));
   };
   const statusLabel = {draft:'Borrador',registration:'Inscripciones abiertas',draw:'Cuadro generado',in_progress:'En juego',finished:'Finalizado',archived:'Archivado'};
-  const courtLabel = {cec1:'CEC Cancha 1',cec2:'CEC Cancha 2',cjp1:'CJP Cancha 1',cjp2:'CJP Cancha 2'};
+  const courtLabel = {cec1:'CEC Cancha 1',cec2:'CEC Cancha 2',cjp1:'CJP Cancha 1',cjp2:'CJP Cancha 2',otro:'Otro lugar (fuera del club)'};
   let currentTournament = null;
 
   function getScheduledMatches(tournament) {

@@ -222,7 +222,8 @@
     const row = v.standings.find(r => r.key === entrant.key);
     const group = L.groupOf(v, entrant);
     const fixture = L.getPlayerFixture(v, entrant);
-    const next = fixture.find(item => item.partido && !FINAL_STATES.includes(item.partido.state));
+    const next = fixture.find(item => item.partido && !FINAL_STATES.includes(item.partido.state)) ||
+      fixture.find(item => item.partido && item.partido.state === 'wo_doble' && !item.partido.retiro);
     const started = v.phase !== 'inscripcion';
 
     const head = `
@@ -249,15 +250,19 @@
       const rival = next.rival;
       const opensIn = L.daysBetween(v.today, r.window.start);
       const closesIn = L.daysBetween(v.today, p.deadline);
-      // Se puede adelantar cualquier partido de una fecha futura.
-      const canSchedule = ['por_agendar', 'proximo'].includes(p.state);
+      // Se puede adelantar cualquier fecha futura o recuperar una fecha vencida.
+      const canSchedule = ['por_agendar', 'proximo', 'wo_doble'].includes(p.state) && !p.retiro;
       const resultButton = (label, ghost) => canRecordResult(p)
         ? `<button class="lg-btn ${ghost ? 'ghost' : ''}" type="button" data-action="record-result" data-gender="${esc(gender)}" data-round="${r.numero}" data-a="${esc(entrant.key)}" data-b="${esc(rival.key)}">${label}</button>`
         : '';
       let detail = '';
       let action = '';
-      if (p.state === 'por_agendar' || p.state === 'proximo') {
-        detail = p.state === 'proximo' ? `La fecha abre el ${fmtLong(r.window.start)}${opensIn > 0 ? ` (en ${daysLabel(opensIn)})` : ''}. Si se ponen de acuerdo, pueden adelantarlo.` : `Tienes ${daysLabel(closesIn + 1)} para jugarlo (hasta el ${fmtLong(p.deadline)}).`;
+      if (p.state === 'por_agendar' || p.state === 'proximo' || p.state === 'wo_doble') {
+        detail = p.state === 'proximo'
+          ? `La fecha abre el ${fmtLong(r.window.start)}${opensIn > 0 ? ` (en ${daysLabel(opensIn)})` : ''}. Si se ponen de acuerdo, pueden adelantarlo.`
+          : p.state === 'wo_doble' || closesIn < 0
+            ? `El plazo de la fecha venció el ${fmtLong(p.deadline)}. Por condiciones climáticas aún pueden jugarlo y anotar el resultado.`
+            : `Tienes ${daysLabel(closesIn + 1)} para jugarlo (hasta el ${fmtLong(p.deadline)}).`;
         const sentToRival = state.proposals.some(pr => pr.fromEmail === myEmail() && pr.toEmail === rival.email);
         action = canSchedule
           ? `<div class="lg-inline lg-next-actions">
@@ -330,6 +335,7 @@
   function myEmail() { return String(state.session?.email || '').trim().toLowerCase(); }
 
   function courtName(courtId) {
+    if (courtId === 'otro') return 'Otro lugar (fuera del club)';
     const court = (DB.COURTS || []).find(c => c.id === courtId);
     return court ? court.label.replace(/\s*–\s*/, ' · ') : String(courtId || '').toUpperCase();
   }
@@ -422,12 +428,13 @@
     if (!me) return null;
     const item = L.getPlayerFixture(v, me).find(it => it.partido && it.rival &&
       ((ref.key && it.rival.key === ref.key) || (ref.email && it.rival.email === ref.email)) &&
-      ['por_agendar', 'proximo', 'invitado'].includes(it.partido.state));
+      !it.partido.retiro && ['por_agendar', 'proximo', 'invitado', 'wo_doble'].includes(it.partido.state));
     return item ? { me, rival: item.rival, round: item.round, deadline: item.partido.deadline, gender } : null;
   }
 
   // ── Diálogo para proponer horarios ────────────────────────────────────
-  const propose = { ctx: null, day: '', slots: {}, picked: [], note: '' };
+  const ELSEWHERE_SLOTS = ['09:00', '10:30', '12:00', '13:30', '15:00', '16:30', '18:00', '19:30', '20:00', '21:00'];
+  const propose = { ctx: null, day: '', slots: {}, picked: [], note: '', elsewhere: false };
 
   function dialog() {
     let dlg = document.getElementById('lgDialog');
@@ -438,17 +445,25 @@
       document.body.appendChild(dlg);
       dlg.addEventListener('click', onDialogClick);
       dlg.addEventListener('input', event => { if (event.target.id === 'lgProposeNote') propose.note = event.target.value; });
+      dlg.addEventListener('change', event => {
+        if (event.target.id === 'lgProposeElsewhere') {
+          propose.elsewhere = event.target.checked;
+          propose.picked = [];
+          renderPropose();
+          if (!propose.elsewhere && propose.day) loadDay(propose.day);
+        }
+      });
       dlg.addEventListener('close', () => { propose.ctx = null; result.ctx = null; dlg.onconfirm = null; dlg.oninput = null; });
     }
     return dlg;
   }
 
-  function proposeDates(ctx) {
+  function proposeDates() {
     const today = L.todayIso();
-    // Desde hoy aunque la fecha aún no abra: el partido se puede adelantar.
+    // Desde hoy (aunque la fecha aún no abra o su plazo haya vencido por
+    // clima) hasta los próximos 21 días de anticipación de reserva.
     const from = today;
-    const limit = L.addDays(today, 21);
-    const to = ctx.deadline < limit ? ctx.deadline : limit;
+    const to = L.addDays(today, 21);
     const dates = [];
     for (let d = from; d <= to && dates.length < 21; d = L.addDays(d, 1)) dates.push(d);
     return dates;
@@ -458,6 +473,7 @@
     propose.ctx = ctx;
     propose.picked = [];
     propose.note = '';
+    propose.elsewhere = false;
     const dates = proposeDates(ctx);
     propose.day = dates[0] || '';
     const dlg = dialog();
@@ -500,9 +516,17 @@
     const isPicked = (courtId, slot) => propose.picked.some(o => o.date === propose.day && o.courtId === courtId && o.slot === slot);
     let grid;
     if (!dates.length) grid = '<p class="lg-empty">El plazo de esta fecha ya no deja días disponibles.</p>';
-    else if (slots === 'loading' || slots === undefined) grid = '<p class="lg-muted lg-loading">Buscando canchas libres…</p>';
+    else if (propose.elsewhere) {
+      const minStart = Date.now();
+      const free = ELSEWHERE_SLOTS.filter(slot => new Date(`${propose.day}T${slot}:00`).getTime() >= minStart);
+      grid = free.length
+        ? `<div class="lg-court-row"><span>Otro lugar</span>
+            <div>${free.map(slot => `<button type="button" class="lg-slot ${isPicked('otro', slot) ? 'is-picked' : ''}" data-dlg="slot" data-court="otro" data-slot="${esc(slot)}">${esc(slot)}</button>`).join('')}</div>
+          </div>`
+        : '<p class="lg-muted">Ya pasaron los horarios de hoy. Elige otro día.</p>';
+    } else if (slots === 'loading' || slots === undefined) grid = '<p class="lg-muted lg-loading">Buscando canchas libres…</p>';
     else if (slots === 'error') grid = '<p class="lg-warn">No se pudo consultar la disponibilidad. <button class="lg-link" type="button" data-dlg="retry">Reintentar</button></p>';
-    else if (!Object.keys(slots).length) grid = '<p class="lg-muted">No quedan horarios libres este día. Prueba otro.</p>';
+    else if (!Object.keys(slots).length) grid = '<p class="lg-muted">No quedan horarios libres este día en las canchas UCT. Prueba otro día o marca «Jugar en otro lugar».</p>';
     else grid = Object.entries(slots).map(([courtId, list]) => `
       <div class="lg-court-row"><span>${esc(courtName(courtId))}</span>
         <div>${list.map(slot => `<button type="button" class="lg-slot ${isPicked(courtId, slot) ? 'is-picked' : ''}" data-dlg="slot" data-court="${esc(courtId)}" data-slot="${esc(slot)}">${esc(slot)}</button>`).join('')}</div>
@@ -515,8 +539,16 @@
           <button type="button" class="lg-dialog-x" data-dlg="close" aria-label="Cerrar">×</button>
         </div>
         <p class="lg-muted lg-dialog-intro">${ctx.admin
-          ? 'Elige un horario con cancha libre. Se reserva la cancha, el partido queda confirmado y ambos jugadores reciben un correo y la invitación de Google Calendar.'
-          : `Elige hasta 3 horarios con cancha libre. ${esc(first)} recibe un correo y elige uno con un clic: la cancha se reserva sola.`}</p>
+          ? (propose.elsewhere
+            ? 'Elige día y hora para el partido fuera del club. No se reserva cancha UCT, el partido queda confirmado y ambos jugadores reciben un correo y la invitación de Google Calendar.'
+            : 'Elige un horario con cancha libre. Se reserva la cancha, el partido queda confirmado y ambos jugadores reciben un correo y la invitación de Google Calendar.')
+          : (propose.elsewhere
+            ? `Elige hasta 3 horarios para jugar fuera del club (no reserva cancha UCT). ${esc(first)} recibe un correo y elige uno con un clic.`
+            : `Elige hasta 3 horarios con cancha libre. ${esc(first)} recibe un correo y elige uno con un clic: la cancha se reserva sola.`)}</p>
+        <label class="lg-result-unfinished">
+          <input type="checkbox" id="lgProposeElsewhere" ${propose.elsewhere ? 'checked' : ''}>
+          <span><strong>Se juega en otro lugar (fuera del club)</strong> — no depende de las canchas UCT ni reserva cancha en el sistema.</span>
+        </label>
         <div class="lg-days" role="tablist" aria-label="Días">${dates.map(d => {
           const count = propose.picked.filter(o => o.date === d).length;
           const parts = optionParts({ date: d, slot: '', courtId: '' });
@@ -531,13 +563,13 @@
             return `<div class="lg-option is-static"><span>${esc(parts.day)}</span><b>${esc(parts.slot)}</b><small>${esc(parts.court)}</small><button type="button" class="lg-option-x" data-dlg="unpick" data-i="${i}" aria-label="Quitar">×</button></div>`;
           }).join('')}</div>` : `<p class="lg-muted">${ctx.admin ? 'Toca un horario para elegirlo.' : 'Toca un horario para agregarlo. Mientras más opciones, más fácil que le acomode.'}</p>`}
           ${ctx.admin ? '' : `<label class="lg-note-field">Mensaje para ${esc(first)} (opcional)
-            <input id="lgProposeNote" maxlength="200" value="${esc(propose.note)}" placeholder="Ej: prefiero en la tarde">
+            <input id="lgProposeNote" maxlength="200" value="${esc(propose.note)}" placeholder="${propose.elsewhere ? 'Ej: indicación de dónde juegan' : 'Ej: prefiero en la tarde'}">
           </label>`}
         </div>
         <div class="lg-dialog-foot">
           <button type="button" class="lg-btn ghost" data-dlg="close">Cancelar</button>
           <button type="button" class="lg-btn" data-dlg="send" ${propose.picked.length && !state.busy ? '' : 'disabled'}>${ctx.admin
-            ? (state.busy ? 'Reservando cancha…' : 'Agendar partido')
+            ? (state.busy ? (propose.elsewhere ? 'Agendando…' : 'Reservando cancha…') : 'Agendar partido')
             : (state.busy ? 'Enviando…' : `Enviar propuesta${propose.picked.length ? ` (${propose.picked.length})` : ''}`)}</button>
         </div>
       </div>`;
@@ -551,7 +583,7 @@
     if (!btn) return;
     const kind = btn.dataset.dlg;
     if (kind === 'close') { dlg.close(); return; }
-    if (kind === 'day') { propose.day = btn.dataset.date; loadDay(propose.day); return; }
+    if (kind === 'day') { propose.day = btn.dataset.date; if (propose.elsewhere) renderPropose(); else loadDay(propose.day); return; }
     if (kind === 'retry') { delete propose.slots[propose.day]; loadDay(propose.day); return; }
     if (kind === 'unpick') { propose.picked.splice(Number(btn.dataset.i), 1); renderPropose(); return; }
     if (kind === 'slot') {
@@ -599,17 +631,18 @@
   // juegan y después uno de los dos (o la comisión) anota el marcador.
   function canRecordResult(p) {
     if (!p || p.match && ['completado', 'wo_retador', 'wo_retado', 'resultado_pendiente'].includes(p.match.status)) return false;
-    if (p.retiro || p.fueraDePlazo) return false;
-    // Incluye las fechas que aún no abren: un partido se puede adelantar.
+    if (p.retiro) return false;
+    // Incluye las fechas que aún no abren (se puede adelantar) y las vencidas
+    // (se puede recuperar y anotar fuera de plazo por condiciones climáticas).
     return ['proximo', 'por_agendar', 'invitado', 'agendado', 'wo_doble'].includes(p.state);
   }
 
   // ── La comisión agenda un partido directamente ───────────────────────
   // Sin esperar a que los jugadores se pongan de acuerdo: cualquier partido
-  // sin resultado cuyo plazo no haya vencido (también para reagendarlo).
-  function canAdminSchedule(p, today) {
-    if (!p || p.retiro || p.a.retirado || p.b.retirado || today > p.deadline) return false;
-    return ['proximo', 'por_agendar', 'invitado', 'agendado'].includes(p.state);
+  // sin resultado (también fechas vencidas o para reagendarlo).
+  function canAdminSchedule(p) {
+    if (!p || p.retiro || p.a.retirado || p.b.retirado) return false;
+    return ['proximo', 'por_agendar', 'invitado', 'agendado', 'wo_doble'].includes(p.state);
   }
 
   function adminScheduleContext(button) {
@@ -617,7 +650,7 @@
     const v = view(gender);
     const round = v.rounds[Number(button.dataset.round) - 1];
     const p = round && round.partidos.find(item => item.a.key === button.dataset.a && item.b.key === button.dataset.b);
-    if (!p || !canAdminSchedule(p, v.today)) return null;
+    if (!p || !canAdminSchedule(p)) return null;
     return { a: p.a, b: p.b, rival: p.b, round, deadline: p.deadline, gender, admin: true };
   }
 
@@ -681,9 +714,9 @@
           <tbody>${row(a, 'a')}${row(b, 'b')}</tbody>
         </table>
         <label class="lg-result-date">Día en que jugaron
-          <input type="date" id="lgResultDate" value="${ctx.expired ? '' : esc(today)}" min="${esc(season.inicio)}" max="${esc(today)}" required>
+          <input type="date" id="lgResultDate" value="${esc(today)}" min="${esc(season.inicio)}" max="${esc(today)}" required>
         </label>
-        ${ctx.expired ? `<p class="lg-muted">Indica el día real del partido. El plazo de este cruce era el ${esc(fmtLong(ctx.deadline))}. Si jugaron después, el marcador queda registrado y suma puntos si la comisión amplía el plazo.</p>` : ''}
+        ${ctx.expired ? `<p class="lg-muted">El plazo de este cruce era el ${esc(fmtLong(ctx.deadline))}. Por condiciones climáticas los partidos se pueden jugar y anotar fuera de plazo: el resultado suma normalmente en la tabla.</p>` : ''}
         <p class="lg-result-summary" id="lgResultSummary" aria-live="polite">Anota el marcador para ver el ganador.</p>
         <p class="lg-muted">${ctx.byCommission
           ? 'Lo anotas como comisión: queda confirmado de inmediato y ambos jugadores reciben un correo.'
@@ -784,8 +817,6 @@
     if (!ctx || !check.ok) return toast(check.msg || 'Revisa el marcador.', 'bad');
     const fecha = document.getElementById('lgResultDate').value;
     if (!fecha || fecha < season.inicio || fecha > L.todayIso()) return toast('Indica el día en que jugaron.', 'bad');
-    const late = fecha > ctx.deadline;
-    if (late && !confirm(`El plazo de este cruce era el ${fmtLong(ctx.deadline)}. El marcador se guardará. Los puntos quedan sujetos a una prórroga de la comisión. ¿Anotarlo igual?`)) return;
     const ref = entrant => ({ id: entrant.id, nombre: entrant.nombre, email: entrant.email });
     state.busy = true;
     btn.disabled = true;
@@ -804,7 +835,7 @@
       if (dlg.open) dlg.close();
       toast(data.pending
         ? `¡Resultado anotado! ${ctx.rival.nombre.split(' ')[0]} tiene 48 horas para confirmarlo.`
-        : late ? 'Resultado confirmado. Los puntos quedan sujetos a una prórroga.' : 'Resultado registrado y confirmado. Ya suma en la tabla.');
+        : 'Resultado registrado y confirmado. Ya suma en la tabla.');
     } catch (err) {
       toast(err.message, 'bad');
       btn.disabled = false;
@@ -850,6 +881,7 @@
     const option = (proposal.options || [])[opcion - 1];
     if (!option) return toast('Esa opción ya no está disponible.', 'bad');
     const parts = optionParts(option);
+    const isElsewhere = option.courtId === 'otro';
     const dlg = dialog();
     propose.ctx = null;
     dlg.innerHTML = `
@@ -861,7 +893,9 @@
           <span class="lg-confirm-when">${esc(parts.day)} · ${esc(parts.slot)}</span>
           <span>${esc(parts.court)}</span>
         </div>
-        <p class="lg-muted">Se reserva la cancha a tu nombre y ambos reciben la confirmación y la invitación de Google Calendar.</p>
+        <p class="lg-muted">${isElsewhere
+          ? 'El partido queda confirmado fuera del club (no reserva cancha UCT) y ambos reciben la confirmación y la invitación de Google Calendar.'
+          : 'Se reserva la cancha a tu nombre y ambos reciben la confirmación y la invitación de Google Calendar.'}</p>
         <div class="lg-dialog-foot">
           <button type="button" class="lg-btn ghost" data-confirm="no">Ver otras opciones</button>
           <button type="button" class="lg-btn" data-confirm="yes">Confirmar partido</button>
@@ -872,7 +906,7 @@
       if (!btn || state.busy) return;
       if (btn.dataset.confirm === 'no') { dlg.close(); return; }
       btn.disabled = true;
-      btn.textContent = 'Reservando cancha…';
+      btn.textContent = isElsewhere ? 'Confirmando…' : 'Reservando cancha…';
       await acceptProposal(proposal, opcion);
       if (dlg.open) dlg.close();
     };
@@ -1165,15 +1199,16 @@
       };
       const info = [];
       if (p.state === 'agendado' || p.state === 'invitado') info.push(`📅 ${fmt(p.date)}${p.slot ? ` · ${esc(p.slot)}` : ''}${p.cancha ? ` · ${esc(p.cancha)}` : ''}`);
-      if (p.state === 'wo_doble') info.push(p.fueraDePlazo ? 'Se jugó fuera de plazo: no suma (bases §9)' : p.retiro ? 'Ambos retirados' : 'Plazo vencido sin resultado registrado: 0 pts para ambos');
+      if (p.state === 'wo_doble') info.push(p.retiro ? 'Ambos retirados' : 'Plazo vencido sin resultado: aún pueden jugarlo y anotar el marcador');
       if (p.state === 'wo' && p.retiro) info.push('Rival retirado de la liga');
       if (p.state === 'jugado' && p.inconcluso) info.push('Inconcluso: se tomó hasta donde llegó');
+      if (p.state === 'jugado' && p.fueraDePlazo) info.push('Jugado fuera de plazo');
       if (p.state === 'por_confirmar') info.push(pendingLine(p));
       if (p.exception) info.push(`Plazo extendido al ${fmt(p.deadline)}`);
 
       const actions = [];
       const mine = Boolean(meKey && (p.a.key === meKey || p.b.key === meKey));
-      if (mine && !state.isAdmin && ['proximo', 'por_agendar'].includes(p.state) && v.today <= p.deadline) {
+      if (mine && !state.isAdmin && !p.retiro && ['proximo', 'por_agendar', 'wo_doble'].includes(p.state)) {
         const rival = p.a.key === meKey ? p.b : p.a;
         actions.push(actBtn('propose', '📅', p.state === 'proximo' ? 'Adelantar' : 'Proponer horarios', { rival: rival.key }));
       }
@@ -1184,10 +1219,9 @@
         actions.push(actBtn('admin-remind-result', '✉️', 'Pedir confirmación', { match: p.match.id, label: pendingLabel(p) }));
         actions.push(actBtn('admin-confirm-result', '✓', 'Confirmar', { match: p.match.id, label: pendingLabel(p) }, 'ok'));
       }
-      if (state.isAdmin && canAdminSchedule(p, v.today)) {
+      if (state.isAdmin && canAdminSchedule(p)) {
         actions.push(actBtn('admin-schedule', '📅', p.state === 'agendado' || p.state === 'invitado' ? 'Reagendar' : 'Agendar', { gender: v.gender, round: round.numero, a: p.a.key, b: p.b.key }));
       }
-
       if (state.isAdmin && (p.state === 'agendado' || p.state === 'invitado') && p.match && p.match.bookingId && p.date >= v.today) {
         actions.push(actBtn('admin-cancel-booking', '✕', 'Cancelar hora', { booking: p.match.bookingId, match: p.match.id, label: `${p.a.nombre} vs ${p.b.nombre} · ${fmt(p.date)}${p.slot ? ` ${p.slot}` : ''}` }, 'danger'));
       }
@@ -1268,8 +1302,8 @@
           <p>Fecha a fecha los puntos se acumulan y definen el ranking de la liga.</p></article>
         <article><h4>Quién juega</h4><p>Todos los integrantes de UCTenis con sus cuotas al día. Participación voluntaria y gratuita, en categoría damas y varones.</p></article>
         <article><h4>Sistema</h4><p>Todos contra todos por fechas: en cada fecha juegas con un rival distinto hasta completar todos los cruces. Si los inscritos son impares, en cada fecha alguien queda libre.${v.grouped ? ` En ${GENDER_LABEL[v.gender]} se juega en ${v.groups.length} grupos armados según el ranking: juegas contra todos los de tu grupo y de cada uno clasifican los mejores al Maestros.` : ''}</p></article>
-        <article><h4>Plazos</h4><p>Cada partido es obligatorio y se juega dentro de los 10 días de su fecha. La fecha vence y no se recupera en forma retroactiva.</p></article>
-        <article><h4>W.O.</h4><p>Si no se juega dentro del plazo, es W.O. para ambos y nadie suma. Si uno no se presenta, gana el jugador presente.</p></article>
+        <article><h4>Plazos</h4><p>Cada fecha dura unos 10 días. Por condiciones climáticas u otros imprevistos, los partidos también se pueden jugar y anotar fuera de plazo.</p></article>
+        <article><h4>W.O.</h4><p>Si un partido queda sin jugar al vencer la fecha, figura como W.O. doble hasta que se juegue y se anote el resultado. Si uno no se presenta al partido acordado, gana el jugador presente.</p></article>
         <article><h4>Casos especiales</h4><p>Licencias médicas justificadas o fuerza mayor se presentan a la comisión organizadora, que puede extender el plazo de ese partido.</p></article>
         <article><h4>Formato</h4><p>${esc(season.formato)}. Cada jugador lleva pelotas en buen estado y se juega con las mejores, de común acuerdo.</p></article>
         <article><h4>Torneo de Maestros</h4><p>Al cerrar la liga clasifican los 4, 6 u 8 mejores según inscritos (menos de 8 → 4; 8 a 11 → 6; 12 o más → 8) y se premian los puestos finales.</p></article>
@@ -1519,7 +1553,7 @@
     if (action === 'admin-schedule' && state.isAdmin) {
       const ctx = adminScheduleContext(button);
       if (ctx) openPropose(ctx);
-      else toast('Ese partido ya tiene resultado o su plazo venció.', 'bad');
+      else toast('Ese partido ya tiene resultado.', 'bad');
       return;
     }
     if (action === 'admin-cancel-booking' && state.isAdmin) {

@@ -402,10 +402,6 @@
 
     if (match && COMPLETED_STATUSES.has(match.status)) {
       const played = matchPlayDate(match);
-      if (played && played > deadline && match.ligaExcepcion !== true) {
-        // Bases §9: una fecha vencida no se juega en forma retroactiva.
-        return { ...base, state: 'wo_doble', fueraDePlazo: true };
-      }
       const winnerSide = winnerSideOf(match);
       if (!winnerSide) return { ...base, state: 'por_confirmar' };
       const loserSide = winnerSide === 'retador' ? 'retado' : 'retador';
@@ -427,6 +423,7 @@
         sets: isWo ? null : { winner: flip ? stats.setsB : stats.setsA, loser: flip ? stats.setsA : stats.setsB },
         games: isWo ? null : { winner: flip ? stats.gamesB : stats.gamesA, loser: flip ? stats.gamesA : stats.gamesB },
         inconcluso: !isWo && inconcluso,
+        fueraDePlazo: Boolean(played && played > deadline && match.ligaExcepcion !== true),
         date: played
       };
     }
@@ -442,12 +439,13 @@
     if (match && match.status === 'resultado_pendiente') {
       return { ...base, state: 'por_confirmar', date: matchPlayDate(match), ...pendingResult(match, sides) };
     }
-    if (today > deadline) {
-      // Bases §8: si no se juega dentro del plazo, W.O. para ambos.
-      return { ...base, state: 'wo_doble' };
-    }
     if (match && match.status === 'aceptado') return { ...base, state: 'agendado', date: matchPlayDate(match), slot: match.slot || '', cancha: match.cancha || '' };
     if (match && match.status === 'pendiente') return { ...base, state: 'invitado', date: matchPlayDate(match), slot: match.slot || '', cancha: match.cancha || '', invitedBy: sides.retador };
+    if (today > deadline) {
+      // Bases §8: si no se juega dentro del plazo, W.O. para ambos (hasta que
+      // lo jueguen y anoten el resultado).
+      return { ...base, state: 'wo_doble' };
+    }
     return { ...base, state: today < window.start ? 'proximo' : 'por_agendar' };
   }
 
@@ -652,11 +650,11 @@
     });
   }
 
-  // Cruces que el jugador puede agendar ahora: fechas en curso o próximas,
-  // sin resultado y cuyo plazo no ha vencido.
+  // Cruces que el jugador puede agendar ahora: fechas en curso, pasadas o
+  // próximas sin resultado (por clima se pueden jugar fuera de plazo).
   function getSchedulablePairings(view, entrant) {
     return getPlayerFixture(view, entrant)
-      .filter(item => item.partido && ['por_agendar', 'proximo'].includes(item.partido.state) && view.today <= item.partido.deadline)
+      .filter(item => item.partido && ['por_agendar', 'proximo', 'wo_doble'].includes(item.partido.state) && !item.partido.retiro)
       .filter(item => !item.rival.retirado);
   }
 

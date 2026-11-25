@@ -81,6 +81,7 @@ const CONFIG = {
  * Retorna el nombre legible de la cancha a partir de su ID.
  */
 function getCourtName(courtId) {
+  if (text(courtId).toLowerCase() === 'otro') return 'Otro lugar (fuera del club)';
   const map = (CONFIG && CONFIG.COURT_NAMES) || {
     cec1: 'CEC Cancha 1',
     cec2: 'CEC Cancha 2',
@@ -879,8 +880,9 @@ function createChallengeCalendarInvite(data) {
     const isLeague = text(data.tipo) === 'liga';
     // Igual que en detectCourtFromEvent: si no llega courtId, jamás asumir
     // una cancha CEC (bloqueadas por mal estado) — el fallback es cjp1.
-    const courtKey = text(data.courtId || (data.cancha && data.cancha.toLowerCase().includes('cec') ? 'cec1' : 'cjp1'));
-    const courtName = getCourtName(courtKey);
+    const isElsewhere = text(data.courtId).toLowerCase() === 'otro' || (!text(data.courtId) && text(data.cancha) && !/cjp|cec/i.test(text(data.cancha)));
+    const courtKey = isElsewhere ? 'otro' : text(data.courtId || (data.cancha && data.cancha.toLowerCase().includes('cec') ? 'cec1' : 'cjp1'));
+    const courtName = isElsewhere ? (text(data.cancha) || getCourtName('otro')) : getCourtName(courtKey);
     const title = '[' + courtName + '] ' + (isLeague ? 'Partido de liga UCTenis: ' : (isFriendly ? 'Partido amistoso UCTenis: ' : 'Desafio ranking UCTenis: ')) + text(data.retadorNombre) + ' vs ' + text(data.retadoNombre);
     const description = [
       isLeague ? 'Partido del Campeonato de Liga UCTenis.' : (isFriendly ? 'Partido amistoso UCTenis.' : 'Desafio de ranking UCTenis.'),
@@ -5674,7 +5676,8 @@ function releaseTournamentBooking(bookingId, idToken, reason) {
 function adminScheduleTournamentMatch(data) {
   if (!isAdminRequest(data)) return { ok: false, msg: 'Acceso reservado al administrador.' };
   const dateStr = text(data.date), slot = text(data.slot), courtId = text(data.courtId);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr) || !/^\d{1,2}:\d{2}$/.test(slot) || !CONFIG.CALENDARS[courtId]) {
+  const isElsewhere = courtId === 'otro';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr) || !/^\d{1,2}:\d{2}$/.test(slot) || (!isElsewhere && !CONFIG.CALENDARS[courtId])) {
     return { ok: false, msg: 'Fecha, hora o cancha no valida.' };
   }
   const lock = LockService.getScriptLock();
@@ -5686,13 +5689,51 @@ function adminScheduleTournamentMatch(data) {
     const match = tournament.matches.find(function(item) { return item.id === text(data.matchId); });
     if (!match) return { ok: false, msg: 'Partido no encontrado.' };
     if (!match.player1 || !match.player2) return { ok: false, msg: 'El partido aun no tiene ambos jugadores definidos.' };
-    const newBookingId = bookingDocumentId(courtId, dateStr, slot);
-    const availability = getAvailableSlots(dateStr, data.idToken, courtId);
-    const available = availability.ok && Array.isArray(availability.courts[courtId]) && availability.courts[courtId].indexOf(slot) >= 0;
-    const existing = getBookingDocument(newBookingId, data.idToken);
-    const ownsExisting = existing.ok && existing.booking && existing.booking.tournamentId === tournament.id && existing.booking.matchId === match.id;
-    if (!available && !ownsExisting) return { ok: false, msg: 'La cancha ya no esta disponible en ese horario.' };
-    if (match.bookingId && match.bookingId !== newBookingId) {
+    const newBookingId = isElsewhere ? '' : bookingDocumentId(courtId, dateStr, slot);
+    let booking = null;
+    if (!isElsewhere) {
+      const availability = getAvailableSlots(dateStr, data.idToken, courtId);
+      const available = availability.ok && Array.isArray(availability.courts[courtId]) && availability.courts[courtId].indexOf(slot) >= 0;
+      const existing = getBookingDocument(newBookingId, data.idToken);
+      const ownsExisting = existing.ok && existing.booking && existing.booking.tournamentId === tournament.id && existing.booking.matchId === match.id;
+      if (!available && !ownsExisting) return { ok: false, msg: 'La cancha ya no esta disponible en ese horario.' };
+      if (match.bookingId && match.bookingId !== newBookingId) {
+        const releasedPrevious = releaseTournamentBooking(match.bookingId, data.idToken);
+        if (!releasedPrevious || !releasedPrevious.ok) {
+          return {
+            ok: false,
+            msg: (releasedPrevious && releasedPrevious.msg) || 'No se pudo liberar la reserva anterior del partido.'
+          };
+        }
+      }
+      const now = new Date().toISOString();
+      booking = ownsExisting ? existing.booking : {
+        id: newBookingId, courtId: courtId, date: dateStr, slot: slot,
+        userId: 'tournament:' + tournament.id, email: verifyGoogleIdToken(data.idToken) || '',
+        emailLower: verifyGoogleIdToken(data.idToken) || '', name: tournament.name,
+        userType: 'admin', userTypeLabel: 'Campeonato UCTenis',
+        status: 'pending_calendar', calendarEventId: '', syncAttempts: 0,
+        createdAt: now, tournamentId: tournament.id, matchId: match.id
+      };
+      booking.guestEmails = [match.player1.email, match.player2.email].filter(Boolean);
+      booking.matchTitle = '[' + getCourtName(courtId) + '] ' + tournament.name + ': ' + match.player1.name + ' vs ' + match.player2.name;
+      booking.updatedAt = now;
+      const reserved = saveBookingDocument(booking, data.idToken);
+      if (!reserved.ok) return reserved;
+      try {
+        const event = findCalendarEventForBooking(booking) || createBookingCalendarEvent(booking);
+        booking.calendarEventId = event.getId();
+        booking.status = 'confirmed';
+        booking.calendarSyncedAt = new Date().toISOString();
+        booking.updatedAt = booking.calendarSyncedAt;
+        booking.syncError = '';
+        saveBookingDocument(booking, data.idToken);
+      } catch (error) {
+        booking.status = 'calendar_retry';
+        booking.syncError = error.message;
+        saveBookingDocument(booking, data.idToken);
+      }
+    } else if (match.bookingId) {
       const releasedPrevious = releaseTournamentBooking(match.bookingId, data.idToken);
       if (!releasedPrevious || !releasedPrevious.ok) {
         return {
@@ -5701,37 +5742,10 @@ function adminScheduleTournamentMatch(data) {
         };
       }
     }
-    const now = new Date().toISOString();
-    const booking = ownsExisting ? existing.booking : {
-      id: newBookingId, courtId: courtId, date: dateStr, slot: slot,
-      userId: 'tournament:' + tournament.id, email: verifyGoogleIdToken(data.idToken) || '',
-      emailLower: verifyGoogleIdToken(data.idToken) || '', name: tournament.name,
-      userType: 'admin', userTypeLabel: 'Campeonato UCTenis',
-      status: 'pending_calendar', calendarEventId: '', syncAttempts: 0,
-      createdAt: now, tournamentId: tournament.id, matchId: match.id
-    };
-    booking.guestEmails = [match.player1.email, match.player2.email].filter(Boolean);
-    booking.matchTitle = '[' + getCourtName(courtId) + '] ' + tournament.name + ': ' + match.player1.name + ' vs ' + match.player2.name;
-    booking.updatedAt = now;
-    const reserved = saveBookingDocument(booking, data.idToken);
-    if (!reserved.ok) return reserved;
-    try {
-      const event = findCalendarEventForBooking(booking) || createBookingCalendarEvent(booking);
-      booking.calendarEventId = event.getId();
-      booking.status = 'confirmed';
-      booking.calendarSyncedAt = new Date().toISOString();
-      booking.updatedAt = booking.calendarSyncedAt;
-      booking.syncError = '';
-      saveBookingDocument(booking, data.idToken);
-    } catch (error) {
-      booking.status = 'calendar_retry';
-      booking.syncError = error.message;
-      saveBookingDocument(booking, data.idToken);
-    }
     const previous = match.date && match.slot && (match.date !== dateStr || match.slot !== slot || match.courtId !== courtId)
       ? leagueOptionLabel({ date: match.date, slot: match.slot, courtId: match.courtId || courtId }) : '';
     const unchanged = match.date === dateStr && match.slot === slot && match.courtId === courtId;
-    match.date = dateStr; match.slot = slot; match.courtId = courtId; match.bookingId = booking.id;
+    match.date = dateStr; match.slot = slot; match.courtId = courtId; match.bookingId = booking ? booking.id : '';
     match.status = match.status === 'completed' ? 'completed' : 'scheduled';
     tournament.status = tournament.status === 'finished' ? 'finished' : 'in_progress';
     tournament.updatedAt = new Date().toISOString();
@@ -5758,7 +5772,7 @@ function adminScheduleTournamentMatch(data) {
         (ok ? emails.sent : emails.failed).push(to);
       });
     }
-    return { ok: true, tournament: saved.tournament, calendarPending: booking.status !== 'confirmed', emails: emails };
+    return { ok: true, tournament: saved.tournament, calendarPending: Boolean(booking && booking.status !== 'confirmed'), emails: emails };
   } finally {
     lock.releaseLock();
   }
@@ -6034,16 +6048,19 @@ function leagueProposeSlots(data) {
   const raw = Array.isArray(data.options) ? data.options.slice(0, LEAGUE_MAX_OPTIONS) : [];
   const options = [];
   for (let i = 0; i < raw.length; i++) {
-    const o = { date: text(raw[i].date), slot: text(raw[i].slot), courtId: text(raw[i].courtId) };
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(o.date) || !/^\d{1,2}:\d{2}$/.test(o.slot) || !CONFIG.CALENDARS[o.courtId]) {
+    const o = { date: text(raw[i].date), slot: text(raw[i].slot), courtId: text(raw[i].courtId) || 'otro' };
+    const isElsewhere = o.courtId === 'otro';
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(o.date) || !/^\d{1,2}:\d{2}$/.test(o.slot) || (!isElsewhere && !CONFIG.CALENDARS[o.courtId])) {
       return { ok: false, msg: 'Uno de los horarios no es válido.' };
     }
-    if (o.date < today || o.date > limit || (plazo && o.date > plazo)) {
-      return { ok: false, msg: 'El ' + leagueOptionLabel(o) + ' queda fuera del plazo de la fecha.' };
+    if (o.date < today || o.date > limit) {
+      return { ok: false, msg: 'El ' + leagueOptionLabel(o) + ' queda fuera del rango de reserva disponible.' };
     }
-    const free = getAvailableSlots(o.date, data.idToken, o.courtId);
-    if (!free.ok || !Array.isArray(free.courts[o.courtId]) || free.courts[o.courtId].indexOf(o.slot) < 0) {
-      return { ok: false, msg: 'El ' + leagueOptionLabel(o) + ' ya no está libre. Elige otro.' };
+    if (!isElsewhere) {
+      const free = getAvailableSlots(o.date, data.idToken, o.courtId);
+      if (!free.ok || !Array.isArray(free.courts[o.courtId]) || free.courts[o.courtId].indexOf(o.slot) < 0) {
+        return { ok: false, msg: 'El ' + leagueOptionLabel(o) + ' ya no está libre. Elige otro.' };
+      }
     }
     options.push(o);
   }
@@ -6145,12 +6162,15 @@ function leagueAcceptProposal(data) {
   }
   const option = (proposal.options || [])[Number(data.opcion) - 1];
   if (!option) return { ok: false, msg: 'Opción no válida.' };
-
-  const booking = createBooking({
-    idToken: data.idToken, email: email, name: proposal.toNombre, userId: proposal.toId,
-    date: option.date, slot: option.slot, courtId: option.courtId, motivo: 'liga'
-  });
-  if (!booking.ok) return { ok: false, msg: booking.msg || 'No se pudo reservar la cancha.', slotTaken: true };
+  const isElsewhere = !option.courtId || option.courtId === 'otro';
+  let booking = { ok: true, booking: null };
+  if (!isElsewhere) {
+    booking = createBooking({
+      idToken: data.idToken, email: email, name: proposal.toNombre, userId: proposal.toId,
+      date: option.date, slot: option.slot, courtId: option.courtId, motivo: 'liga'
+    });
+    if (!booking.ok) return { ok: false, msg: booking.msg || 'No se pudo reservar la cancha.', slotTaken: true };
+  }
 
   const now = new Date().toISOString();
   const courtName = getCourtName(option.courtId);
@@ -6216,8 +6236,9 @@ function leagueAdminSchedule(data) {
   const ref = function(p) { return { id: text(p && p.id), nombre: text(p && p.nombre), email: text(p && p.email).toLowerCase() }; };
   const A = ref(data.playerA), B = ref(data.playerB);
   if (!A.email || !B.email || isSamePlayerReference(A, B)) return { ok: false, msg: 'Jugadores no válidos.' };
-  const dateStr = text(data.date), slot = text(data.slot), courtId = text(data.courtId);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr) || !/^\d{1,2}:\d{2}$/.test(slot) || !CONFIG.CALENDARS[courtId]) {
+  const dateStr = text(data.date), slot = text(data.slot), courtId = text(data.courtId) || 'otro';
+  const isElsewhere = courtId === 'otro';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr) || !/^\d{1,2}:\d{2}$/.test(slot) || (!isElsewhere && !CONFIG.CALENDARS[courtId])) {
     return { ok: false, msg: 'Fecha, hora o cancha no válida.' };
   }
   if (makeLocalDate(dateStr, slot).getTime() <= Date.now()) return { ok: false, msg: 'Ese horario ya pasó.' };
@@ -6225,15 +6246,17 @@ function leagueAdminSchedule(data) {
   const lock = LockService.getScriptLock();
   lock.waitLock(15000);
   try {
-    const free = getAvailableSlots(dateStr, data.idToken, courtId);
-    if (!free.ok || !Array.isArray(free.courts[courtId]) || free.courts[courtId].indexOf(slot) < 0) {
-      return { ok: false, msg: 'Ese horario ya no está libre. Elige otro.', slotTaken: true };
-    }
-    const bookingId = bookingDocumentId(courtId, dateStr, slot);
-    const current = getBookingDocument(bookingId, data.idToken);
-    if (!current.ok) return { ok: false, msg: current.msg || 'No se pudo comprobar la reserva.' };
-    if (current.booking && isActiveBookingStatus(current.booking.status)) {
-      return { ok: false, msg: 'Ese horario acaba de ser reservado. Elige otro.', slotTaken: true };
+    const bookingId = isElsewhere ? '' : bookingDocumentId(courtId, dateStr, slot);
+    if (!isElsewhere) {
+      const free = getAvailableSlots(dateStr, data.idToken, courtId);
+      if (!free.ok || !Array.isArray(free.courts[courtId]) || free.courts[courtId].indexOf(slot) < 0) {
+        return { ok: false, msg: 'Ese horario ya no está libre. Elige otro.', slotTaken: true };
+      }
+      const current = getBookingDocument(bookingId, data.idToken);
+      if (!current.ok) return { ok: false, msg: current.msg || 'No se pudo comprobar la reserva.' };
+      if (current.booking && isActiveBookingStatus(current.booking.status)) {
+        return { ok: false, msg: 'Ese horario acaba de ser reservado. Elige otro.', slotTaken: true };
+      }
     }
 
     // Invitación o partido agendado que ya existía entre ambos.
@@ -6250,27 +6273,30 @@ function leagueAdminSchedule(data) {
 
     const now = new Date().toISOString();
     const courtName = getCourtName(courtId);
-    const booking = {
-      id: bookingId, courtId: courtId, date: dateStr, slot: slot,
-      userId: A.id, email: A.email, emailLower: A.email,
-      name: A.nombre + ' vs ' + B.nombre, userType: 'socio', userTypeLabel: 'Liga UCTenis (agendado por la comisión)',
-      status: 'pending_calendar', calendarEventId: '', syncAttempts: 0,
-      lastSyncAttemptAt: '', lastSuccessfulSyncAt: '', syncAlertedAt: '',
-      guestEmails: [A.email, B.email], matchType: 'liga',
-      matchTitle: '[' + courtName + '] Partido de liga UCTenis: ' + A.nombre + ' vs ' + B.nombre,
-      createdAt: now, updatedAt: now, createdBy: adminEmail
-    };
-    const reserved = saveBookingDocument(booking, data.idToken);
-    if (!reserved.ok) return { ok: false, msg: 'No se pudo reservar la cancha. ' + reserved.msg };
-    try {
-      const event = createBookingCalendarEvent(booking);
-      booking.calendarEventId = event.getId();
-      booking.status = 'confirmed';
-      booking.calendarSyncedAt = new Date().toISOString();
-      booking.lastSuccessfulSyncAt = booking.calendarSyncedAt;
-    } catch (e) {
-      booking.status = 'calendar_retry';
-      booking.syncError = e.message;
+    let booking = null;
+    if (!isElsewhere) {
+      booking = {
+        id: bookingId, courtId: courtId, date: dateStr, slot: slot,
+        userId: A.id, email: A.email, emailLower: A.email,
+        name: A.nombre + ' vs ' + B.nombre, userType: 'socio', userTypeLabel: 'Liga UCTenis (agendado por la comisión)',
+        status: 'pending_calendar', calendarEventId: '', syncAttempts: 0,
+        lastSyncAttemptAt: '', lastSuccessfulSyncAt: '', syncAlertedAt: '',
+        guestEmails: [A.email, B.email], matchType: 'liga',
+        matchTitle: '[' + courtName + '] Partido de liga UCTenis: ' + A.nombre + ' vs ' + B.nombre,
+        createdAt: now, updatedAt: now, createdBy: adminEmail
+      };
+      const reserved = saveBookingDocument(booking, data.idToken);
+      if (!reserved.ok) return { ok: false, msg: 'No se pudo reservar la cancha. ' + reserved.msg };
+      try {
+        const event = createBookingCalendarEvent(booking);
+        booking.calendarEventId = event.getId();
+        booking.status = 'confirmed';
+        booking.calendarSyncedAt = new Date().toISOString();
+        booking.lastSuccessfulSyncAt = booking.calendarSyncedAt;
+      } catch (e) {
+        booking.status = 'calendar_retry';
+        booking.syncError = e.message;
+      }
     }
 
     let challenge;
@@ -6297,9 +6323,20 @@ function leagueAdminSchedule(data) {
       }, patch));
       sheet.appendRow(challengeToRow(challenge));
     }
-    booking.challengeId = challenge.id;
-    booking.updatedAt = new Date().toISOString();
-    saveBookingDocument(booking, data.idToken);
+    if (booking) {
+      booking.challengeId = challenge.id;
+      booking.updatedAt = new Date().toISOString();
+      saveBookingDocument(booking, data.idToken);
+    } else {
+      try {
+        createChallengeCalendarInvite({
+          challengeId: challenge.id, retadorNombre: A.nombre, retadorEmail: A.email,
+          retadoNombre: B.nombre, retadoEmail: B.email, fecha: dateStr,
+          fechaLabel: leagueOptionLabel({ date: dateStr, slot: slot, courtId: courtId }),
+          slot: slot, cancha: courtName, courtId: courtId, bookingId: '', tipo: 'liga'
+        });
+      } catch (e) { console.warn('Invitación Calendar fuera del club:', e.message); }
+    }
 
     // Las propuestas de horario pendientes entre ambos quedan sin efecto.
     try {
@@ -6351,7 +6388,7 @@ function leagueAdminSchedule(data) {
         ], leagueButton(LEAGUE_SITE_URL + 'liga.html', 'Ver el fixture', true)));
     }
 
-    return { ok: true, challenge: mirror, calendarPending: booking.status !== 'confirmed', emails: emails, rescheduled: Boolean(previous) };
+    return { ok: true, challenge: mirror, calendarPending: Boolean(booking && booking.status !== 'confirmed'), emails: emails, rescheduled: Boolean(previous) };
   } finally {
     lock.releaseLock();
   }
@@ -7369,10 +7406,6 @@ function sendLeagueRoundMail(kind, me, rival, round, p, proposal, rivalDoc) {
 
     if (match && COMPLETED_STATUSES.has(match.status)) {
       const played = matchPlayDate(match);
-      if (played && played > deadline && match.ligaExcepcion !== true) {
-        // Bases §9: una fecha vencida no se juega en forma retroactiva.
-        return { ...base, state: 'wo_doble', fueraDePlazo: true };
-      }
       const winnerSide = winnerSideOf(match);
       if (!winnerSide) return { ...base, state: 'por_confirmar' };
       const loserSide = winnerSide === 'retador' ? 'retado' : 'retador';
@@ -7394,6 +7427,7 @@ function sendLeagueRoundMail(kind, me, rival, round, p, proposal, rivalDoc) {
         sets: isWo ? null : { winner: flip ? stats.setsB : stats.setsA, loser: flip ? stats.setsA : stats.setsB },
         games: isWo ? null : { winner: flip ? stats.gamesB : stats.gamesA, loser: flip ? stats.gamesA : stats.gamesB },
         inconcluso: !isWo && inconcluso,
+        fueraDePlazo: Boolean(played && played > deadline && match.ligaExcepcion !== true),
         date: played
       };
     }
@@ -7409,12 +7443,13 @@ function sendLeagueRoundMail(kind, me, rival, round, p, proposal, rivalDoc) {
     if (match && match.status === 'resultado_pendiente') {
       return { ...base, state: 'por_confirmar', date: matchPlayDate(match), ...pendingResult(match, sides) };
     }
-    if (today > deadline) {
-      // Bases §8: si no se juega dentro del plazo, W.O. para ambos.
-      return { ...base, state: 'wo_doble' };
-    }
     if (match && match.status === 'aceptado') return { ...base, state: 'agendado', date: matchPlayDate(match), slot: match.slot || '', cancha: match.cancha || '' };
     if (match && match.status === 'pendiente') return { ...base, state: 'invitado', date: matchPlayDate(match), slot: match.slot || '', cancha: match.cancha || '', invitedBy: sides.retador };
+    if (today > deadline) {
+      // Bases §8: si no se juega dentro del plazo, W.O. para ambos (hasta que
+      // lo jueguen y anoten el resultado).
+      return { ...base, state: 'wo_doble' };
+    }
     return { ...base, state: today < window.start ? 'proximo' : 'por_agendar' };
   }
 
@@ -7619,11 +7654,11 @@ function sendLeagueRoundMail(kind, me, rival, round, p, proposal, rivalDoc) {
     });
   }
 
-  // Cruces que el jugador puede agendar ahora: fechas en curso o próximas,
-  // sin resultado y cuyo plazo no ha vencido.
+  // Cruces que el jugador puede agendar ahora: fechas en curso, pasadas o
+  // próximas sin resultado (por clima se pueden jugar fuera de plazo).
   function getSchedulablePairings(view, entrant) {
     return getPlayerFixture(view, entrant)
-      .filter(item => item.partido && ['por_agendar', 'proximo'].includes(item.partido.state) && view.today <= item.partido.deadline)
+      .filter(item => item.partido && ['por_agendar', 'proximo', 'wo_doble'].includes(item.partido.state) && !item.partido.retiro)
       .filter(item => !item.rival.retirado);
   }
 

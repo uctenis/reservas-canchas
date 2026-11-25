@@ -104,14 +104,18 @@ view = L.buildSeasonView(four, results, { season, gender: 'M', today: '2026-11-2
 assert.equal(view.rounds[1].partidos.every(p => p.state === 'wo_doble'), true);
 assert.equal(view.rounds[2].partidos.every(p => p.state === 'por_agendar'), true);
 
-// Resultado jugado fuera de plazo no cuenta, salvo excepción de la comisión.
+// Resultado jugado y anotado fuera de plazo: se acepta y suma puntos
+// normalmente (p. ej. postergado por condiciones climáticas).
 const late = [mk(p1, { id: 'late', status: 'completado', fecha: '2026-11-15', ganadorId: p1.a.id, marcador: '6-0, 6-0' })];
 view = L.buildSeasonView(four, late, { season, gender: 'M', today: '2026-11-16' });
-assert.equal(view.rounds[0].partidos[0].state, 'wo_doble');
+assert.equal(view.rounds[0].partidos[0].state, 'jugado');
 assert.equal(view.rounds[0].partidos[0].fueraDePlazo, true);
+assert.equal(view.standings.find(r => r.key === p1.a.key).pts, 3);
+assert.equal(view.standings.find(r => r.key === p1.b.key).pts, 1);
 const withException = four.map(p => p.id === p1.a.id ? { ...p, liga2026: { ...p.liga2026, excepciones: { [L.pairKey(p1.a, p1.b)]: '2026-11-18' } } } : p);
 view = L.buildSeasonView(withException, late, { season, gender: 'M', today: '2026-11-16' });
 assert.equal(view.rounds[0].partidos[0].state, 'jugado');
+assert.equal(view.rounds[0].partidos[0].fueraDePlazo, false);
 
 // Empate en puntos entre dos: manda el enfrentamiento directo.
 const three = eight.slice(0, 3);
