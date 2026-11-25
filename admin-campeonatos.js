@@ -223,9 +223,11 @@
     const isOwnSlot = s => match && match.date === dateVal && match.courtId === courtId && match.slot === s;
     const isElsewhere = courtId === 'otro';
     const free = (!isElsewhere && availability?.ok && courtId) ? (availability.courts?.[courtId] || []) : null;
+    const busyLabels = (!isElsewhere && availability?.ok && courtId) ? (availability.busyLabels?.[courtId] || {}) : {};
     slotSelect.innerHTML = '<option value="">Hora</option>' + slots.map(s => {
-      const busy = free && free.indexOf(s) < 0 && !isOwnSlot(s);
-      return `<option value="${s}" ${busy ? 'disabled' : ''}>${s}${busy ? ' (ocupado)' : ''}</option>`;
+      const isClass = busyLabels[s] === 'Clases UCTenis';
+      const busy = free && free.indexOf(s) < 0 && !isOwnSlot(s) && !isClass;
+      return `<option value="${s}" ${busy ? 'disabled' : ''}>${s}${busy ? ' (ocupado)' : isClass ? ' (horario de clases)' : ''}</option>`;
     }).join('');
     if (Array.from(slotSelect.options).some(o => o.value === currentSlot)) slotSelect.value = currentSlot;
   }
@@ -238,8 +240,10 @@
     Array.from(courtSelect.options).forEach(opt => {
       if (!opt.value || opt.value === 'otro') return;
       const free = availability?.ok ? (availability.courts?.[opt.value] || []) : null;
+      const busyLabels = availability?.ok ? (availability.busyLabels?.[opt.value] || {}) : {};
+      const hasClassSlot = Object.values(busyLabels).includes('Clases UCTenis');
       const isOwnCourt = match && match.courtId === opt.value && match.date === dateSelect.value;
-      const empty = Array.isArray(free) && !free.length && !isOwnCourt;
+      const empty = Array.isArray(free) && !free.length && !hasClassSlot && !isOwnCourt;
       opt.disabled = empty;
       opt.textContent = courtNames[opt.value] + (empty ? ' (sin horas libres)' : '');
     });

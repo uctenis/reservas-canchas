@@ -919,9 +919,10 @@ function getShortMatchLabel(c) {
 function renderSlotsByCourt(apiData) {
   if (!sel.date) return;
   const session = DB.getSession();
+  const isAdminSession = Boolean(session && (session.isAdmin === true || ['uctenisclub@gmail.com', 'dsilva@uct.cl'].includes(String(session.email || '').toLowerCase())));
   const dailyLimit = Math.max(1, Number(reservationRules.maxBookingsPerDay) || 1);
   const dailyBookingCount = session ? DB.getBookings().filter(b => b.userId === session.id && b.fecha === sel.date && b.status !== 'cancelada').length : 0;
-  const alreadyHasBooking = Boolean(session && !session.isAdmin && dailyBookingCount >= dailyLimit);
+  const alreadyHasBooking = Boolean(session && !isAdminSession && dailyBookingCount >= dailyLimit);
   const btnConfirm = document.getElementById('btnConfirmSlot');
   sel.slot = null;
   sel.court = null;
@@ -1019,15 +1020,15 @@ function renderSlotsByCourt(apiData) {
     const isTooClose = slotDate < bookingCutoff;
     const isMine = !!(ci.myBooked && ci.myBooked.slot === slot);
     const match = ci.challenges.find(c => c.slot === slot);
-    // Clases fijas: martes y miércoles 18:00–19:30 en CJP
     // Franjas de clases configuradas por el admin (Horarios → Parámetros)
     const isSystemClass = window.isClassBlock(reservationRules.classBlocks, ci.court.id, dayOfWeek, slot);
-    const isBusy = (!ci.available.includes(slot) || isSystemClass || !!match) && !isMine;
+    const isRealBusy = (!ci.available.includes(slot) && ci.busyLabels[slot] !== 'Clases UCTenis') || !!match;
+    const isBusy = (isRealBusy || (isSystemClass && !isAdminSession)) && !isMine;
 
     if (isMine) return { kind: 'mine', label: 'Tu reserva', aria: `${where}: tu reserva` };
     if (isBusy) {
       const vs = match ? `${firstName(match.retadorNombre)} vs ${firstName(match.retadoNombre)}` : '';
-      if (isSystemClass) {
+      if (isSystemClass && !match) {
         return { kind: 'clases', label: 'Clase', aria: `${where}: clases UCTenis`, past: isTooClose };
       }
       if (match) {
@@ -1040,6 +1041,7 @@ function renderSlotsByCourt(apiData) {
     }
     if (isTooClose) return { kind: 'past', label: isPast ? 'Pasada' : `Límite ${leadLabel}`, aria: `${where}: ${isPast ? 'ya pasó' : `se reserva con ${leadLabel} de anticipación`}`, past: true };
     if (alreadyHasBooking) return { kind: 'limit', label: 'Límite diario', aria: `${where}: alcanzaste el límite diario` };
+    if (isSystemClass && isAdminSession) return { kind: 'free', label: 'Clase (Admin)', aria: `Horario de clase disponible para admin: elegir ${where}` };
     return { kind: 'free', label: 'Libre', aria: session ? `Libre: elegir ${where}` : `Libre: inicia sesión para reservar ${where}` };
   }
 

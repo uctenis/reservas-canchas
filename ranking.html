@@ -3682,20 +3682,23 @@ async function updateChallengeAvailableSlots() {
       return;
     }
 
+    const session = DB.getSession();
+    const isAdminSession = isPlayerAdminSession(session);
     const availableBlocks = (apiData.courts && Array.isArray(apiData.courts[canchaId])) ? apiData.courts[canchaId] : [];
+    const busyLabels = (apiData.busyLabels && apiData.busyLabels[canchaId]) || {};
     const playableSlots = (apiData.playable && Array.isArray(apiData.playable[canchaId])) ? apiData.playable[canchaId] : DB.SLOTS;
 
-    // Filter slots using 4-hour offset limit
+    // Filter slots using 4-hour offset limit (admins can also use class slots and have no 4h wait)
     const now = new Date();
     const activeSlots = playableSlots.filter(slot => {
-      const isFree = availableBlocks.includes(slot);
+      const isFree = availableBlocks.includes(slot) || (isAdminSession && busyLabels[slot] === 'Clases UCTenis');
       if (!isFree) return false;
 
       const [sh, sm] = slot.split(':').map(Number);
       const [sy, smo, sd] = fecha.split('-').map(Number);
       const slotDate = new Date(sy, smo - 1, sd, sh, sm, 0);
-      const fourHoursFromNow = new Date(now.getTime() + 4 * 60 * 60 * 1000);
-      return slotDate >= fourHoursFromNow;
+      const minTime = isAdminSession ? now : new Date(now.getTime() + 4 * 60 * 60 * 1000);
+      return slotDate >= minTime;
     });
 
     if (activeSlots.length === 0) {
@@ -3708,7 +3711,8 @@ async function updateChallengeAvailableSlots() {
         let eh = sh + 1, em = sm + 30;
         if (em >= 60) { eh++; em -= 60; }
         const endStr = `${String(eh).padStart(2,'0')}:${String(em).padStart(2,'0')}`;
-        return `<option value="${slot}">${slot} - ${endStr}</option>`;
+        const isClass = isAdminSession && !availableBlocks.includes(slot) && busyLabels[slot] === 'Clases UCTenis';
+        return `<option value="${slot}">${slot} - ${endStr}${isClass ? ' (horario de clases)' : ''}</option>`;
       }).join('');
       selectHora.disabled = false;
       submitBtn.disabled = false;

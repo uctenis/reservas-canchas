@@ -3271,10 +3271,12 @@ function getAvailableSlots(dateStr, idToken, courtIdFilter) {
       let busyMatch = busyTimes.find(b => (slotStart.getTime() < b.end && slotEnd.getTime() > b.start));
       let isDatabaseBooking = databaseBusy[courtKey + '|' + slot] === true;
 
-      if (isClassSlot) {
-        result.busyLabels[courtKey][slot] = 'Clases UCTenis';
-      } else if (!isDatabaseBooking && !busyMatch) {
-        availableSlots.push(slot);
+      if (!isDatabaseBooking && !busyMatch) {
+        if (isClassSlot) {
+          result.busyLabels[courtKey][slot] = 'Clases UCTenis';
+        } else {
+          availableSlots.push(slot);
+        }
       } else if (busyMatch && busyMatch.label) {
         result.busyLabels[courtKey][slot] = busyMatch.label;
       }
@@ -3308,8 +3310,10 @@ function createBooking(data) {
   if (verifiedBookingEmail !== requestedEmail) {
     return { ok: false, msg: 'La identidad de la sesión no coincide con el correo de la reserva.' };
   }
-  const isVerifiedAdmin = Boolean(verifiedBookingEmail &&
-    (CONFIG.ADMINS.emails || []).map(function(email) { return text(email).toLowerCase(); }).indexOf(verifiedBookingEmail) >= 0);
+  const isVerifiedAdmin = Boolean(verifiedBookingEmail && (
+    (CONFIG.ADMINS.emails || []).map(function(email) { return text(email).toLowerCase(); }).indexOf(verifiedBookingEmail) >= 0 ||
+    (memberCheck.player && memberCheck.player.isAdmin === true)
+  ));
 
   // Aceptar también funcionarios UCT (validados por Firebase en el frontend,
   // aquí sólo verificamos que el correo esté en las hojas de cálculo o
@@ -3382,15 +3386,18 @@ function createBooking(data) {
 
   var noonUTC = new Date(data.date + 'T12:00:00Z');
   var dayOfWeek = parseInt(Utilities.formatDate(noonUTC, 'America/Santiago', 'u'), 10) % 7;
-  if (isClassBlockSlot(getClassBlocks(dynamicConfig), courtId, dayOfWeek, slot)) {
+  if (!isVerifiedAdmin && isClassBlockSlot(getClassBlocks(dynamicConfig), courtId, dayOfWeek, slot)) {
     return { ok: false, msg: "Este horario está reservado para Clases UCTenis." };
   }
 
   // Fuente única de verdad: vuelve a comprobar horario regular, fechas
   // especiales y ocupación real dentro del lock, justo antes de crear.
+  // A criterio del admin, los bloques de Clases UCTenis también se pueden ocupar si siguen libres.
   const liveAvailability = getAvailableSlots(dateStr, data.idToken, courtId);
   const liveCourtSlots = liveAvailability && liveAvailability.courts && liveAvailability.courts[courtId];
-  if (!liveAvailability.ok || !Array.isArray(liveCourtSlots) || liveCourtSlots.indexOf(slot) < 0) {
+  const liveBusyLabels = (liveAvailability && liveAvailability.busyLabels && liveAvailability.busyLabels[courtId]) || {};
+  const adminClassOverride = isVerifiedAdmin && liveBusyLabels[slot] === 'Clases UCTenis';
+  if (!liveAvailability.ok || (!adminClassOverride && (!Array.isArray(liveCourtSlots) || liveCourtSlots.indexOf(slot) < 0))) {
     return { ok: false, msg: 'Este horario ya no está disponible. Actualiza la agenda y elige otro.' };
   }
 
@@ -5693,7 +5700,8 @@ function adminScheduleTournamentMatch(data) {
     let booking = null;
     if (!isElsewhere) {
       const availability = getAvailableSlots(dateStr, data.idToken, courtId);
-      const available = availability.ok && Array.isArray(availability.courts[courtId]) && availability.courts[courtId].indexOf(slot) >= 0;
+      const busyLabels = (availability && availability.busyLabels && availability.busyLabels[courtId]) || {};
+      const available = availability.ok && ((Array.isArray(availability.courts[courtId]) && availability.courts[courtId].indexOf(slot) >= 0) || busyLabels[slot] === 'Clases UCTenis');
       const existing = getBookingDocument(newBookingId, data.idToken);
       const ownsExisting = existing.ok && existing.booking && existing.booking.tournamentId === tournament.id && existing.booking.matchId === match.id;
       if (!available && !ownsExisting) return { ok: false, msg: 'La cancha ya no esta disponible en ese horario.' };
@@ -6249,7 +6257,9 @@ function leagueAdminSchedule(data) {
     const bookingId = isElsewhere ? '' : bookingDocumentId(courtId, dateStr, slot);
     if (!isElsewhere) {
       const free = getAvailableSlots(dateStr, data.idToken, courtId);
-      if (!free.ok || !Array.isArray(free.courts[courtId]) || free.courts[courtId].indexOf(slot) < 0) {
+      const busyLabels = (free && free.busyLabels && free.busyLabels[courtId]) || {};
+      const isFreeOrClass = free.ok && ((Array.isArray(free.courts[courtId]) && free.courts[courtId].indexOf(slot) >= 0) || busyLabels[slot] === 'Clases UCTenis');
+      if (!isFreeOrClass) {
         return { ok: false, msg: 'Ese horario ya no está libre. Elige otro.', slotTaken: true };
       }
       const current = getBookingDocument(bookingId, data.idToken);

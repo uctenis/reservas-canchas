@@ -489,17 +489,33 @@
     renderPropose();
     try {
       const data = await DB.getSlotsAPI(date);
+      const isAdminCtx = Boolean(propose.ctx && propose.ctx.admin);
       // Jugadores: la misma anticipación mínima de las reservas; la comisión
-      // puede agendar cualquier horario que aún no empiece.
-      const leadHours = propose.ctx && propose.ctx.admin ? 0 : window.parseMinLeadHours(undefined);
+      // puede agendar cualquier horario que aún no empiece (incluidos los
+      // bloques de Clases UCTenis, a su criterio).
+      const leadHours = isAdminCtx ? 0 : window.parseMinLeadHours(undefined);
       const minStart = Date.now() + leadHours * 3600000;
       const courts = {};
+      const classSlots = {};
       Object.entries((data && data.ok && data.courts) || {}).forEach(([courtId, list]) => {
         if (!Array.isArray(list)) return;
-        const free = list.filter(slot => new Date(`${date}T${slot}:00`).getTime() >= minStart);
-        if (free.length) courts[courtId] = free;
+        const busyLabels = (data.busyLabels && data.busyLabels[courtId]) || {};
+        const playable = (data.playable && Array.isArray(data.playable[courtId])) ? data.playable[courtId] : list;
+        const cSlots = new Set();
+        const combined = isAdminCtx
+          ? playable.filter(slot => {
+              if (list.includes(slot)) return true;
+              if (busyLabels[slot] === 'Clases UCTenis') { cSlots.add(slot); return true; }
+              return false;
+            })
+          : list;
+        const free = combined.filter(slot => new Date(`${date}T${slot}:00`).getTime() >= minStart);
+        if (free.length) {
+          courts[courtId] = free;
+          classSlots[courtId] = cSlots;
+        }
       });
-      propose.slots[date] = data && data.ok ? courts : 'error';
+      propose.slots[date] = data && data.ok ? { courts, classSlots } : 'error';
     } catch (e) {
       propose.slots[date] = 'error';
     }
@@ -512,7 +528,9 @@
     const dlg = dialog();
     const dates = proposeDates(ctx);
     const first = ctx.rival.nombre.split(' ')[0];
-    const slots = propose.slots[propose.day];
+    const dayData = propose.slots[propose.day];
+    const slots = dayData && dayData.courts ? dayData.courts : dayData;
+    const classSlots = (dayData && dayData.classSlots) || {};
     const isPicked = (courtId, slot) => propose.picked.some(o => o.date === propose.day && o.courtId === courtId && o.slot === slot);
     let grid;
     if (!dates.length) grid = '<p class="lg-empty">El plazo de esta fecha ya no deja días disponibles.</p>';
@@ -527,10 +545,16 @@
     } else if (slots === 'loading' || slots === undefined) grid = '<p class="lg-muted lg-loading">Buscando canchas libres…</p>';
     else if (slots === 'error') grid = '<p class="lg-warn">No se pudo consultar la disponibilidad. <button class="lg-link" type="button" data-dlg="retry">Reintentar</button></p>';
     else if (!Object.keys(slots).length) grid = '<p class="lg-muted">No quedan horarios libres este día en las canchas UCT. Prueba otro día o marca «Jugar en otro lugar».</p>';
-    else grid = Object.entries(slots).map(([courtId, list]) => `
+    else grid = Object.entries(slots).map(([courtId, list]) => {
+      const cSet = classSlots[courtId] || new Set();
+      return `
       <div class="lg-court-row"><span>${esc(courtName(courtId))}</span>
-        <div>${list.map(slot => `<button type="button" class="lg-slot ${isPicked(courtId, slot) ? 'is-picked' : ''}" data-dlg="slot" data-court="${esc(courtId)}" data-slot="${esc(slot)}">${esc(slot)}</button>`).join('')}</div>
-      </div>`).join('');
+        <div>${list.map(slot => {
+          const isClass = cSet.has && cSet.has(slot);
+          return `<button type="button" class="lg-slot ${isPicked(courtId, slot) ? 'is-picked' : ''}" data-dlg="slot" data-court="${esc(courtId)}" data-slot="${esc(slot)}"${isClass ? ' title="Franja de Clases UCTenis (habilitada a criterio del admin)"' : ''}>${esc(slot)}${isClass ? ' <small>· Clase</small>' : ''}</button>`;
+        }).join('')}</div>
+      </div>`;
+    }).join('');
 
     dlg.innerHTML = `
       <div class="lg-dialog-inner">
@@ -1340,6 +1364,8 @@
       .sort((x, y) => String(x.p.reportedAt).localeCompare(String(y.p.reportedAt)));
     const expired = v.rounds.flatMap(r => r.partidos.map(p => ({ r, p })))
       .filter(({ p }) => (p.state === 'wo_doble' && !p.retiro) || p.exception);
+    const schedulable = v.rounds.flatMap(r => r.partidos.map(p => ({ r, p })))
+      .filter(({ p }) => canAdminSchedule(p));
 
     el.innerHTML = `
       <div class="lg-admin-head"><h2>Comisión organizadora · ${GENDER_LABEL[v.gender]}</h2><span class="lg-chip muted">Solo administradores</span></div>
@@ -1351,6 +1377,17 @@
             <button class="lg-btn sm" type="button" data-action="admin-enroll">Inscribir</button>
           </div>
           ${phase !== 'inscripcion' ? '<p class="lg-warn">La liga ya partió: inscribir a alguien ahora cambia todos los cruces del fixture.</p>' : ''}
+        </article>
+        <article>
+          <h4>Agendar partido entre jugadores</h4>
+          <p class="lg-muted">Elige cualquier partido pendiente de ${GENDER_LABEL[v.gender]} para fijarle día, hora y cancha (incluidos horarios de Clases UCTenis o fuera del club).</p>
+          <div class="lg-inline">
+            <select id="lgAdminSchedulePair" aria-label="Partido a agendar">
+              <option value="">${schedulable.length ? 'Elige un cruce…' : 'No hay partidos por agendar'}</option>
+              ${schedulable.map(({ r, p }) => `<option value="${r.numero}|${esc(p.a.key)}|${esc(p.b.key)}">F${r.numero} · ${esc(p.a.nombre)} vs ${esc(p.b.nombre)}${p.state === 'agendado' && p.date ? ` (agendado ${esc(fmt(p.date))}${p.slot ? ` ${esc(p.slot)}` : ''})` : ''}</option>`).join('')}
+            </select>
+            <button class="lg-btn sm" type="button" data-action="admin-schedule-pick" ${schedulable.length ? '' : 'disabled'}>📅 Elegir horario</button>
+          </div>
         </article>
         <article>
           <h4>Grupos según ranking</h4>
@@ -1552,6 +1589,16 @@
     }
     if (action === 'admin-schedule' && state.isAdmin) {
       const ctx = adminScheduleContext(button);
+      if (ctx) openPropose(ctx);
+      else toast('Ese partido ya tiene resultado.', 'bad');
+      return;
+    }
+    if (action === 'admin-schedule-pick' && state.isAdmin) {
+      const sel = document.getElementById('lgAdminSchedulePair');
+      const val = sel && sel.value;
+      if (!val) return toast('Elige un partido de la lista.', 'bad');
+      const [round, a, b] = val.split('|');
+      const ctx = adminScheduleContext({ dataset: { gender: state.gender, round, a, b } });
       if (ctx) openPropose(ctx);
       else toast('Ese partido ya tiene resultado.', 'bad');
       return;

@@ -1904,10 +1904,12 @@ const DB = {
   },
   createBooking(userId, courtId, fecha, slot) {
     const bookings = this.getBookings();
-    // Regla: Evitar reservar horario de clases (martes y miércoles de 18:00 a 19:30 en CJP)
+    const session = this.getSession();
+    const isAdmin = Boolean(session && (session.isAdmin || ['uctenisclub@gmail.com', 'dsilva@uct.cl'].includes((session.email || '').toLowerCase())));
+    // Regla: Evitar reservar horario de clases (salvo a criterio del admin)
     const [y, m, d] = fecha.split('-').map(Number);
     const dayOfWeek = new Date(y, m - 1, d).getDay();
-    if ((dayOfWeek === 2 || dayOfWeek === 3) && slot === '18:00' && courtId.startsWith('cjp')) {
+    if (!isAdmin && (dayOfWeek === 2 || dayOfWeek === 3) && slot === '18:00' && courtId.startsWith('cjp')) {
       return { ok: false, msg: 'Este horario está reservado para Clases UCTenis.' };
     }
     // Regla: slot ya ocupado
